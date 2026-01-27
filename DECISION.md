@@ -25,3 +25,9 @@
 
 - Proceed with audit-first recovery (snapshots + checksums + smoke run).
 - Do not restart full B11 v2 grids until strict_future is implemented and smoke passes.
+
+## Phase0/1 status (20260127_032955)
+
+- `runs/offers_core_v2_20260125_214521/offers_core.parquet` is missing.
+- Strict_future AB wiring check could not run; Phase1 halted.
+- Next required step: restore the real offers_core parquet before any AB/repro runs.

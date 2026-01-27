@@ -53,3 +53,16 @@ Outcome:
 - Gate D: `runs/sanity_20260127_023128/alignment_audit.json`
 - Horizon compare: `runs/sanity_20260127_023128/horizon_compare.md`
 - Manifest: `runs/sanity_20260127_023128/MANIFEST.json`
+
+## Phase0 preflight (20260127_032955)
+
+- Preflight compile log: `runs/sanity_20260127_032955/logs/preflight_compile.log`
+- Preflight help log: `runs/sanity_20260127_032955/logs/preflight_help.log`
+- Offers_core probe: `runs/sanity_20260127_032955/logs/offers_core_probe.log` (missing file)
+- SHA256 scripts/configs: `runs/sanity_20260127_032955/logs/sha256_scripts_configs.txt`
+- Phase0 manifest: `runs/sanity_20260127_032955/MANIFEST_phase0.json`
+
+## Phase1 AB strict_future (20260127_032955)
+
+- AB not run (missing offers_core): `runs/sanity_20260127_032955/RESULT_AB.txt`
+- Bench list placeholder: `runs/sanity_20260127_032955/bench_dirs_ab.txt`
