@@ -13,6 +13,7 @@ All changes prioritize auditability, reproducibility, and rollback readiness.
 - Smoke benchmark executed on a tiny `offers_core_smoke.parquet`.
 - Gates A–D and horizon summarizer completed for the smoke run.
 - MANIFEST.json generated for the smoke outputs.
+- `strict_future` toggle added to benchmark + leakage gates (not yet validated on full data).
 
 ### Historical results (from transcript)
 
