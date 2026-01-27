@@ -57,6 +57,7 @@ def _build_samples(
     min_label_delta_days: float,
     min_ratio_delta_abs: float,
     min_ratio_delta_rel: float,
+    strict_future: bool,
 ) -> Tuple[np.ndarray, np.ndarray, Dict[str, int]]:
     df = df.copy()
     df = df[df["funding_goal_usd"] >= label_goal_min].copy()
@@ -74,15 +75,16 @@ def _build_samples(
 
     for _, group in df.groupby("entity_id", sort=False):
         group = group.reset_index(drop=True)
-        if len(group) <= label_horizon:
-            dropped_insufficient_future += 1
+        if len(group) == 0:
             continue
 
-        for label_idx in range(label_horizon, len(group)):
-            input_end = label_idx - label_horizon
-            if input_end < 0:
+        for input_end in range(len(group)):
+            label_idx = input_end + label_horizon
+            if label_idx >= len(group):
                 dropped_insufficient_future += 1
-                continue
+                if strict_future:
+                    continue
+                label_idx = len(group) - 1
 
             input_raised = float(group["funding_raised_usd"].iloc[input_end])
             input_goal = float(group["funding_goal_usd"].iloc[input_end])
@@ -148,6 +150,7 @@ def main() -> None:
     parser.add_argument("--min_label_delta_days", type=float, default=0.0)
     parser.add_argument("--min_ratio_delta_abs", type=float, default=0.0)
     parser.add_argument("--min_ratio_delta_rel", type=float, default=0.0)
+    parser.add_argument("--strict_future", type=int, default=1)
     args = parser.parse_args()
 
     output_dir = Path(args.output_dir)
@@ -166,6 +169,7 @@ def main() -> None:
         min_label_delta_days=args.min_label_delta_days,
         min_ratio_delta_abs=args.min_ratio_delta_abs,
         min_ratio_delta_rel=args.min_ratio_delta_rel,
+        strict_future=bool(args.strict_future),
     )
 
     mask = np.isfinite(y_true) & np.isfinite(input_ratio)
@@ -196,6 +200,7 @@ def main() -> None:
         "seeds": args.seeds,
         "label_goal_min": args.label_goal_min,
         "label_horizon": args.label_horizon,
+        "strict_future": bool(args.strict_future),
         "dropped_due_to_static_ratio": drop_counts["dropped_due_to_static_ratio"],
         "dropped_due_to_min_delta_days": drop_counts["dropped_due_to_min_delta_days"],
         "dropped_due_to_small_ratio_delta_abs": drop_counts["dropped_due_to_small_ratio_delta_abs"],
