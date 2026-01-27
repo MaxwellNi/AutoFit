@@ -39,3 +39,11 @@
 - Real AB: `strict_future=1` with `min_label_delta_days=1.0` + `min_ratio_delta_rel=1e-4` produced **no samples**; AB incomplete.
 - Real sf0 alignment still shows `y≈ratio_from_last (corr>0.9999)`.
 - Conclusion: strict_future wiring is confirmed on smoke, but real AB is blocked; adjust thresholds or time-aligned selection before any grid.
+
+## Phase3 real AB unlock (20260127_045144)
+
+- Feasibility on rebuilt offers_core_v2 recommends `label_horizon=45` (pct_delta_days_lt_min<=0.05 rule).
+- Real AB (sf0 vs sf1) completed on rebuilt offers_core_v2 with `limit_rows=100k` using entity-subset sampling.
+- Alignment conclusion for both runs: `not_simple_y_eq_last_ratio` with `median_delta_days≈1.9167`, leakage_flag=false.
+- strict_future produced measurable differences in counts (sf0 vs sf1) without STRONG WARNING.
+- Decision: strict_future AB is unblocked on real data; next step can proceed after reviewing RESULT_AB_REAL and gates.

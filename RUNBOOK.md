@@ -80,3 +80,13 @@ Outcome:
 - Real AB result: `runs/sanity_20260127_034904/RESULT_AB_REAL.md` (sf1 failed: no samples)
 - Gates (smoke/real): `runs/sanity_20260127_034904/audit_summary_ab_*.json`, `sanity_report_ab_*.json`, `alignment_audit_ab_*.json`
 - Full manifest: `runs/sanity_20260127_034904/MANIFEST_full.json`
+
+## Phase3 real AB unlock (20260127_045144)
+
+- Feasibility rebuilt: `runs/sanity_20260127_045144/feasibility_rebuilt/feasibility_report.json`
+- Recommended horizon: 45 (pct_delta_days_lt_min<=0.05 rule)
+- AB script: `scripts/run_real_ab_minimal.sh`
+- Bench dirs: `runs/sanity_20260127_045144/bench_dirs_ab_real.txt`
+- Result: `runs/sanity_20260127_045144/RESULT_AB_REAL.md`
+- Gates: `runs/sanity_20260127_045144/audit_summary_ab_real.json`, `sanity_report_ab_real.json`, `alignment_audit_ab_real.json`
+- Manifest: `runs/sanity_20260127_045144/MANIFEST_full.json`
