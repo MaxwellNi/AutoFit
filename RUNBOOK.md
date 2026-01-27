@@ -110,3 +110,5 @@ Outcome:
 
 - Command template: `runs/sanity_20260127_092307/B11_V2_8RUN_COMMANDS.md`
 - Next steps checklist: `runs/sanity_20260127_092307/NEXT_STEPS_CHECKLIST.md`
+- Manifest: `runs/sanity_20260127_092307/MANIFEST_full.json`
+- Bundle: `runs/backups/repo_root_20260127_092307_phase3.bundle`
