@@ -92,6 +92,25 @@ def _scan_random_fragments(
     return pd.concat(frames, ignore_index=True)
 
 
+def _build_entity_keys(df: pd.DataFrame, id_cols: Sequence[str]) -> pd.Series:
+    cols = [c for c in id_cols if c in df.columns]
+    if not cols:
+        return pd.Series(["unknown"] * len(df), index=df.index)
+    return df[cols].astype(str).agg("|".join, axis=1)
+
+
+def _fingerprint_dir(path: Path) -> Dict[str, Any]:
+    files = sorted([p for p in path.rglob("*.parquet*") if p.is_file() and "_delta_log" not in str(p)])
+    total_size = 0
+    lines: List[str] = []
+    for p in files:
+        stat = p.stat()
+        total_size += stat.st_size
+        lines.append(f"{p}|{stat.st_size}|{stat.st_mtime}")
+    digest = hashlib.sha256("\n".join(lines).encode("utf-8")).hexdigest() if lines else None
+    return {"file_count": len(files), "size_bytes_total": total_size, "fingerprint_sha256": digest}
+
+
 def _load_snapshots(
     offers_path: Path,
     *,
@@ -100,76 +119,111 @@ def _load_snapshots(
     sample_strategy: str,
     sample_seed: int,
     batch_size: int,
-) -> pd.DataFrame:
+    limit_entities: int | None,
+    entity_seed: int,
+) -> Tuple[pd.DataFrame, Dict[str, Any]]:
+    selection: Dict[str, Any] = {
+        "limit_entities": limit_entities,
+        "entity_seed": entity_seed,
+        "entity_key_cols": None,
+        "selected_entity_hash": None,
+        "selected_entity_count": None,
+        "selected_offer_id_count": None,
+        "filter_col": None,
+        "selection_note": None,
+    }
+
     if offers_path.is_file():
         if offers_path.suffix.lower() == ".csv":
             df = pd.read_csv(offers_path)
         else:
             df = pd.read_parquet(offers_path)
-        if limit_rows is not None and limit_rows > 0:
+        if limit_entities:
+            id_cols = ["platform_name", "offer_id"] if all(c in df.columns for c in ["platform_name", "offer_id"]) else ["offer_id"]
+            selection["entity_key_cols"] = id_cols
+            keys = _build_entity_keys(df, id_cols)
+            unique_keys = keys.dropna().unique().tolist()
+            rng = np.random.RandomState(entity_seed)
+            rng.shuffle(unique_keys)
+            selected = unique_keys[: int(limit_entities)]
+            selection["selected_entity_hash"] = hashlib.sha256("\n".join(selected).encode("utf-8")).hexdigest()
+            selection["selected_entity_count"] = len(selected)
+            df = df[keys.isin(selected)].copy()
+            if "offer_id" in df.columns:
+                selection["filter_col"] = "offer_id"
+                selection["selected_offer_id_count"] = int(df["offer_id"].nunique())
+            selection["selection_note"] = "limit_entities applied on full file"
+        elif limit_rows is not None and limit_rows > 0:
             df = df.head(int(limit_rows)).copy()
-        return df
+        return df, selection
 
-    if sample_strategy == "random_fragments":
-        return _scan_random_fragments(
-            offers_path,
-            columns=columns,
-            limit_rows=limit_rows,
-            seed=int(sample_seed),
-        )
-    return scan_snapshots(
-        [],
-        base_dir=offers_path,
-        columns=columns,
-        allow_all=True,
-        limit_rows=limit_rows,
-        batch_size=batch_size,
-    )
-
-
-def _scan_random_fragments(
-    base_dir: Path,
-    *,
-    columns: Sequence[str],
-    limit_rows: int | None,
-    seed: int,
-) -> pd.DataFrame:
     dataset = ds.dataset(
-        str(base_dir),
+        str(offers_path),
         format="parquet",
         partitioning="hive",
         exclude_invalid_files=True,
         ignore_prefixes=["_delta_log"],
     )
-    cols = [c for c in columns if c in dataset.schema.names]
-    fragments = list(dataset.get_fragments())
-    if not fragments:
-        return pd.DataFrame(columns=cols)
-    rng = np.random.default_rng(seed)
-    rng.shuffle(fragments)
-    frames = []
-    seen = 0
-    for frag in fragments:
-        frag_cols = [c for c in cols if c in frag.physical_schema.names]
-        if not frag_cols:
-            continue
-        table = frag.to_table(columns=frag_cols)
-        df = table.to_pandas()
-        if df.empty:
-            continue
-        if limit_rows is not None:
-            remaining = int(limit_rows) - seen
-            if remaining <= 0:
-                break
-            if len(df) > remaining:
-                df = df.sample(n=remaining, random_state=seed)
-        frames.append(df)
-        seen += len(df)
-        if limit_rows is not None and seen >= int(limit_rows):
-            break
-    if not frames:
-        return pd.DataFrame(columns=cols)
-    return pd.concat(frames, ignore_index=True)
+    schema_cols = set(dataset.schema.names)
+    id_cols = ["platform_name", "offer_id"] if {"platform_name", "offer_id"}.issubset(schema_cols) else ["offer_id"]
+    if "offer_id" not in id_cols:
+        raise KeyError("offer_id not found in dataset schema")
+    selection["entity_key_cols"] = id_cols
+
+    if limit_entities:
+        candidate_rows = limit_rows if limit_rows is not None else 200000
+        if sample_strategy == "random_fragments":
+            sample_df = _scan_random_fragments(
+                offers_path,
+                columns=id_cols,
+                limit_rows=candidate_rows,
+                seed=int(sample_seed),
+            )
+        else:
+            sample_df = scan_snapshots(
+                [],
+                base_dir=offers_path,
+                columns=id_cols,
+                allow_all=True,
+                limit_rows=candidate_rows,
+                batch_size=batch_size,
+            )
+        if sample_df.empty:
+            raise ValueError("No rows available for entity sampling")
+        keys = _build_entity_keys(sample_df, id_cols)
+        unique_keys = keys.dropna().unique().tolist()
+        rng = np.random.RandomState(entity_seed)
+        rng.shuffle(unique_keys)
+        selected = unique_keys[: int(limit_entities)]
+        selection["selected_entity_hash"] = hashlib.sha256("\n".join(selected).encode("utf-8")).hexdigest()
+        selection["selected_entity_count"] = len(selected)
+        selection["selection_note"] = f"limit_entities applied; candidates sampled rows={candidate_rows}"
+
+        offer_ids = sample_df[sample_df[id_cols].astype(str).agg("|".join, axis=1).isin(selected)]["offer_id"].dropna().unique().tolist()
+        selection["filter_col"] = "offer_id"
+        selection["selected_offer_id_count"] = len(offer_ids)
+        expr = ds.field("offer_id").isin(offer_ids)
+        cols = [c for c in columns if c in dataset.schema.names]
+        table = dataset.to_table(columns=cols, filter=expr)
+        return table.to_pandas(), selection
+
+    if sample_strategy == "random_fragments":
+        df = _scan_random_fragments(
+            offers_path,
+            columns=columns,
+            limit_rows=limit_rows,
+            seed=int(sample_seed),
+        )
+    else:
+        df = scan_snapshots(
+            [],
+            base_dir=offers_path,
+            columns=columns,
+            allow_all=True,
+            limit_rows=limit_rows,
+            batch_size=batch_size,
+        )
+    return df, selection
 
 
 def _entity_id_checks(df: pd.DataFrame, id_cols: Sequence[str]) -> Dict[str, int]:
@@ -251,6 +305,8 @@ def main() -> None:
     parser.add_argument("--cutoff_mode", choices=["start", "end"], default="start")
     parser.add_argument("--batch_size", type=int, default=200_000)
     parser.add_argument("--limit_rows", type=int, default=None)
+    parser.add_argument("--limit_entities", type=int, default=None)
+    parser.add_argument("--entity_seed", type=int, default=42)
     parser.add_argument("--sample_strategy", choices=["head", "random_fragments"], default="head")
     parser.add_argument("--sample_seed", type=int, default=42)
     args = parser.parse_args()
@@ -266,6 +322,7 @@ def main() -> None:
     logger.info("offers_path=%s", args.offers_path)
     logger.info("output_dir=%s", output_dir)
     logger.info("limit_rows=%s", args.limit_rows)
+    logger.info("limit_entities=%s entity_seed=%s", args.limit_entities, args.entity_seed)
     logger.info("sample_strategy=%s sample_seed=%s", args.sample_strategy, args.sample_seed)
     logger.info("cutoff_mode=%s", args.cutoff_mode)
     logger.info("cutoff_time=%s", args.cutoff_time)
@@ -281,13 +338,15 @@ def main() -> None:
     )))
 
     offers_path = _resolve_path(args.offers_path)
-    snapshots = _load_snapshots(
+    snapshots, selection = _load_snapshots(
         offers_path,
         columns=columns,
         limit_rows=args.limit_rows,
         sample_strategy=args.sample_strategy,
         sample_seed=args.sample_seed,
         batch_size=args.batch_size,
+        limit_entities=args.limit_entities,
+        entity_seed=args.entity_seed,
     )
 
     logger.info("loaded snapshots rows=%d cols=%d", len(snapshots), len(snapshots.columns))
@@ -378,9 +437,6 @@ def main() -> None:
         "t_index_checks": t_index_stats,
         "cutoff_checks": cutoff_stats,
         "join_coverage": join_stats,
-        "t_index_checks": t_index_stats,
-        "cutoff_checks": cutoff_stats,
-        "join_coverage": join_stats,
     }
     (output_dir / "offers_core_metrics.json").write_text(
         json.dumps(metrics, indent=2, ensure_ascii=False),
@@ -395,18 +451,26 @@ def main() -> None:
         return h.hexdigest()
 
     input_sha = None
+    input_size = None
+    input_fingerprint = None
     if offers_path.is_file():
         input_sha = _sha256(offers_path)
+        input_size = offers_path.stat().st_size
+    else:
+        input_fingerprint = _fingerprint_dir(offers_path)
 
     manifest = {
         "offers_path": str(offers_path),
         "input_sha256": input_sha,
+        "input_size_bytes": input_size,
+        "input_fingerprint": input_fingerprint,
         "output_dir": str(output_dir),
         "rows": int(len(core)),
         "columns": list(core.columns),
         "static_rows": int(len(static_df)),
         "static_columns": list(static_df.columns),
         "rename_map": rename_map,
+        "selection": selection,
         "output_sha256": {
             "offers_core.parquet": _sha256(out_core),
             "offers_static.parquet": _sha256(out_static),

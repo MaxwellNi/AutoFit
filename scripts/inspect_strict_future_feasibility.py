@@ -49,56 +49,12 @@ def _merge_counts(target: Dict[str, int], src: Dict[str, int]) -> None:
         target[k] = int(target.get(k, 0)) + int(v)
 
 
-def _evaluate_pair(
-    input_row: pd.Series,
-    label_row: pd.Series,
-    *,
-    static_ratio_tol: float,
-    min_label_delta_days: float,
-    min_ratio_delta_rel: float,
-) -> Tuple[Dict[str, int], bool, float | None]:
-    drops = {
-        "static_ratio": 0,
-        "min_delta_days": 0,
-        "min_ratio_delta_rel": 0,
-        "ts_order_bad": 0,
-    }
-
-    input_goal = float(input_row.get("funding_goal_usd", np.nan))
-    input_raised = float(input_row.get("funding_raised_usd", np.nan))
-    label_goal = float(label_row.get("funding_goal_usd", np.nan))
-    label_raised = float(label_row.get("funding_raised_usd", np.nan))
-
+def _safe_ratio(raised: np.ndarray, goal: np.ndarray) -> np.ndarray:
+    ratio = np.full_like(raised, np.nan, dtype=float)
     with np.errstate(divide="ignore", invalid="ignore"):
-        input_ratio = input_raised / input_goal if input_goal else np.nan
-        label_ratio = label_raised / label_goal if label_goal else np.nan
-
-    if np.isfinite(label_ratio) and np.isfinite(input_ratio):
-        if abs(label_ratio - input_ratio) < static_ratio_tol:
-            drops["static_ratio"] += 1
-            return drops, False, None
-
-    input_ts = input_row.get("snapshot_ts")
-    label_ts = label_row.get("snapshot_ts")
-    if pd.isna(input_ts) or pd.isna(label_ts):
-        drops["ts_order_bad"] += 1
-        return drops, False, None
-    delta_days = (label_ts - input_ts).total_seconds() / 86400.0
-    if delta_days <= 0:
-        drops["ts_order_bad"] += 1
-        return drops, False, None
-    if min_label_delta_days > 0 and delta_days < min_label_delta_days:
-        drops["min_delta_days"] += 1
-        return drops, False, delta_days
-
-    if np.isfinite(label_ratio) and np.isfinite(input_ratio):
-        delta_abs = abs(label_ratio - input_ratio)
-        delta_rel = delta_abs / max(1.0, abs(input_ratio))
-        if min_ratio_delta_rel > 0 and delta_rel < min_ratio_delta_rel:
-            drops["min_ratio_delta_rel"] += 1
-            return drops, False, delta_days
-
-    return drops, True, delta_days
+        mask = np.isfinite(raised) & np.isfinite(goal) & (goal != 0)
+        ratio[mask] = raised[mask] / goal[mask]
+    return ratio
 
 
 def _evaluate_horizon(
@@ -127,48 +83,78 @@ def _evaluate_horizon(
     counts = {"strict_future_0": 0, "strict_future_1": 0}
     delta_days_list: List[float] = []
 
-    for input_end in range(n):
-        label_idx = input_end + horizon
-        insufficient = label_idx >= n
-        if insufficient:
-            drops_sf1["insufficient_future"] += 1
-            drops_sf0["insufficient_future"] += 1
-            label_idx_sf0 = n - 1
-        else:
-            label_idx_sf0 = label_idx
+    if n == 0:
+        return counts, drops_sf1, delta_days_list
 
-        # strict_future=1
-        if not insufficient:
-            input_row = group.iloc[input_end]
-            label_row = group.iloc[label_idx]
-            drops, ok, delta_days = _evaluate_pair(
-                input_row,
-                label_row,
-                static_ratio_tol=static_ratio_tol,
-                min_label_delta_days=min_label_delta_days,
-                min_ratio_delta_rel=min_ratio_delta_rel,
-            )
-            if ok:
-                counts["strict_future_1"] += 1
-                if delta_days is not None:
-                    delta_days_list.append(delta_days)
-            else:
-                _merge_counts(drops_sf1, drops)
+    idx = np.arange(n)
+    label_idx = idx + horizon
+    insufficient = label_idx >= n
+    drops_sf1["insufficient_future"] = int(insufficient.sum())
+    drops_sf0["insufficient_future"] = int(insufficient.sum())
 
-        # strict_future=0 (label clamped to last if insufficient)
-        input_row = group.iloc[input_end]
-        label_row = group.iloc[label_idx_sf0]
-        drops, ok, _ = _evaluate_pair(
-            input_row,
-            label_row,
-            static_ratio_tol=static_ratio_tol,
-            min_label_delta_days=min_label_delta_days,
-            min_ratio_delta_rel=min_ratio_delta_rel,
-        )
-        if ok:
-            counts["strict_future_0"] += 1
-        else:
-            _merge_counts(drops_sf0, drops)
+    label_idx_sf0 = np.minimum(label_idx, n - 1)
+
+    goals = group["funding_goal_usd"].to_numpy(dtype=float)
+    raised = group["funding_raised_usd"].to_numpy(dtype=float)
+    ts = pd.to_datetime(group["snapshot_ts"], errors="coerce", utc=True).to_numpy(dtype="datetime64[ns]")
+
+    # strict_future=1 valid indices
+    valid_idx = idx[~insufficient]
+    label_idx_valid = label_idx[~insufficient]
+    if valid_idx.size:
+        input_ratio = _safe_ratio(raised[valid_idx], goals[valid_idx])
+        label_ratio = _safe_ratio(raised[label_idx_valid], goals[label_idx_valid])
+
+        static_mask = np.isfinite(input_ratio) & np.isfinite(label_ratio) & (np.abs(label_ratio - input_ratio) < static_ratio_tol)
+        drops_sf1["static_ratio"] = int(static_mask.sum())
+
+        delta_days = (ts[label_idx_valid] - ts[valid_idx]) / np.timedelta64(1, "D")
+        ts_bad = ~np.isfinite(delta_days) | (delta_days <= 0)
+        drops_sf1["ts_order_bad"] = int((~static_mask & ts_bad).sum())
+
+        delta_days_valid = delta_days[~ts_bad]
+        if delta_days_valid.size:
+            delta_days_list.extend(delta_days_valid.astype(float).tolist())
+
+        keep = ~static_mask & ~ts_bad
+        if min_label_delta_days > 0:
+            min_delta_mask = delta_days < min_label_delta_days
+            drops_sf1["min_delta_days"] = int((keep & min_delta_mask).sum())
+            keep = keep & ~min_delta_mask
+
+        if min_ratio_delta_rel > 0:
+            delta_abs = np.abs(label_ratio - input_ratio)
+            delta_rel = delta_abs / np.maximum(1.0, np.abs(input_ratio))
+            min_ratio_mask = np.isfinite(delta_rel) & (delta_rel < min_ratio_delta_rel)
+            drops_sf1["min_ratio_delta_rel"] = int((keep & min_ratio_mask).sum())
+            keep = keep & ~min_ratio_mask
+
+        counts["strict_future_1"] = int(keep.sum())
+
+    # strict_future=0 (label clamped)
+    input_ratio0 = _safe_ratio(raised, goals)
+    label_ratio0 = _safe_ratio(raised[label_idx_sf0], goals[label_idx_sf0])
+    static_mask0 = np.isfinite(input_ratio0) & np.isfinite(label_ratio0) & (np.abs(label_ratio0 - input_ratio0) < static_ratio_tol)
+    drops_sf0["static_ratio"] = int(static_mask0.sum())
+
+    delta_days0 = (ts[label_idx_sf0] - ts[idx]) / np.timedelta64(1, "D")
+    ts_bad0 = ~np.isfinite(delta_days0) | (delta_days0 <= 0)
+    drops_sf0["ts_order_bad"] = int((~static_mask0 & ts_bad0).sum())
+
+    keep0 = ~static_mask0 & ~ts_bad0
+    if min_label_delta_days > 0:
+        min_delta_mask0 = delta_days0 < min_label_delta_days
+        drops_sf0["min_delta_days"] = int((keep0 & min_delta_mask0).sum())
+        keep0 = keep0 & ~min_delta_mask0
+
+    if min_ratio_delta_rel > 0:
+        delta_abs0 = np.abs(label_ratio0 - input_ratio0)
+        delta_rel0 = delta_abs0 / np.maximum(1.0, np.abs(input_ratio0))
+        min_ratio_mask0 = np.isfinite(delta_rel0) & (delta_rel0 < min_ratio_delta_rel)
+        drops_sf0["min_ratio_delta_rel"] = int((keep0 & min_ratio_mask0).sum())
+        keep0 = keep0 & ~min_ratio_mask0
+
+    counts["strict_future_0"] = int(keep0.sum())
 
     return counts, drops_sf1, delta_days_list
 
