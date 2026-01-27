@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
 import logging
 from dataclasses import dataclass
@@ -437,6 +438,13 @@ def main() -> None:
     )
 
     logger.info("Limit rows strategy: %s", limit_info)
+    sampled_entities = sorted({r.entity_id for r in rows})
+    sampled_path = bench_dir / "sampled_entities.json"
+    sampled_path.write_text(json.dumps(sampled_entities, indent=2), encoding="utf-8")
+    selection_hash = hashlib.sha256("\n".join(sampled_entities).encode("utf-8")).hexdigest()
+    (bench_dir / "selection_hash.txt").write_text(selection_hash + "\n", encoding="utf-8")
+
+    logger.info("Sampled entities: %d (hash=%s)", len(sampled_entities), selection_hash)
     logger.info("Dropped counts: %s", drop_counts)
 
     train_rows = [r for r in rows if r.split == "train"]
@@ -579,6 +587,9 @@ def main() -> None:
         "limit_entities": args.limit_entities,
         "limit_rows_strategy": limit_info.get("limit_rows_strategy"),
         "limit_rows_selected_entities": limit_info.get("limit_rows_selected_entities"),
+        "sampled_entities_path": str(sampled_path),
+        "sampled_entities_hash": selection_hash,
+        "sampled_entities_count": len(sampled_entities),
         "device": args.device,
         "models": args.models,
         "max_runs": None,

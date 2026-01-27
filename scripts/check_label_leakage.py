@@ -27,11 +27,36 @@ def _safe_corr(x: np.ndarray, y: np.ndarray) -> Optional[float]:
     return value
 
 
-def _load_offers_core(path: str, limit_rows: Optional[int]) -> pd.DataFrame:
-    df = pd.read_parquet(path)
-    if limit_rows is not None and limit_rows > 0 and len(df) > limit_rows:
-        df = df.iloc[:limit_rows].copy()
-    return df
+def _load_offers_core(path: str) -> pd.DataFrame:
+    return pd.read_parquet(path)
+
+
+def _limit_rows_by_entities(df: pd.DataFrame, limit_rows: int, seed: int) -> Tuple[pd.DataFrame, Dict[str, Any]]:
+    info = {"limit_rows_strategy": None, "limit_rows_selected_entities": None}
+    if "entity_id" not in df.columns:
+        info["limit_rows_strategy"] = "head"
+        return df.head(limit_rows).copy(), info
+    entities = df["entity_id"].dropna().unique().tolist()
+    rng = np.random.RandomState(seed)
+    rng.shuffle(entities)
+    frames = []
+    total = 0
+    for entity_id in entities:
+        group = df[df["entity_id"] == entity_id]
+        if group.empty:
+            continue
+        frames.append(group)
+        total += len(group)
+        if total >= limit_rows:
+            break
+    if not frames:
+        info["limit_rows_strategy"] = "entity_subset"
+        info["limit_rows_selected_entities"] = 0
+        return df.iloc[:0].copy(), info
+    out = pd.concat(frames, ignore_index=True)
+    info["limit_rows_strategy"] = "entity_subset"
+    info["limit_rows_selected_entities"] = len(frames)
+    return out, info
 
 
 def _compute_ratio_w(df: pd.DataFrame) -> pd.DataFrame:
@@ -156,7 +181,37 @@ def main() -> None:
     output_dir = Path(args.output_dir)
     output_dir.mkdir(parents=True, exist_ok=True)
 
-    df = _load_offers_core(args.offers_core, args.limit_rows)
+    warnings: List[str] = []
+    errors: List[str] = []
+    selection_source = None
+    selected_entities_count = None
+    limit_info: Dict[str, Any] = {"limit_rows_strategy": None, "limit_rows_selected_entities": None}
+
+    df = _load_offers_core(args.offers_core)
+    if args.bench_dir:
+        bench_dir = Path(args.bench_dir)
+        sampled_path = bench_dir / "sampled_entities.json"
+        entities = None
+        if sampled_path.exists():
+            entities = json.loads(sampled_path.read_text(encoding="utf-8"))
+            selection_source = str(sampled_path)
+        else:
+            preds_path = bench_dir / "predictions.parquet"
+            if preds_path.exists():
+                try:
+                    preds_df = pd.read_parquet(preds_path, columns=["entity_id"])
+                    entities = preds_df["entity_id"].dropna().astype(str).unique().tolist()
+                    selection_source = str(preds_path)
+                except Exception:
+                    warnings.append("predictions_missing_entity_id_fallback_used")
+            warnings.append("missing_sampled_entities_json_fallback_used")
+        if entities:
+            entities = [str(e) for e in entities]
+            selected_entities_count = len(entities)
+            df = df[df["entity_id"].astype(str).isin(set(entities))].copy()
+
+    if args.limit_rows is not None and args.limit_rows > 0:
+        df, limit_info = _limit_rows_by_entities(df, args.limit_rows, args.sample_seed)
     df = _compute_ratio_w(df)
 
     static_ratio_tol = 1e-6
@@ -187,6 +242,10 @@ def main() -> None:
     if allclose:
         leakage_flag = True
 
+    if y_true.size == 0 or input_ratio.size == 0:
+        errors.append("no_finite_samples_for_leakage_check")
+    overall_ok = not leakage_flag and not errors
+
     report = {
         "bench_dir": args.bench_dir,
         "exp_name": args.exp_name,
@@ -194,6 +253,8 @@ def main() -> None:
         "edgar_features": args.edgar_features,
         "use_edgar": bool(args.use_edgar),
         "limit_rows": args.limit_rows,
+        "limit_rows_strategy": limit_info.get("limit_rows_strategy"),
+        "limit_rows_selected_entities": limit_info.get("limit_rows_selected_entities"),
         "sample_strategy": args.sample_strategy,
         "sample_seed": args.sample_seed,
         "split_seed": args.split_seed,
@@ -201,6 +262,8 @@ def main() -> None:
         "label_goal_min": args.label_goal_min,
         "label_horizon": args.label_horizon,
         "strict_future": bool(args.strict_future),
+        "selection_source": selection_source,
+        "selected_entities_count": selected_entities_count,
         "dropped_due_to_static_ratio": drop_counts["dropped_due_to_static_ratio"],
         "dropped_due_to_min_delta_days": drop_counts["dropped_due_to_min_delta_days"],
         "dropped_due_to_small_ratio_delta_abs": drop_counts["dropped_due_to_small_ratio_delta_abs"],
@@ -237,10 +300,10 @@ def main() -> None:
         "suspect_count": 0,
         "suspects": [],
         "label_degenerate": False,
-        "ok": not leakage_flag,
-        "errors": ["leakage_flag"] if leakage_flag else [],
-        "warnings": [],
-        "overall_ok": not leakage_flag,
+        "ok": overall_ok,
+        "errors": errors + (["leakage_flag"] if leakage_flag else []),
+        "warnings": warnings,
+        "overall_ok": overall_ok,
     }
 
     out_path = output_dir / "label_leakage_report.json"

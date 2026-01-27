@@ -47,3 +47,8 @@
 - Alignment conclusion for both runs: `not_simple_y_eq_last_ratio` with `median_delta_days≈1.9167`, leakage_flag=false.
 - strict_future produced measurable differences in counts (sf0 vs sf1) without STRONG WARNING.
 - Decision: strict_future AB is unblocked on real data; next step can proceed after reviewing RESULT_AB_REAL and gates.
+
+## Gate B sampling consistency (20260127_090025)
+
+- Leakage audit now mirrors benchmark entity sampling (entity-subset after filter).
+- Re-run leakage on sf0/sf1 produced non-empty y_stats (n_finite > 0).

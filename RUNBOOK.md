@@ -90,3 +90,11 @@ Outcome:
 - Result: `runs/sanity_20260127_045144/RESULT_AB_REAL.md`
 - Gates: `runs/sanity_20260127_045144/audit_summary_ab_real.json`, `sanity_report_ab_real.json`, `alignment_audit_ab_real.json`
 - Manifest: `runs/sanity_20260127_045144/MANIFEST_full.json`
+
+## Phase1 Gate B fix (20260127_090025)
+
+- Preflight: `runs/sanity_20260127_090025/STATUS_PRE.txt`
+- Gate B consistency note: `runs/sanity_20260127_090025/audit_gate_b_consistency.md`
+- Leakage re-run (sf0): `runs/sanity_20260127_090025/leakage_ab_real_sf0/label_leakage_report.json`
+- Leakage re-run (sf1): `runs/sanity_20260127_090025/leakage_ab_real_sf1/label_leakage_report.json`
+- Manifest: `runs/sanity_20260127_090025/MANIFEST_phase1.json`
