@@ -105,3 +105,8 @@ Outcome:
 - Feasibility policy report: `runs/sanity_20260127_091335/feasibility_policy/feasibility_report.json`
 - Feasibility policy markdown: `runs/sanity_20260127_091335/feasibility_policy/feasibility_report.md`
 - Manifest: `runs/sanity_20260127_091335/MANIFEST_phase2.json`
+
+## Phase3 B11 v2 command templates (20260127_092307)
+
+- Command template: `runs/sanity_20260127_092307/B11_V2_8RUN_COMMANDS.md`
+- Next steps checklist: `runs/sanity_20260127_092307/NEXT_STEPS_CHECKLIST.md`

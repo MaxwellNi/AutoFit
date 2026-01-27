@@ -58,3 +58,8 @@
 - Feasibility policy on rebuilt offers_core_v2 recommends `label_horizon=45`.
 - Rule: `min_samples>=500` and `pct_delta_days_lt_min<=0.05` and `naive_progress_not_near_perfect`.
 - Evidence: `runs/sanity_20260127_091335/feasibility_policy/feasibility_report.json`.
+
+## B11 v2 command template ready (20260127_092307)
+
+- Prepared 8-run command template for `h=45, strict_future=1`.
+- Execute only after approval; see `runs/sanity_20260127_092307/B11_V2_8RUN_COMMANDS.md`.
