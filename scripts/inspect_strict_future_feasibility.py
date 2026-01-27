@@ -250,17 +250,18 @@ def main() -> None:
             }
         )
 
+    pct_threshold = 0.05
     recommended_horizon = None
     reason = None
     for rep in sorted(horizon_reports, key=lambda r: r["horizon"]):
         samples = rep["strict_future_1_samples"]
         pct_lt = rep["delta_days"]["pct_delta_days_lt_min"]
-        if samples >= 500 and (pct_lt is None or pct_lt <= 0.01):
+        if samples >= 500 and (pct_lt is None or pct_lt <= pct_threshold):
             recommended_horizon = rep["horizon"]
-            reason = "min_samples>=500 and pct_delta_days_lt_min<=0.01"
+            reason = f"min_samples>=500 and pct_delta_days_lt_min<={pct_threshold}"
             break
     if recommended_horizon is None:
-        reason = "no horizon met samples>=500 and pct_delta_days_lt_min<=0.01"
+        reason = f"no horizon met samples>=500 and pct_delta_days_lt_min<={pct_threshold}"
 
     report = {
         "offers_core": str(offers_path),
@@ -273,7 +274,7 @@ def main() -> None:
         "horizons": horizon_reports,
         "recommendation": {
             "recommended_horizon": recommended_horizon,
-            "rule": "strict_future_1_samples>=500 and pct_delta_days_lt_min<=0.01",
+            "rule": f"strict_future_1_samples>=500 and pct_delta_days_lt_min<={pct_threshold}",
             "reason": reason,
         },
     }

@@ -52,11 +52,45 @@ def _safe_corr(x: np.ndarray, y: np.ndarray) -> Optional[float]:
     return value
 
 
-def _load_offers_core(path: str, limit_rows: Optional[int]) -> pd.DataFrame:
+def _limit_rows_by_entities(df: pd.DataFrame, limit_rows: int, seed: int) -> Tuple[pd.DataFrame, int]:
+    if "entity_id" not in df.columns:
+        return df, 0
+    entities = df["entity_id"].dropna().unique().tolist()
+    rng = np.random.RandomState(seed)
+    rng.shuffle(entities)
+    frames = []
+    total = 0
+    for entity_id in entities:
+        group = df[df["entity_id"] == entity_id]
+        if group.empty:
+            continue
+        frames.append(group)
+        total += len(group)
+        if total >= limit_rows:
+            break
+    if not frames:
+        return df.iloc[:0].copy(), 0
+    return pd.concat(frames, ignore_index=True), len(frames)
+
+
+def _load_offers_core(
+    path: str, limit_rows: Optional[int], sample_seed: Optional[int] = None
+) -> Tuple[pd.DataFrame, Dict[str, Any]]:
     df = pd.read_parquet(path)
+    limit_info: Dict[str, Any] = {"limit_rows_strategy": None, "limit_rows_selected_entities": None}
     if limit_rows is not None and limit_rows > 0 and len(df) > limit_rows:
-        df = df.iloc[:limit_rows].copy()
-    return df
+        if sample_seed is not None:
+            if "entity_id" in df.columns:
+                df, selected = _limit_rows_by_entities(df, limit_rows, sample_seed)
+                limit_info["limit_rows_strategy"] = "entity_subset"
+                limit_info["limit_rows_selected_entities"] = int(selected)
+            else:
+                df = df.sample(n=limit_rows, random_state=sample_seed).copy()
+                limit_info["limit_rows_strategy"] = "random_rows"
+        else:
+            df = df.iloc[:limit_rows].copy()
+            limit_info["limit_rows_strategy"] = "head"
+    return df, limit_info
 
 
 def _compute_ratio_w(df: pd.DataFrame) -> pd.DataFrame:
@@ -368,7 +402,7 @@ def main() -> None:
     bench_dir.mkdir(parents=True, exist_ok=True)
     (bench_dir / "configs").mkdir(parents=True, exist_ok=True)
 
-    df = _load_offers_core(args.offers_core, args.limit_rows)
+    df, limit_info = _load_offers_core(args.offers_core, args.limit_rows, args.sample_seed)
     df = _compute_ratio_w(df)
 
     feature_cols = [
@@ -402,6 +436,7 @@ def main() -> None:
         strict_future=bool(args.strict_future),
     )
 
+    logger.info("Limit rows strategy: %s", limit_info)
     logger.info("Dropped counts: %s", drop_counts)
 
     train_rows = [r for r in rows if r.split == "train"]
@@ -542,6 +577,8 @@ def main() -> None:
         "use_edgar": bool(args.use_edgar),
         "limit_rows": args.limit_rows,
         "limit_entities": args.limit_entities,
+        "limit_rows_strategy": limit_info.get("limit_rows_strategy"),
+        "limit_rows_selected_entities": limit_info.get("limit_rows_selected_entities"),
         "device": args.device,
         "models": args.models,
         "max_runs": None,
