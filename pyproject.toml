@@ -4,6 +4,7 @@ version = "0.1.0"
 description = "Recovered minimal project metadata for reproducible audits."
 readme = "QUICK_START.md"
 requires-python = ">=3.9"
+dependencies = ["deltalake"]
 
 [tool.black]
 line-length = 100

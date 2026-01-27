@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from datetime import datetime
 from pathlib import Path
-from typing import Iterable, Optional, Sequence, Tuple
+from typing import Any, Iterable, Optional, Sequence, Tuple
 
 import numpy as np
 import pandas as pd
@@ -24,7 +24,41 @@ EDGAR_FEATURE_COLUMNS = [
 
 AGG_PREFIXES = ("last_", "mean_", "ema_")
 
-AGG_PREFIXES = ("last_", "mean_", "ema_")
+
+def _is_delta_path(path: Path) -> bool:
+    return (path / "_delta_log").exists()
+
+
+def _open_dataset(path: Path, *, logger: Optional[Any] = None, label: Optional[str] = None) -> ds.Dataset:
+    if _is_delta_path(path):
+        try:
+            from deltalake import DeltaTable
+        except Exception as exc:
+            raise RuntimeError(f"deltalake required to read Delta table: {path}") from exc
+        dt = DeltaTable(str(path))
+        dataset = dt.to_pyarrow_dataset()
+        if logger is not None:
+            logger.info(
+                "delta_dataset=%s version=%s active_files=%s",
+                label or str(path),
+                dt.version(),
+                len(dt.files()),
+            )
+        return dataset
+    dataset = ds.dataset(
+        str(path),
+        format="parquet",
+        partitioning="hive",
+        exclude_invalid_files=True,
+        ignore_prefixes=["_delta_log"],
+    )
+    if logger is not None:
+        logger.info(
+            "parquet_dataset=%s fragments=%s",
+            label or str(path),
+            sum(1 for _ in dataset.get_fragments()),
+        )
+    return dataset
 
 
 def _to_float(value) -> float:
@@ -93,6 +127,7 @@ def build_edgar_feature_store_v2(
     align_to_snapshots: bool = False,
     partition_by_year: bool = False,
     cutoff_col: Optional[str] = None,
+    logger: Optional[Any] = None,
 ) -> Path:
     """
     Build compact EDGAR feature store (filing-level aggregates).
@@ -103,7 +138,7 @@ def build_edgar_feature_store_v2(
     output_path.parent.mkdir(parents=True, exist_ok=True)
 
     edgar_raw = load_edgar_features_from_parquet(
-        edgar_path, batch_size=batch_size, limit_rows=limit_rows
+        edgar_path, batch_size=batch_size, limit_rows=limit_rows, logger=logger
     )
     edgar_agg = aggregate_edgar_features(edgar_raw, ema_alpha=ema_alpha)
 
@@ -121,13 +156,7 @@ def build_edgar_feature_store_v2(
         return output_path
 
     # align to snapshots (streaming)
-    dataset = ds.dataset(
-        str(snapshots_path),
-        format="parquet",
-        partitioning="hive",
-        exclude_invalid_files=True,
-        ignore_prefixes=["_delta_log"],
-    )
+    dataset = _open_dataset(snapshots_path, logger=logger, label="offers_snapshots")
     available_cols = set(dataset.schema.names)
     snapshot_cols = list(dict.fromkeys(list(id_cols) + [snapshot_time_col] + ([cutoff_col] if cutoff_col else [])))
     snapshot_cols = [c for c in snapshot_cols if c in available_cols]
@@ -210,6 +239,7 @@ def build_edgar_feature_store_v2(
     align_to_snapshots: bool = False,
     partition_by_year: bool = False,
     cutoff_col: Optional[str] = None,
+    logger: Optional[Any] = None,
 ) -> Path:
     """
     Build compact EDGAR feature store (filing-level aggregates).
@@ -220,7 +250,7 @@ def build_edgar_feature_store_v2(
     output_path.parent.mkdir(parents=True, exist_ok=True)
 
     edgar_raw = load_edgar_features_from_parquet(
-        edgar_path, batch_size=batch_size, limit_rows=limit_rows
+        edgar_path, batch_size=batch_size, limit_rows=limit_rows, logger=logger
     )
     edgar_agg = aggregate_edgar_features(edgar_raw, ema_alpha=ema_alpha)
 
@@ -238,13 +268,7 @@ def build_edgar_feature_store_v2(
         return output_path
 
     # align to snapshots (streaming)
-    dataset = ds.dataset(
-        str(snapshots_path),
-        format="parquet",
-        partitioning="hive",
-        exclude_invalid_files=True,
-        ignore_prefixes=["_delta_log"],
-    )
+    dataset = _open_dataset(snapshots_path, logger=logger, label="offers_snapshots")
     available_cols = set(dataset.schema.names)
     snapshot_cols = list(dict.fromkeys(list(id_cols) + [snapshot_time_col] + ([cutoff_col] if cutoff_col else [])))
     snapshot_cols = [c for c in snapshot_cols if c in available_cols]
@@ -566,14 +590,9 @@ def load_edgar_features_from_parquet(
     *,
     batch_size: int = 200_000,
     limit_rows: Optional[int] = None,
+    logger: Optional[Any] = None,
 ) -> pd.DataFrame:
-    dataset = ds.dataset(
-        str(edgar_path),
-        format="parquet",
-        partitioning="hive",
-        exclude_invalid_files=True,
-        ignore_prefixes=["_delta_log"],
-    )
+    dataset = _open_dataset(edgar_path, logger=logger, label="edgar_accessions")
     columns = ["cik", "filed_date", "submission_offering_data"]
     scanner = dataset.scanner(columns=columns, batch_size=batch_size, use_threads=True)
     frames = []
@@ -607,21 +626,16 @@ def build_edgar_feature_store(
     id_cols: Sequence[str] = ("platform_name", "offer_id", "cik"),
     batch_size: int = 200_000,
     limit_rows: Optional[int] = None,
+    logger: Optional[Any] = None,
 ) -> Path:
     """Build EDGAR feature store aligned to offers snapshots."""
     output_path.parent.mkdir(parents=True, exist_ok=True)
 
     edgar_features = load_edgar_features_from_parquet(
-        edgar_path, batch_size=batch_size, limit_rows=limit_rows
+        edgar_path, batch_size=batch_size, limit_rows=limit_rows, logger=logger
     )
 
-    dataset = ds.dataset(
-        str(snapshots_path),
-        format="parquet",
-        partitioning="hive",
-        exclude_invalid_files=True,
-        ignore_prefixes=["_delta_log"],
-    )
+    dataset = _open_dataset(snapshots_path, logger=logger, label="offers_snapshots")
     snapshot_cols = list(dict.fromkeys(list(id_cols) + [snapshot_time_col]))
     scanner = dataset.scanner(columns=snapshot_cols, use_threads=True)
 

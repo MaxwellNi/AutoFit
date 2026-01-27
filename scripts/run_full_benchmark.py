@@ -373,6 +373,7 @@ def main() -> None:
     parser.add_argument("--use_edgar", type=int, default=0)
     parser.add_argument("--limit_rows", type=int, default=None)
     parser.add_argument("--limit_entities", type=int, default=None)
+    parser.add_argument("--selected_entities_json", type=str, default=None)
     parser.add_argument("--exp_name", type=str, required=True)
     parser.add_argument("--plan", type=str, default="paper_min")
     parser.add_argument("--strict_matrix", type=int, default=0)
@@ -404,6 +405,22 @@ def main() -> None:
     (bench_dir / "configs").mkdir(parents=True, exist_ok=True)
 
     df, limit_info = _load_offers_core(args.offers_core, args.limit_rows, args.sample_seed)
+    selected_entities = None
+    selected_entities_hash = None
+    if args.selected_entities_json:
+        selected_path = Path(args.selected_entities_json)
+        if not selected_path.exists():
+            raise RuntimeError(f"selected_entities_json not found: {selected_path}")
+        selected_entities = json.loads(selected_path.read_text(encoding="utf-8"))
+        selected_entities = [str(e) for e in selected_entities]
+        selected_entities_hash = hashlib.sha256("\n".join(sorted(selected_entities)).encode("utf-8")).hexdigest()
+        if "entity_id" not in df.columns:
+            raise RuntimeError("selected_entities_json provided but entity_id column is missing.")
+        df = df[df["entity_id"].astype(str).isin(set(selected_entities))].copy()
+        if args.limit_rows:
+            logger.info("selected_entities_json provided; ignoring limit_rows=%s", args.limit_rows)
+            limit_info["limit_rows_strategy"] = "selected_entities"
+            limit_info["limit_rows_selected_entities"] = len(selected_entities)
     df = _compute_ratio_w(df)
 
     feature_cols = [
@@ -587,6 +604,9 @@ def main() -> None:
         "limit_entities": args.limit_entities,
         "limit_rows_strategy": limit_info.get("limit_rows_strategy"),
         "limit_rows_selected_entities": limit_info.get("limit_rows_selected_entities"),
+        "selected_entities_json": args.selected_entities_json,
+        "selected_entities_hash": selected_entities_hash,
+        "selected_entities_count": len(selected_entities) if selected_entities is not None else None,
         "sampled_entities_path": str(sampled_path),
         "sampled_entities_hash": selection_hash,
         "sampled_entities_count": len(sampled_entities),
