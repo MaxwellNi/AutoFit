@@ -1,0 +1,286 @@
+(insider) pni@ift-severn:~/project$ tree repo_root -I 'raw'
+repo_root
+├── configs
+│   ├── dataset.yaml
+│   ├── experiment.yaml
+│   └── models
+│       └── tslib_search_example.yaml
+├── data
+│   ├── final
+│   ├── processed
+│   └── runs
+├── DECISION.md
+├── docs
+│   └── RESEARCH_PIPELINE_IMPLEMENTATION.md
+├── env
+│   └── tslib.yml
+├── PROJECT_SUMMARY.md
+├── pyproject.toml
+├── QUICK_START.md
+├── RUNBOOK.md
+├── runs
+│   ├── auto_fit
+│   │   └── 20260125_011956
+│   │       └── logs
+│   │           └── run_auto_fit_smoke.log
+│   ├── backups
+│   │   ├── cron.log
+│   │   └── latest.txt
+│   ├── benchmark_matrix
+│   │   ├── 20260125_010637
+│   │   │   └── logs
+│   │   │       └── run_full_benchmark_smoke.log
+│   │   └── 20260125_011052
+│   │       └── logs
+│   │           └── run_full_benchmark_smoke.log
+│   ├── budget_search
+│   │   └── 20260125_004714
+│   │       └── logs
+│   │           └── pytest_budget_search.log
+│   ├── calibration
+│   │   └── 20260125_005539
+│   │       └── logs
+│   │           └── pytest_calibration.log
+│   ├── compose_candidates
+│   │   └── 20260125_004423
+│   │       └── logs
+│   │           └── pytest_compose_candidates.log
+│   ├── diagnose_dataset
+│   │   ├── 20260125_004227
+│   │   │   └── logs
+│   │   │       └── pytest_diagnose_dataset.log
+│   │   └── 20260125_012059
+│   │       └── logs
+│   │           └── pytest_diagnose_dataset.log
+│   ├── dimension_moe
+│   │   └── 20260125_005339
+│   │       └── logs
+│   │           └── pytest_dimension_moe.log
+│   ├── edgar_feature_store
+│   │   └── 20260125_002540
+│   │       └── logs
+│   │           ├── build_edgar_features_smoke.log
+│   │           └── pytest_edgar_feature_store.log
+│   ├── external_datasets
+│   │   └── 20260125_010855
+│   │       └── logs
+│   │           └── pytest_external_datasets.log
+│   ├── faithfulness
+│   │   └── 20260125_005728
+│   │       └── logs
+│   │           └── pytest_explainability_faithfulness.log
+│   ├── foundation_wrappers
+│   │   └── 20260125_003934
+│   │       └── logs
+│   │           └── pytest_foundation_wrappers.log
+│   ├── irregular_patch
+│   │   └── 20260125_002855
+│   │       └── logs
+│   │           └── pytest_irregular_patch.log
+│   ├── key_resolver
+│   │   └── 20260124_235324
+│   │       └── logs
+│   │           └── pytest_key_resolver.log
+│   ├── nbi_supervision
+│   │   └── 20260125_004953
+│   │       └── logs
+│   │           └── pytest_nbi_supervision.log
+│   ├── parquet_pipeline
+│   │   └── 20260125_002049
+│   │       └── logs
+│   │           └── pytest_pipeline_smoke.log
+│   ├── report_tables
+│   │   └── 20260125_010241
+│   │       └── logs
+│   │           └── pytest_report_tables.log
+│   ├── schema_profile
+│   │   └── 20260124_235147
+│   │       └── logs
+│   │           └── pytest_schema_profiler.log
+│   ├── ssm_encoder_v2
+│   │   └── 20260125_003632
+│   │       └── logs
+│   │           └── pytest_ssm_encoder_v2.log
+│   ├── sync_scripts
+│   │   ├── 20260125_011235
+│   │   │   └── logs
+│   │   │       └── pytest_collect_results.log
+│   │   ├── 20260125_013421
+│   │   │   └── logs
+│   │   │       └── pytest_collect_results.log
+│   │   └── 20260125_021819
+│   │       └── logs
+│   │           └── pytest_collect_results.log
+│   ├── test_nbi_nci_smoke
+│   │   ├── 20260125_013436
+│   │   │   └── logs
+│   │   │       └── run_train_complete_pipeline_smoke.log
+│   │   └── 20260125_021819
+│   │       └── logs
+│   │           └── run_train_complete_pipeline_smoke.log
+│   └── timeline
+│       └── 20260124_235523
+│           └── logs
+│               └── pytest_timeline.log
+├── scripts
+│   ├── audit_bench_configs.py
+│   ├── build_edgar_features.py
+│   ├── check_environment.py
+│   ├── collect_results.py
+│   ├── download_all_data.py
+│   ├── download_nbi_supervision.py
+│   ├── install_missing_packages.sh
+│   ├── prepare_external_dataset.py
+│   ├── profile_parquet_schemas.py
+│   ├── run_all_experiments.sh
+│   ├── run_auto_fit.py
+│   ├── run_full_benchmark.py
+│   ├── run_local_test.sh
+│   ├── run_official_benchmark.py
+│   ├── run_official_models.py
+│   ├── slurm
+│   │   ├── run_autofit_search.sbatch
+│   │   ├── run_benchmark_matrix.sbatch
+│   │   └── run_final_training.sbatch
+│   ├── summarize_horizon_audit.py
+│   ├── sync_repo.sh
+│   ├── sync_results.sh
+│   ├── test_local_small_scale.py
+│   └── train_complete_pipeline.py
+├── src
+│   ├── narrative
+│   │   ├── auto_fit
+│   │   │   ├── budget_search.py
+│   │   │   ├── compose_candidates.py
+│   │   │   ├── diagnose_dataset.py
+│   │   │   ├── __init__.py
+│   │   │   ├── leaderboard.py
+│   │   │   └── __pycache__
+│   │   │       ├── budget_search.cpython-312.pyc
+│   │   │       ├── compose_candidates.cpython-312.pyc
+│   │   │       ├── diagnose_dataset.cpython-312.pyc
+│   │   │       ├── __init__.cpython-312.pyc
+│   │   │       └── leaderboard.cpython-312.pyc
+│   │   ├── data_preprocessing
+│   │   │   ├── edgar_feature_store.py
+│   │   │   ├── external_datasets.py
+│   │   │   ├── key_resolver.py
+│   │   │   ├── load_data.py
+│   │   │   ├── parquet_catalog.py
+│   │   │   ├── __pycache__
+│   │   │   │   ├── edgar_feature_store.cpython-312.pyc
+│   │   │   │   ├── external_datasets.cpython-312.pyc
+│   │   │   │   ├── key_resolver.cpython-312.pyc
+│   │   │   │   ├── load_data.cpython-312.pyc
+│   │   │   │   ├── parquet_catalog.cpython-312.pyc
+│   │   │   │   ├── schema_profiler.cpython-312.pyc
+│   │   │   │   └── timeline.cpython-312.pyc
+│   │   │   ├── schema_profiler.py
+│   │   │   └── timeline.py
+│   │   ├── evaluation
+│   │   │   ├── __init__.py
+│   │   │   ├── __pycache__
+│   │   │   │   ├── __init__.cpython-312.pyc
+│   │   │   │   ├── report.cpython-312.pyc
+│   │   │   │   ├── runner.cpython-312.pyc
+│   │   │   │   └── validation.cpython-312.pyc
+│   │   │   ├── report.py
+│   │   │   ├── runner.py
+│   │   │   └── validation.py
+│   │   ├── explainability
+│   │   │   ├── exporter.py
+│   │   │   ├── __init__.py
+│   │   │   ├── integrated_gradients.py
+│   │   │   ├── lime_utils.py
+│   │   │   ├── llm_explainer.py
+│   │   │   ├── __pycache__
+│   │   │   │   ├── exporter.cpython-312.pyc
+│   │   │   │   ├── __init__.cpython-312.pyc
+│   │   │   │   ├── integrated_gradients.cpython-312.pyc
+│   │   │   │   ├── lime_utils.cpython-312.pyc
+│   │   │   │   ├── llm_explainer.cpython-312.pyc
+│   │   │   │   ├── shap_utils.cpython-312.pyc
+│   │   │   │   └── tcav_utils.cpython-312.pyc
+│   │   │   ├── shap_utils.py
+│   │   │   └── tcav_utils.py
+│   │   ├── models
+│   │   │   ├── foundation_wrappers
+│   │   │   │   ├── base.py
+│   │   │   │   ├── chronos.py
+│   │   │   │   ├── __init__.py
+│   │   │   │   ├── lag_llama.py
+│   │   │   │   ├── moirai.py
+│   │   │   │   └── __pycache__
+│   │   │   │       ├── base.cpython-312.pyc
+│   │   │   │       ├── chronos.cpython-312.pyc
+│   │   │   │       ├── __init__.cpython-312.pyc
+│   │   │   │       ├── lag_llama.cpython-312.pyc
+│   │   │   │       └── moirai.cpython-312.pyc
+│   │   │   ├── fusion.py
+│   │   │   ├── irregular_patch.py
+│   │   │   ├── local_registry.py
+│   │   │   ├── module_wrappers.py
+│   │   │   ├── __pycache__
+│   │   │   │   ├── fusion.cpython-312.pyc
+│   │   │   │   ├── irregular_patch.cpython-312.pyc
+│   │   │   │   ├── local_registry.cpython-312.pyc
+│   │   │   │   ├── module_wrappers.cpython-312.pyc
+│   │   │   │   ├── ssm_encoder_v2.cpython-312.pyc
+│   │   │   │   ├── temporal_fm.cpython-312.pyc
+│   │   │   │   ├── torch_data.cpython-312.pyc
+│   │   │   │   ├── torch_data_parquet.cpython-312.pyc
+│   │   │   │   └── training_loop.cpython-312.pyc
+│   │   │   ├── ssm_encoder_v2.py
+│   │   │   ├── temporal_fm.py
+│   │   │   ├── torch_data_parquet.py
+│   │   │   ├── torch_data.py
+│   │   │   └── training_loop.py
+│   │   ├── nbi_nci
+│   │   │   ├── calibration.py
+│   │   │   ├── dimension_moe.py
+│   │   │   ├── nbi_computation.py
+│   │   │   ├── nbi_supervision.py
+│   │   │   ├── outcome_model.py
+│   │   │   └── __pycache__
+│   │   │       ├── calibration.cpython-312.pyc
+│   │   │       ├── dimension_moe.cpython-312.pyc
+│   │   │       ├── nbi_computation.cpython-312.pyc
+│   │   │       ├── nbi_supervision.cpython-312.pyc
+│   │   │       └── outcome_model.cpython-312.pyc
+│   │   ├── pipeline.py
+│   │   ├── __pycache__
+│   │   │   └── pipeline.cpython-312.pyc
+│   │   └── training
+│   │       ├── distributed.py
+│   │       └── __pycache__
+│   │           └── distributed.cpython-312.pyc
+│   └── narrative.egg-info
+│       ├── dependency_links.txt
+│       ├── PKG-INFO
+│       ├── requires.txt
+│       ├── SOURCES.txt
+│       └── top_level.txt
+└── test
+    ├── test_budget_search.py
+    ├── test_calibration.py
+    ├── test_collate_fixed_len.py
+    ├── test_collect_results.py
+    ├── test_compose_candidates.py
+    ├── test_diagnose_dataset.py
+    ├── test_dimension_moe.py
+    ├── test_edgar_feature_store.py
+    ├── test_explainability_faithfulness.py
+    ├── test_external_datasets.py
+    ├── test_foundation_wrappers.py
+    ├── test_irregular_patch.py
+    ├── test_key_resolver.py
+    ├── test_nbi_supervision.py
+    ├── test_parquet_catalog.py
+    ├── test_pipeline_smoke.py
+    ├── test_report_tables.py
+    ├── test_schema_profiler.py
+    ├── test_ssm_encoder_v2.py
+    ├── test_temporal_fm_activation.py
+    └── test_timeline.py
+
+106 directories, 176 files

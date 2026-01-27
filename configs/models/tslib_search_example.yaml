@@ -1,0 +1,6 @@
+models:
+  - dlinear
+  - patchtst
+training:
+  seeds: [42]
+  epochs: 2

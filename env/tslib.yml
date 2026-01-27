@@ -1,0 +1,11 @@
+name: tslib
+channels:
+  - conda-forge
+dependencies:
+  - python>=3.9
+  - numpy
+  - pandas
+  - pyarrow
+  - scikit-learn
+  - pyyaml
+  - pytorch

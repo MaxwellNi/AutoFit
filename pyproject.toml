@@ -1,0 +1,12 @@
+[project]
+name = "cursor-next-generation-ml-pipeline"
+version = "0.1.0"
+description = "Recovered minimal project metadata for reproducible audits."
+readme = "QUICK_START.md"
+requires-python = ">=3.9"
+
+[tool.black]
+line-length = 100
+
+[tool.isort]
+profile = "black"

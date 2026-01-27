@@ -1,0 +1,55 @@
+# RUNBOOK
+
+> Reconstructed after workspace reset. Historical entries may be missing.
+
+## Recovery note
+
+- This file was recreated to unblock B11 v2 policy work.
+- New entries will be appended below.
+
+## Auto-backup setup (20260126_144350)
+
+- Created `scripts/auto_backup.sh`
+- Installed hourly cron job to run backup
+- Initial snapshot: `runs/backups/20260126_144350/repo_backup.tgz`
+
+## Strict-future policy upgrade (attempt, 20260126_144844)
+
+Commands (h14 minimal 2-run with min deltas):
+
+```
+set -e; stamp=20260126_144844; for edgar in on off; do if [ "$edgar" = "on" ]; then edgar_arg="--edgar_features runs/edgar_feature_store/20260125_163720_smoke/edgar_features --use_edgar 1"; else edgar_arg="--use_edgar 0"; fi; exp="paper_min_matrix_edgar_${edgar}_v2_b11_lr500000_goal50_h14_fix2_sf_policy_v2"; PYTHONPATH=src python scripts/run_full_benchmark.py --offers_core runs/offers_core_v2_20260125_214521/offers_core.parquet $edgar_arg --limit_rows 500000 --exp_name "$exp" --plan paper_min --strict_matrix 1 --models dlinear patchtst itransformer timesnet --fusion_types none film --module_variants base nonstat multiscale --seeds 42 43 --sample_strategy random_entities --sample_seed 42 --split_seed 42 --label_goal_min 50 --label_horizon 14 --min_label_delta_days 1.0 --min_ratio_delta_rel 1e-4 |& tee -a runs/sanity_${stamp}/h14_policy_min_run.log; done
+```
+
+Outcome:
+
+- Run failed with `RuntimeError: No samples available after filtering`.
+- Drop counts (first run): `dropped_due_to_static_ratio=10190`, `dropped_due_to_min_delta_days=925`, `dropped_due_to_insufficient_future=39`.
+
+## Recovery snapshot (20260127_021255)
+
+- Snapshot dir: `runs/backups/repo_root_snapshot_20260127_021255/`
+- Snapshot tar: `runs/backups/repo_root_snapshot_20260127_021255.tar.gz`
+- Listing: `runs/backups/ls_repo_root_20260127_021255.txt`
+- Checksums: `runs/backups/sha256_repo_root_20260127_021255.txt`
+
+## Historical stamps (from transcript; outputs missing)
+
+- `20260126_021733` — h1 fix2_sf full grid; outputs missing due to disaster.
+- `20260126_084648` — h3 minimal + GateA fix; outputs missing due to disaster.
+- `20260126_091417` — h3 full grid; outputs missing due to disaster.
+- `20260126_093612` — h7 minimal; outputs missing due to disaster.
+- `20260126_101559` — h7 full grid; outputs missing due to disaster.
+- `20260126_105043` — h14 minimal; outputs missing due to disaster.
+- `20260126_112613` — h14 full grid; outputs missing due to disaster.
+
+## Smoke recovery run (20260127_023128)
+
+- offers_core_smoke: `runs/offers_core_smoke_20260127_023118/offers_core_smoke.parquet`
+- bench_dir: `runs/benchmarks/smoke_b11_recovery_h3_20260127_023128/`
+- Gate A: `runs/sanity_20260127_023128/audit_summary.json`
+- Gate B: `runs/sanity_20260127_023128_leakage_smoke/label_leakage_report.json`
+- Gate C: `runs/sanity_20260127_023128/sanity_report.json`
+- Gate D: `runs/sanity_20260127_023128/alignment_audit.json`
+- Horizon compare: `runs/sanity_20260127_023128/horizon_compare.md`
+- Manifest: `runs/sanity_20260127_023128/MANIFEST.json`

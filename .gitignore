@@ -1,0 +1,11 @@
+data/**
+runs/**
+*.parquet
+*.csv
+*.pt
+*.pth
+*.ckpt
+*.log
+__pycache__/
+*.pyc
+.DS_Store

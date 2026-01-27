@@ -1,0 +1,5 @@
+dataset:
+  name: "offers_core"
+  path: "runs/offers_core_smoke/offers_core_smoke.parquet"
+  snapshot_ts_col: "snapshot_ts"
+  entity_id_col: "entity_id"
