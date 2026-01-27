@@ -4,6 +4,7 @@ from __future__ import annotations
 import argparse
 import hashlib
 import json
+from datetime import datetime
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
 
@@ -30,7 +31,20 @@ def _sample_rows(dataset, columns: List[str]) -> List[Dict[str, Any]]:
         table = scanner.head(5)
     except Exception:
         table = scanner.to_table().slice(0, 5)
-    return table.to_pylist()
+    rows = table.to_pylist()
+    return [_json_safe(row) for row in rows]
+
+
+def _json_safe(value: Any) -> Any:
+    if isinstance(value, (pd.Timestamp, datetime, np.datetime64)):
+        return str(value)
+    if isinstance(value, np.generic):
+        return value.item()
+    if isinstance(value, dict):
+        return {k: _json_safe(v) for k, v in value.items()}
+    if isinstance(value, list):
+        return [_json_safe(v) for v in value]
+    return value
 
 
 def _count_fragments(dataset) -> int:

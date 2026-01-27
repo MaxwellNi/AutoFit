@@ -61,6 +61,14 @@ def _open_dataset(path: Path, *, logger: Optional[Any] = None, label: Optional[s
     return dataset
 
 
+def _normalize_utc_ts(series: pd.Series) -> pd.Series:
+    ts = pd.to_datetime(series, errors="coerce", utc=True)
+    try:
+        return ts.astype("datetime64[ns, UTC]")
+    except Exception:
+        return pd.to_datetime(ts.astype("string"), errors="coerce", utc=True)
+
+
 def _to_float(value) -> float:
     if value is None or (isinstance(value, float) and np.isnan(value)):
         return np.nan
@@ -490,13 +498,13 @@ def align_edgar_features_to_snapshots(
     keep_cols = list(dict.fromkeys(list(id_cols) + [snapshot_time_col] + ([cutoff_col_used] if cutoff_col_used else [])))
     snaps = snaps[keep_cols]
     snaps["cik"] = snaps["cik"].astype(str)
-    snaps[snapshot_time_col] = pd.to_datetime(snaps[snapshot_time_col], errors="coerce", utc=True)
+    snaps[snapshot_time_col] = _normalize_utc_ts(snaps[snapshot_time_col])
     snaps = snaps.dropna(subset=[snapshot_time_col])
     snaps = snaps[~snaps["cik"].isin(["", "nan", "None", "NaN"])]
     snaps = snaps.dropna(subset=[snapshot_time_col])
     snaps = snaps[~snaps["cik"].isin(["", "nan", "None", "NaN"])]
     if cutoff_col_used:
-        snaps[cutoff_col_used] = pd.to_datetime(snaps[cutoff_col_used], errors="coerce", utc=True)
+        snaps[cutoff_col_used] = _normalize_utc_ts(snaps[cutoff_col_used])
         snaps["cutoff_ts"] = snaps[cutoff_col_used]
     else:
         snaps["cutoff_ts"] = snaps[snapshot_time_col]
@@ -504,7 +512,7 @@ def align_edgar_features_to_snapshots(
     edgar = edgar_features.copy()
     if not edgar.empty:
         edgar["cik"] = edgar["cik"].astype(str)
-        edgar["filed_date"] = pd.to_datetime(edgar["filed_date"], errors="coerce", utc=True)
+        edgar["filed_date"] = _normalize_utc_ts(edgar["filed_date"])
         edgar = edgar.dropna(subset=["filed_date"])
         edgar = edgar[~edgar["cik"].isin(["", "nan", "None", "NaN"])]
         edgar = edgar.sort_values(["filed_date", "cik"], kind="mergesort")
