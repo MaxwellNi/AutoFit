@@ -98,3 +98,4 @@ Outcome:
 - Leakage re-run (sf0): `runs/sanity_20260127_090025/leakage_ab_real_sf0/label_leakage_report.json`
 - Leakage re-run (sf1): `runs/sanity_20260127_090025/leakage_ab_real_sf1/label_leakage_report.json`
 - Manifest: `runs/sanity_20260127_090025/MANIFEST_phase1.json`
+- Bundle: `runs/backups/repo_root_20260127_090025_phase1.bundle`
