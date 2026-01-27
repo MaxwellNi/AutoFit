@@ -64,7 +64,7 @@ def _evaluate_horizon(
     static_ratio_tol: float,
     min_label_delta_days: float,
     min_ratio_delta_rel: float,
-) -> Tuple[Dict[str, int], Dict[str, int], List[float]]:
+) -> Tuple[Dict[str, int], Dict[str, int], List[float], List[float], List[float]]:
     n = len(group)
     drops_sf1 = {
         "insufficient_future": 0,
@@ -82,6 +82,8 @@ def _evaluate_horizon(
     }
     counts = {"strict_future_0": 0, "strict_future_1": 0}
     delta_days_list: List[float] = []
+    input_keep_values: List[float] = []
+    label_keep_values: List[float] = []
 
     if n == 0:
         return counts, drops_sf1, delta_days_list
@@ -105,7 +107,8 @@ def _evaluate_horizon(
         input_ratio = _safe_ratio(raised[valid_idx], goals[valid_idx])
         label_ratio = _safe_ratio(raised[label_idx_valid], goals[label_idx_valid])
 
-        static_mask = np.isfinite(input_ratio) & np.isfinite(label_ratio) & (np.abs(label_ratio - input_ratio) < static_ratio_tol)
+        valid_ratio = np.isfinite(input_ratio) & np.isfinite(label_ratio)
+        static_mask = valid_ratio & (np.abs(label_ratio - input_ratio) < static_ratio_tol)
         drops_sf1["static_ratio"] = int(static_mask.sum())
 
         delta_days = (ts[label_idx_valid] - ts[valid_idx]) / np.timedelta64(1, "D")
@@ -116,7 +119,7 @@ def _evaluate_horizon(
         if delta_days_valid.size:
             delta_days_list.extend(delta_days_valid.astype(float).tolist())
 
-        keep = ~static_mask & ~ts_bad
+        keep = valid_ratio & ~static_mask & ~ts_bad
         if min_label_delta_days > 0:
             min_delta_mask = delta_days < min_label_delta_days
             drops_sf1["min_delta_days"] = int((keep & min_delta_mask).sum())
@@ -130,18 +133,22 @@ def _evaluate_horizon(
             keep = keep & ~min_ratio_mask
 
         counts["strict_future_1"] = int(keep.sum())
+        if keep.any():
+            input_keep_values.extend(input_ratio[keep].astype(float).tolist())
+            label_keep_values.extend(label_ratio[keep].astype(float).tolist())
 
     # strict_future=0 (label clamped)
     input_ratio0 = _safe_ratio(raised, goals)
     label_ratio0 = _safe_ratio(raised[label_idx_sf0], goals[label_idx_sf0])
-    static_mask0 = np.isfinite(input_ratio0) & np.isfinite(label_ratio0) & (np.abs(label_ratio0 - input_ratio0) < static_ratio_tol)
+    valid_ratio0 = np.isfinite(input_ratio0) & np.isfinite(label_ratio0)
+    static_mask0 = valid_ratio0 & (np.abs(label_ratio0 - input_ratio0) < static_ratio_tol)
     drops_sf0["static_ratio"] = int(static_mask0.sum())
 
     delta_days0 = (ts[label_idx_sf0] - ts[idx]) / np.timedelta64(1, "D")
     ts_bad0 = ~np.isfinite(delta_days0) | (delta_days0 <= 0)
     drops_sf0["ts_order_bad"] = int((~static_mask0 & ts_bad0).sum())
 
-    keep0 = ~static_mask0 & ~ts_bad0
+    keep0 = valid_ratio0 & ~static_mask0 & ~ts_bad0
     if min_label_delta_days > 0:
         min_delta_mask0 = delta_days0 < min_label_delta_days
         drops_sf0["min_delta_days"] = int((keep0 & min_delta_mask0).sum())
@@ -156,7 +163,7 @@ def _evaluate_horizon(
 
     counts["strict_future_0"] = int(keep0.sum())
 
-    return counts, drops_sf1, delta_days_list
+    return counts, drops_sf1, delta_days_list, input_keep_values, label_keep_values
 
 
 def main() -> None:
@@ -210,10 +217,12 @@ def main() -> None:
             "ts_order_bad": 0,
         }
         delta_days_all: List[float] = []
+        input_keep_all: List[float] = []
+        label_keep_all: List[float] = []
 
         for _, group in df.groupby("entity_id", sort=False):
             group = group.reset_index(drop=True)
-            counts, drops, delta_days_list = _evaluate_horizon(
+            counts, drops, delta_days_list, input_keep, label_keep = _evaluate_horizon(
                 group,
                 horizon,
                 static_ratio_tol=args.static_ratio_tol,
@@ -224,6 +233,8 @@ def main() -> None:
             counts_sf1 += counts["strict_future_1"]
             _merge_counts(drops_sf1, drops)
             delta_days_all.extend(delta_days_list)
+            input_keep_all.extend(input_keep)
+            label_keep_all.extend(label_keep)
 
         delta_stats = {
             "median": None,
@@ -240,6 +251,21 @@ def main() -> None:
                 "pct_delta_days_lt_min": float((arr < args.min_label_delta_days).mean()),
             }
 
+        naive_rmse = None
+        naive_std_y = None
+        naive_near_perfect = None
+        if label_keep_all:
+            label_arr = np.asarray(label_keep_all, dtype=float)
+            input_arr = np.asarray(input_keep_all, dtype=float)
+            naive_std_y = float(np.std(label_arr)) if label_arr.size else None
+            if label_arr.size:
+                naive_rmse = float(np.sqrt(np.mean((label_arr - input_arr) ** 2)))
+            if naive_std_y is not None and np.isfinite(naive_std_y):
+                if naive_std_y == 0.0:
+                    naive_near_perfect = True
+                elif naive_rmse is not None:
+                    naive_near_perfect = bool(naive_rmse <= 0.05 * naive_std_y)
+
         horizon_reports.append(
             {
                 "horizon": horizon,
@@ -247,21 +273,29 @@ def main() -> None:
                 "strict_future_1_samples": int(counts_sf1),
                 "drops_strict_future_1": drops_sf1,
                 "delta_days": delta_stats,
+                "naive_progress_rmse": naive_rmse,
+                "naive_progress_std_y": naive_std_y,
+                "naive_progress_near_perfect": naive_near_perfect,
             }
         )
 
     pct_threshold = 0.05
     recommended_horizon = None
     reason = None
+    candidates: List[Dict[str, Any]] = []
     for rep in sorted(horizon_reports, key=lambda r: r["horizon"]):
         samples = rep["strict_future_1_samples"]
         pct_lt = rep["delta_days"]["pct_delta_days_lt_min"]
         if samples >= 500 and (pct_lt is None or pct_lt <= pct_threshold):
-            recommended_horizon = rep["horizon"]
-            reason = f"min_samples>=500 and pct_delta_days_lt_min<={pct_threshold}"
-            break
+            candidates.append(rep)
+    non_trivial = [r for r in candidates if r.get("naive_progress_near_perfect") is False]
+    if non_trivial:
+        recommended_horizon = min(non_trivial, key=lambda r: r["horizon"])["horizon"]
+        reason = "min_samples>=500, pct_delta_days_lt_min<=0.05, naive_progress_not_near_perfect"
+    elif candidates:
+        reason = "all candidates near-perfect; expand horizons or tighten min_ratio_delta_rel or change label"
     if recommended_horizon is None:
-        reason = f"no horizon met samples>=500 and pct_delta_days_lt_min<={pct_threshold}"
+        reason = reason or f"no horizon met samples>=500 and pct_delta_days_lt_min<={pct_threshold}"
 
     report = {
         "offers_core": str(offers_path),
@@ -274,7 +308,7 @@ def main() -> None:
         "horizons": horizon_reports,
         "recommendation": {
             "recommended_horizon": recommended_horizon,
-            "rule": f"strict_future_1_samples>=500 and pct_delta_days_lt_min<={pct_threshold}",
+            "rule": "min_samples>=500, pct_delta_days_lt_min<=0.05, naive_progress_not_near_perfect",
             "reason": reason,
         },
     }
@@ -294,13 +328,13 @@ def main() -> None:
         f.write(f"- p90: {entity_stats['p90']}\n")
         f.write(f"- max: {entity_stats['max']}\n\n")
         f.write("## Horizon feasibility\n\n")
-        f.write("| horizon | sf0_samples | sf1_samples | drops_sf1_insufficient | drops_sf1_static | drops_sf1_min_delta | drops_sf1_min_ratio_rel | drops_sf1_ts_bad | delta_days_median | pct_delta_days_lt_min |\n")
-        f.write("| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |\n")
+        f.write("| horizon | sf0_samples | sf1_samples | drops_sf1_insufficient | drops_sf1_static | drops_sf1_min_delta | drops_sf1_min_ratio_rel | drops_sf1_ts_bad | delta_days_median | pct_delta_days_lt_min | naive_rmse | std_y | near_perfect |\n")
+        f.write("| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |\n")
         for rep in report["horizons"]:
             drops = rep["drops_strict_future_1"]
             delta = rep["delta_days"]
             f.write(
-                "| {h} | {sf0} | {sf1} | {ins} | {static} | {min_d} | {min_r} | {ts} | {med} | {pct} |\n".format(
+                "| {h} | {sf0} | {sf1} | {ins} | {static} | {min_d} | {min_r} | {ts} | {med} | {pct} | {rmse} | {std} | {np} |\n".format(
                     h=rep["horizon"],
                     sf0=rep["strict_future_0_samples"],
                     sf1=rep["strict_future_1_samples"],
@@ -311,6 +345,9 @@ def main() -> None:
                     ts=drops["ts_order_bad"],
                     med=delta["median"],
                     pct=delta["pct_delta_days_lt_min"],
+                    rmse=rep.get("naive_progress_rmse"),
+                    std=rep.get("naive_progress_std_y"),
+                    np=rep.get("naive_progress_near_perfect"),
                 )
             )
         f.write("\n## Recommendation\n\n")

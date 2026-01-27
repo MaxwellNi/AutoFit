@@ -99,3 +99,9 @@ Outcome:
 - Leakage re-run (sf1): `runs/sanity_20260127_090025/leakage_ab_real_sf1/label_leakage_report.json`
 - Manifest: `runs/sanity_20260127_090025/MANIFEST_phase1.json`
 - Bundle: `runs/backups/repo_root_20260127_090025_phase1.bundle`
+
+## Phase2 official horizon policy (20260127_091335)
+
+- Feasibility policy report: `runs/sanity_20260127_091335/feasibility_policy/feasibility_report.json`
+- Feasibility policy markdown: `runs/sanity_20260127_091335/feasibility_policy/feasibility_report.md`
+- Manifest: `runs/sanity_20260127_091335/MANIFEST_phase2.json`
