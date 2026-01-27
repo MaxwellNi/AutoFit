@@ -66,3 +66,17 @@ Outcome:
 
 - AB not run (missing offers_core): `runs/sanity_20260127_032955/RESULT_AB.txt`
 - Bench list placeholder: `runs/sanity_20260127_032955/bench_dirs_ab.txt`
+
+## Phase0-4 strict_future wiring (20260127_034904)
+
+- Smoke offers_core selected: `runs/offers_core_smoke_20260127_023118/offers_core_smoke.parquet`
+- Smoke validation log: `runs/sanity_20260127_034904/logs/offers_core_smoke_validate.log`
+- Smoke AB bench_dirs: `runs/sanity_20260127_034904/bench_dirs_ab_smoke.txt`
+- Smoke AB result: `runs/sanity_20260127_034904/RESULT_AB_SMOKE.md`
+- Raw candidates log: `runs/sanity_20260127_034904/logs/offers_raw_candidates.txt`
+- Built offers_core_v2: `runs/offers_core_v2_20260127_034904/offers_core.parquet`
+- Build manifest: `runs/offers_core_v2_20260127_034904/MANIFEST.json`
+- Real AB bench_dirs: `runs/sanity_20260127_034904/bench_dirs_ab_real.txt`
+- Real AB result: `runs/sanity_20260127_034904/RESULT_AB_REAL.md` (sf1 failed: no samples)
+- Gates (smoke/real): `runs/sanity_20260127_034904/audit_summary_ab_*.json`, `sanity_report_ab_*.json`, `alignment_audit_ab_*.json`
+- Full manifest: `runs/sanity_20260127_034904/MANIFEST_full.json`

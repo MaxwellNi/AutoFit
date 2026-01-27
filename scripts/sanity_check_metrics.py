@@ -161,24 +161,24 @@ def main() -> None:
         entry["label_horizon"] = _infer_label_horizon(bench_dir, metrics_df, preds_df)
 
         if "y_true_raw" in test_df.columns and "y_pred_raw" in test_df.columns:
-            y_true = test_df["y_true_raw"].to_numpy(dtype=float)
-            y_pred = test_df["y_pred_raw"].to_numpy(dtype=float)
+            y_true_full = test_df["y_true_raw"].to_numpy(dtype=float)
+            y_pred_full = test_df["y_pred_raw"].to_numpy(dtype=float)
             entry["label_scale"] = "raw"
         else:
-            y_true = test_df["y_true"].to_numpy(dtype=float)
-            y_pred = test_df["y_pred"].to_numpy(dtype=float)
+            y_true_full = test_df["y_true"].to_numpy(dtype=float)
+            y_pred_full = test_df["y_pred"].to_numpy(dtype=float)
             entry["label_scale"] = "standardized"
 
-        mask = np.isfinite(y_true) & np.isfinite(y_pred)
-        y_true = y_true[mask]
-        y_pred = y_pred[mask]
+        mask = np.isfinite(y_true_full) & np.isfinite(y_pred_full)
+        y_true_eval = y_true_full[mask]
+        y_pred_eval = y_pred_full[mask]
 
         entry["y_stats"] = {
-            "count": int(y_true.size),
-            "mean": float(np.nanmean(y_true)) if y_true.size else None,
-            "std": float(np.nanstd(y_true)) if y_true.size else None,
-            "min": float(np.nanmin(y_true)) if y_true.size else None,
-            "max": float(np.nanmax(y_true)) if y_true.size else None,
+            "count": int(y_true_eval.size),
+            "mean": float(np.nanmean(y_true_eval)) if y_true_eval.size else None,
+            "std": float(np.nanstd(y_true_eval)) if y_true_eval.size else None,
+            "min": float(np.nanmin(y_true_eval)) if y_true_eval.size else None,
+            "max": float(np.nanmax(y_true_eval)) if y_true_eval.size else None,
         }
 
         best_rmse = None
@@ -197,9 +197,9 @@ def main() -> None:
             )
             y_mean = float(np.nanmean(train_y)) if train_y.size else float("nan")
         else:
-            y_mean = float(np.nanmean(y_true)) if y_true.size else float("nan")
-        naive_pred = np.full_like(y_true, y_mean)
-        entry["naive_mean_baseline"] = _metrics(y_true, naive_pred)
+            y_mean = float(np.nanmean(y_true_eval)) if y_true_eval.size else float("nan")
+        naive_pred = np.full_like(y_true_eval, y_mean)
+        entry["naive_mean_baseline"] = _metrics(y_true_eval, naive_pred)
 
         total_rows = len(test_df)
         progress_invalid_reasons: Dict[str, int] = {}
@@ -235,18 +235,18 @@ def main() -> None:
         progress_pred[invalid_mask] = fallback_value
         defined_ratio = 1.0 - (float(invalid_mask.sum()) / max(1, total_rows))
 
-        ratio_mask = np.isfinite(progress_pred) & np.isfinite(y_true)
-        entry["naive_progress_baseline"] = _metrics(y_true[ratio_mask], progress_pred[ratio_mask])
+        ratio_mask = np.isfinite(progress_pred) & np.isfinite(y_true_full)
+        entry["naive_progress_baseline"] = _metrics(y_true_full[ratio_mask], progress_pred[ratio_mask])
         entry["naive_progress_baseline"]["defined_ratio"] = defined_ratio
         entry["naive_progress_baseline"]["invalid_reasons"] = progress_invalid_reasons
         entry["naive_progress_baseline"]["predict_ratio"] = ratio_source or "missing"
         entry["naive_progress_baseline"]["n_eval"] = int(ratio_mask.sum())
 
         current_ratio = ratio
-        mask_lr = np.isfinite(current_ratio) & np.isfinite(y_true)
+        mask_lr = np.isfinite(current_ratio) & np.isfinite(y_true_full)
         label_vs_current = {
-            "corr": _safe_corr(y_true[mask_lr], current_ratio[mask_lr]) if mask_lr.any() else None,
-            "max_abs_diff": float(np.max(np.abs(y_true[mask_lr] - current_ratio[mask_lr]))) if mask_lr.any() else None,
+            "corr": _safe_corr(y_true_full[mask_lr], current_ratio[mask_lr]) if mask_lr.any() else None,
+            "max_abs_diff": float(np.max(np.abs(y_true_full[mask_lr] - current_ratio[mask_lr]))) if mask_lr.any() else None,
             "n_finite": int(mask_lr.sum()),
         }
         entry["label_vs_current_ratio"] = label_vs_current

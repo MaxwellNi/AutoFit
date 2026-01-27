@@ -443,14 +443,17 @@ def main() -> None:
 
                     y_pred_test = _predict(model, test_loader, device=device)
                     y_true_test = np.array([r.y for r in test_rows], dtype=float)
-                    rmse = float(np.sqrt(mean_squared_error(y_true_test, y_pred_test))) if len(y_true_test) else float("nan")
-                    mae = float(mean_absolute_error(y_true_test, y_pred_test)) if len(y_true_test) else float("nan")
-                    r2 = float(r2_score(y_true_test, y_pred_test)) if len(y_true_test) > 1 else float("nan")
+                    mask = np.isfinite(y_true_test) & np.isfinite(y_pred_test)
+                    y_true_eval = y_true_test[mask]
+                    y_pred_eval = y_pred_test[mask]
+                    rmse = float(np.sqrt(mean_squared_error(y_true_eval, y_pred_eval))) if len(y_true_eval) else float("nan")
+                    mae = float(mean_absolute_error(y_true_eval, y_pred_eval)) if len(y_true_eval) else float("nan")
+                    r2 = float(r2_score(y_true_eval, y_pred_eval)) if len(y_true_eval) > 1 else float("nan")
 
                     results.append(
                         {
                             "model": model_name,
-                            "mse": float(mean_squared_error(y_true_test, y_pred_test)) if len(y_true_test) else float("nan"),
+                            "mse": float(mean_squared_error(y_true_eval, y_pred_eval)) if len(y_true_eval) else float("nan"),
                             "rmse": rmse,
                             "mae": mae,
                             "r2": r2,

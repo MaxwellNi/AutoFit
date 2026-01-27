@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
 import logging
 import sys
@@ -89,6 +90,41 @@ def _scan_random_fragments(
     if not frames:
         return pd.DataFrame(columns=cols)
     return pd.concat(frames, ignore_index=True)
+
+
+def _load_snapshots(
+    offers_path: Path,
+    *,
+    columns: Sequence[str],
+    limit_rows: int | None,
+    sample_strategy: str,
+    sample_seed: int,
+    batch_size: int,
+) -> pd.DataFrame:
+    if offers_path.is_file():
+        if offers_path.suffix.lower() == ".csv":
+            df = pd.read_csv(offers_path)
+        else:
+            df = pd.read_parquet(offers_path)
+        if limit_rows is not None and limit_rows > 0:
+            df = df.head(int(limit_rows)).copy()
+        return df
+
+    if sample_strategy == "random_fragments":
+        return _scan_random_fragments(
+            offers_path,
+            columns=columns,
+            limit_rows=limit_rows,
+            seed=int(sample_seed),
+        )
+    return scan_snapshots(
+        [],
+        base_dir=offers_path,
+        columns=columns,
+        allow_all=True,
+        limit_rows=limit_rows,
+        batch_size=batch_size,
+    )
 
 
 def _scan_random_fragments(
@@ -214,9 +250,7 @@ def main() -> None:
     parser.add_argument("--cutoff_time", type=str, default=None)
     parser.add_argument("--cutoff_mode", choices=["start", "end"], default="start")
     parser.add_argument("--batch_size", type=int, default=200_000)
-    parser.add_argument("--sample_strategy", choices=["head", "random_fragments"], default="head")
-    parser.add_argument("--sample_seed", type=int, default=42)
-    args = parser.parse_args()
+    parser.add_argument("--limit_rows", type=int, default=None)
     parser.add_argument("--sample_strategy", choices=["head", "random_fragments"], default="head")
     parser.add_argument("--sample_seed", type=int, default=42)
     args = parser.parse_args()
@@ -233,7 +267,6 @@ def main() -> None:
     logger.info("output_dir=%s", output_dir)
     logger.info("limit_rows=%s", args.limit_rows)
     logger.info("sample_strategy=%s sample_seed=%s", args.sample_strategy, args.sample_seed)
-    logger.info("sample_strategy=%s sample_seed=%s", args.sample_strategy, args.sample_seed)
     logger.info("cutoff_mode=%s", args.cutoff_mode)
     logger.info("cutoff_time=%s", args.cutoff_time)
 
@@ -248,22 +281,14 @@ def main() -> None:
     )))
 
     offers_path = _resolve_path(args.offers_path)
-    if args.sample_strategy == "random_fragments":
-        snapshots = _scan_random_fragments(
-            offers_path,
-            columns=columns,
-            limit_rows=args.limit_rows,
-            seed=int(args.sample_seed),
-        )
-    else:
-        snapshots = scan_snapshots(
-            [],
-            base_dir=offers_path,
-            columns=columns,
-            allow_all=True,
-            limit_rows=args.limit_rows,
-            batch_size=args.batch_size,
-        )
+    snapshots = _load_snapshots(
+        offers_path,
+        columns=columns,
+        limit_rows=args.limit_rows,
+        sample_strategy=args.sample_strategy,
+        sample_seed=args.sample_seed,
+        batch_size=args.batch_size,
+    )
 
     logger.info("loaded snapshots rows=%d cols=%d", len(snapshots), len(snapshots.columns))
     if snapshots.empty:
@@ -286,6 +311,14 @@ def main() -> None:
         cutoff_time=args.cutoff_time,
         cutoff_mode=args.cutoff_mode,
     )
+
+    rename_map: Dict[str, str] = {}
+    if "funding_goal_usd" not in core.columns and "funding_goal" in core.columns:
+        rename_map["funding_goal"] = "funding_goal_usd"
+    if "funding_raised_usd" not in core.columns and "funding_raised" in core.columns:
+        rename_map["funding_raised"] = "funding_raised_usd"
+    if rename_map:
+        core = core.rename(columns=rename_map)
 
     logger.info("core rows=%d cols=%d", len(core), len(core.columns))
     logger.info("static rows=%d cols=%d", len(static_df), len(static_df.columns))
@@ -351,6 +384,37 @@ def main() -> None:
     }
     (output_dir / "offers_core_metrics.json").write_text(
         json.dumps(metrics, indent=2, ensure_ascii=False),
+        encoding="utf-8",
+    )
+
+    def _sha256(path: Path) -> str:
+        h = hashlib.sha256()
+        with path.open("rb") as f:
+            for chunk in iter(lambda: f.read(1024 * 1024), b""):
+                h.update(chunk)
+        return h.hexdigest()
+
+    input_sha = None
+    if offers_path.is_file():
+        input_sha = _sha256(offers_path)
+
+    manifest = {
+        "offers_path": str(offers_path),
+        "input_sha256": input_sha,
+        "output_dir": str(output_dir),
+        "rows": int(len(core)),
+        "columns": list(core.columns),
+        "static_rows": int(len(static_df)),
+        "static_columns": list(static_df.columns),
+        "rename_map": rename_map,
+        "output_sha256": {
+            "offers_core.parquet": _sha256(out_core),
+            "offers_static.parquet": _sha256(out_static),
+        },
+        "command": " ".join([sys.executable, str(Path(__file__).resolve())] + sys.argv[1:]),
+    }
+    (output_dir / "MANIFEST.json").write_text(
+        json.dumps(manifest, indent=2, ensure_ascii=False),
         encoding="utf-8",
     )
 

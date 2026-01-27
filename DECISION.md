@@ -31,3 +31,11 @@
 - `runs/offers_core_v2_20260125_214521/offers_core.parquet` is missing.
 - Strict_future AB wiring check could not run; Phase1 halted.
 - Next required step: restore the real offers_core parquet before any AB/repro runs.
+
+## strict_future wiring status (20260127_034904)
+
+- SMOKE AB shows strict_future changes sample counts; smoke is wiring-only, not a mainline conclusion.
+- Real offers_core_v2 rebuilt from `data/raw/offers` (200k rows).
+- Real AB: `strict_future=1` with `min_label_delta_days=1.0` + `min_ratio_delta_rel=1e-4` produced **no samples**; AB incomplete.
+- Real sf0 alignment still shows `y≈ratio_from_last (corr>0.9999)`.
+- Conclusion: strict_future wiring is confirmed on smoke, but real AB is blocked; adjust thresholds or time-aligned selection before any grid.
