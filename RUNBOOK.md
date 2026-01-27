@@ -112,3 +112,12 @@ Outcome:
 - Next steps checklist: `runs/sanity_20260127_092307/NEXT_STEPS_CHECKLIST.md`
 - Manifest: `runs/sanity_20260127_092307/MANIFEST_full.json`
 - Bundle: `runs/backups/repo_root_20260127_092307_phase3.bundle`
+
+## Phase4 minval edgar on/off (20260127_102903)
+
+- Preflight: `runs/sanity_20260127_102903/STATUS_PRE.txt`
+- Bench dirs: `runs/sanity_20260127_102903/bench_dirs_minval.txt`
+- Gate B leakage (off): `runs/sanity_20260127_102903/leakage_b11_v2_minval_edgar_off_lr100000_goal50_h45_sf1_20260127_102903_20260127_102924/label_leakage_report.json`
+- Gate B leakage (on): `runs/sanity_20260127_102903/leakage_b11_v2_minval_edgar_on_lr100000_goal50_h45_sf1_20260127_102903_20260127_103151/label_leakage_report.json`
+- Minval audit summary: `runs/sanity_20260127_102903/MINVAL_AUDIT_SUMMARY.json`
+- Manifest: `runs/sanity_20260127_102903/MANIFEST_full.json`
