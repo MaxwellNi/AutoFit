@@ -121,6 +121,13 @@ Outcome:
 - Minval failed due to CUDA capability mismatch (see `runs/sanity_20260128_103341/FAILURE.md`)
 - MANIFEST_full: `runs/sanity_20260128_103341/MANIFEST_full.json`
 
+## Orchestrator sync failure (20260128_133452)
+
+- Minval bench dirs: `runs/sanity_20260128_133452/bench_dirs_minval.txt`
+- Gate B leakage: `runs/sanity_20260128_133452/leakage_*`
+- Sync failure (iris disk quota): `runs/sanity_20260128_133452/FAILURE.md`
+- MANIFEST_full: `runs/sanity_20260128_133452/MANIFEST_full.json`
+
 ## Orchestrator GPU check failure (20260128_114623)
 
 - 3090 GPU check: `runs/sanity_20260128_114623/logs/gpu_check_3090.log`
