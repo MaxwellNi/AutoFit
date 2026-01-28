@@ -30,8 +30,8 @@ def _du_h(path: Path) -> str:
 def _parse_delta_versions(log_text: str) -> Dict[str, Optional[int]]:
     edgar_version = None
     offers_version = None
-    edgar_match = re.search(r"delta_dataset=edgar_accessions version=(\\d+)", log_text)
-    offers_match = re.search(r"delta_dataset=offers_snapshots version=(\\d+)", log_text)
+    edgar_match = re.search(r"delta_dataset=edgar_accessions version=(\d+)", log_text)
+    offers_match = re.search(r"delta_dataset=offers_snapshots version=(\d+)", log_text)
     if edgar_match:
         edgar_version = int(edgar_match.group(1))
     if offers_match:
