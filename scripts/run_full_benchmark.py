@@ -12,6 +12,7 @@ from typing import Any, Dict, List, Optional, Tuple
 
 import numpy as np
 import pandas as pd
+import pyarrow.parquet as pq
 import torch
 import yaml
 from sklearn.metrics import mean_absolute_error, mean_squared_error, r2_score
@@ -20,6 +21,62 @@ from torch.utils.data import DataLoader, Dataset
 
 
 logger = logging.getLogger("run_full_benchmark")
+
+
+def _resolve_edgar_dir(edgar_features: Optional[str]) -> Path:
+    if edgar_features:
+        return Path(edgar_features)
+    latest = Path("runs/edgar_feature_store/latest.txt")
+    if not latest.exists():
+        raise RuntimeError("edgar_features not provided and latest.txt missing")
+    stamp = latest.read_text(encoding="utf-8").strip()
+    return Path("runs/edgar_feature_store") / stamp / "edgar_features"
+
+
+def _edgar_preflight(edgar_dir: Path, bench_dir: Path) -> Dict[str, Any]:
+    if "smoke" in str(edgar_dir):
+        raise RuntimeError(f"edgar_features points to smoke dir: {edgar_dir}")
+    files = [p for p in edgar_dir.rglob("*.parquet") if p.is_file()]
+    if not files:
+        raise RuntimeError(f"edgar_features empty: {edgar_dir}")
+    rng = np.random.RandomState(42)
+    sample_file = files[int(rng.randint(0, len(files)))]
+    table = pq.read_table(sample_file, memory_map=True)
+    if table.num_rows > 200:
+        table = table.slice(0, 200)
+    df = table.to_pandas()
+    cols = list(df.columns)
+    col_hash = hashlib.sha256(",".join(sorted(cols)).encode("utf-8")).hexdigest()
+    numeric_cols = [c for c in df.columns if pd.api.types.is_numeric_dtype(df[c])]
+    stats = []
+    for col in numeric_cols[:5]:
+        non_null_rate = float(df[col].notna().mean()) if len(df) else 0.0
+        non_zero_rate = float((df[col].fillna(0) != 0).mean()) if len(df) else 0.0
+        stats.append((col, non_null_rate, non_zero_rate))
+    if not stats:
+        raise RuntimeError("edgar_features has no numeric columns")
+    if not any(nr > 0.01 and zr > 0.01 for _, nr, zr in stats):
+        raise RuntimeError("edgar_features numeric columns fail non-null/non-zero >1% threshold")
+    status_path = bench_dir / "STATUS_PRE.txt"
+    lines = [
+        f"edgar_dir={edgar_dir}",
+        f"edgar_features_file_count={len(files)}",
+        f"sample_file={sample_file}",
+        f"sample_rows={len(df)}",
+        f"sample_cols={len(df.columns)}",
+        f"sample_col_names={cols[:30]}",
+        f"col_hash={col_hash}",
+    ]
+    for col, non_null_rate, non_zero_rate in stats:
+        lines.append(f"numeric_col={col} non_null_rate={non_null_rate:.4f} non_zero_rate={non_zero_rate:.4f}")
+    status_path.write_text("\n".join(lines) + "\n", encoding="utf-8")
+    return {
+        "edgar_features_path": str(edgar_dir),
+        "edgar_features_file_count": len(files),
+        "edgar_features_sample_file": str(sample_file),
+        "edgar_features_col_hash": col_hash,
+        "edgar_status_path": str(status_path),
+    }
 
 
 def _setup_logging() -> None:
@@ -424,6 +481,13 @@ def main() -> None:
             logger.info("selected_entities_json provided; ignoring limit_rows=%s", args.limit_rows)
             limit_info["limit_rows_strategy"] = "selected_entities"
             limit_info["limit_rows_selected_entities"] = len(selected_entities)
+    edgar_meta: Dict[str, Any] = {}
+    if bool(args.use_edgar):
+        edgar_dir = _resolve_edgar_dir(args.edgar_features)
+        args.edgar_features = str(edgar_dir)
+        edgar_meta = _edgar_preflight(edgar_dir, bench_dir)
+        logger.info("edgar_features=%s", args.edgar_features)
+        logger.info("edgar_features_file_count=%s", edgar_meta.get("edgar_features_file_count"))
     df = _compute_ratio_w(df)
 
     feature_cols = [
@@ -603,6 +667,10 @@ def main() -> None:
         "offers_static": args.offers_static,
         "edgar_features": args.edgar_features,
         "use_edgar": bool(args.use_edgar),
+        "edgar_features_file_count": edgar_meta.get("edgar_features_file_count"),
+        "edgar_features_col_hash": edgar_meta.get("edgar_features_col_hash"),
+        "edgar_features_sample_file": edgar_meta.get("edgar_features_sample_file"),
+        "edgar_status_path": edgar_meta.get("edgar_status_path"),
         "limit_rows": args.limit_rows,
         "limit_entities": args.limit_entities,
         "limit_rows_strategy": limit_info.get("limit_rows_strategy"),
