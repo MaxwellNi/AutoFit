@@ -522,10 +522,15 @@ def main() -> None:
     )
 
     logger.info("Limit rows strategy: %s", limit_info)
-    sampled_entities = sorted({r.entity_id for r in rows})
+    if selected_entities is not None:
+        sampled_entities = sorted(set(selected_entities))
+    else:
+        sampled_entities = sorted({r.entity_id for r in rows})
     sampled_path = bench_dir / "sampled_entities.json"
     sampled_path.write_text(json.dumps(sampled_entities, indent=2), encoding="utf-8")
-    selection_hash = hashlib.sha256("\n".join(sampled_entities).encode("utf-8")).hexdigest()
+    selection_hash = selected_entities_hash or hashlib.sha256(
+        "\n".join(sampled_entities).encode("utf-8")
+    ).hexdigest()
     (bench_dir / "selection_hash.txt").write_text(selection_hash + "\n", encoding="utf-8")
 
     logger.info("Sampled entities: %d (hash=%s)", len(sampled_entities), selection_hash)
