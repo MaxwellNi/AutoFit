@@ -51,12 +51,28 @@ sync_one() {
   else
     rsync -av "${ROOT}/${EDGAR_DIR}/" "${host}:${repo}/${EDGAR_DIR}/"
   fi
-  rsync -av "${ROOT}/${SELECTION_DIR}/" "${host}:${repo}/${SELECTION_DIR}/"
+  remote_sel_hash=""
+  remote_sel_sha=""
+  if ssh "${host}" "test -f ${repo}/${SELECTION_DIR}/selection_hash.txt && test -f ${repo}/${SELECTION_DIR}/sampled_entities.json"; then
+    remote_sel_hash=$(ssh "${host}" "cat ${repo}/${SELECTION_DIR}/selection_hash.txt")
+    remote_sel_sha=$(ssh "${host}" "sha256sum ${repo}/${SELECTION_DIR}/sampled_entities.json | awk '{print \$1}'")
+  fi
+  if [ -n "${remote_sel_hash}" ] && [ -n "${remote_sel_sha}" ] \
+     && [ "${remote_sel_hash}" = "${local_sel_hash}" ] \
+     && [ "${remote_sel_sha}" = "${local_sel_sha}" ]; then
+    echo "skip_selection_sync(${host})=1 selection already matches" | tee -a "${log}"
+  else
+    rsync -av "${ROOT}/${SELECTION_DIR}/" "${host}:${repo}/${SELECTION_DIR}/"
+  fi
 
   remote_offers_sha=$(ssh "${host}" "sha256sum ${repo}/${OFFERS_CORE} | awk '{print \$1}'")
   remote_edgar_hash=$(ssh "${host}" "find ${repo}/${EDGAR_DIR} -type f -print0 | sort -z | xargs -0 sha256sum | cut -d' ' -f1 | sha256sum | cut -d' ' -f1")
-  remote_sel_sha=$(ssh "${host}" "sha256sum ${repo}/${SELECTION_DIR}/sampled_entities.json | awk '{print \$1}'")
-  remote_sel_hash=$(ssh "${host}" "cat ${repo}/${SELECTION_DIR}/selection_hash.txt")
+  if [ -z "${remote_sel_sha}" ]; then
+    remote_sel_sha=$(ssh "${host}" "sha256sum ${repo}/${SELECTION_DIR}/sampled_entities.json | awk '{print \$1}'")
+  fi
+  if [ -z "${remote_sel_hash}" ]; then
+    remote_sel_hash=$(ssh "${host}" "cat ${repo}/${SELECTION_DIR}/selection_hash.txt")
+  fi
 
   echo "remote_offers_sha(${host})=${remote_offers_sha}" | tee -a "${log}"
   echo "remote_edgar_hash(${host})=${remote_edgar_hash}" | tee -a "${log}"
