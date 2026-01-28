@@ -36,10 +36,21 @@ echo "local_selection_hash=${local_sel_hash}" | tee -a "${log}"
 sync_one() {
   local host="$1"
   local repo="$2"
+  local skip_edgar_sync="${3:-0}"
   echo "sync_host=${host} repo=${repo}" | tee -a "${log}"
   ssh "${host}" "mkdir -p ${repo}/$(dirname ${OFFERS_CORE}) ${repo}/${EDGAR_DIR} ${repo}/${SELECTION_DIR}"
   rsync -av "${ROOT}/${OFFERS_CORE}" "${host}:${repo}/${OFFERS_CORE}"
-  rsync -av "${ROOT}/${EDGAR_DIR}/" "${host}:${repo}/${EDGAR_DIR}/"
+  if [ "${skip_edgar_sync}" = "1" ]; then
+    remote_count=$(ssh "${host}" "find ${repo}/${EDGAR_DIR} -type f | wc -l")
+    if [ "${remote_count}" -gt 0 ]; then
+      echo "skip_edgar_sync(${host})=1 remote_file_count=${remote_count}" | tee -a "${log}"
+    else
+      echo "skip_edgar_sync(${host})=1 but remote empty -> syncing edgar" | tee -a "${log}"
+      rsync -av "${ROOT}/${EDGAR_DIR}/" "${host}:${repo}/${EDGAR_DIR}/"
+    fi
+  else
+    rsync -av "${ROOT}/${EDGAR_DIR}/" "${host}:${repo}/${EDGAR_DIR}/"
+  fi
   rsync -av "${ROOT}/${SELECTION_DIR}/" "${host}:${repo}/${SELECTION_DIR}/"
 
   remote_offers_sha=$(ssh "${host}" "sha256sum ${repo}/${OFFERS_CORE} | awk '{print \$1}'")
@@ -71,7 +82,7 @@ sync_one() {
 }
 
 sync_one 4090 "${REPO_4090}"
-sync_one iris "${REPO_IRIS}"
-sync_one aion "${REPO_AION}"
+sync_one iris "${REPO_IRIS}" 1
+sync_one aion "${REPO_AION}" 1
 
 echo "SYNC OK" | tee -a "${log}"
