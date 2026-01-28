@@ -35,6 +35,12 @@ def main() -> None:
         help="Output parquet path",
     )
     parser.add_argument(
+        "--log_dir",
+        type=Path,
+        default=None,
+        help="Optional log directory (defaults to output_path parent / logs)",
+    )
+    parser.add_argument(
         "--snapshot_time_col",
         type=str,
         default="crawled_date",
@@ -56,10 +62,10 @@ def main() -> None:
     if args.partition_by_year and args.output_path.suffix:
         args.output_path = args.output_path.with_suffix("")
 
-    ts = datetime.now().strftime("%Y%m%d_%H%M%S")
-    run_dir = Path("runs") / "edgar_feature_store" / ts
-    run_dir.mkdir(parents=True, exist_ok=True)
-    log_dir = run_dir / "logs"
+    if args.log_dir is None:
+        log_dir = args.output_path.parent / "logs"
+    else:
+        log_dir = args.log_dir
     log_dir.mkdir(parents=True, exist_ok=True)
     log_path = log_dir / "build_edgar_features.log"
 

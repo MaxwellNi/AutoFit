@@ -5,6 +5,7 @@ import argparse
 from pathlib import Path
 from typing import List, Tuple
 
+import hashlib
 import numpy as np
 import pandas as pd
 import pyarrow.parquet as pq
@@ -54,6 +55,8 @@ def main() -> None:
     print(f"sample_rows={len(df)}")
     print(f"sample_cols={len(df.columns)}")
     print(f"sample_col_names={list(df.columns)[:30]}")
+    col_hash = hashlib.sha256(",".join(sorted(df.columns)).encode("utf-8")).hexdigest()
+    print(f"col_hash={col_hash}")
     if len(df) == 0 or len(df.columns) == 0:
         raise SystemExit("FATAL: edgar_features sample has no rows or columns")
 
@@ -66,6 +69,10 @@ def main() -> None:
         raise SystemExit("FATAL: all numeric columns are entirely null in sample")
     if all(non_zero_rate == 0.0 for _, _, non_zero_rate in stats):
         raise SystemExit("FATAL: all numeric columns are zero in sample")
+    if not any(
+        non_null_rate > 0.01 and non_zero_rate > 0.01 for _, non_null_rate, non_zero_rate in stats
+    ):
+        raise SystemExit("FATAL: numeric columns fail non-null/non-zero >1% threshold")
 
 
 if __name__ == "__main__":

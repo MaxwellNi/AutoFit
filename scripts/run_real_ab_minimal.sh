@@ -7,6 +7,35 @@ OUT="${ROOT}/runs/sanity_${STAMP}"
 LOGS="${OUT}/logs"
 mkdir -p "${LOGS}"
 
+if [ "${1:-}" = "--self_test" ]; then
+  python - <<'PY'
+entry = {
+    "strict_future": 1,
+    "n_rows": 10,
+    "n_eval": 10,
+    "y_count": 10,
+    "dropped_due_to_insufficient_future": 0,
+    "alignment_conclusion": "ok",
+    "leakage_flag": False,
+    "bench_dir": "/tmp/bench",
+}
+err_txt = ""
+line = "| {sf} | {n_rows} | {n_eval} | {y_count} | {dropped} | {conclusion} | {leak} | {err} | {bench} |".format(
+    sf=entry["strict_future"],
+    n_rows=entry.get("n_rows"),
+    n_eval=entry.get("n_eval"),
+    y_count=entry.get("y_count"),
+    dropped=entry.get("dropped_due_to_insufficient_future"),
+    conclusion=entry.get("alignment_conclusion"),
+    leak=entry.get("leakage_flag"),
+    err=err_txt,
+    bench=entry["bench_dir"],
+)
+print(line)
+PY
+  exit 0
+fi
+
 FEAS_JSON="${1:-}"
 OFFERS_CORE="${2:-}"
 
@@ -269,7 +298,17 @@ for entry in sf_entries:
         errors.append(f"alignment={entry['alignment_errors']}")
     err_txt = "; ".join(errors) if errors else ""
     lines_md.append(
-        f"| {entry['strict_future']} | {entry.get('n_rows')} | {entry.get('n_eval')} | {entry.get('y_count')} | {entry.get('dropped_due_to_insufficient_future')} | {entry.get('alignment_conclusion')} | {entry.get('leakage_flag')} | {err_txt} | {entry['bench_dir']} |"
+        "| {sf} | {n_rows} | {n_eval} | {y_count} | {dropped} | {conclusion} | {leak} | {err} | {bench} |".format(
+            sf=entry["strict_future"],
+            n_rows=entry.get("n_rows"),
+            n_eval=entry.get("n_eval"),
+            y_count=entry.get("y_count"),
+            dropped=entry.get("dropped_due_to_insufficient_future"),
+            conclusion=entry.get("alignment_conclusion"),
+            leak=entry.get("leakage_flag"),
+            err=err_txt,
+            bench=entry["bench_dir"],
+        )
     )
 
 lines_md.append("\\n## Conclusion\\n")

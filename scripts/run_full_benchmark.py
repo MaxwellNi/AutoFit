@@ -404,7 +404,10 @@ def main() -> None:
     bench_dir.mkdir(parents=True, exist_ok=True)
     (bench_dir / "configs").mkdir(parents=True, exist_ok=True)
 
-    df, limit_info = _load_offers_core(args.offers_core, args.limit_rows, args.sample_seed)
+    load_limit_rows = args.limit_rows
+    if args.selected_entities_json:
+        load_limit_rows = None
+    df, limit_info = _load_offers_core(args.offers_core, load_limit_rows, args.sample_seed)
     selected_entities = None
     selected_entities_hash = None
     if args.selected_entities_json:
