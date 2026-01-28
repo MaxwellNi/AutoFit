@@ -10,7 +10,7 @@
 set -euo pipefail
 
 cd /home/users/npin/repo_root
-source /work/projects/eint/envs/.micromamba/etc/profile.d/micromamba.sh
+eval "$(/home/users/npin/.local/bin/micromamba shell hook -s bash)"
 micromamba activate insider
 
 STAMP="$(cat runs/backups/current_audit_stamp.txt)"
