@@ -4,7 +4,7 @@ set -euo pipefail
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 STAMP="$(cat "${ROOT}/runs/backups/current_audit_stamp.txt")"
 ORCH_DIR="${ROOT}/runs/orchestrator/${STAMP}"
-mkdir -p "${ORCH_DIR}"
+mkdir -p "${ORCH_DIR}/logs"
 
 OFFERS_CORE="runs/offers_core_v2_20260127_043052/offers_core.parquet"
 EDGAR_STAMP="$(cat "${ROOT}/runs/edgar_feature_store/latest.txt")"
@@ -20,7 +20,7 @@ echo "stamp=${STAMP}" | tee "${log}"
 
 hash_dir() {
   local dir="$1"
-  find "$dir" -type f -print0 | sort -z | xargs -0 sha256sum | sha256sum | awk '{print $1}'
+  find "$dir" -type f -print0 | sort -z | xargs -0 sha256sum | awk '{print $1}' | sha256sum | awk '{print $1}'
 }
 
 local_offers_sha=$(sha256sum "${ROOT}/${OFFERS_CORE}" | awk '{print $1}')
@@ -43,7 +43,7 @@ sync_one() {
   rsync -av "${ROOT}/${SELECTION_DIR}/" "${host}:${repo}/${SELECTION_DIR}/"
 
   remote_offers_sha=$(ssh "${host}" "sha256sum ${repo}/${OFFERS_CORE} | awk '{print \$1}'")
-  remote_edgar_hash=$(ssh "${host}" "find ${repo}/${EDGAR_DIR} -type f -print0 | sort -z | xargs -0 sha256sum | sha256sum | awk '{print \$1}'")
+  remote_edgar_hash=$(ssh "${host}" "find ${repo}/${EDGAR_DIR} -type f -print0 | sort -z | xargs -0 sha256sum | awk '{print \\$1}' | sha256sum | awk '{print \\$1}'")
   remote_sel_sha=$(ssh "${host}" "sha256sum ${repo}/${SELECTION_DIR}/sampled_entities.json | awk '{print \$1}'")
   remote_sel_hash=$(ssh "${host}" "cat ${repo}/${SELECTION_DIR}/selection_hash.txt")
 
