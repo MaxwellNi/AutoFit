@@ -11,13 +11,14 @@ import pandas as pd
 import pyarrow.parquet as pq
 
 
-def _pick_sample_file(edgar_dir: Path) -> Path:
+def _pick_sample_file(edgar_dir: Path, seed: int = 42) -> Path:
     files = sorted(p for p in edgar_dir.rglob("*.parquet") if p.is_file())
     if not files:
         files = sorted(p for p in edgar_dir.rglob("*") if p.is_file())
     if not files:
         raise FileNotFoundError(f"no files found under {edgar_dir}")
-    return files[0]
+    rng = np.random.RandomState(seed)
+    return files[int(rng.randint(0, len(files)))]
 
 
 def _numeric_stats(df: pd.DataFrame, max_cols: int = 8) -> List[Tuple[str, float, float]]:
@@ -35,6 +36,7 @@ def main() -> None:
     parser = argparse.ArgumentParser(description="Preflight EDGAR feature store sanity check.")
     parser.add_argument("--edgar_dir", type=str, required=True)
     parser.add_argument("--sample_rows", type=int, default=200)
+    parser.add_argument("--seed", type=int, default=42)
     args = parser.parse_args()
 
     edgar_dir = Path(args.edgar_dir)
@@ -46,7 +48,7 @@ def main() -> None:
     if file_count == 0:
         raise SystemExit("FATAL: edgar_features exists but empty")
 
-    sample_file = _pick_sample_file(edgar_dir)
+    sample_file = _pick_sample_file(edgar_dir, seed=args.seed)
     print(f"sample_file={sample_file}")
     table = pq.read_table(sample_file, memory_map=True)
     if args.sample_rows > 0 and table.num_rows > args.sample_rows:
