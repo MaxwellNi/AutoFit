@@ -10,6 +10,8 @@ OFFERS_CORE="runs/offers_core_v2_20260127_043052/offers_core.parquet"
 EDGAR_STAMP="$(cat "${ROOT}/runs/edgar_feature_store/latest.txt")"
 EDGAR_DIR="runs/edgar_feature_store/${EDGAR_STAMP}/edgar_features"
 SELECTION_DIR="runs/selections/b11_v2_canonical"
+SELECTION_HOME="/home/users/npin/runs/selections/b11_v2_canonical"
+STAMP_FILE="runs/backups/current_audit_stamp.txt"
 
 REPO_4090="/home/pni/projects/repo_root"
 REPO_IRIS="/home/users/npin/repo_root"
@@ -37,9 +39,14 @@ sync_one() {
   local host="$1"
   local repo="$2"
   local skip_edgar_sync="${3:-0}"
+  local selection_target="${4:-${repo}/${SELECTION_DIR}}"
   echo "sync_host=${host} repo=${repo}" | tee -a "${log}"
-  ssh "${host}" "mkdir -p ${repo}/$(dirname ${OFFERS_CORE}) ${repo}/${EDGAR_DIR} ${repo}/${SELECTION_DIR}"
+  ssh "${host}" "mkdir -p ${repo}/$(dirname ${OFFERS_CORE}) ${repo}/${EDGAR_DIR} ${selection_target} ${repo}/$(dirname ${STAMP_FILE}) ${repo}/runs/orchestrator/${STAMP}"
   rsync -av "${ROOT}/${OFFERS_CORE}" "${host}:${repo}/${OFFERS_CORE}"
+  rsync -av "${ROOT}/${STAMP_FILE}" "${host}:${repo}/${STAMP_FILE}"
+  rsync -av "${ROOT}/runs/orchestrator/${STAMP}/b11_v2_matrix.json" "${host}:${repo}/runs/orchestrator/${STAMP}/b11_v2_matrix.json"
+  rsync -av "${ROOT}/runs/orchestrator/${STAMP}/B11_COMMANDS.md" "${host}:${repo}/runs/orchestrator/${STAMP}/B11_COMMANDS.md"
+  rsync -av "${ROOT}/runs/orchestrator/${STAMP}/ARTIFACTS.json" "${host}:${repo}/runs/orchestrator/${STAMP}/ARTIFACTS.json"
   if [ "${skip_edgar_sync}" = "1" ]; then
     remote_count=$(ssh "${host}" "find ${repo}/${EDGAR_DIR} -type f | wc -l")
     if [ "${remote_count}" -gt 0 ]; then
@@ -53,25 +60,25 @@ sync_one() {
   fi
   remote_sel_hash=""
   remote_sel_sha=""
-  if ssh "${host}" "test -f ${repo}/${SELECTION_DIR}/selection_hash.txt && test -f ${repo}/${SELECTION_DIR}/sampled_entities.json"; then
-    remote_sel_hash=$(ssh "${host}" "cat ${repo}/${SELECTION_DIR}/selection_hash.txt")
-    remote_sel_sha=$(ssh "${host}" "sha256sum ${repo}/${SELECTION_DIR}/sampled_entities.json | awk '{print \$1}'")
+  if ssh "${host}" "test -f ${selection_target}/selection_hash.txt && test -f ${selection_target}/sampled_entities.json"; then
+    remote_sel_hash=$(ssh "${host}" "cat ${selection_target}/selection_hash.txt")
+    remote_sel_sha=$(ssh "${host}" "sha256sum ${selection_target}/sampled_entities.json | awk '{print \$1}'")
   fi
   if [ -n "${remote_sel_hash}" ] && [ -n "${remote_sel_sha}" ] \
      && [ "${remote_sel_hash}" = "${local_sel_hash}" ] \
      && [ "${remote_sel_sha}" = "${local_sel_sha}" ]; then
     echo "skip_selection_sync(${host})=1 selection already matches" | tee -a "${log}"
   else
-    rsync -av "${ROOT}/${SELECTION_DIR}/" "${host}:${repo}/${SELECTION_DIR}/"
+    rsync -av "${ROOT}/${SELECTION_DIR}/" "${host}:${selection_target}/"
   fi
 
   remote_offers_sha=$(ssh "${host}" "sha256sum ${repo}/${OFFERS_CORE} | awk '{print \$1}'")
   remote_edgar_hash=$(ssh "${host}" "find ${repo}/${EDGAR_DIR} -type f -print0 | sort -z | xargs -0 sha256sum | cut -d' ' -f1 | sha256sum | cut -d' ' -f1")
   if [ -z "${remote_sel_sha}" ]; then
-    remote_sel_sha=$(ssh "${host}" "sha256sum ${repo}/${SELECTION_DIR}/sampled_entities.json | awk '{print \$1}'")
+    remote_sel_sha=$(ssh "${host}" "sha256sum ${selection_target}/sampled_entities.json | awk '{print \$1}'")
   fi
   if [ -z "${remote_sel_hash}" ]; then
-    remote_sel_hash=$(ssh "${host}" "cat ${repo}/${SELECTION_DIR}/selection_hash.txt")
+    remote_sel_hash=$(ssh "${host}" "cat ${selection_target}/selection_hash.txt")
   fi
 
   echo "remote_offers_sha(${host})=${remote_offers_sha}" | tee -a "${log}"
@@ -98,7 +105,7 @@ sync_one() {
 }
 
 sync_one 4090 "${REPO_4090}"
-sync_one iris "${REPO_IRIS}" 1
-sync_one aion "${REPO_AION}" 1
+sync_one iris "${REPO_IRIS}" 1 "${SELECTION_HOME}"
+sync_one aion "${REPO_AION}" 1 "${SELECTION_HOME}"
 
 echo "SYNC OK" | tee -a "${log}"
