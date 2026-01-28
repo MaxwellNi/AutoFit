@@ -128,6 +128,14 @@ Outcome:
 - Sync failure (iris disk quota): `runs/sanity_20260128_133452/FAILURE.md`
 - MANIFEST_full: `runs/sanity_20260128_133452/MANIFEST_full.json`
 
+## Orchestrator sync + launch (20260128_133452)
+
+- Sync OK (4090/iris/aion): `runs/orchestrator/20260128_133452/logs/sync_artifacts.log`
+- 4090 launch (nohup): `runs/orchestrator/20260128_133452/logs/launch_airisklab.nohup.log`
+- 3090 launch (nohup): `runs/orchestrator/20260128_133452/logs/launch_ift_severn.nohup.log`
+- Iris array job: `4746784` (`runs/orchestrator/20260128_133452/logs/ssh_iris_launch.log`)
+- Aion CPU job: `10929048` (`runs/orchestrator/20260128_133452/logs/ssh_aion_launch.log`)
+
 ## Orchestrator GPU check failure (20260128_114623)
 
 - 3090 GPU check: `runs/sanity_20260128_114623/logs/gpu_check_3090.log`
