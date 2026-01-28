@@ -1,6 +1,7 @@
 #!/bin/bash
 #SBATCH --job-name=b11_v2_iris
 #SBATCH --partition=gpu
+#SBATCH --qos=normal
 #SBATCH --gres=gpu:1
 #SBATCH --cpus-per-task=8
 #SBATCH --mem=64G

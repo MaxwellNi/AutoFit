@@ -1,6 +1,7 @@
 #!/bin/bash
 #SBATCH --job-name=b11_v2_aion_cpu
 #SBATCH --partition=batch
+#SBATCH --qos=normal
 #SBATCH --cpus-per-task=8
 #SBATCH --mem=64G
 #SBATCH --time=0-04:00:00
