@@ -128,6 +128,13 @@ Outcome:
 - Failure note: `runs/sanity_20260128_114623/FAILURE.md`
 - MANIFEST_full: `runs/sanity_20260128_114623/MANIFEST_full.json`
 
+## Orchestrator GPU check failure (20260128_132832)
+
+- 3090 GPU check: `runs/sanity_20260128_132832/logs/gpu_check_3090.log`
+- 4090 GPU check failed: `runs/sanity_20260128_132832/logs/gpu_check_4090.log`
+- Failure note: `runs/sanity_20260128_132832/FAILURE.md`
+- MANIFEST_full: `runs/sanity_20260128_132832/MANIFEST_full.json`
+
 ## Phase4 minval edgar on/off (20260127_102903)
 
 - Preflight: `runs/sanity_20260127_102903/STATUS_PRE.txt`
