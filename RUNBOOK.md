@@ -113,6 +113,14 @@ Outcome:
 - Manifest: `runs/sanity_20260127_092307/MANIFEST_full.json`
 - Bundle: `runs/backups/repo_root_20260127_092307_phase3.bundle`
 
+## Orchestrator preflight + minval attempt (20260128_103341)
+
+- STATUS_PRE: `runs/sanity_20260128_103341/STATUS_PRE.txt`
+- Coverage report: `runs/sanity_20260128_103341/coverage_report.json`
+- EDGAR manifest: `runs/edgar_feature_store/20260127_133511/MANIFEST.json`
+- Minval failed due to CUDA capability mismatch (see `runs/sanity_20260128_103341/FAILURE.md`)
+- MANIFEST_full: `runs/sanity_20260128_103341/MANIFEST_full.json`
+
 ## Phase4 minval edgar on/off (20260127_102903)
 
 - Preflight: `runs/sanity_20260127_102903/STATUS_PRE.txt`
