@@ -7,6 +7,7 @@ import json
 import subprocess
 from pathlib import Path
 
+import numpy as np
 import pyarrow.parquet as pq
 
 
@@ -23,11 +24,15 @@ def _read_selection_hash(selection_hash_path: Path) -> str:
 
 
 def _edgar_col_hash(edgar_dir: Path) -> str:
-    files = sorted([p for p in edgar_dir.rglob("*.parquet") if p.is_file()])
+    files = [p for p in edgar_dir.rglob("*.parquet") if p.is_file()]
     if not files:
         raise SystemExit("FATAL: edgar_dir empty")
-    schema = pq.read_schema(files[0])
-    cols = list(schema.names)
+    rng = np.random.RandomState(42)
+    sample_file = files[int(rng.randint(0, len(files)))]
+    table = pq.read_table(sample_file, memory_map=True)
+    if table.num_rows > 200:
+        table = table.slice(0, 200)
+    cols = list(table.to_pandas().columns)
     return hashlib.sha256(",".join(sorted(cols)).encode("utf-8")).hexdigest()
 
 
