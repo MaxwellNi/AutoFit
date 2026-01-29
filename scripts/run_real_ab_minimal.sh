@@ -313,11 +313,11 @@ for entry in sf_entries:
 
 lines_md.append("\\n## Conclusion\\n")
 if any(entry.get("sanity_errors") for entry in sf_entries):
-    lines_md.append("AB 不完整：存在无预测/无样本导致的 sanity/alignment 错误，strict_future=1 未完成。")
+    lines_md.append("AB incomplete: sanity/alignment errors present (missing predictions or samples); strict_future=1 did not complete.")
 elif changed:
-    lines_md.append("strict_future 开关产生了可观测差异（样本量/对齐/泄露至少一项变化）。")
+    lines_md.append("The strict_future toggle produced observable differences (at least one of: sample count, alignment, leakage).")
 else:
-    lines_md.append("strict_future 开关未产生可观测差异，需要检查接线或记录字段。")
+    lines_md.append("No observable differences from strict_future toggle; verify wiring and recorded fields.")
 
 (out / "RESULT_AB_REAL.md").write_text("\\n".join(lines_md) + "\\n", encoding="utf-8")
 print(out / "RESULT_AB_REAL.md")

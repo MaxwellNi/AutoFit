@@ -1,50 +1,52 @@
 # AutoFit-TS
 
-AutoFit-TS is an agentic temporal foundation framework for irregular, long-horizon
-trajectories with heterogeneous exogenous signals. It automatically composes model
-components to match dataset characteristics under a fixed compute budget, and it
-produces auditable narrative indices through a concept bottleneck for faithful
-explanations.
+AutoFit-TS is a research-grade framework for learning and auditing temporal
+foundation models on irregular, long-horizon longitudinal data. It is designed
+for high-integrity scientific evaluation: reproducible benchmarks, strict
+no-leakage validation, and concept-level explanations that support auditability
+in downstream analyses.
 
-## Scope
-- Data: irregular fundraising trajectories with static descriptors, multi-year
-  snapshots, external filings, and narrative content
-- Tasks: outcome prediction and trajectory forecasting with strict no-leakage
-  evaluation
-- Outputs: paper-ready tables, diagnostics, and structured explanation reports
+Key features
+- Automatic composition of temporal architectures to match dataset characteristics
+  (irregular sampling, missingness, non-stationarity, multiscale rhythms, and
+  exogenous influence) under a fixed compute/budget constraint.
+- Multi-stream temporal backbone with modular exogenous conditioning (cross-
+  attention, FiLM, bridge-token fusion) and interchangeable foundation wrappers.
+- Concept Bottleneck layer that produces interpretable narrative indices that
+  enable additive concept models and structured natural-language explanation
+  reports.
+- Parquet-native data ingestion and diagnostics, end-to-end benchmark pipelines,
+  and automated generation of paper-ready evaluation tables (main, ablation,
+  faithfulness, efficiency).
 
-## Core ideas
-- Dataset-driven composition based on nonstationarity, long memory, multiscale
-  periodicity, irregular sampling, and exogenous strength
-- Multi-stream temporal backbone with exogenous conditioning (cross-attention,
-  FiLM, bridge-token fusion)
-- Concept bottleneck and additive concept models for auditable narrative indices
-  and explanations
+Repository layout
+- `src/narrative/` — core pipeline, model components, diagnostics, and explainability
+- `scripts/` — utilities for data preparation, benchmarking, auditing, and report generation
+- `configs/` — canonical experiment/dataset configurations
+- `docs/` — methodological notes, API references, and evaluation descriptors
+- `runs/` — runtime artifacts and generated reports (not tracked in the canonical release)
 
-## Current status (recovery mode)
-- Parquet-native pipeline, diagnostics, candidate composition, budget search, and
-  report tables are implemented and tested
-- EDGAR feature store, external dataset normalization, and multi-server sync
-  templates are in place
-- Concept bottleneck, NBI/NCI computation, and outcome models exist but need full
-  tests
-- Official B11 v2 grid is gated by strict-future validation; see `RUNBOOK.md` and
-  `DECISION.md`
+Getting started (developer quickstart)
+1. Create a Python environment (recommended: Python 3.9+).
+2. Install runtime dependencies from `pyproject.toml`.
+3. Run unit tests:
 
-## Repo structure
-- `src/narrative/` core pipeline, models, and explainability
-- `scripts/` end-to-end runs, audits, and report generation
-- `configs/` experiment and dataset configs
-- `docs/` recovery notes and research pipeline status
-- `runs/` local artifacts and audits (not tracked)
+```bash
+PYTHONPATH=src pytest -q
+```
 
-## Quick start (smoke)
-1. Build a tiny `offers_core_smoke.parquet` (see `RUNBOOK.md`).
-2. Run a minimal benchmark (`label_horizon=3`, `label_goal_min=50`,
-   `limit_rows=5000`, `models=dlinear patchtst`).
-3. Run Gates A-D and `scripts/summarize_horizon_audit.py`.
+Example: small-scale smoke benchmark
+```bash
+# build a small offers parquet (implementation-specific)
+# run a minimal benchmark with limit rows and a short horizon
+PYTHONPATH=src python scripts/run_full_benchmark.py --offers_path data/raw/offers --limit_rows 5000 --label_horizon 3 --models dlinear patchtst
+```
 
-## Reproducibility and audits
-- `docs/RESEARCH_PIPELINE_IMPLEMENTATION.md` tracks pipeline coverage and tests
-- `docs/audits/` and `runs/` contain manifests, gates, and paper table outputs
-- `QUICK_START.md` is the safety-first entry point
+Citation
+If you use this code in research, please cite the AutoFit-TS project and include a
+reference to the accompanying paper (when available).
+
+License and contribution
+This repository is intended as a public research artifact. See `LICENSE` for terms.
+Contributions are welcome via issues and pull requests; please follow the
+repository's contribution guidelines.

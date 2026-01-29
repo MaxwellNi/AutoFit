@@ -18,7 +18,7 @@ _METRIC_PATTERNS = {
     "r2": re.compile(r"(?i)\b(R2|R\^2|R²)\b[^0-9]{0,8}([0-9]+(?:\.[0-9]+)?)"),
 }
 
-_TOP_KEYWORDS = re.compile(r"(?i)(top[- ]?1\b|\bbest\b|最优|最佳|冠军)")
+_TOP_KEYWORDS = re.compile(r"(?i)(top[- ]?1\b|\bbest\b|\bchampion\b)")
 
 
 def _load_main_results(paper_tables_dir: Path | None, bench_dirs: Sequence[str]) -> pd.DataFrame:

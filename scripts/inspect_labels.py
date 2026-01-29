@@ -143,12 +143,12 @@ def _conclude(head: Dict[str, Any], rand: Dict[str, Any]) -> str:
     head_unique = head["funding_ratio_w"]["unique"]
     rand_unique = rand["funding_ratio_w"]["unique"]
     if head_ratio < 0.1 and rand_ratio >= 0.1 and rand_unique >= 5:
-        return "退化主要来自采样策略（head 截断导致标签缺失/常数）"
+        return "Degradation likely due to sampling strategy (head truncation causing missing/constant labels)."
     if head_ratio < 0.1 and rand_ratio < 0.1:
-        return "退化可能来自字段缺失/清洗/对齐问题（两种采样均缺失）"
+        return "Degradation may be due to missing fields, cleaning, or alignment issues (both sampling strategies show low label rates)."
     if head_unique < 5 and rand_unique >= 5:
-        return "退化主要来自采样策略（head 截断导致标签离散度不足）"
-    return "退化原因不唯一，需要进一步排查字段缺失与采样共同影响"
+        return "Degradation likely due to sampling strategy (head truncation leading to insufficient label variability)."
+    return "No single root cause identified; further investigation into missing fields and sampling effects is required."
 
 
 def main() -> None:

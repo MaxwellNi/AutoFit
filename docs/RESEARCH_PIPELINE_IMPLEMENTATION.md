@@ -1,55 +1,59 @@
-# Research Pipeline Implementation (Recovery Status)
+# Research Pipeline Implementation
 
-## Current status (20260127)
+This document describes the design and components of the AutoFit-TS research
+pipeline. It focuses on methodology, interfaces, and reproducible evaluation
+practices appropriate for an open-source research release.
 
-This repo is in disaster recovery mode after a workspace rollback and file loss.
-All changes prioritize auditability, reproducibility, and rollback readiness.
+Overview
+--------
+AutoFit-TS is built around three objectives:
 
-### Recovery checkpoints completed
+- Robust temporal representation learning for irregular, long-horizon
+  trajectories with heterogeneous exogenous signals.
+- Automated composition and budget-aware model selection to match measured
+  dataset characteristics (non-stationarity, long memory, multiscale periodicity,
+  irregular sampling, exogenous strength).
+- Auditable concept-level explanations via a concept-bottleneck layer and
+  additive concept models.
 
-- Snapshot + checksum inventory created under `runs/backups/`.
-- Essential scripts restored and de-duplicated.
-- All `scripts/*.py` now pass `python <file> --help`.
-- Smoke benchmark executed on a tiny `offers_core_smoke.parquet`.
-- Gates A–D and horizon summarizer completed for the smoke run.
-- MANIFEST.json generated for the smoke outputs.
-- `strict_future` toggle added to benchmark + leakage gates (not yet validated on full data).
+Pipeline components
+-------------------
 
-### Historical results (from transcript)
+- Data ingestion (parquet-native): efficient, partitioned ingestion that avoids
+  CSV fallbacks and reads only required columns (id/time/text/json/outcomes).
+- Schema profiler: detects candidate time columns, join keys, and generates a
+  reproducible schema profile for downstream pipelines.
+- Irregular timeline transformer: constructs event indices, time-deltas, and
+  truncation masks for variable-length sequences.
+- Feature stores: EDGAR feature extraction and compact aggregations (last/mean/EMA).
+- Model blocks:
+  - IrregularPatch embedding for time-aware patching and masking
+  - SSMEncoderV2 for chunked, depthwise separable conv + gated MLP representations
+  - Foundation model wrappers to interchange Chronos / Lag-Llama / Moirai style backbones
+- AutoFit search: budget-aware candidate composition and successive halving
+  with early stopping; exports best_config.yaml for final training.
+- Explainability: concept bottleneck, attribution exporter (concept/time/exogenous),
+  and faithfulness tests (deletion/insertion, counterfactual ablations).
+- Evaluation: parquet-native benchmark aggregation and generation of four paper
+  tables (main, ablation, faithfulness, efficiency).
 
-Outputs for the prior stamps are **missing** in this workspace due to disaster:
-`20260126_021733`, `20260126_084648`, `20260126_091417`, `20260126_093612`,
-`20260126_101559`, `20260126_105043`, `20260126_112613`.
-They are listed in `RUNBOOK.md` as missing and should be re-run only after recovery.
+Developer notes
+---------------
+- Unit tests are provided under `test/` and can be executed with `pytest`.
+- Configs live in `configs/` and provide canonical experiment definitions.
+- Scripts in `scripts/` are utilities; user-facing examples are documented in the
+  repository README.
 
-### Next required steps (before any full grid)
+Reproducibility and auditing
+---------------------------
+- All experiments log resolved configs and artifacts under `runs/<exp>/`.
+- Benchmarks produce manifests and paper-table outputs in parquet and CSV to
+  facilitate reproducible downstream analysis.
+- The codebase follows strict no-leakage rules for time-splitting and label
+  generation; see the evaluation code paths for validation gates.
 
-1. Implement `strict_future` policy (drop samples without valid future label).
-2. Re-run minimal h14 validation (2 runs, edgar on/off).
-3. Only if validation passes, run the official B11 v2 8-run grid.
-# 研究管道实现计划
-
-## 研究目标对齐
-
-### 核心目标
-1. **NBI (Narrative Bias Index)** - 可解释的偏差维度评分
-2. **NCI (Narrative Convergence Index)** - 模板化收敛程度
-3. **GenAI 时代效应** - 测试 post-2023 对叙事和融资结果的影响
-
-### 数据
-- offers_snapshots parquet（619GB, panel over time）
-- EDGAR parquet（187GB, filing+financial）
-
-### 阶段 0：Parquet schema profiling ✅
-**文件**：`scripts/profile_parquet_schemas.py` / `data_preprocessing/schema_profiler.py`
-
-**功能**：
-- 轮廓化 offers/EDGAR parquet schema
-- 自动推断时间列与 join key 候选
-- 输出 `runs/schema_profile/<timestamp>/schema_profile.json|csv`
-
-**自测**：
-- `PYTHONPATH=src pytest test/test_schema_profiler.py`
+For more details on individual modules and APIs, see the inline module
+documentation in `src/narrative/` and the example configs in `configs/`.
 
 ### 阶段 0.5：Entity key resolver ✅
 **文件**：`data_preprocessing/key_resolver.py`

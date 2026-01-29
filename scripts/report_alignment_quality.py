@@ -145,7 +145,7 @@ def main() -> None:
     pd.DataFrame([join_cov]).to_parquet(output_dir / "alignment_join_coverage.parquet", index=False)
 
     logger.info(
-        "join coverage 三集合比例: n_static=%d n_snapshot=%d n_edgar=%d n_union=%d n_all_three=%d ratio_all_three_over_union=%.4f ratio_all_three_over_static=%.4f",
+        "join coverage (three-set ratios): n_static=%d n_snapshot=%d n_edgar=%d n_union=%d n_all_three=%d ratio_all_three_over_union=%.4f ratio_all_three_over_static=%.4f",
         n_static,
         n_snapshot,
         n_edgar,
