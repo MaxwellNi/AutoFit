@@ -175,10 +175,13 @@ def _compute_ratio_w(df: pd.DataFrame) -> pd.DataFrame:
     df = df.copy()
     goal = pd.to_numeric(df["funding_goal_usd"], errors="coerce")
     raised = pd.to_numeric(df["funding_raised_usd"], errors="coerce")
-    ratio = raised / goal
+    ratio = pd.Series(np.nan, index=df.index, dtype=float)
+    valid = np.isfinite(goal) & (goal != 0) & np.isfinite(raised)
+    ratio.loc[valid] = raised[valid] / goal[valid]
     df["funding_ratio"] = ratio
-    if ratio.notna().any():
-        q_low, q_high = ratio.quantile([0.01, 0.99])
+    ratio_finite = ratio[np.isfinite(ratio)]
+    if not ratio_finite.empty:
+        q_low, q_high = ratio_finite.quantile([0.01, 0.99])
         df["funding_ratio_w"] = ratio.clip(lower=q_low, upper=q_high)
     else:
         df["funding_ratio_w"] = np.nan
@@ -739,7 +742,8 @@ def main() -> None:
         }
         (bench_dir / "metrics.json").write_text(json.dumps(metrics, indent=2), encoding="utf-8")
         pd.DataFrame([]).to_parquet(bench_dir / "metrics.parquet", index=False)
-        raise SystemExit(f"FATAL: benchmark failed due to {fail_reasons}")
+        logger.error("FATAL: benchmark failed due to %s", fail_reasons)
+        raise SystemExit(2)
 
     train_loader = DataLoader(ArrayDataset(train_rows), batch_size=args.batch_size, shuffle=True)
     val_loader = DataLoader(ArrayDataset(val_rows), batch_size=args.batch_size, shuffle=False) if val_rows else None
