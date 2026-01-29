@@ -30,7 +30,6 @@ experiments.
 ## B) Recommended (audit / reproducibility / open-source hygiene)
 
 - `docs/RESEARCH_PIPELINE_IMPLEMENTATION.md`
-- `docs/transcripts/cursor_next_generation_ml_pipeline_impl.md`
 - `scripts/verify_docs_against_runs.py`
 - `scripts/audit_repo_consistency.py`
 - `scripts/auto_backup.sh`

@@ -9,3 +9,7 @@ runs/**
 __pycache__/
 *.pyc
 .DS_Store
+docs/transcripts/
+.c????r/
+*_next_generation_ml_pipeline_impl.md
+*pr?mpt*
