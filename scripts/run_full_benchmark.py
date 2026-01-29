@@ -110,6 +110,26 @@ def _safe_corr(x: np.ndarray, y: np.ndarray) -> Optional[float]:
     return value
 
 
+def _split_stats(rows: List["SampleRow"]) -> Dict[str, Any]:
+    if not rows:
+        return {
+            "n_samples": 0,
+            "y_min": None,
+            "y_max": None,
+            "y_mean": None,
+            "any_nonfinite_y": False,
+        }
+    y = np.array([r.y for r in rows], dtype=float)
+    finite = np.isfinite(y)
+    return {
+        "n_samples": int(len(rows)),
+        "y_min": float(np.min(y[finite])) if finite.any() else None,
+        "y_max": float(np.max(y[finite])) if finite.any() else None,
+        "y_mean": float(np.mean(y[finite])) if finite.any() else None,
+        "any_nonfinite_y": bool((~finite).any()),
+    }
+
+
 def _limit_rows_by_entities(df: pd.DataFrame, limit_rows: int, seed: int) -> Tuple[pd.DataFrame, int]:
     if "entity_id" not in df.columns:
         return df, 0
@@ -234,6 +254,7 @@ def _build_samples(
     dropped_due_to_min_delta_days = 0
     dropped_due_to_small_ratio_delta_abs = 0
     dropped_due_to_small_ratio_delta_rel = 0
+    dropped_due_to_nonfinite_label = 0
 
     rows: List[SampleRow] = []
     for entity_id, group in df.groupby("entity_id", sort=False):
@@ -299,11 +320,16 @@ def _build_samples(
                 mask = np.concatenate([pad_mask, mask], axis=0)
 
             split = "train" if entity_id in train_ids else "val" if entity_id in val_ids else "test"
+            y_value = _safe_float(group["funding_ratio_w"].iloc[label_idx])
+            if not np.isfinite(y_value):
+                dropped_due_to_nonfinite_label += 1
+                continue
+
             rows.append(
                 SampleRow(
                     x=values,
                     mask=mask,
-                    y=_safe_float(group["funding_ratio_w"].iloc[label_idx]),
+                    y=y_value,
                     split=split,
                     entity_id=str(entity_id),
                     input_end_idx=int(input_end),
@@ -325,6 +351,7 @@ def _build_samples(
         "dropped_due_to_min_delta_days": dropped_due_to_min_delta_days,
         "dropped_due_to_small_ratio_delta_abs": dropped_due_to_small_ratio_delta_abs,
         "dropped_due_to_small_ratio_delta_rel": dropped_due_to_small_ratio_delta_rel,
+        "dropped_due_to_nonfinite_label": dropped_due_to_nonfinite_label,
     }
     return rows, drop_counts
 
@@ -490,6 +517,27 @@ def main() -> None:
         logger.info("edgar_features_file_count=%s", edgar_meta.get("edgar_features_file_count"))
     df = _compute_ratio_w(df)
 
+    edgar_feature_cols: List[str] = []
+    edgar_join_valid_rate = 0.0
+    if bool(args.use_edgar):
+        edgar_df = pd.read_parquet(args.edgar_features)
+        join_keys = ["offer_id", "cutoff_ts"]
+        missing_keys = [k for k in join_keys if k not in df.columns or k not in edgar_df.columns]
+        if missing_keys:
+            raise RuntimeError(f"edgar join missing keys: {missing_keys}")
+        dedup_before = len(edgar_df)
+        if "edgar_filed_date" in edgar_df.columns:
+            edgar_df = edgar_df.sort_values("edgar_filed_date")
+        edgar_df = edgar_df.drop_duplicates(subset=join_keys, keep="last")
+        logger.info("edgar_dedup: before=%d after=%d", dedup_before, len(edgar_df))
+        df = df.merge(edgar_df, on=join_keys, how="left", validate="many_to_one")
+        numeric_cols = [c for c in edgar_df.columns if c not in join_keys and pd.api.types.is_numeric_dtype(edgar_df[c])]
+        edgar_feature_cols = [c for c in numeric_cols if c in df.columns]
+        if not edgar_feature_cols:
+            raise RuntimeError("No numeric edgar feature columns after join.")
+        valid_mask = df[edgar_feature_cols].notna().any(axis=1)
+        edgar_join_valid_rate = float(valid_mask.mean()) if len(df) else 0.0
+
     feature_cols = [
         c
         for c in [
@@ -500,7 +548,7 @@ def main() -> None:
             "time_delta_days",
         ]
         if c in df.columns
-    ]
+    ] + edgar_feature_cols
     if not feature_cols:
         raise RuntimeError("No usable feature columns found in offers_core.")
 
@@ -541,10 +589,107 @@ def main() -> None:
     test_rows = [r for r in rows if r.split == "test"]
     if not rows:
         raise RuntimeError("No samples available after filtering; check data availability and filters.")
-    if not train_rows:
-        train_rows = rows
-    if not test_rows:
-        test_rows = rows
+
+    train_stats = _split_stats(train_rows)
+    val_stats = _split_stats(val_rows)
+    test_stats = _split_stats(test_rows)
+
+    fail_reasons = []
+    if train_stats["n_samples"] == 0:
+        fail_reasons.append("no_train_samples")
+    if val_stats["n_samples"] == 0:
+        fail_reasons.append("no_val_samples")
+    if test_stats["n_samples"] == 0:
+        fail_reasons.append("no_test_samples")
+    if train_stats["any_nonfinite_y"]:
+        fail_reasons.append("nonfinite_y_train")
+    if val_stats["any_nonfinite_y"]:
+        fail_reasons.append("nonfinite_y_val")
+    if test_stats["any_nonfinite_y"]:
+        fail_reasons.append("nonfinite_y_test")
+    if bool(args.use_edgar) and (len(edgar_feature_cols) == 0 or edgar_join_valid_rate == 0.0):
+        fail_reasons.append("edgar_join_valid_rate_zero")
+
+    resolved = {
+        "exp_name": args.exp_name,
+        "offers_core": args.offers_core,
+        "offers_static": args.offers_static,
+        "edgar_features": args.edgar_features,
+        "use_edgar": bool(args.use_edgar),
+        "edgar_features_file_count": edgar_meta.get("edgar_features_file_count"),
+        "edgar_features_col_hash": edgar_meta.get("edgar_features_col_hash"),
+        "edgar_features_sample_file": edgar_meta.get("edgar_features_sample_file"),
+        "edgar_status_path": edgar_meta.get("edgar_status_path"),
+        "n_edgar_features": len(edgar_feature_cols),
+        "edgar_join_valid_rate": edgar_join_valid_rate,
+        "limit_rows": args.limit_rows,
+        "limit_entities": args.limit_entities,
+        "limit_rows_strategy": limit_info.get("limit_rows_strategy"),
+        "limit_rows_selected_entities": limit_info.get("limit_rows_selected_entities"),
+        "selected_entities_json": args.selected_entities_json,
+        "selected_entities_hash": selected_entities_hash,
+        "selected_entities_count": len(selected_entities) if selected_entities is not None else None,
+        "sampled_entities_path": str(sampled_path),
+        "sampled_entities_hash": selection_hash,
+        "sampled_entities_count": len(sampled_entities),
+        "device": args.device,
+        "models": args.models,
+        "max_runs": None,
+        "plan": args.plan,
+        "fusion_types": args.fusion_types,
+        "module_variants": args.module_variants,
+        "seeds": args.seeds,
+        "sample_strategy": args.sample_strategy,
+        "sample_seed": args.sample_seed,
+        "split_seed": args.split_seed,
+        "label_goal_min": args.label_goal_min,
+        "label_horizon": args.label_horizon,
+        "strict_future": bool(args.strict_future),
+        "dropped_due_to_insufficient_future": drop_counts["dropped_due_to_insufficient_future"],
+        "dropped_due_to_static_ratio": drop_counts["dropped_due_to_static_ratio"],
+        "dropped_due_to_min_delta_days": drop_counts["dropped_due_to_min_delta_days"],
+        "dropped_due_to_small_ratio_delta_abs": drop_counts["dropped_due_to_small_ratio_delta_abs"],
+        "dropped_due_to_small_ratio_delta_rel": drop_counts["dropped_due_to_small_ratio_delta_rel"],
+        "dropped_due_to_nonfinite_label": drop_counts["dropped_due_to_nonfinite_label"],
+        "strict_matrix": bool(args.strict_matrix),
+        "seq_len": args.seq_len,
+        "pred_len": args.pred_len,
+        "enc_in": len(feature_cols),
+        "min_label_delta_days": args.min_label_delta_days,
+        "min_ratio_delta_abs": args.min_ratio_delta_abs,
+        "min_ratio_delta_rel": args.min_ratio_delta_rel,
+        "bench_defaults": {
+            "data": {"seq_len": args.seq_len, "pred_len": args.pred_len, "enc_in": len(feature_cols)},
+            "train": {"epochs": args.epochs, "batch_size": args.batch_size, "lr": args.lr, "weight_decay": args.weight_decay},
+        },
+    }
+    (bench_dir / "configs" / "resolved_config.yaml").write_text(
+        yaml.safe_dump(resolved, sort_keys=False), encoding="utf-8"
+    )
+
+    if fail_reasons:
+        metrics = {
+            "exp_name": args.exp_name,
+            "timestamp": timestamp,
+            "status": "fail",
+            "errors": fail_reasons,
+            "n_rows": int(len(df)),
+            "n_entities": int(df["entity_id"].nunique()) if "entity_id" in df.columns else None,
+            "n_features_static": 0,
+            "n_features_edgar": len(edgar_feature_cols),
+            "edgar_valid_rate": edgar_join_valid_rate,
+            "use_edgar": bool(args.use_edgar),
+            "n_train_samples": train_stats["n_samples"],
+            "n_val_samples": val_stats["n_samples"],
+            "n_test_samples": test_stats["n_samples"],
+            "y_train_stats": train_stats,
+            "y_val_stats": val_stats,
+            "y_test_stats": test_stats,
+            "results": [],
+        }
+        (bench_dir / "metrics.json").write_text(json.dumps(metrics, indent=2), encoding="utf-8")
+        pd.DataFrame([]).to_parquet(bench_dir / "metrics.parquet", index=False)
+        raise SystemExit(f"FATAL: benchmark failed due to {fail_reasons}")
 
     train_loader = DataLoader(ArrayDataset(train_rows), batch_size=args.batch_size, shuffle=True)
     val_loader = DataLoader(ArrayDataset(val_rows), batch_size=args.batch_size, shuffle=False) if val_rows else None
@@ -645,11 +790,13 @@ def main() -> None:
     metrics = {
         "exp_name": args.exp_name,
         "timestamp": timestamp,
+        "status": "success",
+        "errors": [],
         "n_rows": int(len(df)),
         "n_entities": int(df["entity_id"].nunique()) if "entity_id" in df.columns else None,
         "n_features_static": 0,
-        "n_features_edgar": 0,
-        "edgar_valid_rate": 0.0,
+        "n_features_edgar": len(edgar_feature_cols),
+        "edgar_valid_rate": edgar_join_valid_rate,
         "cutoff_violation": 0,
         "use_edgar": bool(args.use_edgar),
         "unique_backbones": len(set(args.models)),
@@ -660,65 +807,19 @@ def main() -> None:
         "results_count": len(results),
         "total_runs": len(results),
         "results": results,
+        "n_train_samples": train_stats["n_samples"],
+        "n_val_samples": val_stats["n_samples"],
+        "n_test_samples": test_stats["n_samples"],
+        "y_train_stats": train_stats,
+        "y_val_stats": val_stats,
+        "y_test_stats": test_stats,
     }
 
     (bench_dir / "metrics.json").write_text(json.dumps(metrics, indent=2), encoding="utf-8")
     pd.DataFrame(results).to_parquet(bench_dir / "metrics.parquet", index=False)
     pd.DataFrame(predictions).to_parquet(bench_dir / "predictions.parquet", index=False)
 
-    resolved = {
-        "exp_name": args.exp_name,
-        "offers_core": args.offers_core,
-        "offers_static": args.offers_static,
-        "edgar_features": args.edgar_features,
-        "use_edgar": bool(args.use_edgar),
-        "edgar_features_file_count": edgar_meta.get("edgar_features_file_count"),
-        "edgar_features_col_hash": edgar_meta.get("edgar_features_col_hash"),
-        "edgar_features_sample_file": edgar_meta.get("edgar_features_sample_file"),
-        "edgar_status_path": edgar_meta.get("edgar_status_path"),
-        "limit_rows": args.limit_rows,
-        "limit_entities": args.limit_entities,
-        "limit_rows_strategy": limit_info.get("limit_rows_strategy"),
-        "limit_rows_selected_entities": limit_info.get("limit_rows_selected_entities"),
-        "selected_entities_json": args.selected_entities_json,
-        "selected_entities_hash": selected_entities_hash,
-        "selected_entities_count": len(selected_entities) if selected_entities is not None else None,
-        "sampled_entities_path": str(sampled_path),
-        "sampled_entities_hash": selection_hash,
-        "sampled_entities_count": len(sampled_entities),
-        "device": args.device,
-        "models": args.models,
-        "max_runs": None,
-        "plan": args.plan,
-        "fusion_types": args.fusion_types,
-        "module_variants": args.module_variants,
-        "seeds": args.seeds,
-        "sample_strategy": args.sample_strategy,
-        "sample_seed": args.sample_seed,
-        "split_seed": args.split_seed,
-        "label_goal_min": args.label_goal_min,
-        "label_horizon": args.label_horizon,
-        "strict_future": bool(args.strict_future),
-        "dropped_due_to_insufficient_future": drop_counts["dropped_due_to_insufficient_future"],
-        "dropped_due_to_static_ratio": drop_counts["dropped_due_to_static_ratio"],
-        "dropped_due_to_min_delta_days": drop_counts["dropped_due_to_min_delta_days"],
-        "dropped_due_to_small_ratio_delta_abs": drop_counts["dropped_due_to_small_ratio_delta_abs"],
-        "dropped_due_to_small_ratio_delta_rel": drop_counts["dropped_due_to_small_ratio_delta_rel"],
-        "strict_matrix": bool(args.strict_matrix),
-        "seq_len": args.seq_len,
-        "pred_len": args.pred_len,
-        "enc_in": len(feature_cols),
-        "min_label_delta_days": args.min_label_delta_days,
-        "min_ratio_delta_abs": args.min_ratio_delta_abs,
-        "min_ratio_delta_rel": args.min_ratio_delta_rel,
-        "bench_defaults": {
-            "data": {"seq_len": args.seq_len, "pred_len": args.pred_len, "enc_in": len(feature_cols)},
-            "train": {"epochs": args.epochs, "batch_size": args.batch_size, "lr": args.lr, "weight_decay": args.weight_decay},
-        },
-    }
-    (bench_dir / "configs" / "resolved_config.yaml").write_text(
-        yaml.safe_dump(resolved, sort_keys=False), encoding="utf-8"
-    )
+    # resolved_config already written before training
 
     logger.info("Output: %s", bench_dir)
 
