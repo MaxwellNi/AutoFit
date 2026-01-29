@@ -254,6 +254,7 @@ def _build_samples(
     dropped_due_to_min_delta_days = 0
     dropped_due_to_small_ratio_delta_abs = 0
     dropped_due_to_small_ratio_delta_rel = 0
+    dropped_due_to_nonfinite_ratio = 0
     dropped_due_to_nonfinite_label = 0
 
     rows: List[SampleRow] = []
@@ -282,9 +283,15 @@ def _build_samples(
             input_goal = _safe_float(group["funding_goal_usd"].iloc[input_end])
             label_raised = _safe_float(group["funding_raised_usd"].iloc[label_idx])
             label_goal = _safe_float(group["funding_goal_usd"].iloc[label_idx])
-            with np.errstate(divide="ignore", invalid="ignore"):
-                input_ratio = input_raised / input_goal if input_goal not in (0.0, np.nan) else np.nan
-                label_ratio = label_raised / label_goal if label_goal not in (0.0, np.nan) else np.nan
+            input_ratio = np.nan
+            label_ratio = np.nan
+            if np.isfinite(input_goal) and input_goal != 0.0 and np.isfinite(input_raised):
+                input_ratio = input_raised / input_goal
+            if np.isfinite(label_goal) and label_goal != 0.0 and np.isfinite(label_raised):
+                label_ratio = label_raised / label_goal
+            if not (np.isfinite(input_ratio) and np.isfinite(label_ratio)):
+                dropped_due_to_nonfinite_ratio += 1
+                continue
 
             if np.isfinite(label_ratio) and np.isfinite(input_ratio):
                 if abs(label_ratio - input_ratio) < static_ratio_tol:
@@ -351,6 +358,7 @@ def _build_samples(
         "dropped_due_to_min_delta_days": dropped_due_to_min_delta_days,
         "dropped_due_to_small_ratio_delta_abs": dropped_due_to_small_ratio_delta_abs,
         "dropped_due_to_small_ratio_delta_rel": dropped_due_to_small_ratio_delta_rel,
+        "dropped_due_to_nonfinite_ratio": dropped_due_to_nonfinite_ratio,
         "dropped_due_to_nonfinite_label": dropped_due_to_nonfinite_label,
     }
     return rows, drop_counts
@@ -650,6 +658,7 @@ def main() -> None:
         "dropped_due_to_min_delta_days": drop_counts["dropped_due_to_min_delta_days"],
         "dropped_due_to_small_ratio_delta_abs": drop_counts["dropped_due_to_small_ratio_delta_abs"],
         "dropped_due_to_small_ratio_delta_rel": drop_counts["dropped_due_to_small_ratio_delta_rel"],
+        "dropped_due_to_nonfinite_ratio": drop_counts["dropped_due_to_nonfinite_ratio"],
         "dropped_due_to_nonfinite_label": drop_counts["dropped_due_to_nonfinite_label"],
         "strict_matrix": bool(args.strict_matrix),
         "seq_len": args.seq_len,
@@ -667,6 +676,35 @@ def main() -> None:
         yaml.safe_dump(resolved, sort_keys=False), encoding="utf-8"
     )
 
+    status_run = {
+        "exp_name": args.exp_name,
+        "timestamp": timestamp,
+        "status": "fail" if fail_reasons else "ok",
+        "errors": fail_reasons,
+        "n_train": train_stats["n_samples"],
+        "n_val": val_stats["n_samples"],
+        "n_test": test_stats["n_samples"],
+        "any_nonfinite_y_train": train_stats["any_nonfinite_y"],
+        "any_nonfinite_y_val": val_stats["any_nonfinite_y"],
+        "any_nonfinite_y_test": test_stats["any_nonfinite_y"],
+        "y_train_min": train_stats["y_min"],
+        "y_train_max": train_stats["y_max"],
+        "y_train_mean": train_stats["y_mean"],
+        "y_val_min": val_stats["y_min"],
+        "y_val_max": val_stats["y_max"],
+        "y_val_mean": val_stats["y_mean"],
+        "y_test_min": test_stats["y_min"],
+        "y_test_max": test_stats["y_max"],
+        "y_test_mean": test_stats["y_mean"],
+        "y_train_stats": train_stats,
+        "y_val_stats": val_stats,
+        "y_test_stats": test_stats,
+        "n_edgar_features": len(edgar_feature_cols),
+        "edgar_join_valid_rate": edgar_join_valid_rate,
+        "drop_counts": drop_counts,
+    }
+    (bench_dir / "STATUS_RUN.json").write_text(json.dumps(status_run, indent=2), encoding="utf-8")
+
     if fail_reasons:
         metrics = {
             "exp_name": args.exp_name,
@@ -679,9 +717,21 @@ def main() -> None:
             "n_features_edgar": len(edgar_feature_cols),
             "edgar_valid_rate": edgar_join_valid_rate,
             "use_edgar": bool(args.use_edgar),
-            "n_train_samples": train_stats["n_samples"],
-            "n_val_samples": val_stats["n_samples"],
-            "n_test_samples": test_stats["n_samples"],
+            "n_train": train_stats["n_samples"],
+            "n_val": val_stats["n_samples"],
+            "n_test": test_stats["n_samples"],
+            "any_nonfinite_y_train": train_stats["any_nonfinite_y"],
+            "any_nonfinite_y_val": val_stats["any_nonfinite_y"],
+            "any_nonfinite_y_test": test_stats["any_nonfinite_y"],
+            "y_train_min": train_stats["y_min"],
+            "y_train_max": train_stats["y_max"],
+            "y_train_mean": train_stats["y_mean"],
+            "y_val_min": val_stats["y_min"],
+            "y_val_max": val_stats["y_max"],
+            "y_val_mean": val_stats["y_mean"],
+            "y_test_min": test_stats["y_min"],
+            "y_test_max": test_stats["y_max"],
+            "y_test_mean": test_stats["y_mean"],
             "y_train_stats": train_stats,
             "y_val_stats": val_stats,
             "y_test_stats": test_stats,
@@ -807,9 +857,21 @@ def main() -> None:
         "results_count": len(results),
         "total_runs": len(results),
         "results": results,
-        "n_train_samples": train_stats["n_samples"],
-        "n_val_samples": val_stats["n_samples"],
-        "n_test_samples": test_stats["n_samples"],
+        "n_train": train_stats["n_samples"],
+        "n_val": val_stats["n_samples"],
+        "n_test": test_stats["n_samples"],
+        "any_nonfinite_y_train": train_stats["any_nonfinite_y"],
+        "any_nonfinite_y_val": val_stats["any_nonfinite_y"],
+        "any_nonfinite_y_test": test_stats["any_nonfinite_y"],
+        "y_train_min": train_stats["y_min"],
+        "y_train_max": train_stats["y_max"],
+        "y_train_mean": train_stats["y_mean"],
+        "y_val_min": val_stats["y_min"],
+        "y_val_max": val_stats["y_max"],
+        "y_val_mean": val_stats["y_mean"],
+        "y_test_min": test_stats["y_min"],
+        "y_test_max": test_stats["y_max"],
+        "y_test_mean": test_stats["y_mean"],
         "y_train_stats": train_stats,
         "y_val_stats": val_stats,
         "y_test_stats": test_stats,
