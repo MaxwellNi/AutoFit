@@ -136,6 +136,15 @@ Outcome:
 - Iris array job: `4746784` (`runs/orchestrator/20260128_133452/logs/ssh_iris_launch.log`)
 - Aion CPU job: `10929048` (`runs/orchestrator/20260128_133452/logs/ssh_aion_launch.log`)
 
+## Orchestrator Step G (20260128_133452)
+
+- sanity_report: `runs/orchestrator/20260128_133452/sanity_report.json`
+- metrics_master: `runs/orchestrator/20260128_133452/collected/metrics_master.parquet`
+- paper_tables (parquet/csv/tex): `runs/orchestrator/20260128_133452/paper_tables/`
+- SUMMARY: `runs/orchestrator/20260128_133452/SUMMARY.md`
+- MANIFEST_full: `runs/orchestrator/20260128_133452/MANIFEST_full.json`
+- OPLOG: `runs/orchestrator/20260128_133452/OPLOG.md`
+
 ## Orchestrator GPU check failure (20260128_114623)
 
 - 3090 GPU check: `runs/sanity_20260128_114623/logs/gpu_check_3090.log`

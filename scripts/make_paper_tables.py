@@ -208,10 +208,29 @@ def main() -> None:
     faith_df = _faithfulness(metrics)
     eff_df = _efficiency(metrics)
 
-    main_df.to_parquet(output_dir / "main_results.parquet", index=False)
-    ablation_df.to_parquet(output_dir / "ablation.parquet", index=False)
-    faith_df.to_parquet(output_dir / "faithfulness.parquet", index=False)
-    eff_df.to_parquet(output_dir / "efficiency.parquet", index=False)
+    output_dir.mkdir(parents=True, exist_ok=True)
+    tex_dir = output_dir / "tables"
+    tex_dir.mkdir(exist_ok=True)
+
+    main_path = output_dir / "main_results.parquet"
+    ablation_path = output_dir / "ablation.parquet"
+    faith_path = output_dir / "faithfulness.parquet"
+    eff_path = output_dir / "efficiency.parquet"
+
+    main_df.to_parquet(main_path, index=False)
+    ablation_df.to_parquet(ablation_path, index=False)
+    faith_df.to_parquet(faith_path, index=False)
+    eff_df.to_parquet(eff_path, index=False)
+
+    main_df.to_csv(output_dir / "main_results.csv", index=False)
+    ablation_df.to_csv(output_dir / "ablation.csv", index=False)
+    faith_df.to_csv(output_dir / "faithfulness.csv", index=False)
+    eff_df.to_csv(output_dir / "efficiency.csv", index=False)
+
+    main_df.to_latex(tex_dir / "main_results.tex", index=False)
+    ablation_df.to_latex(tex_dir / "ablation.tex", index=False)
+    faith_df.to_latex(tex_dir / "faithfulness.tex", index=False)
+    eff_df.to_latex(tex_dir / "efficiency.tex", index=False)
 
 
 if __name__ == "__main__":
