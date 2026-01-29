@@ -7,6 +7,8 @@ import json
 import subprocess
 from pathlib import Path
 
+import pyarrow.parquet as pq
+
 
 def _sha256(path: Path) -> str:
     h = hashlib.sha256()
@@ -18,6 +20,15 @@ def _sha256(path: Path) -> str:
 
 def _read_selection_hash(selection_hash_path: Path) -> str:
     return selection_hash_path.read_text(encoding="utf-8").strip()
+
+
+def _edgar_col_hash(edgar_dir: Path) -> str:
+    files = sorted([p for p in edgar_dir.rglob("*.parquet") if p.is_file()])
+    if not files:
+        raise SystemExit("FATAL: edgar_dir empty")
+    schema = pq.read_schema(files[0])
+    cols = list(schema.names)
+    return hashlib.sha256(",".join(sorted(cols)).encode("utf-8")).hexdigest()
 
 
 def main() -> None:
@@ -46,6 +57,13 @@ def main() -> None:
         files = [p for p in edgar_dir.rglob("*") if p.is_file()]
         if len(files) == 0:
             raise SystemExit("FATAL: edgar_dir empty")
+        expected_col_hash = artifacts.get("edgar_col_hash")
+        if expected_col_hash:
+            current_col_hash = _edgar_col_hash(edgar_dir)
+            if current_col_hash != expected_col_hash:
+                raise SystemExit(
+                    f"FATAL: edgar_col_hash mismatch {current_col_hash} != {expected_col_hash}"
+                )
 
     print("verify_artifacts: OK")
 
