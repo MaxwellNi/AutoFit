@@ -36,15 +36,15 @@ else
 fi
 LOG_DIR="${ORCH_DIR}/logs"
 mkdir -p "${LOG_DIR}"
-START_IDX="${START_IDX:-0}"
-END_IDX="${END_IDX:-5}"
+START_IDX="${START_IDX:-6}"
+END_IDX="${END_IDX:-11}"
 
-source ~/anaconda3/etc/profile.d/conda.sh
-conda activate insider
+source /home/pni/miniforge3/etc/profile.d/conda.sh
+conda activate /home/pni/miniforge3/envs/insider
 
 python "${ROOT}/scripts/verify_artifacts.py" \
   --artifacts_json "${ORCH_DIR}/ARTIFACTS.json" \
-  --require_edgar |& tee "${LOG_DIR}/verify_artifacts_ift_severn.log"
+  --require_edgar |& tee "${LOG_DIR}/verify_artifacts_4090.log"
 
 idx="${START_IDX}"
 while [[ "${idx}" -le "${END_IDX}" ]]; do
