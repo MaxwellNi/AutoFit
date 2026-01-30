@@ -3,6 +3,10 @@
     {
       "path": "docs/audits/orchestrator_20260129_073037.md",
       "sha256": "5523206a94d4badd5afd7e439b9512576fc301710e383c26275fdbb30cc0d6d5"
+    },
+    {
+      "path": "docs/audits/distillation_fidelity_20260129_073037.md",
+      "sha256": "22b14c5eac2fe67c09e5f9129b67e2621d5d4b7825b4309e7e94628bac5a39d2"
     }
   ]
 }

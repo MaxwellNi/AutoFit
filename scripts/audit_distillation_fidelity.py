@@ -2,15 +2,17 @@
 """
 Distillation fidelity audit: raw vs processed (offers_core, EDGAR feature store).
 
-Validates provenance, schema, coverage, value fidelity, missingness, and outputs
-a PASS/FAIL gate for Block 2 readiness. All outputs are written under runs/;
-no machine names or absolute paths in reports.
+Hard-gate: no skipping. Requires deltalake; Delta versions must match MANIFEST;
+raw vs core row/value consistency and EDGAR recompute consistency are enforced.
+FAIL-FAST on any skipped, unreadable raw, or mismatch.
 """
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
 import logging
+import os
 import sys
 from datetime import datetime
 from pathlib import Path
@@ -49,14 +51,19 @@ OFFERS_CORE_DEFAULT_COLUMNS = list(
 )
 
 
-def _setup_logger(output_dir: Path) -> logging.Logger:
+def _hostname() -> str:
+    return os.environ.get("HOSTNAME", os.environ.get("COMPUTERNAME", "unknown")).replace(".", "-")[:64]
+
+
+def _setup_logger(output_dir: Path, host_suffix: Optional[str] = None) -> logging.Logger:
     log_dir = output_dir / "logs"
     log_dir.mkdir(parents=True, exist_ok=True)
     logger = logging.getLogger("audit_distillation_fidelity")
     logger.setLevel(logging.INFO)
     logger.handlers.clear()
     fmt = logging.Formatter("%(asctime)s | %(levelname)s | %(message)s")
-    fh = logging.FileHandler(log_dir / "distillation_fidelity.log", encoding="utf-8")
+    name = f"distillation_fidelity_{host_suffix or _hostname()}.log"
+    fh = logging.FileHandler(log_dir / name, encoding="utf-8")
     fh.setFormatter(fmt)
     sh = logging.StreamHandler()
     sh.setFormatter(fmt)
@@ -65,19 +72,21 @@ def _setup_logger(output_dir: Path) -> logging.Logger:
     return logger
 
 
-def _delta_version_and_files(path: Path, logger: logging.Logger) -> Tuple[Optional[int], List[str]]:
+def _delta_version_and_files(path: Path) -> Tuple[Optional[int], int]:
+    """Return (version, active_files_count). Uses file_uris() for deltalake 1.x."""
     try:
         from deltalake import DeltaTable
     except ImportError:
-        logger.warning("deltalake not installed; skipping Delta version read for %s", path)
-        return None, []
-    if not (path / "_delta_log").exists():
-        logger.warning("Not a Delta table: %s", path)
-        return None, []
-    dt = DeltaTable(str(path))
-    ver = dt.version()
-    files_list = dt.files()
-    return ver, files_list
+        return None, 0
+    if not path.exists() or not (path / "_delta_log").exists():
+        return None, 0
+    try:
+        dt = DeltaTable(str(path))
+        ver = dt.version()
+        files_list = dt.file_uris() if hasattr(dt, "file_uris") else (dt.files() if hasattr(dt, "files") else [])
+        return ver, len(files_list)
+    except Exception:
+        return None, 0
 
 
 def _provenance_report(logger: logging.Logger) -> Dict[str, Any]:
@@ -135,8 +144,8 @@ def _schema_audit_edgar(df: pd.DataFrame) -> Dict[str, Any]:
     }
 
 
-def _load_selection(selection_json: Optional[Path], bench_list_path: Path, offers_core: pd.DataFrame, seed: int, sample_entities: int, logger: logging.Logger) -> List[str]:
-    """Load entity_id list: from selection_json, or first bench sampled_entities.json, or sample from offers_core."""
+def _load_selection(selection_json: Optional[Path], bench_list_path: Path, offers_core: Optional[pd.DataFrame], seed: int, sample_entities: int, logger: logging.Logger) -> List[str]:
+    """Load entity_id list: from selection_json, or first bench sampled_entities.json, or sample from offers_core if provided."""
     entity_ids: List[str] = []
     if selection_json and selection_json.exists():
         data = json.loads(selection_json.read_text(encoding="utf-8"))
@@ -150,7 +159,7 @@ def _load_selection(selection_json: Optional[Path], bench_list_path: Path, offer
             if sampled.exists():
                 entity_ids = json.loads(sampled.read_text(encoding="utf-8"))
                 logger.info("Loaded %d entities from first bench %s", len(entity_ids), sampled)
-    if not entity_ids and not offers_core.empty and "entity_id" in offers_core.columns:
+    if not entity_ids and offers_core is not None and not offers_core.empty and "entity_id" in offers_core.columns:
         entity_ids = offers_core["entity_id"].dropna().unique().tolist()
         logger.info("Using entity_id from offers_core: %d", len(entity_ids))
     if not entity_ids:
@@ -162,16 +171,32 @@ def _load_selection(selection_json: Optional[Path], bench_list_path: Path, offer
 
 
 def _entity_keys_from_ids(entity_ids: List[str]) -> Tuple[List[str], List[str]]:
+    """Parse entity_id to (platform_name, offer_id). Supports 'platform||offer_id' or 'platform|offer_id'."""
     platform_names, offer_ids = [], []
     for eid in entity_ids:
         if "||" in eid:
             a, b = eid.split("||", 1)
             platform_names.append(a)
             offer_ids.append(b)
+        elif "|" in eid:
+            a, b = eid.split("|", 1)
+            platform_names.append(a)
+            offer_ids.append(b)
         else:
             platform_names.append("")
             offer_ids.append(eid)
     return platform_names, offer_ids
+
+
+def _entity_id_to_platform_offer(eid: str) -> Tuple[str, str]:
+    """Return (platform_name, offer_id) for filter/build. Supports '||' and '|' separators."""
+    if "||" in eid:
+        a, b = eid.split("||", 1)
+        return a.strip(), b.strip()
+    if "|" in eid:
+        a, b = eid.split("|", 1)
+        return a.strip(), b.strip()
+    return "", str(eid).strip()
 
 
 def _coverage_by_year(df: pd.DataFrame, time_col: str, entity_col: str) -> Dict[str, Dict[str, int]]:
@@ -186,11 +211,12 @@ def _coverage_by_year(df: pd.DataFrame, time_col: str, entity_col: str) -> Dict[
 
 
 def _raw_offers_row_counts(raw_offers_delta: Path, entity_ids: List[str], columns: Sequence[str], logger: logging.Logger) -> Dict[str, int]:
-    """Light scan: read raw Delta (chunked) and count rows per entity."""
+    """Read raw Delta and count rows per entity. Uses (platform_name, offer_id) filter when entity set is small."""
     entity_set = set(entity_ids)
     counts: Dict[str, int] = {eid: 0 for eid in entity_ids}
     try:
         from deltalake import DeltaTable
+        import pyarrow.dataset as ds
         dt = DeltaTable(str(raw_offers_delta))
         dset = dt.to_pyarrow_dataset()
     except Exception as e:
@@ -201,14 +227,25 @@ def _raw_offers_row_counts(raw_offers_delta: Path, entity_ids: List[str], column
         cols.append("platform_name")
     if "offer_id" not in cols and "offer_id" in dset.schema.names:
         cols.append("offer_id")
-    scanner = dset.scanner(columns=cols, batch_size=100_000)
+    # Build (platform_name, offer_id) filter so we only read rows for our entities (avoids full scan)
+    filter_expr = None
+    if entity_ids and "platform_name" in dset.schema.names and "offer_id" in dset.schema.names and len(entity_ids) <= 2000:
+        pairs = [_entity_id_to_platform_offer(eid) for eid in entity_ids]
+        if pairs:
+            filter_expr = (ds.field("platform_name") == pairs[0][0]) & (ds.field("offer_id") == str(pairs[0][1]))
+            for pn, oid in pairs[1:]:
+                filter_expr = filter_expr | ((ds.field("platform_name") == pn) & (ds.field("offer_id") == str(oid)))
+    scanner = dset.scanner(columns=cols, filter=filter_expr, batch_size=100_000) if filter_expr is not None else dset.scanner(columns=cols, batch_size=100_000)
+    total_read = 0
     for batch in scanner.to_batches():
         pdf = batch.to_pandas()
         if "platform_name" in pdf.columns and "offer_id" in pdf.columns:
-            pdf["_eid"] = pdf["platform_name"].astype(str) + "||" + pdf["offer_id"].astype(str)
+            pdf["_eid"] = pdf["platform_name"].astype(str) + "|" + pdf["offer_id"].astype(str)
+            vc = pdf["_eid"].value_counts()
             for eid in entity_set:
-                counts[eid] = counts.get(eid, 0) + int((pdf["_eid"] == eid).sum())
-        if sum(counts.values()) > 2_000_000:
+                counts[eid] = counts.get(eid, 0) + int(vc.get(eid, 0))
+        total_read += len(pdf)
+        if filter_expr is None and total_read >= 1_500_000:
             break
     return counts
 
@@ -236,17 +273,25 @@ def _fidelity_offers_raw_vs_core(
     diff_count = 0
     total_compared = 0
     try:
+        import pyarrow.dataset as ds
         from deltalake import DeltaTable
         dt = DeltaTable(str(raw_offers_delta))
         dset = dt.to_pyarrow_dataset()
         read_cols = [c for c in compare_cols + ["platform_name", "offer_id", "crawled_date", "snapshot_date", "crawled_date_day"] if c in dset.schema.names]
+        filter_expr = None
+        if sample_ids and "platform_name" in dset.schema.names and "offer_id" in dset.schema.names:
+            pairs = [_entity_id_to_platform_offer(eid) for eid in sample_ids]
+            if pairs:
+                filter_expr = (ds.field("platform_name") == pairs[0][0]) & (ds.field("offer_id") == str(pairs[0][1]))
+                for pn, oid in pairs[1:]:
+                    filter_expr = filter_expr | ((ds.field("platform_name") == pn) & (ds.field("offer_id") == str(oid)))
         raw_dfs = []
-        scanner = dset.scanner(columns=read_cols, batch_size=200_000)
+        scanner = dset.scanner(columns=read_cols, filter=filter_expr, batch_size=200_000) if filter_expr is not None else dset.scanner(columns=read_cols, batch_size=200_000)
         for batch in scanner.to_batches():
             pdf = batch.to_pandas()
-            pdf["entity_id"] = pdf["platform_name"].astype(str) + "||" + pdf["offer_id"].astype(str)
+            pdf["entity_id"] = pdf["platform_name"].astype(str) + "|" + pdf["offer_id"].astype(str)
             raw_dfs.append(pdf[pdf["entity_id"].isin(sample_ids)])
-            if sum(len(d) for d in raw_dfs) > 500_000:
+            if filter_expr is None and sum(len(d) for d in raw_dfs) > 500_000:
                 break
         raw_df = pd.concat(raw_dfs, ignore_index=True) if raw_dfs else pd.DataFrame()
     except Exception as e:
@@ -312,6 +357,125 @@ def _missingness_edgar(df: pd.DataFrame) -> Dict[str, Any]:
     return {"missing_rates": missing_rates, "over_95_pct_missing": over_95, "all_missing": all_missing, "all_constant": all_constant}
 
 
+def _fidelity_edgar_raw_vs_store(
+    raw_edgar_delta: Path,
+    edgar_dir: Path,
+    entity_ids: List[str],
+    edgar_sample: pd.DataFrame,
+    logger: logging.Logger,
+) -> Dict[str, Any]:
+    """Recompute EDGAR features from raw for a few (offer_id, cik) and compare to store. FAIL-FAST on mismatch."""
+    try:
+        from deltalake import DeltaTable
+        from narrative.data_preprocessing.edgar_feature_store import (
+            load_edgar_features_from_parquet,
+            extract_edgar_features,
+            aggregate_edgar_features,
+        )
+    except ImportError as e:
+        return {"status": "skipped", "reason": str(e)}
+    if not raw_edgar_delta.exists() or not (raw_edgar_delta / "_delta_log").exists():
+        return {"status": "skipped", "reason": "raw edgar delta path missing or not a Delta table"}
+    if edgar_sample.empty or "offer_id" not in edgar_sample.columns or "cik" not in edgar_sample.columns:
+        return {"status": "skipped", "reason": "no edgar sample or missing offer_id/cik"}
+    # Pick 5 (offer_id, cik) from store that have EDGAR (any such rows), not restricted to selection
+    has_edgar = edgar_sample.drop_duplicates(subset=["offer_id", "cik"]).head(5)
+    if has_edgar.empty:
+        return {"status": "skipped", "reason": "no (offer_id, cik) rows in edgar store sample"}
+    pick = has_edgar
+    our_offer_ids = set(pick["offer_id"].astype(str).unique())
+    ciks = pick["cik"].astype(str).dropna().unique().tolist()
+    if not ciks:
+        return {"status": "skipped", "reason": "no valid cik in sample"}
+    try:
+        edgar_raw = load_edgar_features_from_parquet(Path(raw_edgar_delta), batch_size=100_000, limit_rows=500_000)
+    except Exception as e:
+        return {"status": "skipped", "reason": f"load_edgar_features_from_parquet failed: {e}"}
+    if edgar_raw.empty:
+        return {"status": "skipped", "reason": "raw edgar empty"}
+    edgar_raw = edgar_raw[edgar_raw["cik"].astype(str).isin(ciks)]
+    if edgar_raw.empty:
+        return {"status": "skipped", "reason": "no raw rows for sample ciks"}
+    agg = aggregate_edgar_features(edgar_raw, ema_alpha=0.2)
+    agg_cols = [c for c in agg.columns if c.startswith("last_") or c.startswith("mean_") or c.startswith("ema_")]
+    import pyarrow.dataset as ds
+    store_ds = ds.dataset(str(edgar_dir), format="parquet", partitioning="hive", exclude_invalid_files=True, ignore_prefixes=["_delta_log"])
+    store_tbl = store_ds.to_table()
+    store_df = store_tbl.to_pandas()
+    store_df = store_df[store_df["offer_id"].astype(str).isin(our_offer_ids)]
+    failed = False
+    max_abs_diff = 0.0
+    for _, row in pick.iterrows():
+        oid, cik = str(row["offer_id"]), str(row["cik"])
+        store_rows = store_df[(store_df["offer_id"].astype(str) == oid) & (store_df["cik"].astype(str) == cik)]
+        if store_rows.empty:
+            continue
+        agg_cik = agg[agg["cik"].astype(str) == cik]
+        if agg_cik.empty:
+            failed = True
+            break
+        for col in agg_cols:
+            if col not in store_rows.columns:
+                continue
+            store_vals = store_rows[col].dropna()
+            if store_vals.empty:
+                continue
+            agg_vals = agg_cik[col].dropna()
+            if agg_vals.empty:
+                continue
+            for sv in store_vals.iloc[:3]:
+                for av in agg_vals.iloc[:3]:
+                    try:
+                        d = abs(float(sv) - float(av))
+                        if d > 1e-5:
+                            failed = True
+                        max_abs_diff = max(max_abs_diff, d)
+                    except (TypeError, ValueError):
+                        pass
+    return {"failed": failed, "max_abs_diff": max_abs_diff, "sample_ciks": len(ciks)}
+
+
+def _stream_offers_core(
+    path: Path,
+    entity_ids: List[str],
+    fidelity_ids: List[str],
+    use_cols: List[str],
+    logger: logging.Logger,
+) -> Tuple[Dict[str, Dict[str, int]], Dict[str, int], pd.DataFrame]:
+    """Stream offers_core parquet to get coverage_by_year, core_row_counts, and fidelity subset."""
+    import pyarrow.parquet as pq
+    coverage: Dict[str, Dict[str, Any]] = {str(y): {"rows": 0, "unique_entities": 0, "_entities": set()} for y in range(2022, 2027)}
+    entity_set = set(entity_ids)
+    fidelity_set = set(fidelity_ids)
+    core_row_counts: Dict[str, int] = {eid: 0 for eid in entity_ids}
+    fidelity_dfs: List[pd.DataFrame] = []
+    schema = pq.read_schema(path)
+    read_cols = [c for c in use_cols if c in schema.names]
+    if not read_cols:
+        read_cols = schema.names
+    pf = pq.ParquetFile(path)
+    for batch in pf.iter_batches(columns=read_cols, batch_size=200_000):
+        pdf = batch.to_pandas()
+        if "snapshot_ts" in pdf.columns and "entity_id" in pdf.columns:
+            years = pd.to_datetime(pdf["snapshot_ts"], errors="coerce", utc=True).dt.year
+            for y in range(2022, 2027):
+                mask = years == y
+                coverage[str(y)]["rows"] += int(mask.sum())
+                coverage[str(y)]["_entities"].update(pdf.loc[mask, "entity_id"].dropna().astype(str).unique().tolist())
+        if "entity_id" in pdf.columns:
+            vc = pdf["entity_id"].value_counts()
+            for eid in entity_set:
+                core_row_counts[eid] = core_row_counts.get(eid, 0) + int(vc.get(eid, 0))
+            sub = pdf[pdf["entity_id"].isin(fidelity_set)]
+            if not sub.empty:
+                fidelity_dfs.append(sub)
+    for y in range(2022, 2027):
+        coverage[str(y)]["unique_entities"] = len(coverage[str(y)]["_entities"])
+        del coverage[str(y)]["_entities"]
+    offers_core_fidelity = pd.concat(fidelity_dfs, ignore_index=True) if fidelity_dfs else pd.DataFrame()
+    return coverage, core_row_counts, offers_core_fidelity
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(description="Distillation fidelity audit (raw vs processed).")
     parser.add_argument("--offers_core", type=Path, required=True)
@@ -322,33 +486,45 @@ def main() -> None:
     parser.add_argument("--bench_list", type=Path, required=True)
     parser.add_argument("--output_dir", type=Path, required=True)
     parser.add_argument("--seed", type=int, default=42)
-    parser.add_argument("--sample_entities", type=int, default=200)
-    parser.add_argument("--fidelity_entities", type=int, default=5)
+    parser.add_argument("--sample_entities", type=int, default=500)
+    parser.add_argument("--fidelity_entities", type=int, default=10)
+    parser.add_argument("--require_deltalake", type=int, default=0)
     args = parser.parse_args()
+    if args.require_deltalake:
+        try:
+            from deltalake import DeltaTable  # noqa: F401
+        except ImportError as e:
+            print("FATAL: --require_deltalake 1 but deltalake not available:", e, file=sys.stderr)
+            sys.exit(2)
     args.output_dir.mkdir(parents=True, exist_ok=True)
-    logger = _setup_logger(args.output_dir)
-    logger.info("=== Distillation Fidelity Audit Start ===")
+    host = _hostname()
+    logger = _setup_logger(args.output_dir, host_suffix=host)
+    logger.info("=== Distillation Fidelity Audit Start (host=%s) ===", host)
     fail_reasons: List[str] = []
     report: Dict[str, Any] = {"provenance": _provenance_report(logger)}
+    script_sha256 = hashlib.sha256(Path(__file__).read_bytes()).hexdigest()
+    report["script_sha256"] = script_sha256
+    report["column_rationale"] = {
+        "offers_core": "Static columns support entity/context; trajectory columns (funding_goal_usd, funding_raised_usd, investors_count, is_funded) support (i) outcome prediction and (ii) trajectory forecasting; time key supports cutoff and no-leak splits; label/target columns hook into NBI/NCI concept bottleneck.",
+        "edgar_feature_store": "Nine base fields from SEC offering data; last/mean/ema aggregations support (i) outcome prediction via exogenous conditioning and (ii) trajectory forecasting; output columns feed concept bottleneck and explainability stack.",
+    }
     use_cols = ["platform_name", "offer_id", "snapshot_ts", "entity_id", "funding_goal_usd", "funding_raised_usd", "investors_count", "crawled_date", "crawled_date_day", "cutoff_ts", "cutoff_mask"]
-    try:
-        import pyarrow.parquet as pq
-        schema = pq.read_schema(args.offers_core)
-        read_cols = [c for c in use_cols if c in schema.names]
-        if read_cols:
-            offers_core = pd.read_parquet(args.offers_core, columns=read_cols)
-        else:
-            offers_core = pd.read_parquet(args.offers_core)
-    except Exception:
-        offers_core = pd.read_parquet(args.offers_core)
-    if "platform_name" not in offers_core.columns:
-        offers_core = pd.read_parquet(args.offers_core)
+    entity_ids = _load_selection(args.selection_json, args.bench_list, None, args.seed, args.sample_entities, logger)
+    report["selected_entities_count"] = len(entity_ids)
+    if not entity_ids:
+        fail_reasons.append("no entity selection available")
+    fidelity_ids = entity_ids[: args.fidelity_entities] if len(entity_ids) >= args.fidelity_entities else entity_ids
+    logger.info("Streaming offers_core for coverage and fidelity subset (entities=%d, fidelity=%d)", len(entity_ids), len(fidelity_ids))
+    coverage, core_row_counts, offers_core_fidelity = _stream_offers_core(args.offers_core, entity_ids, fidelity_ids, use_cols, logger)
+    offers_core = offers_core_fidelity
+    if "entity_id" not in offers_core.columns and "platform_name" in offers_core.columns and "offer_id" in offers_core.columns:
+        offers_core = offers_core.copy()
+        offers_core["entity_id"] = offers_core["platform_name"].astype(str) + "||" + offers_core["offer_id"].astype(str)
     report["offers_core_schema"] = _schema_audit_offers(offers_core)
+    report["offers_core_schema"]["row_count"] = sum(coverage[str(y)]["rows"] for y in range(2022, 2027))
     time_col = report["offers_core_schema"]["time_key"]
     entity_col = "entity_id" if "entity_id" in offers_core.columns else "offer_id"
-    if "entity_id" not in offers_core.columns and "platform_name" in offers_core.columns and "offer_id" in offers_core.columns:
-        offers_core["entity_id"] = offers_core["platform_name"].astype(str) + "||" + offers_core["offer_id"].astype(str)
-    report["offers_core_coverage_by_year"] = _coverage_by_year(offers_core, time_col if time_col != "unknown" else "snapshot_ts" if "snapshot_ts" in offers_core.columns else list(offers_core.columns)[0], entity_col)
+    report["offers_core_coverage_by_year"] = coverage
     edgar_dataset_path = args.edgar_dir
     edgar_df = pd.DataFrame()
     try:
@@ -371,31 +547,45 @@ def main() -> None:
         logger.warning("Could not open EDGAR store: %s", e)
         report["edgar_schema"] = {}
         report["edgar_coverage_by_year"] = {}
-    # Delta versions
-    off_ver, off_files = _delta_version_and_files(args.raw_offers_delta, logger)
-    edgar_ver, edgar_files = _delta_version_and_files(args.raw_edgar_delta, logger)
-    report["delta"] = {"raw_offers_version": off_ver, "raw_offers_active_files_count": len(off_files), "raw_edgar_version": edgar_ver, "raw_edgar_active_files_count": len(edgar_files)}
+    # Delta versions (hard-gate: must match MANIFEST when require_deltalake)
+    off_ver, off_files_count = _delta_version_and_files(args.raw_offers_delta)
+    edgar_ver, edgar_files_count = _delta_version_and_files(args.raw_edgar_delta)
+    report["delta"] = {"raw_offers_version": off_ver, "raw_offers_active_files_count": off_files_count, "raw_edgar_version": edgar_ver, "raw_edgar_active_files_count": edgar_files_count}
     manifest_path = args.edgar_dir.parent / "MANIFEST.json"
     delta_versions: Dict[str, Any] = {}
     if manifest_path.exists():
         manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
         delta_versions = manifest.get("delta_versions", {})
-        if delta_versions.get("edgar_accessions_version") is not None and edgar_ver is not None and delta_versions["edgar_accessions_version"] != edgar_ver:
-            fail_reasons.append("edgar_accessions Delta version mismatch vs MANIFEST")
-        if delta_versions.get("offers_snapshots_version") is not None and off_ver is not None and delta_versions["offers_snapshots_version"] != off_ver:
-            fail_reasons.append("offers_snapshots Delta version mismatch vs MANIFEST")
+        expect_offers = delta_versions.get("offers_snapshots_version")
+        expect_edgar = delta_versions.get("edgar_accessions_version")
+        if args.require_deltalake:
+            if off_ver is None:
+                fail_reasons.append("raw offers delta unreadable (deltalake required)")
+            if edgar_ver is None:
+                fail_reasons.append("raw edgar delta unreadable (deltalake required)")
+            if expect_offers is not None and off_ver is not None and off_ver != expect_offers:
+                fail_reasons.append(f"offers_snapshots Delta version mismatch: got {off_ver}, expected {expect_offers}")
+            if expect_edgar is not None and edgar_ver is not None and edgar_ver != expect_edgar:
+                fail_reasons.append(f"edgar_accessions Delta version mismatch: got {edgar_ver}, expected {expect_edgar}")
+        else:
+            if expect_offers is not None and off_ver is not None and off_ver != expect_offers:
+                fail_reasons.append("offers_snapshots Delta version mismatch vs MANIFEST")
+            if expect_edgar is not None and edgar_ver is not None and edgar_ver != expect_edgar:
+                fail_reasons.append("edgar_accessions Delta version mismatch vs MANIFEST")
     report["manifest_delta_versions"] = delta_versions
-    # Selection and coverage consistency
-    entity_ids = _load_selection(args.selection_json, args.bench_list, offers_core, args.seed, args.sample_entities, logger)
-    report["selected_entities_count"] = len(entity_ids)
-    if not entity_ids:
-        fail_reasons.append("no entity selection available")
-    core_row_counts = {}
-    if entity_ids and "entity_id" in offers_core.columns:
-        for eid in entity_ids:
-            core_row_counts[eid] = int((offers_core["entity_id"] == eid).sum())
+    # Key hashes
+    report["offers_core_sha256"] = hashlib.sha256(args.offers_core.read_bytes()).hexdigest() if args.offers_core.exists() else None
+    orch_manifest = args.output_dir.parent / "MANIFEST_full.json"
+    if orch_manifest.exists():
+        orch = json.loads(orch_manifest.read_text(encoding="utf-8"))
+        report["offers_core_sha256_manifest"] = orch.get("offers_core_sha256")
+        report["selection_hash"] = orch.get("selection_hash")
+    if manifest_path.exists():
+        m = json.loads(manifest_path.read_text(encoding="utf-8"))
+        report["edgar_col_hash"] = m.get("sha256", {}).get("edgar_feature_store") or (m.get("status_pre", [{}])[0].get("col_hash") if m.get("status_pre") else None)
+    # Coverage consistency (core_row_counts from stream)
     report["coverage_consistency"] = {"core_row_counts_sample": dict(list(core_row_counts.items())[:20])}
-    raw_counts = _raw_offers_row_counts(args.raw_offers_delta, entity_ids[:20], OFFERS_CORE_DEFAULT_COLUMNS, logger)
+    raw_counts = _raw_offers_row_counts(args.raw_offers_delta, fidelity_ids, OFFERS_CORE_DEFAULT_COLUMNS, logger)
     report["coverage_consistency"]["raw_row_counts_sample"] = raw_counts
     offending = []
     for eid in raw_counts:
@@ -406,8 +596,9 @@ def main() -> None:
                 offending.append({"entity_id": eid, "raw_rows": raw_n, "core_rows": core_n, "diff_ratio": float(ratio)})
     if offending:
         report["coverage_consistency"]["offending_entities"] = offending[:10]
-        if len(offending) > 5:
-            fail_reasons.append("row_count_diff_ratio > 0.5% for multiple entities (raw vs core)")
+        fail_reasons.append("row_count_diff_ratio > 0.5% for at least one entity (raw vs core)")
+    if args.require_deltalake and not raw_counts and fidelity_ids:
+        fail_reasons.append("raw offers delta unreadable (require_deltalake=1 but no row counts)")
     # EDGAR alignment (chunked scan for offer_id set to compute entity-level rate)
     our_offer_ids = set((eid.split("||")[-1] if "||" in eid else eid) for eid in entity_ids)
     edgar_offer_set: set = set()
@@ -430,12 +621,19 @@ def main() -> None:
         report["edgar_alignment"]["note"] = "0.0029 (row-level) vs 0.475 (entity-level) explained by denominator: row-level = edgar_rows/total_offers_rows; entity-level = entities_with_any_edgar/total_entities."
     else:
         report["edgar_alignment"] = {}
-    # Fidelity (light)
-    fidelity_offers = _fidelity_offers_raw_vs_core(args.raw_offers_delta, offers_core, entity_ids, args.fidelity_entities, 3, 1e-6, logger)
+    # Fidelity (hard-gate: no skip when require_deltalake; compare fidelity subset only)
+    fidelity_offers = _fidelity_offers_raw_vs_core(args.raw_offers_delta, offers_core, fidelity_ids, len(fidelity_ids), 3, 1e-6, logger)
     report["fidelity_offers"] = fidelity_offers
-    if fidelity_offers.get("diff_count", 0) > 10 and fidelity_offers.get("total_compared", 0) > 0:
+    if fidelity_offers.get("status") == "skipped":
+        fail_reasons.append("offers raw vs core fidelity skipped: " + str(fidelity_offers.get("reason", "")))
+    elif fidelity_offers.get("diff_count", 0) > 10 and fidelity_offers.get("total_compared", 0) > 0:
         fail_reasons.append("offers_core value fidelity: too many raw vs core diffs")
-    report["fidelity_edgar"] = {"status": "store_schema_check_only", "note": "Full recompute from raw not run in this audit to keep CPU light."}
+    report["fidelity_edgar"] = _fidelity_edgar_raw_vs_store(args.raw_edgar_delta, args.edgar_dir, entity_ids, edgar_df, logger)
+    if report["fidelity_edgar"].get("status") == "skipped":
+        if args.require_deltalake:
+            fail_reasons.append("EDGAR raw vs store fidelity skipped: " + str(report["fidelity_edgar"].get("reason", "")))
+    elif report["fidelity_edgar"].get("failed"):
+        fail_reasons.append("EDGAR recompute vs store: at least one mismatch")
     # Missingness
     report["missingness_offers"] = _missingness_offers(offers_core, ["platform_name", "offer_id"])
     if not edgar_df.empty:
@@ -500,7 +698,7 @@ def main() -> None:
     logger.info("Wrote %s", md_path)
     logger.info("=== Distillation Fidelity Audit Complete === Gate: %s", "PASS" if report["gate_passed"] else "FAIL")
     if fail_reasons:
-        sys.exit(1)
+        sys.exit(2)
 
 
 if __name__ == "__main__":
