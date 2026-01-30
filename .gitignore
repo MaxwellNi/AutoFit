@@ -17,3 +17,4 @@ RUNBOOK.md
 DECISION.md
 recovered_files.txt
 docs/RESEARCH_PIPELINE_IMPLEMENTATION.md
+scripts/auto_backup.sh
