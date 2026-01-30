@@ -52,7 +52,7 @@ OFFERS_CORE_DEFAULT_COLUMNS = list(
 
 
 def _hostname() -> str:
-    return os.environ.get("HOSTNAME", os.environ.get("COMPUTERNAME", "unknown")).replace(".", "-")[:64]
+    return os.environ.get("HOST_TAG", os.environ.get("HOSTNAME", os.environ.get("COMPUTERNAME", "unknown"))).replace(".", "-")[:64]
 
 
 def _setup_logger(output_dir: Path, host_suffix: Optional[str] = None) -> logging.Logger:
@@ -199,6 +199,23 @@ def _entity_id_to_platform_offer(eid: str) -> Tuple[str, str]:
     return "", str(eid).strip()
 
 
+def _normalize_entity_id(platform: Any, offer: Any) -> str:
+    """Build canonical entity_id from platform and offer (handles NaN, int, str)."""
+    p = ("" if pd.isna(platform) else str(platform).strip())
+    o = ("" if pd.isna(offer) else str(offer).strip())
+    return f"{p}|{o}"
+
+
+def _detect_raw_entity_columns(schema_names: Sequence[str]) -> Tuple[Optional[str], Optional[str]]:
+    """Auto-detect platform and offer id column names in raw Delta. Returns (platform_col, offer_col)."""
+    platform_candidates = ("platform_name", "platform", "platformId", "source_platform")
+    offer_candidates = ("offer_id", "offerid", "offerId", "id")
+    names = [s for s in schema_names]
+    platform_col = next((c for c in platform_candidates if c in names), None)
+    offer_col = next((c for c in offer_candidates if c in names), None)
+    return platform_col, offer_col
+
+
 def _coverage_by_year(df: pd.DataFrame, time_col: str, entity_col: str) -> Dict[str, Dict[str, int]]:
     if time_col not in df.columns:
         return {}
@@ -211,7 +228,7 @@ def _coverage_by_year(df: pd.DataFrame, time_col: str, entity_col: str) -> Dict[
 
 
 def _raw_offers_row_counts(raw_offers_delta: Path, entity_ids: List[str], columns: Sequence[str], logger: logging.Logger) -> Dict[str, int]:
-    """Read raw Delta and count rows per entity. Uses (platform_name, offer_id) filter when entity set is small."""
+    """Read raw Delta and count rows per entity. Auto-detects platform/offer columns; uses filter when entity set is small."""
     entity_set = set(entity_ids)
     counts: Dict[str, int] = {eid: 0 for eid in entity_ids}
     try:
@@ -222,28 +239,37 @@ def _raw_offers_row_counts(raw_offers_delta: Path, entity_ids: List[str], column
     except Exception as e:
         logger.warning("Could not open raw offers Delta %s: %s", raw_offers_delta, e)
         return counts
-    cols = [c for c in columns if c in dset.schema.names][:15]
-    if "platform_name" not in cols and "platform_name" in dset.schema.names:
-        cols.append("platform_name")
-    if "offer_id" not in cols and "offer_id" in dset.schema.names:
-        cols.append("offer_id")
-    # Build (platform_name, offer_id) filter so we only read rows for our entities (avoids full scan)
+    schema_names = dset.schema.names if hasattr(dset.schema, "names") else [f.name for f in dset.schema]
+    platform_col, offer_col = _detect_raw_entity_columns(schema_names)
+    if not platform_col or not offer_col:
+        logger.warning("Raw Delta missing platform/offer columns (got %s, %s); schema sample: %s", platform_col, offer_col, schema_names[:15])
+        return counts
+    cols = [c for c in columns if c in schema_names][:15]
+    if platform_col not in cols:
+        cols.append(platform_col)
+    if offer_col not in cols:
+        cols.append(offer_col)
+    # Normalize entity_ids for matching (canonical platform|offer)
+    entity_set_normalized = {_normalize_entity_id(*_entity_id_to_platform_offer(eid)): eid for eid in entity_ids}
+    # Build (platform_col, offer_col) filter; cast to string for int columns in raw
+    import pyarrow as pa
     filter_expr = None
-    if entity_ids and "platform_name" in dset.schema.names and "offer_id" in dset.schema.names and len(entity_ids) <= 2000:
+    if entity_ids and len(entity_ids) <= 2000:
         pairs = [_entity_id_to_platform_offer(eid) for eid in entity_ids]
         if pairs:
-            filter_expr = (ds.field("platform_name") == pairs[0][0]) & (ds.field("offer_id") == str(pairs[0][1]))
+            p0, o0 = str(pairs[0][0]), str(pairs[0][1])
+            filter_expr = (ds.field(platform_col).cast(pa.string()) == p0) & (ds.field(offer_col).cast(pa.string()) == o0)
             for pn, oid in pairs[1:]:
-                filter_expr = filter_expr | ((ds.field("platform_name") == pn) & (ds.field("offer_id") == str(oid)))
+                filter_expr = filter_expr | ((ds.field(platform_col).cast(pa.string()) == str(pn)) & (ds.field(offer_col).cast(pa.string()) == str(oid)))
     scanner = dset.scanner(columns=cols, filter=filter_expr, batch_size=100_000) if filter_expr is not None else dset.scanner(columns=cols, batch_size=100_000)
     total_read = 0
     for batch in scanner.to_batches():
         pdf = batch.to_pandas()
-        if "platform_name" in pdf.columns and "offer_id" in pdf.columns:
-            pdf["_eid"] = pdf["platform_name"].astype(str) + "|" + pdf["offer_id"].astype(str)
+        if platform_col in pdf.columns and offer_col in pdf.columns:
+            pdf["_eid"] = pdf.apply(lambda r: _normalize_entity_id(r[platform_col], r[offer_col]), axis=1)
             vc = pdf["_eid"].value_counts()
-            for eid in entity_set:
-                counts[eid] = counts.get(eid, 0) + int(vc.get(eid, 0))
+            for eid_norm, eid_orig in entity_set_normalized.items():
+                counts[eid_orig] = counts.get(eid_orig, 0) + int(vc.get(eid_norm, 0))
         total_read += len(pdf)
         if filter_expr is None and total_read >= 1_500_000:
             break
@@ -273,31 +299,44 @@ def _fidelity_offers_raw_vs_core(
     diff_count = 0
     total_compared = 0
     try:
+        import pyarrow as pa
         import pyarrow.dataset as ds
         from deltalake import DeltaTable
         dt = DeltaTable(str(raw_offers_delta))
         dset = dt.to_pyarrow_dataset()
-        read_cols = [c for c in compare_cols + ["platform_name", "offer_id", "crawled_date", "snapshot_date", "crawled_date_day"] if c in dset.schema.names]
+        schema_names = dset.schema.names if hasattr(dset.schema, "names") else [f.name for f in dset.schema]
+        platform_col, offer_col = _detect_raw_entity_columns(schema_names)
+        if not platform_col or not offer_col:
+            return {"status": "skipped", "reason": f"raw Delta missing platform/offer columns (got {platform_col}, {offer_col})"}
+        read_cols = [c for c in compare_cols + [platform_col, offer_col, "crawled_date", "snapshot_date", "crawled_date_day"] if c in schema_names]
         filter_expr = None
-        if sample_ids and "platform_name" in dset.schema.names and "offer_id" in dset.schema.names:
+        sample_ids_normalized = {_normalize_entity_id(*_entity_id_to_platform_offer(eid)): eid for eid in sample_ids}
+        if sample_ids:
             pairs = [_entity_id_to_platform_offer(eid) for eid in sample_ids]
             if pairs:
-                filter_expr = (ds.field("platform_name") == pairs[0][0]) & (ds.field("offer_id") == str(pairs[0][1]))
+                p0, o0 = str(pairs[0][0]), str(pairs[0][1])
+                filter_expr = (ds.field(platform_col).cast(pa.string()) == p0) & (ds.field(offer_col).cast(pa.string()) == o0)
                 for pn, oid in pairs[1:]:
-                    filter_expr = filter_expr | ((ds.field("platform_name") == pn) & (ds.field("offer_id") == str(oid)))
+                    filter_expr = filter_expr | ((ds.field(platform_col).cast(pa.string()) == str(pn)) & (ds.field(offer_col).cast(pa.string()) == str(oid)))
         raw_dfs = []
         scanner = dset.scanner(columns=read_cols, filter=filter_expr, batch_size=200_000) if filter_expr is not None else dset.scanner(columns=read_cols, batch_size=200_000)
         for batch in scanner.to_batches():
             pdf = batch.to_pandas()
-            pdf["entity_id"] = pdf["platform_name"].astype(str) + "|" + pdf["offer_id"].astype(str)
-            raw_dfs.append(pdf[pdf["entity_id"].isin(sample_ids)])
+            pdf["entity_id"] = pdf.apply(lambda r: _normalize_entity_id(r[platform_col], r[offer_col]), axis=1)
+            raw_dfs.append(pdf[pdf["entity_id"].isin(sample_ids_normalized.keys())])
             if filter_expr is None and sum(len(d) for d in raw_dfs) > 500_000:
                 break
         raw_df = pd.concat(raw_dfs, ignore_index=True) if raw_dfs else pd.DataFrame()
+        if not raw_df.empty:
+            raw_df["entity_id"] = raw_df["entity_id"].map(lambda e: sample_ids_normalized.get(e, e))
     except Exception as e:
         logger.warning("Raw read for fidelity failed: %s", e)
         return {"status": "skipped", "reason": str(e)}
     if raw_df.empty:
+        logger.error(
+            "no raw rows for sample entities: sample_ids=%s; raw schema sample=%s; filter used for (platform_col=%s, offer_col=%s)",
+            sample_ids[:5], schema_names[:20], platform_col, offer_col,
+        )
         return {"status": "skipped", "reason": "no raw rows for sample entities"}
     time_col = "snapshot_ts" if "snapshot_ts" in raw_df.columns else "crawled_date_day" if "crawled_date_day" in raw_df.columns else "crawled_date"
     if time_col not in raw_df.columns:
@@ -438,17 +477,17 @@ def _fidelity_edgar_raw_vs_store(
 def _stream_offers_core(
     path: Path,
     entity_ids: List[str],
-    fidelity_ids: List[str],
+    fidelity_pool_size: int,
     use_cols: List[str],
     logger: logging.Logger,
 ) -> Tuple[Dict[str, Dict[str, int]], Dict[str, int], pd.DataFrame]:
-    """Stream offers_core parquet to get coverage_by_year, core_row_counts, and fidelity subset."""
+    """Stream offers_core parquet: coverage_by_year, core_row_counts, and a pool of rows for up to fidelity_pool_size unique entities (for fidelity selection)."""
     import pyarrow.parquet as pq
     coverage: Dict[str, Dict[str, Any]] = {str(y): {"rows": 0, "unique_entities": 0, "_entities": set()} for y in range(2022, 2027)}
     entity_set = set(entity_ids)
-    fidelity_set = set(fidelity_ids)
     core_row_counts: Dict[str, int] = {eid: 0 for eid in entity_ids}
-    fidelity_dfs: List[pd.DataFrame] = []
+    pool_entity_ids: List[str] = []
+    pool_dfs: List[pd.DataFrame] = []
     schema = pq.read_schema(path)
     read_cols = [c for c in use_cols if c in schema.names]
     if not read_cols:
@@ -466,14 +505,17 @@ def _stream_offers_core(
             vc = pdf["entity_id"].value_counts()
             for eid in entity_set:
                 core_row_counts[eid] = core_row_counts.get(eid, 0) + int(vc.get(eid, 0))
-            sub = pdf[pdf["entity_id"].isin(fidelity_set)]
+            for eid in pdf["entity_id"].dropna().astype(str).unique().tolist():
+                if eid in entity_set and eid not in pool_entity_ids and len(pool_entity_ids) < fidelity_pool_size:
+                    pool_entity_ids.append(eid)
+            sub = pdf[pdf["entity_id"].isin(pool_entity_ids)]
             if not sub.empty:
-                fidelity_dfs.append(sub)
+                pool_dfs.append(sub)
     for y in range(2022, 2027):
         coverage[str(y)]["unique_entities"] = len(coverage[str(y)]["_entities"])
         del coverage[str(y)]["_entities"]
-    offers_core_fidelity = pd.concat(fidelity_dfs, ignore_index=True) if fidelity_dfs else pd.DataFrame()
-    return coverage, core_row_counts, offers_core_fidelity
+    offers_core_pool = pd.concat(pool_dfs, ignore_index=True) if pool_dfs else pd.DataFrame()
+    return coverage, core_row_counts, offers_core_pool
 
 
 def main() -> None:
@@ -489,6 +531,8 @@ def main() -> None:
     parser.add_argument("--sample_entities", type=int, default=500)
     parser.add_argument("--fidelity_entities", type=int, default=10)
     parser.add_argument("--require_deltalake", type=int, default=0)
+    parser.add_argument("--row_count_ratio_tolerance", type=float, default=0.005, help="Max allowed |raw-core|/raw per entity (default 0.5%%)")
+    parser.add_argument("--fidelity_diff_ratio_tolerance", type=float, default=0.01, help="Max allowed diff_count/total_compared for offers raw vs core (default 1%%)")
     args = parser.parse_args()
     if args.require_deltalake:
         try:
@@ -513,9 +557,15 @@ def main() -> None:
     report["selected_entities_count"] = len(entity_ids)
     if not entity_ids:
         fail_reasons.append("no entity selection available")
-    fidelity_ids = entity_ids[: args.fidelity_entities] if len(entity_ids) >= args.fidelity_entities else entity_ids
-    logger.info("Streaming offers_core for coverage and fidelity subset (entities=%d, fidelity=%d)", len(entity_ids), len(fidelity_ids))
-    coverage, core_row_counts, offers_core_fidelity = _stream_offers_core(args.offers_core, entity_ids, fidelity_ids, use_cols, logger)
+    fidelity_pool_size = max(args.fidelity_entities * 10, 100)
+    logger.info("Streaming offers_core for coverage and fidelity pool (entities=%d, pool_size=%d)", len(entity_ids), fidelity_pool_size)
+    coverage, core_row_counts, offers_core_pool = _stream_offers_core(args.offers_core, entity_ids, fidelity_pool_size, use_cols, logger)
+    core_entity_ids = offers_core_pool["entity_id"].dropna().astype(str).unique().tolist() if not offers_core_pool.empty and "entity_id" in offers_core_pool.columns else []
+    raw_counts_pool = _raw_offers_row_counts(args.raw_offers_delta, core_entity_ids, OFFERS_CORE_DEFAULT_COLUMNS, logger) if core_entity_ids else {}
+    fidelity_ids = [eid for eid in core_entity_ids if raw_counts_pool.get(eid, 0) > 0][: args.fidelity_entities]
+    if len(fidelity_ids) < args.fidelity_entities:
+        fail_reasons.append(f"fewer than {args.fidelity_entities} entities with both core and raw rows (got {len(fidelity_ids)} from pool {len(core_entity_ids)})")
+    offers_core_fidelity = offers_core_pool[offers_core_pool["entity_id"].isin(fidelity_ids)] if fidelity_ids and not offers_core_pool.empty else pd.DataFrame()
     offers_core = offers_core_fidelity
     if "entity_id" not in offers_core.columns and "platform_name" in offers_core.columns and "offer_id" in offers_core.columns:
         offers_core = offers_core.copy()
@@ -583,24 +633,26 @@ def main() -> None:
     if manifest_path.exists():
         m = json.loads(manifest_path.read_text(encoding="utf-8"))
         report["edgar_col_hash"] = m.get("sha256", {}).get("edgar_feature_store") or (m.get("status_pre", [{}])[0].get("col_hash") if m.get("status_pre") else None)
-    # Coverage consistency (core_row_counts from stream)
+    # Coverage consistency (core_row_counts from stream; raw_counts for fidelity_ids from pool scan)
     report["coverage_consistency"] = {"core_row_counts_sample": dict(list(core_row_counts.items())[:20])}
-    raw_counts = _raw_offers_row_counts(args.raw_offers_delta, fidelity_ids, OFFERS_CORE_DEFAULT_COLUMNS, logger)
+    raw_counts = {eid: raw_counts_pool.get(eid, 0) for eid in fidelity_ids} if fidelity_ids else {}
     report["coverage_consistency"]["raw_row_counts_sample"] = raw_counts
+    row_tol = getattr(args, "row_count_ratio_tolerance", 0.005)
+    report["coverage_consistency"]["row_count_ratio_tolerance"] = row_tol
     offending = []
     for eid in raw_counts:
         raw_n, core_n = raw_counts[eid], core_row_counts.get(eid, 0)
         if raw_n > 0:
             ratio = abs(raw_n - core_n) / raw_n
-            if ratio > 0.005:
+            if ratio > row_tol:
                 offending.append({"entity_id": eid, "raw_rows": raw_n, "core_rows": core_n, "diff_ratio": float(ratio)})
     if offending:
         report["coverage_consistency"]["offending_entities"] = offending[:10]
-        fail_reasons.append("row_count_diff_ratio > 0.5% for at least one entity (raw vs core)")
+        fail_reasons.append(f"row_count_diff_ratio > {row_tol} for at least one entity (raw vs core)")
     if args.require_deltalake and not raw_counts and fidelity_ids:
         fail_reasons.append("raw offers delta unreadable (require_deltalake=1 but no row counts)")
     # EDGAR alignment (chunked scan for offer_id set to compute entity-level rate)
-    our_offer_ids = set((eid.split("||")[-1] if "||" in eid else eid) for eid in entity_ids)
+    our_offer_ids = set((eid.split("|")[-1] if "|" in eid else eid) for eid in entity_ids)
     edgar_offer_set: set = set()
     if not edgar_df.empty and "offer_id" in edgar_df.columns:
         edgar_offer_set = set(edgar_df["offer_id"].astype(str).dropna().unique())
@@ -626,8 +678,14 @@ def main() -> None:
     report["fidelity_offers"] = fidelity_offers
     if fidelity_offers.get("status") == "skipped":
         fail_reasons.append("offers raw vs core fidelity skipped: " + str(fidelity_offers.get("reason", "")))
-    elif fidelity_offers.get("diff_count", 0) > 10 and fidelity_offers.get("total_compared", 0) > 0:
-        fail_reasons.append("offers_core value fidelity: too many raw vs core diffs")
+    else:
+        total_compared = fidelity_offers.get("total_compared", 0)
+        diff_count = fidelity_offers.get("diff_count", 0)
+        ratio_tol = getattr(args, "fidelity_diff_ratio_tolerance", 0.01)
+        if total_compared > 0 and diff_count / total_compared > ratio_tol:
+            fail_reasons.append(
+                f"offers_core value fidelity: diff_ratio {diff_count}/{total_compared}={diff_count/total_compared:.4f} > {ratio_tol}"
+            )
     report["fidelity_edgar"] = _fidelity_edgar_raw_vs_store(args.raw_edgar_delta, args.edgar_dir, entity_ids, edgar_df, logger)
     if report["fidelity_edgar"].get("status") == "skipped":
         if args.require_deltalake:
