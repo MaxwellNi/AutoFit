@@ -7,6 +7,10 @@
     {
       "path": "docs/audits/distillation_fidelity_20260129_073037.md",
       "sha256": "7e059707f55a3188f934d9fae437878c36eee145b6468297572ba1d32868baea"
+    },
+    {
+      "path": "docs/audits/column_manifest_20260129_073037.md",
+      "sha256": "6c8c7335fb08d53d1e23773bc1260311256be3b627c22c4423aeb1fa91d9393c"
     }
   ]
 }
