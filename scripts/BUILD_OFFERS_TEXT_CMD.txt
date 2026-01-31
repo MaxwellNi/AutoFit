@@ -1,0 +1,9 @@
+# Build offers_text_full (streaming, auto-tuned memory)
+# Chunk size auto-tuned from available RAM. Run on 4090 (or any host).
+
+mkdir -p runs/orchestrator/20260129_073037/analysis/logs
+PYTHONUNBUFFERED=1 python scripts/build_offers_text.py \
+  --raw_offers_delta data/raw/offers \
+  --output_dir runs/offers_text_v1_20260129_073037_full \
+  --overwrite 1 \
+  2>&1 | tee runs/orchestrator/20260129_073037/analysis/logs/build_offers_text_full_$(hostname -s).log
