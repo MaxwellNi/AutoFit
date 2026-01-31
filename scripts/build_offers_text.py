@@ -4,9 +4,9 @@ Build offers_text parquet from raw offers delta (narrative columns for NBI/NCI).
 Joins by entity_id + snapshot_ts. Converts array fields to joined strings.
 Output: offers_text.parquet + MANIFEST.json (local, untracked).
 
-STREAMING mode: processes in chunks to avoid OOM. Uses SQLite for disk-based
-deduplication. Chunk size is auto-tuned from available RAM (40%% of avail minus
-8GB headroom, ~800B/row) unless --chunk_rows overrides. Cap 5M--20M rows/chunk.
+STREAMING mode: maximizes device RAM for full-scale build. Chunk size auto-tuned
+from MemAvailable (50%% of avail minus 8GB headroom, ~1.2KB/row incl processing).
+No artificial cap—use --chunk_rows to override. Final tail processed in sub-chunks.
 
 If offers_text.parquet exists and --overwrite 0, exits with error to prevent
 accidental overwrite of full build by a debug run with --limit_rows.
@@ -83,7 +83,8 @@ def main() -> None:
     parser.add_argument("--output_dir", type=Path, required=True)
     parser.add_argument("--limit_rows", type=int, default=None, help="Limit rows read (for testing); omit for full build")
     parser.add_argument("--overwrite", type=int, default=0, help="1=allow overwrite if output exists; 0=fail if exists")
-    parser.add_argument("--chunk_rows", type=int, default=None, help="Rows per chunk (default: auto, cap 20M to avoid OOM on final chunk)")
+    parser.add_argument("--chunk_rows", type=int, default=None, help="Override rows per chunk (default: auto from RAM)")
+    parser.add_argument("--ram_fraction", type=float, default=0.5, help="Fraction of usable RAM for chunk (default 0.5)")
     args = parser.parse_args()
 
     chunk_rows = args.chunk_rows
@@ -97,16 +98,17 @@ def main() -> None:
                 with open("/proc/meminfo") as f:
                     for line in f:
                         if line.startswith("MemAvailable:"):
-                            avail_gb = int(line.split()[1]) / 1024**2  # kB -> GB
+                            avail_gb = int(line.split()[1]) / (1024**2)
                             break
             except Exception:
                 pass
         headroom_gb = 8.0
         usable_gb = max(4.0, avail_gb - headroom_gb)
-        bytes_per_row = 800
-        chunk_rows = int(0.4 * usable_gb * 1024**3 / bytes_per_row)
-        chunk_rows = max(5_000_000, min(20_000_000, chunk_rows))
-        print(f"build_offers_text: auto chunk_rows={chunk_rows:,} (avail_ram~{avail_gb:.0f}GB)", flush=True)
+        bytes_per_row = 1200  # raw + processing (apply, concat) overhead
+        frac = max(0.3, min(0.7, args.ram_fraction))
+        chunk_rows = int(frac * usable_gb * 1024**3 / bytes_per_row)
+        chunk_rows = max(2_000_000, chunk_rows)
+        print(f"build_offers_text: auto chunk_rows={chunk_rows:,} (avail_ram~{avail_gb:.0f}GB, frac={frac})", flush=True)
 
     print("build_offers_text: starting (streaming mode)", flush=True)
     args.output_dir.mkdir(parents=True, exist_ok=True)
@@ -183,7 +185,9 @@ def main() -> None:
                     if not schema_created:
                         processed.head(0).to_sql("offers_text", conn, if_exists="replace", index=False)
                         schema_created = True
-                    processed.to_sql("offers_text", conn, if_exists="append", index=False, method="multi", chunksize=50_000)
+                    sql_chunk = 2_000_000
+                    for j in range(0, len(processed), sql_chunk):
+                        processed.iloc[j : j + sql_chunk].to_sql("offers_text", conn, if_exists="append", index=False, method="multi", chunksize=30)
                     rows_written_to_db += len(processed)
                 del merged, processed
 
@@ -211,7 +215,9 @@ def main() -> None:
                         if not schema_created:
                             processed.head(0).to_sql("offers_text", conn, if_exists="replace", index=False)
                             schema_created = True
-                        processed.to_sql("offers_text", conn, if_exists="append", index=False, method="multi", chunksize=50_000)
+                        sql_chunk = 2_000_000
+                        for j in range(0, len(processed), sql_chunk):
+                            processed.iloc[j : j + sql_chunk].to_sql("offers_text", conn, if_exists="append", index=False, method="multi", chunksize=30)
                         rows_written_to_db += len(processed)
                     del merged, processed
             if frames_acc:
@@ -223,7 +229,9 @@ def main() -> None:
                     if not schema_created:
                         processed.head(0).to_sql("offers_text", conn, if_exists="replace", index=False)
                         schema_created = True
-                    processed.to_sql("offers_text", conn, if_exists="append", index=False, method="multi", chunksize=50_000)
+                    sql_chunk = 2_000_000
+                    for j in range(0, len(processed), sql_chunk):
+                        processed.iloc[j : j + sql_chunk].to_sql("offers_text", conn, if_exists="append", index=False, method="multi", chunksize=30)
                     rows_written_to_db += len(processed)
                 del merged, processed
         chunk_buf = []
@@ -233,28 +241,39 @@ def main() -> None:
             n_unique_entity_id = 0
             n_unique_entity_day = 0
         else:
-            print(f"build_offers_text: deduping in SQLite ({rows_written_to_db:,} rows)", flush=True)
-            conn.execute(
-                "CREATE TABLE offers_text_deduped AS SELECT * FROM offers_text WHERE rowid IN "
-                "(SELECT MAX(rowid) FROM offers_text GROUP BY entity_id, snapshot_ts)"
-            )
-            conn.execute("DROP TABLE offers_text")
-            conn.execute("ALTER TABLE offers_text_deduped RENAME TO offers_text")
-            conn.commit()
-            print(f"build_offers_text: exporting to parquet (streaming)", flush=True)
+            print(f"build_offers_text: deduping and exporting ({rows_written_to_db:,} rows)", flush=True)
             import pyarrow as pa
             import pyarrow.parquet as pq
-            writer = None
+            result: pd.DataFrame | None = None
             for chunk in pd.read_sql_query("SELECT * FROM offers_text", conn, chunksize=500_000):
-                tbl = pa.Table.from_pandas(chunk, preserve_index=False)
-                if writer is None:
-                    writer = pq.ParquetWriter(str(out_path), tbl.schema)
-                writer.write_table(tbl)
-            if writer:
-                writer.close()
-            rows_emitted = int(pd.read_sql_query("SELECT COUNT(*) as n FROM offers_text", conn).iloc[0]["n"])
-            n_unique_entity_id = int(pd.read_sql_query("SELECT COUNT(DISTINCT entity_id) as n FROM offers_text", conn).iloc[0]["n"])
-            n_unique_entity_day = int(pd.read_sql_query("SELECT COUNT(DISTINCT date(snapshot_ts)) as n FROM offers_text", conn).iloc[0]["n"])
+                if result is None:
+                    result = chunk.copy()
+                else:
+                    result = pd.concat([result, chunk], ignore_index=True).drop_duplicates(
+                        subset=["entity_id", "snapshot_ts"], keep="last"
+                    ).reset_index(drop=True)
+                del chunk
+            if result is not None:
+                rows_emitted = len(result)
+                n_unique_entity_id = int(result["entity_id"].nunique())
+                snap = pd.to_datetime(result["snapshot_ts"], errors="coerce")
+                n_unique_entity_day = int(snap.dt.date.nunique())
+                out_path.parent.mkdir(parents=True, exist_ok=True)
+                writer = None
+                export_chunk = 1_000_000
+                for j in range(0, len(result), export_chunk):
+                    sub = result.iloc[j : j + export_chunk]
+                    tbl = pa.Table.from_pandas(sub, preserve_index=False)
+                    if writer is None:
+                        writer = pq.ParquetWriter(str(out_path), tbl.schema)
+                    writer.write_table(tbl)
+                if writer:
+                    writer.close()
+                del result
+            else:
+                rows_emitted = 0
+                n_unique_entity_id = 0
+                n_unique_entity_day = 0
         conn.close()
     finally:
         Path(db_path).unlink(missing_ok=True)
