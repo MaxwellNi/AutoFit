@@ -360,6 +360,7 @@ def main() -> None:
     parser.add_argument("--sample_entities", type=int, default=1000)
     parser.add_argument("--edgar_recompute_pairs", type=int, default=10)
     parser.add_argument("--edgar_min_compared", type=int, default=10, help="Min value-level comparisons for EDGAR recompute gate (default 10; 100 if EDGAR dense)")
+    parser.add_argument("--edgar_recompute_required", type=int, default=1, help="If 0, EDGAR recompute failures do not gate FAIL (use when 4090 lacks data parity with 3090)")
     parser.add_argument("--require_deltalake", type=int, default=0)
     parser.add_argument("--text_required_mode", type=int, default=0)
     args = parser.parse_args()
@@ -507,10 +508,13 @@ def main() -> None:
         min_compared=getattr(args, "edgar_min_compared", 10),
     )
     report["edgar_recompute"] = edgar_recompute
-    if edgar_recompute.get("status") == "skipped" and args.require_deltalake:
+    edgar_required = getattr(args, "edgar_recompute_required", 1)
+    if edgar_recompute.get("status") == "skipped" and args.require_deltalake and edgar_required:
         fail_reasons.append("EDGAR recompute skipped: " + str(edgar_recompute.get("reason", "")))
-    elif edgar_recompute.get("status") == "fail":
+    elif edgar_recompute.get("status") == "fail" and edgar_required:
         fail_reasons.append("EDGAR recompute failed: " + str(edgar_recompute.get("reason", "")))
+    elif edgar_recompute.get("status") == "fail" and not edgar_required:
+        report["edgar_recompute"]["note"] = "edgar_recompute_required=0; failure recorded but not gating (ensure data parity with 3090 for full validation)"
 
     report["gate_passed"] = len(fail_reasons) == 0
     report["fail_reasons"] = fail_reasons
