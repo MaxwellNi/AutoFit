@@ -261,7 +261,9 @@ def _edgar_recompute_gate(
         result["reason"] = "no snapshot rows for sample"
         return result
     try:
-        edgar_raw = load_edgar_features_from_parquet(Path(raw_edgar_delta), batch_size=100_000, limit_rows=300_000)
+        edgar_raw = load_edgar_features_from_parquet(
+            Path(raw_edgar_delta), batch_size=100_000, limit_rows=1_500_000, cik_filter=ciks
+        )
     except Exception as e:
         result["status"] = "skipped"
         result["reason"] = f"load_edgar_features_from_parquet: {e}"
@@ -303,10 +305,18 @@ def _edgar_recompute_gate(
     max_abs_diff = 0.0
     diff_count = 0
     total_compared = 0
-    store_sub["_date"] = pd.to_datetime(store_sub["crawled_date"], utc=True).dt.strftime("%Y-%m-%d")
-    aligned["_date"] = pd.to_datetime(aligned["crawled_date"], utc=True).dt.strftime("%Y-%m-%d")
-    store_sub["_key"] = store_sub["platform_name"].astype(str) + "|" + store_sub["offer_id"].astype(str) + "|" + store_sub["cik"].astype(str) + "|" + store_sub["_date"]
-    aligned["_key"] = aligned["platform_name"].astype(str) + "|" + aligned["offer_id"].astype(str) + "|" + aligned["cik"].astype(str) + "|" + aligned["_date"]
+    store_sub["crawled_date"] = pd.to_datetime(store_sub["crawled_date"], utc=True)
+    aligned["crawled_date"] = pd.to_datetime(aligned["crawled_date"], utc=True)
+    def _ts_key(s: pd.Series) -> pd.Series:
+        return s.dt.strftime("%Y-%m-%dT%H:%M:%S")
+    store_sub["_key"] = (
+        store_sub["platform_name"].astype(str) + "|" + store_sub["offer_id"].astype(str)
+        + "|" + store_sub["cik"].astype(str) + "|" + _ts_key(store_sub["crawled_date"])
+    )
+    aligned["_key"] = (
+        aligned["platform_name"].astype(str) + "|" + aligned["offer_id"].astype(str)
+        + "|" + aligned["cik"].astype(str) + "|" + _ts_key(aligned["crawled_date"])
+    )
     keys_in_both = set(store_sub["_key"]) & set(aligned["_key"])
     for col in agg_cols:
         if col not in aligned.columns or col not in store_sub.columns:

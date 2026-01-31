@@ -598,11 +598,16 @@ def load_edgar_features_from_parquet(
     *,
     batch_size: int = 200_000,
     limit_rows: Optional[int] = None,
+    cik_filter: Optional[Sequence[str]] = None,
     logger: Optional[Any] = None,
 ) -> pd.DataFrame:
     dataset = _open_dataset(edgar_path, logger=logger, label="edgar_accessions")
     columns = ["cik", "filed_date", "submission_offering_data"]
-    scanner = dataset.scanner(columns=columns, batch_size=batch_size, use_threads=True)
+    filter_expr = None
+    if cik_filter and "cik" in (dataset.schema.names if hasattr(dataset.schema, "names") else [f.name for f in dataset.schema]):
+        casted = pa.array([str(c) for c in cik_filter])
+        filter_expr = ds.field("cik").isin(casted)
+    scanner = dataset.scanner(columns=columns, batch_size=batch_size, filter=filter_expr, use_threads=True) if filter_expr is not None else dataset.scanner(columns=columns, batch_size=batch_size, use_threads=True)
     frames = []
     seen = 0
     for batch in scanner.to_batches():
