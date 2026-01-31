@@ -1,0 +1,97 @@
+# Column contract v2: machine-readable MUST_KEEP / CAN_DROP / SHOULD_ADD
+# Used by audit_column_manifest.py when --text_required_mode 1
+# Do NOT change offers_core_v2 schema; only add missing tables (offers_text)
+
+offers_core:
+  must_keep:
+    - entity_id
+    - platform_name
+    - offer_id
+    - snapshot_ts
+    - funding_goal_usd
+    - funding_raised_usd
+    - investors_count
+    - is_funded
+  can_drop:
+    - hash_id
+    - link
+
+offers_static:
+  must_keep:
+    - entity_id
+    - platform_name
+    - offer_id
+    - static_snapshot_ts
+    - cik
+    - platform_country
+    - market_tags
+    - security_type
+    - investment_type
+    - regulation
+    - datetime_open_offering
+    - datetime_close_offering
+  can_drop:
+    - hash_id
+    - link
+
+offers_text:
+  must_keep:
+    - entity_id
+    - platform_name
+    - offer_id
+    - snapshot_ts
+    - headline
+    - title
+    - description_text
+    - company_description
+    - product_description
+    - financial_condition
+    - financial_forecasts
+    - financial_risks
+    - offering_purpose
+    - term_sheet
+    - front_video_transcript
+    - use_of_funds_text
+    - reasons_to_invest_text
+    - updates_text
+    - questions_text
+
+edgar_store:
+  must_keep:
+    - offer_id
+    - cik
+    - snapshot_year
+    - last_total_offering_amount
+    - last_total_amount_sold
+    - last_total_remaining
+    - last_number_non_accredited_investors
+    - last_total_number_already_invested
+    - last_minimum_investment_accepted
+    - last_sales_commissions
+    - last_finders_fees
+    - last_gross_proceeds_used
+    - mean_total_offering_amount
+    - mean_total_amount_sold
+    - mean_total_remaining
+    - mean_number_non_accredited_investors
+    - mean_total_number_already_invested
+    - mean_minimum_investment_accepted
+    - mean_sales_commissions
+    - mean_finders_fees
+    - mean_gross_proceeds_used
+    - ema_total_offering_amount
+    - ema_total_amount_sold
+    - ema_total_remaining
+    - ema_number_non_accredited_investors
+    - ema_total_number_already_invested
+    - ema_minimum_investment_accepted
+    - ema_sales_commissions
+    - ema_finders_fees
+    - ema_gross_proceeds_used
+
+should_add_v3_candidates:
+  - number_of_days_left
+  - status
+  - web_fundraising_status
+  - offering_status
+  - interest_rate

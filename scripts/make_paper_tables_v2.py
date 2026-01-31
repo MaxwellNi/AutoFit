@@ -101,14 +101,18 @@ def _efficiency_from_real_runs(real_runs: List[Dict[str, Any]]) -> pd.DataFrame:
 
 def main() -> None:
     parser = argparse.ArgumentParser(description="Build paper tables from benchmark_truthfulness.json only.")
-    parser.add_argument("--benchmark_truthfulness_json", type=Path, required=True)
+    parser.add_argument("--benchmark_truthfulness_json", type=Path, default=None)
+    parser.add_argument("--truthfulness_json", type=Path, default=None, help="Alias for --benchmark_truthfulness_json")
     parser.add_argument("--output_dir", type=Path, required=True, help="e.g. runs/orchestrator/STAMP/paper_tables")
     args = parser.parse_args()
 
-    if not args.benchmark_truthfulness_json.exists():
-        raise FileNotFoundError(f"benchmark_truthfulness.json not found: {args.benchmark_truthfulness_json}")
+    truth_path = args.truthfulness_json or args.benchmark_truthfulness_json
+    if not truth_path:
+        raise ValueError("Must provide --benchmark_truthfulness_json or --truthfulness_json")
+    if not truth_path.exists():
+        raise FileNotFoundError(f"truthfulness json not found: {truth_path}")
 
-    data = json.loads(args.benchmark_truthfulness_json.read_text(encoding="utf-8"))
+    data = json.loads(truth_path.read_text(encoding="utf-8"))
     real_runs = data.get("real_runs", [])
     if not real_runs:
         raise ValueError("benchmark_truthfulness.json has no real_runs")

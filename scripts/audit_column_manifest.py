@@ -185,6 +185,7 @@ def _edgar_recompute_gate(
     atol: float,
     require_deltalake: bool,
     logger: logging.Logger,
+    min_compared: int = 10,
 ) -> Dict[str, Any]:
     """Recompute EDGAR features from raw aligned to snapshots (same logic as build_edgar_features) and compare to store. Hard gate."""
     result: Dict[str, Any] = {"status": "ok", "max_abs_diff": 0.0, "diff_count": 0, "total_compared": 0}
@@ -225,13 +226,18 @@ def _edgar_recompute_gate(
         return result
     agg_cols = [c for c in store_df.columns if c.startswith("last_") or c.startswith("mean_") or c.startswith("ema_")]
     agg_cols = [c for c in agg_cols if not c.endswith("_is_missing")][:15]
-    pairs_df = store_df[["platform_name", "offer_id", "cik"]].drop_duplicates().dropna()
+    sample_col = agg_cols[0] if agg_cols else None
+    if sample_col and sample_col in store_df.columns:
+        has_data = store_df[store_df[sample_col].notna()][["platform_name", "offer_id", "cik"]].drop_duplicates().dropna()
+        pairs_df = has_data if len(has_data) >= n_pairs else store_df[["platform_name", "offer_id", "cik"]].drop_duplicates().dropna()
+    else:
+        pairs_df = store_df[["platform_name", "offer_id", "cik"]].drop_duplicates().dropna()
     if pairs_df.empty:
         result["status"] = "skipped"
         result["reason"] = "no (platform_name, offer_id, cik) in store"
         return result
     rng = np.random.default_rng(42)
-    n_pick = min(n_pairs, len(pairs_df))
+    n_pick = min(max(n_pairs, 30), len(pairs_df))
     pick = pairs_df.iloc[rng.choice(len(pairs_df), size=n_pick, replace=False)]
     our_offer_ids = set(pick["offer_id"].astype(str).unique())
     ciks = pick["cik"].astype(str).dropna().unique().tolist()
@@ -297,16 +303,15 @@ def _edgar_recompute_gate(
     max_abs_diff = 0.0
     diff_count = 0
     total_compared = 0
-    store_sub["_key"] = (
-        store_sub["platform_name"].astype(str) + "|" + store_sub["offer_id"].astype(str) + "|" + store_sub["cik"].astype(str) + "|" + store_sub["crawled_date"].astype(str)
-    )
-    aligned["_key"] = (
-        aligned["platform_name"].astype(str) + "|" + aligned["offer_id"].astype(str) + "|" + aligned["cik"].astype(str) + "|" + aligned["crawled_date"].astype(str)
-    )
+    store_sub["_date"] = pd.to_datetime(store_sub["crawled_date"], utc=True).dt.strftime("%Y-%m-%d")
+    aligned["_date"] = pd.to_datetime(aligned["crawled_date"], utc=True).dt.strftime("%Y-%m-%d")
+    store_sub["_key"] = store_sub["platform_name"].astype(str) + "|" + store_sub["offer_id"].astype(str) + "|" + store_sub["cik"].astype(str) + "|" + store_sub["_date"]
+    aligned["_key"] = aligned["platform_name"].astype(str) + "|" + aligned["offer_id"].astype(str) + "|" + aligned["cik"].astype(str) + "|" + aligned["_date"]
+    keys_in_both = set(store_sub["_key"]) & set(aligned["_key"])
     for col in agg_cols:
         if col not in aligned.columns or col not in store_sub.columns:
             continue
-        for _key in aligned["_key"].unique()[:50]:
+        for _key in list(keys_in_both)[:500]:
             store_row = store_sub[store_sub["_key"] == _key]
             align_row = aligned[aligned["_key"] == _key]
             if store_row.empty or align_row.empty:
@@ -332,7 +337,10 @@ def _edgar_recompute_gate(
     result["max_abs_diff"] = max_abs_diff
     result["diff_count"] = diff_count
     result["total_compared"] = total_compared
-    if failed and total_compared > 0:
+    if require_deltalake and total_compared < min_compared:
+        result["status"] = "fail"
+        result["reason"] = f"EDGAR recompute total_compared={total_compared} < {min_compared} (insufficient comparisons)"
+    elif failed and total_compared > 0:
         result["status"] = "fail"
         result["reason"] = f"EDGAR recompute diff_count={diff_count} total_compared={total_compared} max_abs_diff={max_abs_diff}"
     return result
@@ -342,6 +350,7 @@ def main() -> None:
     parser = argparse.ArgumentParser(description="Column-level sufficiency audit (MUST_KEEP / CAN_DROP / SHOULD_ADD).")
     parser.add_argument("--offers_core", type=Path, required=True)
     parser.add_argument("--offers_static", type=Path, required=True)
+    parser.add_argument("--offers_text", type=Path, default=None, help="Path to offers_text.parquet (for NBI/NCI)")
     parser.add_argument("--edgar_dir", type=Path, required=True)
     parser.add_argument("--raw_offers_delta", type=Path, required=True)
     parser.add_argument("--raw_edgar_delta", type=Path, required=True)
@@ -350,6 +359,7 @@ def main() -> None:
     parser.add_argument("--seed", type=int, default=42)
     parser.add_argument("--sample_entities", type=int, default=1000)
     parser.add_argument("--edgar_recompute_pairs", type=int, default=10)
+    parser.add_argument("--edgar_min_compared", type=int, default=10, help="Min value-level comparisons for EDGAR recompute gate (default 10; 100 if EDGAR dense)")
     parser.add_argument("--require_deltalake", type=int, default=0)
     parser.add_argument("--text_required_mode", type=int, default=0)
     args = parser.parse_args()
@@ -395,12 +405,26 @@ def main() -> None:
     report["narrative_note"] = "These columns belong to offers_text table, NOT offers_core."
     narrative_in_raw = [c for c in NARRATIVE_REQUIRED_COLS if c in raw_offers_cols]
     report["narrative_in_raw"] = narrative_in_raw
-    # Check offers_text: we do not have a separate offers_text path; if text_required_mode=1, FAIL when missing
-    offers_text_path = args.offers_core.parent / "offers_text.parquet"
+    # Check offers_text: use --offers_text if provided, else offers_core.parent/offers_text.parquet
+    offers_text_path = args.offers_text if args.offers_text else (args.offers_core.parent / "offers_text.parquet")
     has_offers_text = offers_text_path.exists()
     report["offers_text_exists"] = has_offers_text
     if args.text_required_mode and not has_offers_text:
         fail_reasons.append("text_required_mode=1 but offers_text table missing")
+    elif args.text_required_mode and has_offers_text:
+        contract_path = repo_root / "configs" / "column_contract_v2.yaml"
+        if contract_path.exists():
+            try:
+                import yaml
+                contract = yaml.safe_load(contract_path.read_text(encoding="utf-8"))
+                text_must = contract.get("offers_text", {}).get("must_keep", [])
+                text_cols = _parquet_schema(offers_text_path)
+                missing_text = [c for c in text_must if c not in text_cols]
+                if missing_text:
+                    fail_reasons.append(f"offers_text missing MUST_KEEP per contract: {missing_text}")
+                report["offers_text_must_keep_missing"] = missing_text
+            except Exception as e:
+                logger.warning("Could not validate offers_text against contract: %s", e)
 
     # Processed missingness (exact from head of parquet)
     core_df = pd.DataFrame()
@@ -480,6 +504,7 @@ def main() -> None:
         atol=1e-5,
         require_deltalake=bool(args.require_deltalake),
         logger=logger,
+        min_compared=getattr(args, "edgar_min_compared", 10),
     )
     report["edgar_recompute"] = edgar_recompute
     if edgar_recompute.get("status") == "skipped" and args.require_deltalake:
