@@ -6,7 +6,7 @@ Output: offers_text.parquet + MANIFEST.json (local, untracked).
 
 STREAMING mode: processes in chunks to avoid OOM. Uses SQLite for disk-based
 deduplication. Chunk size is auto-tuned from available RAM (40%% of avail minus
-8GB headroom, ~800B/row) unless --chunk_rows overrides. Cap 5M--50M rows/chunk.
+8GB headroom, ~800B/row) unless --chunk_rows overrides. Cap 5M--20M rows/chunk.
 
 If offers_text.parquet exists and --overwrite 0, exits with error to prevent
 accidental overwrite of full build by a debug run with --limit_rows.
@@ -83,7 +83,7 @@ def main() -> None:
     parser.add_argument("--output_dir", type=Path, required=True)
     parser.add_argument("--limit_rows", type=int, default=None, help="Limit rows read (for testing); omit for full build")
     parser.add_argument("--overwrite", type=int, default=0, help="1=allow overwrite if output exists; 0=fail if exists")
-    parser.add_argument("--chunk_rows", type=int, default=None, help="Rows per chunk (default: auto from 40%% of available RAM, ~800B/row)")
+    parser.add_argument("--chunk_rows", type=int, default=None, help="Rows per chunk (default: auto, cap 20M to avoid OOM on final chunk)")
     args = parser.parse_args()
 
     chunk_rows = args.chunk_rows
@@ -105,7 +105,7 @@ def main() -> None:
         usable_gb = max(4.0, avail_gb - headroom_gb)
         bytes_per_row = 800
         chunk_rows = int(0.4 * usable_gb * 1024**3 / bytes_per_row)
-        chunk_rows = max(5_000_000, min(50_000_000, chunk_rows))
+        chunk_rows = max(5_000_000, min(20_000_000, chunk_rows))
         print(f"build_offers_text: auto chunk_rows={chunk_rows:,} (avail_ram~{avail_gb:.0f}GB)", flush=True)
 
     print("build_offers_text: starting (streaming mode)", flush=True)
@@ -194,17 +194,38 @@ def main() -> None:
                 break
 
         if chunk_buf:
-            merged = pd.concat(chunk_buf, ignore_index=True)
-            before = len(merged)
-            processed = _process_chunk(merged, array_cols, dedup_col)
-            rows_all_text_null_dropped += before - len(processed) if not processed.empty else before
-            if not processed.empty:
-                if not schema_created:
-                    processed.head(0).to_sql("offers_text", conn, if_exists="replace", index=False)
-                    schema_created = True
-                processed.to_sql("offers_text", conn, if_exists="append", index=False, method="multi", chunksize=50_000)
-                rows_written_to_db += len(processed)
-            del merged, processed
+            sub_size = chunk_rows
+            frames_acc: List[pd.DataFrame] = []
+            rows_acc = 0
+            for df in chunk_buf:
+                frames_acc.append(df)
+                rows_acc += len(df)
+                if rows_acc >= sub_size:
+                    merged = pd.concat(frames_acc, ignore_index=True)
+                    frames_acc = []
+                    rows_acc = 0
+                    before = len(merged)
+                    processed = _process_chunk(merged, array_cols, dedup_col)
+                    rows_all_text_null_dropped += before - len(processed) if not processed.empty else before
+                    if not processed.empty:
+                        if not schema_created:
+                            processed.head(0).to_sql("offers_text", conn, if_exists="replace", index=False)
+                            schema_created = True
+                        processed.to_sql("offers_text", conn, if_exists="append", index=False, method="multi", chunksize=50_000)
+                        rows_written_to_db += len(processed)
+                    del merged, processed
+            if frames_acc:
+                merged = pd.concat(frames_acc, ignore_index=True)
+                before = len(merged)
+                processed = _process_chunk(merged, array_cols, dedup_col)
+                rows_all_text_null_dropped += before - len(processed) if not processed.empty else before
+                if not processed.empty:
+                    if not schema_created:
+                        processed.head(0).to_sql("offers_text", conn, if_exists="replace", index=False)
+                        schema_created = True
+                    processed.to_sql("offers_text", conn, if_exists="append", index=False, method="multi", chunksize=50_000)
+                    rows_written_to_db += len(processed)
+                del merged, processed
         chunk_buf = []
 
         if not schema_created or rows_written_to_db == 0:
