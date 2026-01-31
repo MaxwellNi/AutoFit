@@ -1,5 +1,5 @@
-# Build offers_text_full (streaming, auto-tuned memory)
-# Chunk size auto-tuned from available RAM. Run on 4090 (or any host).
+# Build offers_text_full (full-scale, raw~105M rows)
+# Chunk cap 25M so we process during scan (else tail OOM). Output passes Block 1.5+++/2 audits.
 
 mkdir -p runs/orchestrator/20260129_073037/analysis/logs
 PYTHONUNBUFFERED=1 python scripts/build_offers_text.py \

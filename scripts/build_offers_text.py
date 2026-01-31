@@ -4,9 +4,8 @@ Build offers_text parquet from raw offers delta (narrative columns for NBI/NCI).
 Joins by entity_id + snapshot_ts. Converts array fields to joined strings.
 Output: offers_text.parquet + MANIFEST.json (local, untracked).
 
-STREAMING mode: maximizes device RAM for full-scale build. Chunk size auto-tuned
-from MemAvailable (50%% of avail minus 8GB headroom, ~1.2KB/row incl processing).
-No artificial cap—use --chunk_rows to override. Final tail processed in sub-chunks.
+STREAMING mode: chunk size auto-tuned from MemAvailable, capped at 25M rows (raw~105M;
+must process during scan else tail OOM). Use --chunk_rows to override.
 
 If offers_text.parquet exists and --overwrite 0, exits with error to prevent
 accidental overwrite of full build by a debug run with --limit_rows.
@@ -107,7 +106,7 @@ def main() -> None:
         bytes_per_row = 1200  # raw + processing (apply, concat) overhead
         frac = max(0.3, min(0.7, args.ram_fraction))
         chunk_rows = int(frac * usable_gb * 1024**3 / bytes_per_row)
-        chunk_rows = max(2_000_000, chunk_rows)
+        chunk_rows = max(2_000_000, min(25_000_000, chunk_rows))  # cap 25M: raw~105M, must process during scan
         print(f"build_offers_text: auto chunk_rows={chunk_rows:,} (avail_ram~{avail_gb:.0f}GB, frac={frac})", flush=True)
 
     print("build_offers_text: starting (streaming mode)", flush=True)
