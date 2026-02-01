@@ -1,6 +1,9 @@
 # Full-scale data freeze pointer (20260131_235740)
 # Final directories for Block 3 training. No sensitive paths.
+# Block 3 MUST read this file only; no hand-filled paths.
+# When wide freeze (offers_core_full_*_wide_*) exists, update to TRAIN_WIDE_FINAL.
 
+variant: "TRAIN_FULL_DAILY"
 stamp: "20260131_235740"
 
 offers_text:

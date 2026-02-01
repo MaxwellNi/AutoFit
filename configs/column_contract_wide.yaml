@@ -1,0 +1,145 @@
+categorical_distinct_max: 200000
+edgar_store:
+  high_value: []
+  must_keep:
+  - ex_99_files
+  - company_name
+  - ex_second_files
+  - form_type
+  - filing_date
+  - incorporation_state
+  - category
+  - entity_type
+  - country_state
+  - extra_docs
+  - fiscal_year_end
+  - accession_number
+  - file_number
+  - exchanges
+  - film_number
+  - extra_submission
+  - cik
+  - ein
+  - is_inline_XBRL
+  - acceptance_datetime
+  - htm_files
+  - flags
+  - business_address
+  - items
+  - filed_date
+  - former_names
+non_null_min: 0.001
+offers_core_daily:
+  can_drop: &id001
+  - hash_id
+  - link
+  derived_structured:
+  - text_len
+  - num_tokens_est
+  - num_urls
+  - num_hashtags
+  high_value: &id002 []
+  must_keep:
+  - company_website
+  - front_image_url
+  - datetime_open_offering
+  - financial_condition
+  - company_logo
+  - is_investable
+  - company_type
+  - date_of_formation
+  - datetime_maturity
+  - platform_country
+  - datetime_close_offering
+  - company_legal_name
+  - regulation
+  - offer_id
+  - is_testing_the_waters
+  - financial_statements_files
+  - fiscal_year_end_date
+  - financial_forecasts
+  - appears_in_landing_page
+  - status
+  - description_text
+  - financial_risks
+  - file_number
+  - allow_crypto_payments
+  - url
+  - cik
+  - datetime_form_filing
+  - company_email
+  - crawled_date
+  - comments
+  - company_name
+  - web_fundraising_status
+  - duplicated
+  - is_funded
+  - platform_name
+  - investors_count
+  - funding_goal_usd
+  - funding_raised_usd
+offers_core_snapshot:
+  can_drop: *id001
+  derived_only: []
+  high_value: *id002
+  must_keep:
+  - company_website
+  - front_image_url
+  - datetime_open_offering
+  - financial_condition
+  - company_logo
+  - is_investable
+  - company_type
+  - date_of_formation
+  - datetime_maturity
+  - platform_country
+  - datetime_close_offering
+  - company_legal_name
+  - regulation
+  - offer_id
+  - is_testing_the_waters
+  - financial_statements_files
+  - fiscal_year_end_date
+  - financial_forecasts
+  - appears_in_landing_page
+  - status
+  - description_text
+  - financial_risks
+  - file_number
+  - allow_crypto_payments
+  - url
+  - cik
+  - datetime_form_filing
+  - company_email
+  - crawled_date
+  - comments
+  - company_name
+  - web_fundraising_status
+  - duplicated
+  - is_funded
+  - platform_name
+  - investors_count
+  - funding_goal_usd
+  - funding_raised_usd
+offers_text:
+  must_keep:
+  - entity_id
+  - platform_name
+  - offer_id
+  - snapshot_ts
+  - headline
+  - title
+  - description_text
+  - company_description
+  - product_description
+  - financial_condition
+  - financial_forecasts
+  - financial_risks
+  - offering_purpose
+  - term_sheet
+  - front_video_transcript
+  - use_of_funds_text
+  - reasons_to_invest_text
+  - updates_text
+  - questions_text
+stamp: '20260201_201246'

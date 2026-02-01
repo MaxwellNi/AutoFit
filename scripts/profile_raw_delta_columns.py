@@ -95,15 +95,115 @@ def _schema_from_deltalake(delta_path: Path) -> Dict[str, str]:
         return {}
 
 
+def _welford_update(n: int, mean: float, m2: float, x: float) -> tuple[int, float, float]:
+    n1 = n + 1
+    delta = x - mean
+    mean1 = mean + delta / n1
+    m2_1 = m2 + delta * (x - mean1)
+    return n1, mean1, m2_1
+
+
+def _profile_from_scan_streaming(
+    delta_path: Path, mode: str, scan_rows: int, seed: int, batch_size: int = 500_000
+) -> Dict[str, Any]:
+    """Streaming scan: Welford mean/std, min/max, reservoir quantiles, top_k for categorical."""
+    try:
+        from deltalake import DeltaTable
+        import pandas as pd
+        import numpy as np
+        dt = DeltaTable(str(delta_path))
+        dset = dt.to_pyarrow_dataset()
+        all_cols = [f.name for f in dt.schema().fields]
+        read_cols = all_cols[:120]
+        acc: Dict[str, Dict[str, Any]] = {c: {"welford": (0, 0.0, 0.0), "min": None, "max": None, "reservoir": [], "counter": {}, "null_count": 0} for c in read_cols}
+        reservoir_size = min(100_000, scan_rows // 10)
+        total_seen = 0
+        rng = np.random.default_rng(seed)
+        for batch in dset.scanner(columns=read_cols, batch_size=batch_size).to_batches():
+            df = batch.to_pandas()
+            total_seen += len(df)
+            for c in read_cols:
+                if c not in df.columns:
+                    continue
+                s = df[c].dropna()
+                acc[c]["null_count"] += int(df[c].isna().sum())
+                if s.empty:
+                    continue
+                if pd.api.types.is_numeric_dtype(s):
+                    arr = pd.to_numeric(s, errors="coerce").dropna().values
+                    n, mean, m2 = acc[c]["welford"]
+                    for v in arr:
+                        vf = float(v)
+                        if np.isfinite(vf):
+                            n, mean, m2 = _welford_update(n, mean, m2, vf)
+                            if acc[c]["min"] is None or vf < acc[c]["min"]:
+                                acc[c]["min"] = vf
+                            if acc[c]["max"] is None or vf > acc[c]["max"]:
+                                acc[c]["max"] = vf
+                            if len(acc[c]["reservoir"]) < reservoir_size:
+                                acc[c]["reservoir"].append(vf)
+                            elif rng.random() < reservoir_size / (n + 1):
+                                acc[c]["reservoir"][rng.integers(0, reservoir_size)] = vf
+                    acc[c]["welford"] = (n, mean, m2)
+                else:
+                    for v in s.astype(str):
+                        acc[c]["counter"][v] = acc[c]["counter"].get(v, 0) + 1
+                        if len(acc[c]["counter"]) > 100_000:
+                            acc[c]["counter"] = dict(sorted(acc[c]["counter"].items(), key=lambda x: -x[1])[:50_000])
+            if total_seen >= scan_rows:
+                break
+        cols_out = {}
+        for c in read_cols:
+            a = acc[c]
+            n, mean, m2 = a["welford"]
+            rc = total_seen
+            nc = a["null_count"]
+            nnr = 1 - (nc / rc) if rc else None
+            dtype = "float64" if n > 0 else "object"
+            col: Dict[str, Any] = {
+                "column": c,
+                "dtype": dtype,
+                "source": "scan_sample",
+                "non_null_rate_sample": nnr,
+                "record_count": rc,
+                "approx_null_count": nc,
+            }
+            if n > 0:
+                col["mean_sample"] = mean
+                col["std_sample"] = float((m2 / n) ** 0.5) if n else 0.0
+                col["min_sample"] = a["min"]
+                col["max_sample"] = a["max"]
+                rv = a["reservoir"]
+                if len(rv) >= 10:
+                    arr = np.array(rv)
+                    col["p01_sample"] = float(np.percentile(arr, 1))
+                    col["p50_sample"] = float(np.percentile(arr, 50))
+                    col["p99_sample"] = float(np.percentile(arr, 99))
+            if a["counter"]:
+                top = sorted(a["counter"].items(), key=lambda x: -x[1])[:50]
+                col["distinct_sample"] = len(a["counter"])
+                col["top_k"] = [x[0] for x in top]
+            col["approx_non_null_rate"] = nnr
+            cols_out[c] = col
+        return {
+            "mode": mode,
+            "source": "scan_sample",
+            "total_records_est": total_seen,
+            "columns": cols_out,
+        }
+    except Exception as e:
+        return {"mode": mode, "source": "error", "error": str(e), "columns": {}}
+
+
 def _profile_from_scan(delta_path: Path, mode: str, scan_rows: int, seed: int) -> Dict[str, Any]:
-    """Fallback: scan sample rows for column stats."""
+    """Fallback: scan sample rows for column stats (small sample, in-memory)."""
     try:
         from deltalake import DeltaTable
         import pandas as pd
         dt = DeltaTable(str(delta_path))
         dset = dt.to_pyarrow_dataset()
-        cols = [f.name for f in dt.schema().fields][:60]
-        df = dset.scanner(columns=cols, batch_size=min(scan_rows, 100_000)).to_pandas()
+        cols = [f.name for f in dt.schema().fields][:80]
+        df = dset.scanner(columns=cols, batch_size=min(scan_rows, 200_000)).to_pandas()
         if scan_rows and len(df) > scan_rows:
             df = df.sample(n=scan_rows, random_state=seed, replace=False)
         if df.empty:
@@ -114,14 +214,15 @@ def _profile_from_scan(delta_path: Path, mode: str, scan_rows: int, seed: int) -
             nc = s.isna().sum()
             rc = len(s)
             cols_out[c] = {
+                "column": c,
                 "dtype": str(s.dtype),
                 "source": "scan_sample",
-                "approx_non_null_rate": 1 - (nc / rc) if rc else None,
+                "non_null_rate_sample": 1 - (nc / rc) if rc else None,
                 "approx_null_count": int(nc),
                 "record_count": rc,
                 "min": str(s.min()) if s.dtype == "object" or "str" in str(s.dtype) else (float(s.min()) if s.dtype.kind in "fc" else s.min()),
                 "max": str(s.max()) if s.dtype == "object" or "str" in str(s.dtype) else (float(s.max()) if s.dtype.kind in "fc" else s.max()),
-                "n_unique_est": int(s.nunique()) if rc else None,
+                "distinct_sample": int(s.nunique()) if rc else None,
             }
         return {
             "mode": mode,
@@ -166,7 +267,9 @@ def _to_md(profile: Dict[str, Any], title: str) -> str:
             v = cols[c]
             nnr = v.get("approx_non_null_rate")
             nnr_s = f"{nnr:.2%}" if nnr is not None else "N/A"
-            lines.append(f"- **{c}**: non_null≈{nnr_s}, min/max in profile")
+            std_s = f" std={v.get('std_sample'):.4f}" if v.get('std_sample') is not None else ""
+            dist_s = f" distinct={v.get('distinct_sample')}" if v.get('distinct_sample') is not None else ""
+            lines.append(f"- **{c}**: non_null≈{nnr_s}{std_s}{dist_s}")
             seen.add(c)
         lines.append("")
     other = [c for c in cols if c not in seen][:30]
@@ -191,7 +294,10 @@ def main() -> None:
     parser.add_argument("--mode", choices=["offers", "edgar", "both"], default="both")
     parser.add_argument("--seed", type=int, default=42)
     parser.add_argument("--sample_files_frac", type=float, default=1.0)
-    parser.add_argument("--scan_sample_rows", type=int, default=0, help="0=no scan; >0 stream sample for stats")
+    parser.add_argument("--scan_sample_rows", type=int, default=0, help="0=no scan; >0 stream sample for stats (use streaming when >= 500k)")
+    parser.add_argument("--inventory_out", type=Path, default=None, help="Output parquet for column inventory (used when mode is single)")
+    parser.add_argument("--inventory_out_offers", type=Path, default=None)
+    parser.add_argument("--inventory_out_edgar", type=Path, default=None)
     args = parser.parse_args()
 
     delta_offers = args.raw_delta if args.raw_delta and args.mode == "offers" else args.raw_offers
@@ -201,14 +307,16 @@ def main() -> None:
 
     def _run_mode(mode: str, delta: Path) -> None:
         prof = _delta_stats_from_log(delta.resolve(), mode)
-        if not prof.get("columns") and args.scan_sample_rows:
+        if args.scan_sample_rows >= 500_000:
+            prof = _profile_from_scan_streaming(delta.resolve(), mode, args.scan_sample_rows, args.seed)
+        elif not prof.get("columns") and args.scan_sample_rows:
             prof = _profile_from_scan(delta.resolve(), mode, args.scan_sample_rows, args.seed)
         elif not prof.get("columns"):
             prof = _profile_from_scan(delta.resolve(), mode, 50_000, args.seed)
         schema = _schema_from_deltalake(delta.resolve())
         for col, dtype in schema.items():
             if col not in prof.get("columns", {}):
-                prof.setdefault("columns", {})[col] = {"dtype": dtype, "source": "schema_only"}
+                prof.setdefault("columns", {})[col] = {"column": col, "dtype": dtype, "source": "schema_only", "approx_non_null_rate": None}
         out_json = args.output_json if args.output_json else (out_dir / f"raw_{mode}_profile.json")
         out_md = args.output_md if args.output_md else (out_dir / f"raw_{mode}_profile.md")
         out_json.parent.mkdir(parents=True, exist_ok=True)
@@ -216,6 +324,24 @@ def main() -> None:
         out_json.write_text(json.dumps(prof, indent=2), encoding="utf-8")
         out_md.write_text(_to_md(prof, f"Raw {mode.title()} Profile"), encoding="utf-8")
         print(f"Wrote {out_json}, {out_md}", flush=True)
+        inv_path = None
+        if args.inventory_out and args.mode == mode:
+            inv_path = args.inventory_out
+        elif args.mode == "both":
+            inv_path = (args.inventory_out_offers if mode == "offers" else args.inventory_out_edgar) or (out_dir / f"raw_{mode}_column_inventory.parquet")
+        if inv_path:
+            inv_path.parent.mkdir(parents=True, exist_ok=True)
+            try:
+                import pandas as pd
+                rows = []
+                for col_name, v in prof.get("columns", {}).items():
+                    r = {"column": col_name, **{k: val for k, val in v.items() if k != "top_k" and not isinstance(val, (list, dict))}}
+                    rows.append(r)
+                inv_df = pd.DataFrame(rows)
+                inv_df.to_parquet(inv_path, index=False)
+                print(f"Wrote inventory {inv_path}", flush=True)
+            except Exception as e:
+                print(f"WARN: inventory write failed: {e}", flush=True)
 
     if args.mode in ("offers", "both"):
         _run_mode("offers", delta_offers)

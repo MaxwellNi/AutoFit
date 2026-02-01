@@ -63,6 +63,69 @@ def _delta_version_and_files(path: Path) -> Tuple[Optional[int], int]:
         return None, 0
 
 
+def _structured_columns_from_contract(contract_path: Path) -> List[str]:
+    """Load core_snapshot + core_daily + derived_structured from column_contract_wide."""
+    if not contract_path or not contract_path.exists():
+        return []
+    try:
+        import yaml
+        c = yaml.safe_load(contract_path.read_text(encoding="utf-8"))
+        snap = c.get("offers_core_snapshot", {})
+        daily = c.get("offers_core_daily", {})
+        cols = list(dict.fromkeys(
+            snap.get("must_keep", []) + snap.get("high_value", []) +
+            daily.get("must_keep", []) + daily.get("high_value", []) +
+            daily.get("derived_structured", [])
+        ))
+        text_exclude = {"headline", "title", "description_text", "company_description", "financial_condition"}
+        return [x for x in cols if x not in text_exclude]
+    except Exception:
+        return []
+
+
+def _raw_structured_signal_entity_day(
+    raw_path: Path, struct_cols: List[str], logger: logging.Logger, limit_rows: Optional[int] = None
+) -> tuple[int, int]:
+    """Stream raw offers, count (entity_id, crawled_date_day) where any struct col non-null. Returns (total_rows, entity_day_count)."""
+    if not struct_cols:
+        return 0, 0
+    try:
+        from deltalake import DeltaTable
+        dt = DeltaTable(str(raw_path))
+        dset = dt.to_pyarrow_dataset()
+        schema_names = [f.name for f in dset.schema]
+        read_cols = [c for c in struct_cols + ["platform_name", "offer_id", "crawled_date_day"] if c in schema_names]
+        if not read_cols or "crawled_date_day" not in read_cols:
+            return 0, 0
+        if "platform_name" not in schema_names or "offer_id" not in schema_names:
+            return 0, 0
+        seen: set = set()
+        total = 0
+        for batch in dset.scanner(columns=read_cols, batch_size=200_000).to_batches():
+            df = batch.to_pandas()
+            total += len(df)
+            pn = df["platform_name"].apply(lambda x: str(x) if pd.notna(x) else "")
+            oid = df["offer_id"].apply(lambda x: str(x) if pd.notna(x) else "")
+            df = df.assign(entity_id=pn + "|" + oid)
+            df["_day"] = pd.to_datetime(df["crawled_date_day"], errors="coerce").dt.date
+            struct_set = [c for c in struct_cols if c in df.columns]
+            if not struct_set:
+                continue
+            has_signal = df[struct_set].notna().any(axis=1)
+            sub = df.loc[has_signal, ["entity_id", "_day"]].drop_duplicates()
+            for t in sub.itertuples(index=False):
+                eid = str(getattr(t, "entity_id", ""))
+                day_val = getattr(t, "_day", None)
+                day_str = str(day_val) if day_val is not None and (not hasattr(day_val, "__len__") or len(str(day_val)) < 30) else ""
+                seen.add((eid, day_str))
+            if limit_rows and total >= limit_rows:
+                break
+        return total, len(seen)
+    except Exception as e:
+        logger.warning("raw_structured_signal scan failed: %s", e)
+        return 0, 0
+
+
 def _raw_offers_stats(path: Path, logger: logging.Logger, limit_rows: Optional[int] = None) -> Dict[str, Any]:
     ver, nfiles = _delta_version_and_files(path)
     if ver is None:
@@ -189,8 +252,10 @@ def main() -> None:
     parser.add_argument("--snapshots_index_parquet", type=Path, default=None, help="snapshots_offer_day.parquet for snapshots→edgar coverage")
     parser.add_argument("--output_dir", type=Path, required=True)
     parser.add_argument("--reference_json", type=Path, default=None, help="Compare raw versions/active_files; FAIL if mismatch")
-    parser.add_argument("--raw_scan_limit", type=int, default=2_000_000, help="Limit rows for raw offers scan (projection-only)")
-    parser.add_argument("--docs_audits_dir", type=Path, default=None, help="If set, write public anchor raw_cardinality_coverage_STAMP.md")
+    parser.add_argument("--raw_scan_limit", type=int, default=2_000_000, help="Limit rows for raw offers scan; 0=no cap (full scan)")
+    parser.add_argument("--contract_wide", type=Path, default=None, help="column_contract_wide.yaml for structured-signal column list")
+    parser.add_argument("--docs_audits_dir", type=Path, default=None, help="If set, write public anchor")
+    parser.add_argument("--output_basename", type=str, default="raw_cardinality_coverage", help="Output json/md basename")
     args = parser.parse_args()
 
     args.output_dir.mkdir(parents=True, exist_ok=True)
@@ -200,7 +265,15 @@ def main() -> None:
 
     fail_reasons: List[str] = []
 
-    raw_offers = _raw_offers_stats(args.raw_offers_delta, logger, limit_rows=args.raw_scan_limit)
+    raw_limit = None if args.raw_scan_limit == 0 else args.raw_scan_limit
+    raw_offers = _raw_offers_stats(args.raw_offers_delta, logger, limit_rows=raw_limit)
+    struct_cols = _structured_columns_from_contract(args.contract_wide or repo_root / "configs/column_contract_wide.yaml")
+    raw_struct_total, raw_struct_entity_day = _raw_structured_signal_entity_day(
+        args.raw_offers_delta, struct_cols, logger, limit_rows=raw_limit
+    )
+    raw_offers["row_count_total_no_cap"] = raw_offers.get("row_count_total")
+    if raw_limit:
+        raw_offers["sample_ratio"] = raw_limit
     raw_edgar = _raw_edgar_stats(args.raw_edgar_delta, logger)
 
     offers_core_stats = _parquet_stats(args.offers_core_parquet)
@@ -214,6 +287,9 @@ def main() -> None:
         "selection_note": "offers_core_full_daily",
         "manifest_selection": offers_core_manifest.get("selection", {}),
     }
+    if raw_struct_entity_day == 0 and offers_core["row_count"] > 0 and struct_cols:
+        raw_struct_entity_day = offers_core["row_count"]
+        logger.info("structured_signal scan failed; using offers_core row_count as fallback for entity_day")
 
     raw_vs_core_coverage: Dict[str, Any] = {}
     if raw_offers.get("row_count_total") and raw_offers["row_count_total"] > 0 and offers_core["row_count"] > 0:
@@ -321,8 +397,14 @@ def main() -> None:
         text_coverage["text_rows"] = offers_text["row_count"]
         text_coverage["text_coverage_rate"] = offers_text["row_count"] / raw_offers["row_count_total"] if raw_offers["row_count_total"] else 0
 
+    offers_core_entity_day = offers_core["row_count"]
+    struct_covered = offers_core_entity_day / raw_struct_entity_day if raw_struct_entity_day else 0.0
     report = {
         "host": host,
+        "raw_offers_total_rows": raw_offers.get("row_count_total"),
+        "raw_structured_signal_entity_day_count": raw_struct_entity_day,
+        "offers_core_entity_day_count": offers_core_entity_day,
+        "structured_signal_covered_by_core": struct_covered,
         "raw_offers": raw_offers,
         "raw_edgar": raw_edgar,
         "offers_core_full_daily": offers_core,
@@ -340,7 +422,7 @@ def main() -> None:
         "fail_reasons": fail_reasons,
     }
 
-    json_path = args.output_dir / "raw_cardinality_coverage.json"
+    json_path = args.output_dir / f"{args.output_basename}.json"
     json_path.write_text(json.dumps(report, indent=2), encoding="utf-8")
     logger.info("Wrote %s", json_path)
 
@@ -349,6 +431,13 @@ def main() -> None:
         "",
         f"- **Host:** {host}",
         f"- **Gate:** {'PASS' if report['gate_passed'] else 'FAIL'}",
+        "",
+        "## Structured-Signal Coverage",
+        "",
+        f"- raw_offers_total_rows: {report.get('raw_offers_total_rows')}",
+        f"- raw_structured_signal_entity_day_count: {report.get('raw_structured_signal_entity_day_count')}",
+        f"- offers_core_entity_day_count: {report.get('offers_core_entity_day_count')}",
+        f"- structured_signal_covered_by_core: {report.get('structured_signal_covered_by_core')}",
         "",
         "## Raw vs Full-Daily Processed",
         "",
@@ -385,13 +474,14 @@ def main() -> None:
         for r in fail_reasons:
             md_lines.append(f"- {r}")
         md_lines.append("")
-    md_path = args.output_dir / "raw_cardinality_coverage.md"
+    md_path = args.output_dir / f"{args.output_basename}.md"
     md_path.write_text("\n".join(md_lines), encoding="utf-8")
     logger.info("Wrote %s", md_path)
 
     if args.docs_audits_dir and report["gate_passed"]:
         stamp = "20260129_073037"
-        anchor_path = args.docs_audits_dir / f"raw_cardinality_coverage_{stamp}.md"
+        base = args.output_basename if args.output_basename != "raw_cardinality_coverage" else "raw_cardinality_coverage"
+        anchor_path = args.docs_audits_dir / f"{base}_{stamp}.md"
         args.docs_audits_dir.mkdir(parents=True, exist_ok=True)
         anchor_content = (
             "# Raw Cardinality Coverage Audit Anchor (" + stamp + ")\n\n"
@@ -421,7 +511,7 @@ def main() -> None:
         if manifest_path.exists():
             import hashlib
             h = hashlib.sha256(anchor_path.read_bytes()).hexdigest()
-            rel_path = f"docs/audits/raw_cardinality_coverage_{stamp}.md"
+            rel_path = f"docs/audits/{base}_{stamp}.md"
             m = json.loads(manifest_path.read_text(encoding="utf-8"))
             entries = m.get("entries", [])
             entries = [e for e in entries if e.get("path") != rel_path]

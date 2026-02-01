@@ -36,16 +36,20 @@ Full-scale data freeze completed. All audit gates PASS.
 - Must use actual edgar_store_full_daily; no fallback for PASS
 - Granularity: offer-day or cik-day (matches store)
 
-### 3. Full Coverage Audit
+### 3. Full Coverage / Structured-Signal Audit
 - raw_cardinality_coverage.json: raw_vs_core_coverage, text_coverage, snapshots_to_edgar_coverage
+- raw_cardinality_coverage_full_daily.json: raw_offers_total_rows, raw_structured_signal_entity_day_count, offers_core_entity_day_count, structured_signal_covered_by_core
 - gap_reasons_top_k for snapshots→edgar alignment
 
-## Raw Profiles
+## Raw Profiles / Inventory
 - raw_offers_profile: 148 columns, delta_log stats
 - raw_edgar_profile: delta_log stats
+- raw_offers_column_inventory.parquet: scan_sample (10M rows) with std/top_k when available
+- raw_edgar_column_inventory.parquet: idem
 
-## v3 Column Contract
-- configs/column_contract_v3.yaml
+## Column Contracts
+- configs/column_contract_v3.yaml: coverage_min=0.05
+- configs/column_contract_wide.yaml: non_null_min=0.001, wide-table principle
 - offers_core_snapshot/daily: must_keep, should_add, can_drop
 - offers_text: must_keep
 - edgar_store: must_keep (27 last/mean/ema features)
@@ -55,6 +59,7 @@ Full-scale data freeze completed. All audit gates PASS.
 |-------|------|------|
 | column_manifest | PASS | runs/orchestrator/20260129_073037/analysis/column_manifest.json |
 | raw_cardinality_coverage | PASS | runs/orchestrator/20260129_073037/analysis/raw_cardinality_coverage.json |
+| raw_cardinality_coverage_full_daily | PASS | runs/orchestrator/20260129_073037/analysis/raw_cardinality_coverage_full_daily.json |
 | distillation_fidelity | PASS | runs/orchestrator/20260129_073037/analysis/distillation_fidelity_report.json |
 
 ## Multi-Scale Products
