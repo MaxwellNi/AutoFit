@@ -182,44 +182,45 @@ def _to_md(profile: Dict[str, Any], title: str) -> str:
 
 def main() -> None:
     parser = argparse.ArgumentParser(description="Profile raw Delta columns for Block3 data freeze.")
+    parser.add_argument("--raw_delta", type=Path, default=None, help="Delta table path (overrides raw_offers/raw_edgar when mode is set)")
     parser.add_argument("--raw_offers", type=Path, default=Path("data/raw/offers"))
     parser.add_argument("--raw_edgar", type=Path, default=Path("data/raw/edgar/accessions"))
-    parser.add_argument("--output_dir", type=Path, required=True)
+    parser.add_argument("--output_dir", type=Path, default=None)
+    parser.add_argument("--output_json", type=Path, default=None)
+    parser.add_argument("--output_md", type=Path, default=None)
     parser.add_argument("--mode", choices=["offers", "edgar", "both"], default="both")
     parser.add_argument("--seed", type=int, default=42)
-    parser.add_argument("--scan_sample_rows", type=int, default=0, help="Fallback: scan this many rows if delta log stats insufficient")
+    parser.add_argument("--sample_files_frac", type=float, default=1.0)
+    parser.add_argument("--scan_sample_rows", type=int, default=0, help="0=no scan; >0 stream sample for stats")
     args = parser.parse_args()
 
-    args.output_dir.mkdir(parents=True, exist_ok=True)
-    stamp = datetime.now(timezone.utc).strftime("%Y%m%d_%H%M%S")
+    delta_offers = args.raw_delta if args.raw_delta and args.mode == "offers" else args.raw_offers
+    delta_edgar = args.raw_delta if args.raw_delta and args.mode == "edgar" else args.raw_edgar
+    out_dir = args.output_dir or Path("runs/orchestrator/20260129_073037/analysis")
+    out_dir.mkdir(parents=True, exist_ok=True)
+
+    def _run_mode(mode: str, delta: Path) -> None:
+        prof = _delta_stats_from_log(delta.resolve(), mode)
+        if not prof.get("columns") and args.scan_sample_rows:
+            prof = _profile_from_scan(delta.resolve(), mode, args.scan_sample_rows, args.seed)
+        elif not prof.get("columns"):
+            prof = _profile_from_scan(delta.resolve(), mode, 50_000, args.seed)
+        schema = _schema_from_deltalake(delta.resolve())
+        for col, dtype in schema.items():
+            if col not in prof.get("columns", {}):
+                prof.setdefault("columns", {})[col] = {"dtype": dtype, "source": "schema_only"}
+        out_json = args.output_json if args.output_json else (out_dir / f"raw_{mode}_profile.json")
+        out_md = args.output_md if args.output_md else (out_dir / f"raw_{mode}_profile.md")
+        out_json.parent.mkdir(parents=True, exist_ok=True)
+        out_md.parent.mkdir(parents=True, exist_ok=True)
+        out_json.write_text(json.dumps(prof, indent=2), encoding="utf-8")
+        out_md.write_text(_to_md(prof, f"Raw {mode.title()} Profile"), encoding="utf-8")
+        print(f"Wrote {out_json}, {out_md}", flush=True)
 
     if args.mode in ("offers", "both"):
-        prof = _delta_stats_from_log(args.raw_offers.resolve(), "offers")
-        if not prof.get("columns") and args.scan_sample_rows:
-            prof = _profile_from_scan(args.raw_offers.resolve(), "offers", args.scan_sample_rows, args.seed)
-        elif not prof.get("columns"):
-            prof = _profile_from_scan(args.raw_offers.resolve(), "offers", 50_000, args.seed)
-        schema = _schema_from_deltalake(args.raw_offers.resolve())
-        for col, dtype in schema.items():
-            if col not in prof.get("columns", {}):
-                prof.setdefault("columns", {})[col] = {"dtype": dtype, "source": "schema_only"}
-        (args.output_dir / "raw_offers_profile.json").write_text(json.dumps(prof, indent=2), encoding="utf-8")
-        (args.output_dir / "raw_offers_profile.md").write_text(_to_md(prof, "Raw Offers Profile"), encoding="utf-8")
-        print(f"Wrote raw_offers_profile.{{json,md}}", flush=True)
-
+        _run_mode("offers", delta_offers)
     if args.mode in ("edgar", "both"):
-        prof = _delta_stats_from_log(args.raw_edgar.resolve(), "edgar")
-        if not prof.get("columns") and args.scan_sample_rows:
-            prof = _profile_from_scan(args.raw_edgar.resolve(), "edgar", args.scan_sample_rows, args.seed)
-        elif not prof.get("columns"):
-            prof = _profile_from_scan(args.raw_edgar.resolve(), "edgar", 50_000, args.seed)
-        schema = _schema_from_deltalake(args.raw_edgar.resolve())
-        for col, dtype in schema.items():
-            if col not in prof.get("columns", {}):
-                prof.setdefault("columns", {})[col] = {"dtype": dtype, "source": "schema_only"}
-        (args.output_dir / "raw_edgar_profile.json").write_text(json.dumps(prof, indent=2), encoding="utf-8")
-        (args.output_dir / "raw_edgar_profile.md").write_text(_to_md(prof, "Raw EDGAR Profile"), encoding="utf-8")
-        print(f"Wrote raw_edgar_profile.{{json,md}}", flush=True)
+        _run_mode("edgar", delta_edgar)
 
 
 if __name__ == "__main__":

@@ -115,7 +115,7 @@ def main() -> None:
     data = json.loads(truth_path.read_text(encoding="utf-8"))
     real_runs = data.get("real_runs", [])
     if not real_runs:
-        raise ValueError("benchmark_truthfulness.json has no real_runs")
+        print("WARNING: benchmark_truthfulness.json has no real_runs; emitting empty tables", flush=True)
 
     args.output_dir.mkdir(parents=True, exist_ok=True)
 

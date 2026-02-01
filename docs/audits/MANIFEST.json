@@ -19,6 +19,18 @@
     {
       "path": "docs/audits/RUNBOOK_FULL_SCALE.md",
       "sha256": "043b28b1890fc0141b91c6032892dfc19f7a7a86db4418b1dcd820bcdfcfcb4c"
+    },
+    {
+      "path": "docs/audits/BLOCK3_READY_FULL_SCALE_20260131_235740.md",
+      "sha256": "260780bedcc317c46a3a81d216590d6c6a62c7914c8fa4d84e80d1c1bdbcd878"
+    },
+    {
+      "path": "docs/audits/column_contract_v3_20260201_161424.md",
+      "sha256": "b2d01d0c0d0a9249adfbb5dfc9b0d03030f4c1322785c4c2e6e0d000ac94bbbe"
+    },
+    {
+      "path": "docs/audits/raw_cardinality_coverage_20260129_073037.md",
+      "sha256": "427d210c4be98a738d846542b6c8993a117d9c62090fc28ebb7dde50c7e6ed9f"
     }
   ]
 }

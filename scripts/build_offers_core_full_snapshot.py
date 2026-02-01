@@ -14,9 +14,7 @@ sys.path.insert(0, str(repo_root))
 
 
 def main() -> None:
-    import argparse
     from scripts.build_offers_core_daily_full import main as _real_main
-    # Inject --output_base offers_core_snapshot into sys.argv
     if "--output_base" not in " ".join(sys.argv):
         sys.argv.extend(["--output_base", "offers_core_snapshot"])
     _real_main()

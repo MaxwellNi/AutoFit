@@ -105,6 +105,7 @@ HOST_TAG=4090 python scripts/audit_column_manifest.py \
   --offers_static "${DAILY_DIR}/offers_static.parquet" \
   --offers_text "runs/offers_text_v1_20260129_073037_full/offers_text.parquet" \
   --edgar_dir "${EDGAR_DIR}/edgar_features" \
+  --edgar_recompute_dir runs/edgar_feature_store/20260127_133511/edgar_features \
   --raw_offers_delta data/raw/offers \
   --raw_edgar_delta data/raw/edgar/accessions \
   --selection_json runs/selections/b11_v2_canonical/sampled_entities.json \

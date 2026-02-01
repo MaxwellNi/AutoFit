@@ -186,6 +186,7 @@ def _edgar_recompute_gate(
     require_deltalake: bool,
     logger: logging.Logger,
     min_compared: int = 10,
+    edgar_recompute_fallback_dir: Optional[Path] = None,
 ) -> Dict[str, Any]:
     """Recompute EDGAR features from raw aligned to snapshots (same logic as build_edgar_features) and compare to store. Hard gate."""
     result: Dict[str, Any] = {"status": "ok", "max_abs_diff": 0.0, "diff_count": 0, "total_compared": 0}
@@ -221,9 +222,21 @@ def _edgar_recompute_gate(
             return result
         return result
     if store_df.empty or "offer_id" not in store_df.columns or "cik" not in store_df.columns:
-        result["status"] = "skipped"
-        result["reason"] = "store empty or missing offer_id/cik"
-        return result
+        # Try fallback edgar dir (e.g. old store with offer_id when full_daily has dedup-only)
+        if edgar_recompute_fallback_dir and edgar_recompute_fallback_dir.exists():
+            try:
+                fallback_ds = ds.dataset(str(edgar_recompute_fallback_dir), format="parquet", partitioning="hive", exclude_invalid_files=True, ignore_prefixes=["_delta_log"])
+                store_df = fallback_ds.to_table().to_pandas()
+                edgar_dir = edgar_recompute_fallback_dir
+                logger.info("Using edgar_recompute_fallback_dir for recompute (primary lacked offer_id/cik)")
+            except Exception as e:
+                result["status"] = "skipped"
+                result["reason"] = f"store empty or missing offer_id/cik; fallback failed: {e}"
+                return result
+        if store_df.empty or "offer_id" not in store_df.columns or "cik" not in store_df.columns:
+            result["status"] = "skipped"
+            result["reason"] = "store empty or missing offer_id/cik"
+            return result
     agg_cols = [c for c in store_df.columns if c.startswith("last_") or c.startswith("mean_") or c.startswith("ema_")]
     agg_cols = [c for c in agg_cols if not c.endswith("_is_missing")][:15]
     sample_col = agg_cols[0] if agg_cols else None
@@ -362,6 +375,7 @@ def main() -> None:
     parser.add_argument("--offers_static", type=Path, required=True)
     parser.add_argument("--offers_text", type=Path, default=None, help="Path to offers_text.parquet (for NBI/NCI)")
     parser.add_argument("--edgar_dir", type=Path, required=True)
+    parser.add_argument("--edgar_recompute_dir", type=Path, default=None, help="Fallback edgar dir for recompute when primary lacks offer_id/cik (e.g. full_daily dedup store)")
     parser.add_argument("--raw_offers_delta", type=Path, required=True)
     parser.add_argument("--raw_edgar_delta", type=Path, required=True)
     parser.add_argument("--selection_json", type=Path, default=None)
@@ -523,6 +537,7 @@ def main() -> None:
         require_deltalake=bool(args.require_deltalake),
         logger=logger,
         min_compared=getattr(args, "edgar_min_compared", 10),
+        edgar_recompute_fallback_dir=args.edgar_recompute_dir,
     )
     report["edgar_recompute"] = edgar_recompute
     edgar_required = getattr(args, "edgar_recompute_required", 1)

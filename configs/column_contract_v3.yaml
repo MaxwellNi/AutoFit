@@ -1,0 +1,92 @@
+coverage_min: 0.05
+edgar_store:
+  must_keep:
+  - offer_id
+  - cik
+  - snapshot_year
+  - last_total_offering_amount
+  - last_total_amount_sold
+  - last_total_remaining
+  - last_number_non_accredited_investors
+  - last_total_number_already_invested
+  - last_minimum_investment_accepted
+  - last_sales_commissions
+  - last_finders_fees
+  - last_gross_proceeds_used
+  - mean_total_offering_amount
+  - mean_total_amount_sold
+  - mean_total_remaining
+  - mean_number_non_accredited_investors
+  - mean_total_number_already_invested
+  - mean_minimum_investment_accepted
+  - mean_sales_commissions
+  - mean_finders_fees
+  - mean_gross_proceeds_used
+  - ema_total_offering_amount
+  - ema_total_amount_sold
+  - ema_total_remaining
+  - ema_number_non_accredited_investors
+  - ema_total_number_already_invested
+  - ema_minimum_investment_accepted
+  - ema_sales_commissions
+  - ema_finders_fees
+  - ema_gross_proceeds_used
+offers_core_daily:
+  can_drop: &id001
+  - hash_id
+  - link
+  must_keep: &id002
+  - entity_id
+  - platform_name
+  - offer_id
+  - snapshot_ts
+  - funding_goal_usd
+  - funding_raised_usd
+  - investors_count
+  - is_funded
+  should_add:
+  - status
+  - web_fundraising_status
+offers_core_snapshot:
+  can_drop: *id001
+  must_keep: *id002
+  should_add:
+  - status
+  - web_fundraising_status
+offers_static:
+  can_drop: *id001
+  must_keep:
+  - entity_id
+  - platform_name
+  - offer_id
+  - static_snapshot_ts
+  - cik
+  - platform_country
+  - market_tags
+  - security_type
+  - investment_type
+  - regulation
+  - datetime_open_offering
+  - datetime_close_offering
+offers_text:
+  must_keep:
+  - entity_id
+  - platform_name
+  - offer_id
+  - snapshot_ts
+  - headline
+  - title
+  - description_text
+  - company_description
+  - product_description
+  - financial_condition
+  - financial_forecasts
+  - financial_risks
+  - offering_purpose
+  - term_sheet
+  - front_video_transcript
+  - use_of_funds_text
+  - reasons_to_invest_text
+  - updates_text
+  - questions_text
+stamp: '20260201_161424'

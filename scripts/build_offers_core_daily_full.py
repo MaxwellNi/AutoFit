@@ -35,12 +35,27 @@ DEDUP_COL = "processed_datetime"
 def main() -> None:
     parser = argparse.ArgumentParser(description="Build full offers_core_daily (streaming, no OOM).")
     parser.add_argument("--raw_offers_delta", type=Path, required=True)
+    parser.add_argument("--contract", type=Path, default=None, help="column_contract_v3.yaml for column list")
     parser.add_argument("--output_dir", type=Path, required=True)
     parser.add_argument("--overwrite", type=int, default=0)
     parser.add_argument("--chunk_rows", type=int, default=None)
     parser.add_argument("--limit_rows", type=int, default=None)
     parser.add_argument("--output_base", type=str, default="offers_core_daily", help="Base name: offers_core_snapshot or offers_core_daily")
     args = parser.parse_args()
+
+    core_cols = list(CORE_COLS)
+    if args.contract and args.contract.exists():
+        try:
+            import yaml
+            c = yaml.safe_load(args.contract.read_text(encoding="utf-8"))
+            snap = c.get("offers_core_snapshot", c.get("offers_core_daily", {}))
+            must = snap.get("must_keep", [])
+            should = snap.get("should_add", [])
+            for col in must + should:
+                if col not in core_cols and col in ("funding_goal_usd", "funding_raised_usd", "investors_count", "is_funded", "cik", "link", "hash_id", "datetime_open_offering", "datetime_close_offering"):
+                    core_cols.append(col)
+        except Exception:
+            pass
 
     out_core = args.output_dir / f"{args.output_base}.parquet"
     out_static = args.output_dir / "offers_static.parquet"
@@ -64,7 +79,7 @@ def main() -> None:
     active_files = len(files_list)
 
     schema_names = [f.name for f in dt.schema().fields]
-    read_cols = [c for c in CORE_COLS + [DEDUP_COL] if c in schema_names]
+    read_cols = [c for c in core_cols + [DEDUP_COL] if c in schema_names]
     if DEDUP_COL not in read_cols and "processed_datetime" in schema_names:
         read_cols.append("processed_datetime")
     if "crawled_date_day" not in read_cols:
@@ -171,7 +186,7 @@ def main() -> None:
                 date_max = str(snap.max().date()) if not snap.empty else None
 
                 out_cols = ["entity_id", "platform_name", "offer_id", "snapshot_ts", SNAPSHOT_COL]
-                out_cols += [c for c in CORE_COLS if c in result.columns and c not in out_cols]
+                out_cols += [c for c in core_cols if c in result.columns and c not in out_cols]
                 result = result[[c for c in out_cols if c in result.columns]]
 
                 import pyarrow as pa
