@@ -185,16 +185,18 @@ def _edgar_recompute_gate(
     atol: float,
     require_deltalake: bool,
     logger: logging.Logger,
-    min_compared: int = 10,
+    min_compared: int = 200,
     edgar_recompute_fallback_dir: Optional[Path] = None,
 ) -> Dict[str, Any]:
-    """Recompute EDGAR features from raw aligned to snapshots (same logic as build_edgar_features) and compare to store. Hard gate."""
-    result: Dict[str, Any] = {"status": "ok", "max_abs_diff": 0.0, "diff_count": 0, "total_compared": 0}
+    """Recompute EDGAR features from raw aligned to snapshots (same logic as build_edgar_features) and compare to store.
+    Hard gate: total_compared >= min_compared and diff_count == 0.
+    If store is cik-day (no offer_id), recompute by cik-day. Fallback NEVER used for PASS (debug dump only).
+    """
+    result: Dict[str, Any] = {"status": "ok", "max_abs_diff": 0.0, "diff_count": 0, "total_compared": 0, "granularity": "unknown"}
     try:
         from deltalake import DeltaTable
         from narrative.data_preprocessing.edgar_feature_store import (
             load_edgar_features_from_parquet,
-            extract_edgar_features,
             aggregate_edgar_features,
             align_edgar_features_to_snapshots,
         )
@@ -202,14 +204,10 @@ def _edgar_recompute_gate(
     except ImportError as e:
         result["status"] = "skipped"
         result["reason"] = str(e)
-        if require_deltalake:
-            return result
         return result
     if not raw_edgar_delta.exists() or not (raw_edgar_delta / "_delta_log").exists():
         result["status"] = "skipped"
         result["reason"] = "raw edgar delta missing or not Delta"
-        if require_deltalake:
-            return result
         return result
     try:
         store_ds = ds.dataset(str(edgar_dir), format="parquet", partitioning="hive", exclude_invalid_files=True, ignore_prefixes=["_delta_log"])
@@ -218,57 +216,63 @@ def _edgar_recompute_gate(
     except Exception as e:
         result["status"] = "skipped"
         result["reason"] = f"edgar store read: {e}"
-        if require_deltalake:
-            return result
         return result
-    if store_df.empty or "offer_id" not in store_df.columns or "cik" not in store_df.columns:
-        # Try fallback edgar dir (e.g. old store with offer_id when full_daily has dedup-only)
-        if edgar_recompute_fallback_dir and edgar_recompute_fallback_dir.exists():
-            try:
-                fallback_ds = ds.dataset(str(edgar_recompute_fallback_dir), format="parquet", partitioning="hive", exclude_invalid_files=True, ignore_prefixes=["_delta_log"])
-                store_df = fallback_ds.to_table().to_pandas()
-                edgar_dir = edgar_recompute_fallback_dir
-                logger.info("Using edgar_recompute_fallback_dir for recompute (primary lacked offer_id/cik)")
-            except Exception as e:
-                result["status"] = "skipped"
-                result["reason"] = f"store empty or missing offer_id/cik; fallback failed: {e}"
-                return result
-        if store_df.empty or "offer_id" not in store_df.columns or "cik" not in store_df.columns:
-            result["status"] = "skipped"
-            result["reason"] = "store empty or missing offer_id/cik"
-            return result
+    if store_df.empty or "cik" not in store_df.columns:
+        result["status"] = "skipped"
+        result["reason"] = "store empty or missing cik"
+        return result
+    use_cik_day = "offer_id" not in store_df.columns
     agg_cols = [c for c in store_df.columns if c.startswith("last_") or c.startswith("mean_") or c.startswith("ema_")]
     agg_cols = [c for c in agg_cols if not c.endswith("_is_missing")][:15]
-    sample_col = agg_cols[0] if agg_cols else None
-    if sample_col and sample_col in store_df.columns:
-        has_data = store_df[store_df[sample_col].notna()][["platform_name", "offer_id", "cik"]].drop_duplicates().dropna()
-        pairs_df = has_data if len(has_data) >= n_pairs else store_df[["platform_name", "offer_id", "cik"]].drop_duplicates().dropna()
-    else:
-        pairs_df = store_df[["platform_name", "offer_id", "cik"]].drop_duplicates().dropna()
-    if pairs_df.empty:
-        result["status"] = "skipped"
-        result["reason"] = "no (platform_name, offer_id, cik) in store"
-        return result
-    rng = np.random.default_rng(42)
-    n_pick = min(max(n_pairs, 30), len(pairs_df))
-    pick = pairs_df.iloc[rng.choice(len(pairs_df), size=n_pick, replace=False)]
-    our_offer_ids = set(pick["offer_id"].astype(str).unique())
-    ciks = pick["cik"].astype(str).dropna().unique().tolist()
-    if not ciks:
-        result["status"] = "skipped"
-        result["reason"] = "no valid cik"
-        return result
-    store_sub = store_df[
-        (store_df["offer_id"].astype(str).isin(our_offer_ids)) & (store_df["cik"].astype(str).isin(ciks))
-    ].copy()
-    snapshot_col = "crawled_date_day" if "crawled_date_day" in store_sub.columns else "crawled_date"
-    if snapshot_col not in store_sub.columns:
+    snapshot_col = "crawled_date_day" if "crawled_date_day" in store_df.columns else "crawled_date"
+    if snapshot_col not in store_df.columns:
         result["status"] = "skipped"
         result["reason"] = "store missing snapshot time column"
         return result
-    store_sub["crawled_date"] = pd.to_datetime(store_sub[snapshot_col], errors="coerce", utc=True)
-    store_sub = store_sub.dropna(subset=["crawled_date"])
-    snaps = store_sub[["platform_name", "offer_id", "cik", "crawled_date"]].drop_duplicates()
+
+    if use_cik_day:
+        result["granularity"] = "cik-day"
+        ciks_df = store_df[["cik"]].drop_duplicates().dropna()
+        if ciks_df.empty:
+            result["status"] = "skipped"
+            result["reason"] = "no cik in store"
+            return result
+        rng = np.random.default_rng(42)
+        n_pick = min(max(n_pairs * 2, 50), len(ciks_df))
+        pick = ciks_df.iloc[rng.choice(len(ciks_df), size=n_pick, replace=False)]
+        ciks = pick["cik"].astype(str).unique().tolist()
+        store_sub = store_df[store_df["cik"].astype(str).isin(ciks)].copy()
+        store_sub["crawled_date"] = pd.to_datetime(store_sub[snapshot_col], errors="coerce", utc=True)
+        store_sub = store_sub.dropna(subset=["crawled_date"])
+        snaps = store_sub[["cik", "crawled_date"]].drop_duplicates()
+    else:
+        result["granularity"] = "offer-day"
+        sample_col = agg_cols[0] if agg_cols else None
+        if sample_col and sample_col in store_df.columns:
+            has_data = store_df[store_df[sample_col].notna()][["platform_name", "offer_id", "cik"]].drop_duplicates().dropna()
+            pairs_df = has_data if len(has_data) >= n_pairs else store_df[["platform_name", "offer_id", "cik"]].drop_duplicates().dropna()
+        else:
+            pairs_df = store_df[["platform_name", "offer_id", "cik"]].drop_duplicates().dropna()
+        if pairs_df.empty:
+            result["status"] = "skipped"
+            result["reason"] = "no (platform_name, offer_id, cik) in store"
+            return result
+        rng = np.random.default_rng(42)
+        n_pick = min(max(n_pairs, 30), len(pairs_df))
+        pick = pairs_df.iloc[rng.choice(len(pairs_df), size=n_pick, replace=False)]
+        our_offer_ids = set(pick["offer_id"].astype(str).unique())
+        ciks = pick["cik"].astype(str).dropna().unique().tolist()
+        if not ciks:
+            result["status"] = "skipped"
+            result["reason"] = "no valid cik"
+            return result
+        store_sub = store_df[
+            (store_df["offer_id"].astype(str).isin(our_offer_ids)) & (store_df["cik"].astype(str).isin(ciks))
+        ].copy()
+        store_sub["crawled_date"] = pd.to_datetime(store_sub[snapshot_col], errors="coerce", utc=True)
+        store_sub = store_sub.dropna(subset=["crawled_date"])
+        snaps = store_sub[["platform_name", "offer_id", "cik", "crawled_date"]].drop_duplicates()
+
     if snaps.empty:
         result["status"] = "skipped"
         result["reason"] = "no snapshot rows for sample"
@@ -297,12 +301,13 @@ def _edgar_recompute_gate(
             return result
         return result
     agg = aggregate_edgar_features(edgar_raw, ema_alpha=0.2)
+    id_cols_used = ("cik",) if use_cik_day else ("platform_name", "offer_id", "cik")
     try:
         aligned = align_edgar_features_to_snapshots(
             agg,
             snaps,
             snapshot_time_col="crawled_date",
-            id_cols=("platform_name", "offer_id", "cik"),
+            id_cols=id_cols_used,
         )
     except Exception as e:
         result["status"] = "skipped"
@@ -322,19 +327,25 @@ def _edgar_recompute_gate(
     aligned["crawled_date"] = pd.to_datetime(aligned["crawled_date"], utc=True)
     def _ts_key(s: pd.Series) -> pd.Series:
         return s.dt.strftime("%Y-%m-%dT%H:%M:%S")
-    store_sub["_key"] = (
-        store_sub["platform_name"].astype(str) + "|" + store_sub["offer_id"].astype(str)
-        + "|" + store_sub["cik"].astype(str) + "|" + _ts_key(store_sub["crawled_date"])
-    )
-    aligned["_key"] = (
-        aligned["platform_name"].astype(str) + "|" + aligned["offer_id"].astype(str)
-        + "|" + aligned["cik"].astype(str) + "|" + _ts_key(aligned["crawled_date"])
-    )
+    if use_cik_day:
+        store_sub["_key"] = store_sub["cik"].astype(str) + "|" + _ts_key(store_sub["crawled_date"])
+        aligned["_key"] = aligned["cik"].astype(str) + "|" + _ts_key(aligned["crawled_date"])
+    else:
+        store_sub["_key"] = (
+            store_sub["platform_name"].astype(str) + "|" + store_sub["offer_id"].astype(str)
+            + "|" + store_sub["cik"].astype(str) + "|" + _ts_key(store_sub["crawled_date"])
+        )
+        aligned["_key"] = (
+            aligned["platform_name"].astype(str) + "|" + aligned["offer_id"].astype(str)
+            + "|" + aligned["cik"].astype(str) + "|" + _ts_key(aligned["crawled_date"])
+        )
     keys_in_both = set(store_sub["_key"]) & set(aligned["_key"])
+    key_list = list(keys_in_both)
+    max_keys = max(1500, min_compared // max(1, len(agg_cols)) + 100)
     for col in agg_cols:
         if col not in aligned.columns or col not in store_sub.columns:
             continue
-        for _key in list(keys_in_both)[:500]:
+        for _key in key_list[:max_keys]:
             store_row = store_sub[store_sub["_key"] == _key]
             align_row = aligned[aligned["_key"] == _key]
             if store_row.empty or align_row.empty:
@@ -375,7 +386,7 @@ def main() -> None:
     parser.add_argument("--offers_static", type=Path, required=True)
     parser.add_argument("--offers_text", type=Path, default=None, help="Path to offers_text.parquet (for NBI/NCI)")
     parser.add_argument("--edgar_dir", type=Path, required=True)
-    parser.add_argument("--edgar_recompute_dir", type=Path, default=None, help="Fallback edgar dir for recompute when primary lacks offer_id/cik (e.g. full_daily dedup store)")
+    parser.add_argument("--edgar_recompute_dir", type=Path, default=None, help="Deprecated: fallback not used for PASS; only for debug dump")
     parser.add_argument("--raw_offers_delta", type=Path, required=True)
     parser.add_argument("--raw_edgar_delta", type=Path, required=True)
     parser.add_argument("--selection_json", type=Path, default=None)
@@ -383,7 +394,7 @@ def main() -> None:
     parser.add_argument("--seed", type=int, default=42)
     parser.add_argument("--sample_entities", type=int, default=1000)
     parser.add_argument("--edgar_recompute_pairs", type=int, default=10)
-    parser.add_argument("--edgar_min_compared", type=int, default=10, help="Min value-level comparisons for EDGAR recompute gate (default 10; 100 if EDGAR dense)")
+    parser.add_argument("--edgar_min_compared", type=int, default=200, help="Min value-level comparisons for EDGAR recompute gate (default 200)")
     parser.add_argument("--edgar_recompute_required", type=int, default=1, help="If 0, EDGAR recompute failures do not gate FAIL (use when 4090 lacks data parity with 3090)")
     parser.add_argument("--require_deltalake", type=int, default=0)
     parser.add_argument("--text_required_mode", type=int, default=0)
@@ -536,8 +547,8 @@ def main() -> None:
         atol=1e-5,
         require_deltalake=bool(args.require_deltalake),
         logger=logger,
-        min_compared=getattr(args, "edgar_min_compared", 10),
-        edgar_recompute_fallback_dir=args.edgar_recompute_dir,
+        min_compared=getattr(args, "edgar_min_compared", 200),
+        edgar_recompute_fallback_dir=None,
     )
     report["edgar_recompute"] = edgar_recompute
     edgar_required = getattr(args, "edgar_recompute_required", 1)

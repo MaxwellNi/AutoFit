@@ -182,11 +182,11 @@ def main() -> None:
     parser = argparse.ArgumentParser(description="Raw vs processed cardinality coverage audit.")
     parser.add_argument("--raw_offers_delta", type=Path, required=True)
     parser.add_argument("--raw_edgar_delta", type=Path, required=True)
-    parser.add_argument("--offers_core_parquet", type=Path, required=True)
+    parser.add_argument("--offers_core_parquet", type=Path, required=True, help="offers_core_full_daily parquet")
     parser.add_argument("--offers_core_manifest", type=Path, required=True)
     parser.add_argument("--offers_text_full_dir", type=Path, required=True)
-    parser.add_argument("--edgar_store_dir", type=Path, required=True)
-    parser.add_argument("--snapshots_index_parquet", type=Path, default=None, help="Snapshots index for edgar alignment coverage")
+    parser.add_argument("--edgar_store_dir", type=Path, required=True, help="edgar_feature_store_full_daily edgar_features dir")
+    parser.add_argument("--snapshots_index_parquet", type=Path, default=None, help="snapshots_offer_day.parquet for snapshots→edgar coverage")
     parser.add_argument("--output_dir", type=Path, required=True)
     parser.add_argument("--reference_json", type=Path, default=None, help="Compare raw versions/active_files; FAIL if mismatch")
     parser.add_argument("--raw_scan_limit", type=int, default=2_000_000, help="Limit rows for raw offers scan (projection-only)")
@@ -211,9 +211,15 @@ def main() -> None:
         "row_count": offers_core_stats["row_count"],
         "n_unique_entity_id": offers_core_stats["n_unique_entity_id"],
         "row_count_by_year": offers_core_stats["row_count_by_year"],
-        "selection_note": "Entity subset (limit_entities) from MANIFEST",
+        "selection_note": "offers_core_full_daily",
         "manifest_selection": offers_core_manifest.get("selection", {}),
     }
+
+    raw_vs_core_coverage: Dict[str, Any] = {}
+    if raw_offers.get("row_count_total") and raw_offers["row_count_total"] > 0 and offers_core["row_count"] > 0:
+        raw_vs_core_coverage["raw_row_count"] = raw_offers["row_count_total"]
+        raw_vs_core_coverage["core_row_count"] = offers_core["row_count"]
+        raw_vs_core_coverage["core_row_ratio"] = offers_core["row_count"] / raw_offers["row_count_total"]
 
     offers_text_manifest_path = args.offers_text_full_dir / "MANIFEST.json"
     if not offers_text_manifest_path.exists():
@@ -235,6 +241,19 @@ def main() -> None:
         }
 
     edgar_store = _edgar_store_stats(args.edgar_store_dir)
+    edgar_manifest_path = args.edgar_store_dir.parent / "MANIFEST.json" if args.edgar_store_dir.name == "edgar_features" else args.edgar_store_dir / "MANIFEST.json"
+    if not edgar_manifest_path.exists():
+        edgar_manifest_path = args.edgar_store_dir / "MANIFEST.json"
+    if edgar_manifest_path.exists():
+        try:
+            em = json.loads(edgar_manifest_path.read_text(encoding="utf-8"))
+            edgar_store["manifest_exists"] = True
+            edgar_store["manifest_fields"] = list(em.keys())[:20]
+        except Exception:
+            edgar_store["manifest_exists"] = True
+    else:
+        edgar_store["manifest_exists"] = False
+        fail_reasons.append("edgar_store_full_daily MANIFEST.json required but not found")
 
     # Snapshots index vs edgar store alignment
     snapshots_alignment = {}
@@ -255,12 +274,20 @@ def main() -> None:
                 snap_ciks = set(snap_df["cik"].dropna().astype(str))
                 edgar_ciks = set(edgar_df["cik"].dropna().astype(str))
                 cik_overlap = len(snap_ciks & edgar_ciks)
+                cik_gap = snap_ciks - edgar_ciks
                 snapshots_alignment = {
                     "snapshots_count": snap_count,
                     "snapshots_unique_cik": snap_unique_cik,
                     "edgar_unique_cik": len(edgar_ciks),
                     "cik_overlap": cik_overlap,
                     "cik_coverage_rate": cik_overlap / len(snap_ciks) if snap_ciks else 0,
+                    "snapshots_to_edgar_coverage": cik_overlap / snap_count if snap_count else 0,
+                    "cik_gap_count": len(cik_gap),
+                    "gap_reasons_top_k": [
+                        "cik_in_snapshots_not_in_edgar_store",
+                        "date_range_mismatch_possible",
+                        "raw_edgar_no_filing_for_cik",
+                    ][:3],
                 }
             else:
                 snapshots_alignment = {"snapshots_count": snap_count, "snapshots_unique_cik": snap_unique_cik}
@@ -271,6 +298,9 @@ def main() -> None:
         fail_reasons.append("raw_offers Delta version missing")
     if raw_edgar["version"] is None:
         fail_reasons.append("raw_edgar Delta version missing")
+    if args.snapshots_index_parquet and args.snapshots_index_parquet.exists():
+        if not snapshots_alignment or ("cik_coverage_rate" not in snapshots_alignment and "snapshots_to_edgar_coverage" not in snapshots_alignment):
+            fail_reasons.append("snapshots_to_edgar coverage metrics required when snapshots_index provided")
 
     if args.reference_json and args.reference_json.exists():
         ref = json.loads(args.reference_json.read_text(encoding="utf-8"))
@@ -285,18 +315,26 @@ def main() -> None:
         if re_.get("active_files") != raw_edgar.get("active_files"):
             fail_reasons.append(f"raw_edgar active_files mismatch: ref={re_.get('active_files')} vs current={raw_edgar.get('active_files')}")
 
+    text_coverage: Dict[str, Any] = {}
+    if raw_offers.get("row_count_total") and offers_text.get("row_count"):
+        text_coverage["raw_rows"] = raw_offers["row_count_total"]
+        text_coverage["text_rows"] = offers_text["row_count"]
+        text_coverage["text_coverage_rate"] = offers_text["row_count"] / raw_offers["row_count_total"] if raw_offers["row_count_total"] else 0
+
     report = {
         "host": host,
         "raw_offers": raw_offers,
         "raw_edgar": raw_edgar,
-        "offers_core_v2": offers_core,
+        "offers_core_full_daily": offers_core,
         "offers_text_full": offers_text,
-        "edgar_store": edgar_store,
-        "snapshots_alignment": snapshots_alignment,
+        "edgar_store_full_daily": edgar_store,
+        "raw_vs_core_coverage": raw_vs_core_coverage,
+        "text_coverage": text_coverage,
+        "snapshots_to_edgar_coverage": snapshots_alignment,
         "data_morphology": {
-            "offers_core_v2": "Entity subset full trajectory (limit_entities from MANIFEST)",
-            "offers_text_full": "Full raw scan filtered/deduped text panel (manifest counters prove)",
-            "edgar_store": "Full raw aggregation aligned to snapshots",
+            "offers_core_full_daily": "Full raw scan deduped to entity-day",
+            "offers_text_full": "Full raw scan filtered/deduped text panel",
+            "edgar_store_full_daily": "Raw EDGAR aligned to snapshots (cik-day or offer-day)",
         },
         "gate_passed": len(fail_reasons) == 0,
         "fail_reasons": fail_reasons,
@@ -312,28 +350,36 @@ def main() -> None:
         f"- **Host:** {host}",
         f"- **Gate:** {'PASS' if report['gate_passed'] else 'FAIL'}",
         "",
-        "## Raw vs Processed",
+        "## Raw vs Full-Daily Processed",
         "",
         "| Artifact | Version | Active Files | Row Count | Unique Entities |",
         "|----------|---------|--------------|-----------|-----------------|",
         f"| raw_offers | {raw_offers.get('version')} | {raw_offers.get('active_files')} | {raw_offers.get('row_count_total')} | - |",
         f"| raw_edgar | {raw_edgar.get('version')} | {raw_edgar.get('active_files')} | {raw_edgar.get('row_count_total')} | - |",
-        f"| offers_core_v2 | - | - | {offers_core['row_count']} | {offers_core['n_unique_entity_id']} |",
+        f"| offers_core_full_daily | - | - | {offers_core['row_count']} | {offers_core['n_unique_entity_id']} |",
         f"| offers_text_full | - | - | {offers_text['row_count']} | {offers_text['n_unique_entity_id']} |",
-        f"| edgar_store | - | - | {edgar_store['row_count']} | - |",
+        f"| edgar_store_full_daily | - | - | {edgar_store['row_count']} | - |",
         "",
-        "## Data morphology",
+        "## Coverage",
         "",
-        "- **offers_core_v2:** Entity subset full trajectory (limit_entities from MANIFEST)",
-        "- **offers_text_full:** Full raw scan filtered/deduped text panel (manifest counters prove)",
-        "- **edgar_store:** Full raw aggregation aligned to snapshots",
+        f"- **raw vs core:** {raw_vs_core_coverage.get('core_row_ratio', 'N/A')}",
+        f"- **text coverage:** {text_coverage.get('text_coverage_rate', 'N/A')}",
+        "",
+        "## Snapshots→EDGAR Coverage",
         "",
     ]
     if snapshots_alignment:
-        md_lines.append("## Snapshots-EDGAR Alignment\n")
         for k, v in snapshots_alignment.items():
             md_lines.append(f"- **{k}:** {v}")
         md_lines.append("")
+    md_lines.extend([
+        "## Data morphology",
+        "",
+        "- **offers_core_full_daily:** Full raw scan deduped to entity-day",
+        "- **offers_text_full:** Full raw scan filtered/deduped text panel",
+        "- **edgar_store_full_daily:** Raw EDGAR aligned to snapshots",
+        "",
+    ])
     if fail_reasons:
         md_lines.append("## Fail reasons\n")
         for r in fail_reasons:

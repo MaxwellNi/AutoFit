@@ -22,7 +22,11 @@
     },
     {
       "path": "docs/audits/BLOCK3_READY_FULL_SCALE_20260131_235740.md",
-      "sha256": "260780bedcc317c46a3a81d216590d6c6a62c7914c8fa4d84e80d1c1bdbcd878"
+      "sha256": "f66be512d616eaf9ed63acae08030c855583c73c67db6f18ae8b8fdee67e4703"
+    },
+    {
+      "path": "docs/audits/FULL_SCALE_POINTER.yaml",
+      "sha256": "a99502c2a5d307d0aac149b9c9e33e1eea00066b160512b6772d2c470441cbe4"
     },
     {
       "path": "docs/audits/column_contract_v3_20260201_161424.md",

@@ -1,0 +1,38 @@
+# Full-scale data freeze pointer (20260131_235740)
+# Final directories for Block 3 training. No sensitive paths.
+
+stamp: "20260131_235740"
+
+offers_text:
+  dir: runs/offers_text_v1_20260129_073037_full
+  parquet: runs/offers_text_v1_20260129_073037_full/offers_text.parquet
+  manifest: runs/offers_text_v1_20260129_073037_full/MANIFEST.json
+
+offers_core_daily:
+  dir: runs/offers_core_full_daily_20260131_235740
+  parquet: runs/offers_core_full_daily_20260131_235740/offers_core_daily.parquet
+  static: runs/offers_core_full_daily_20260131_235740/offers_static.parquet
+  manifest: runs/offers_core_full_daily_20260131_235740/MANIFEST.json
+
+offers_core_snapshot:
+  dir: runs/offers_core_full_snapshot_20260201_035329
+  parquet: runs/offers_core_full_snapshot_20260201_035329/offers_core_snapshot.parquet
+  manifest: runs/offers_core_full_snapshot_20260201_035329/MANIFEST.json
+
+snapshots_index:
+  offer_day: runs/offers_core_full_daily_20260131_235740/snapshots_index/snapshots_offer_day.parquet
+  cik_day: runs/offers_core_full_daily_20260131_235740/snapshots_index/snapshots_cik_day.parquet
+
+edgar_store_full_daily:
+  dir: runs/edgar_feature_store_full_daily_20260131_235740
+  features: runs/edgar_feature_store_full_daily_20260131_235740/edgar_features
+  manifest: runs/edgar_feature_store_full_daily_20260131_235740/MANIFEST.json
+
+multiscale_full:
+  dir: runs/multiscale_full_20260131_235740
+
+analysis:
+  dir: runs/orchestrator/20260129_073037/analysis
+  column_manifest: runs/orchestrator/20260129_073037/analysis/column_manifest.json
+  raw_cardinality_coverage: runs/orchestrator/20260129_073037/analysis/raw_cardinality_coverage.json
+  distillation_fidelity: runs/orchestrator/20260129_073037/analysis/distillation_fidelity_report.json

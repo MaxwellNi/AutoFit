@@ -20,8 +20,25 @@ Full-scale data freeze completed. All audit gates PASS.
 
 ### edgar_store_full_daily
 - Path: runs/edgar_feature_store_full_daily_20260131_235740/edgar_features
-- row_count: ~26M (aligned to snapshots)
+- MANIFEST: runs/edgar_feature_store_full_daily_20260131_235740/MANIFEST.json
+- row_count: 1,325,222 (aligned to snapshots_cik_day)
 - raw edgar version: 1639, active_files: 46
+- partition_strategy: snapshot_year
+
+## Key Audit Evidences
+
+### 1. EDGAR MANIFEST (required)
+- Path: runs/edgar_feature_store_full_daily_20260131_235740/MANIFEST.json
+- Fields: raw_edgar_delta_version, raw_edgar_active_files, snapshots_index_rows, output_rows, output_columns, partition_strategy, git_head, built_at
+
+### 2. EDGAR Recompute (value-level gate)
+- column_manifest.json: edgar_recompute.total_compared >= 200, diff_count == 0
+- Must use actual edgar_store_full_daily; no fallback for PASS
+- Granularity: offer-day or cik-day (matches store)
+
+### 3. Full Coverage Audit
+- raw_cardinality_coverage.json: raw_vs_core_coverage, text_coverage, snapshots_to_edgar_coverage
+- gap_reasons_top_k for snapshots→edgar alignment
 
 ## Raw Profiles
 - raw_offers_profile: 148 columns, delta_log stats
@@ -64,16 +81,25 @@ python scripts/build_column_contract_v3.py \
   --raw_edgar_profile runs/orchestrator/20260129_073037/analysis/raw_edgar_profile.json \
   --output_yaml configs/column_contract_v3.yaml
 
-# Column manifest audit (use edgar_recompute_dir when full_daily store lacks offer_id)
+# Column manifest audit (no fallback; recompute on actual edgar_store_full_daily)
 HOST_TAG=4090 python scripts/audit_column_manifest.py \
   --offers_core runs/offers_core_full_daily_20260131_235740/offers_core_daily.parquet \
   --offers_static runs/offers_core_full_daily_20260131_235740/offers_static.parquet \
   --offers_text runs/offers_text_v1_20260129_073037_full/offers_text.parquet \
   --edgar_dir runs/edgar_feature_store_full_daily_20260131_235740/edgar_features \
-  --edgar_recompute_dir runs/edgar_feature_store/20260127_133511/edgar_features \
   --raw_offers_delta data/raw/offers --raw_edgar_delta data/raw/edgar/accessions \
   --selection_json runs/selections/b11_v2_canonical/sampled_entities.json \
   --output_dir runs/orchestrator/20260129_073037/analysis \
-  --require_deltalake 1 --text_required_mode 1 \
+  --edgar_min_compared 200 --require_deltalake 1 --text_required_mode 1 \
   --contract_path configs/column_contract_v3.yaml
+
+# Raw cardinality coverage (full_daily focus)
+HOST_TAG=4090 python scripts/audit_raw_cardinality_coverage.py \
+  --raw_offers_delta data/raw/offers --raw_edgar_delta data/raw/edgar/accessions \
+  --offers_core_parquet runs/offers_core_full_daily_20260131_235740/offers_core_daily.parquet \
+  --offers_core_manifest runs/offers_core_full_daily_20260131_235740/MANIFEST.json \
+  --offers_text_full_dir runs/offers_text_v1_20260129_073037_full \
+  --edgar_store_dir runs/edgar_feature_store_full_daily_20260131_235740/edgar_features \
+  --snapshots_index_parquet runs/offers_core_full_daily_20260131_235740/snapshots_index/snapshots_offer_day.parquet \
+  --output_dir runs/orchestrator/20260129_073037/analysis --docs_audits_dir docs/audits
 ```
