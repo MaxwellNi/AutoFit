@@ -2,7 +2,7 @@
   "entries": [
     {
       "path": "docs/audits/orchestrator_20260129_073037.md",
-      "sha256": "546587e89397ca5e50007be21a2d29461e9ffe220262d960d0ca0072f2d8fcb7"
+      "sha256": "0af35a931d8318fde1c91039b11f411499c8449c3aba1bd6074b719e1a1d3d4a"
     },
     {
       "path": "docs/audits/distillation_fidelity_20260129_073037.md",
@@ -15,6 +15,10 @@
     {
       "path": "docs/audits/benchmark_truthfulness_20260129_073037.md",
       "sha256": "ce109f519d0b34d05ee1ffb1716e758cc198a281bae94ba46aeb93def59f14f4"
+    },
+    {
+      "path": "docs/audits/RUNBOOK_FULL_SCALE.md",
+      "sha256": "043b28b1890fc0141b91c6032892dfc19f7a7a86db4418b1dcd820bcdfcfcb4c"
     }
   ]
 }

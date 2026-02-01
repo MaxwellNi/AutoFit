@@ -42,7 +42,7 @@ def _open_dataset(path: Path, *, logger: Optional[Any] = None, label: Optional[s
                 "delta_dataset=%s version=%s active_files=%s",
                 label or str(path),
                 dt.version(),
-                len(dt.files()),
+                len((getattr(dt, "file_uris", None) or getattr(dt, "files", lambda: []))()),
             )
         return dataset
     dataset = ds.dataset(
