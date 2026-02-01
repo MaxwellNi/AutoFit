@@ -166,6 +166,17 @@ def main() -> None:
     if args.snapshots_index_parquet:
         args.snapshot_time_col = "crawled_date_day"
 
+    id_cols: tuple = ("platform_name", "offer_id", "cik")
+    if snapshots_path and str(snapshots_path).endswith(".parquet") and snapshots_path.exists():
+        try:
+            import pyarrow.parquet as pq
+            snap_schema = pq.read_schema(snapshots_path).names
+            if "platform_name" not in snap_schema or "offer_id" not in snap_schema:
+                id_cols = ("cik",)
+                logger.info("snapshots is cik-day only; using id_cols=(cik,)")
+        except Exception:
+            pass
+
     logger.info("build_edgar_features start")
     logger.info("edgar_path=%s", args.edgar_path)
     logger.info("snapshots_path=%s", snapshots_path)
@@ -182,6 +193,7 @@ def main() -> None:
         snapshots_path=snapshots_path,
         output_path=args.output_path,
         snapshot_time_col=args.snapshot_time_col,
+        id_cols=id_cols,
         batch_size=args.batch_size,
         limit_rows=args.limit_rows,
         ema_alpha=args.ema_alpha,

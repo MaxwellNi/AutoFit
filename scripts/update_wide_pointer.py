@@ -37,7 +37,7 @@ def main() -> None:
         "analysis": {
             "dir": f"{analysis_base}/wide_{stamp}",
             "freeze_candidates": f"{analysis_base}/wide_{stamp}/freeze_candidates.json",
-            "column_manifest": f"{analysis_base}/wide_{stamp}/column_manifest_wide.json",
+            "column_manifest": f"{analysis_base}/wide_{stamp}/column_manifest.json",
             "raw_cardinality_coverage": f"{analysis_base}/wide_{stamp}/raw_cardinality_coverage_wide_{stamp}.json",
         },
     }

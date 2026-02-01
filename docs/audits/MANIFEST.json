@@ -59,6 +59,10 @@
     {
       "path": "docs/audits/BLOCK3_READY_WIDE_20260201_211317.md",
       "sha256": "017eba56a562c0b253f694e6d98aa8642228bca328e97ae8965b1e5c4aa8bca9"
+    },
+    {
+      "path": "docs/audits/raw_cardinality_coverage_wide_20260201_211317_20260129_073037.md",
+      "sha256": "427d210c4be98a738d846542b6c8993a117d9c62090fc28ebb7dde50c7e6ed9f"
     }
   ]
 }
