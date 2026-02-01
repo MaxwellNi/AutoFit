@@ -186,6 +186,7 @@ def main() -> None:
     parser.add_argument("--offers_core_manifest", type=Path, required=True)
     parser.add_argument("--offers_text_full_dir", type=Path, required=True)
     parser.add_argument("--edgar_store_dir", type=Path, required=True)
+    parser.add_argument("--snapshots_index_parquet", type=Path, default=None, help="Snapshots index for edgar alignment coverage")
     parser.add_argument("--output_dir", type=Path, required=True)
     parser.add_argument("--reference_json", type=Path, default=None, help="Compare raw versions/active_files; FAIL if mismatch")
     parser.add_argument("--raw_scan_limit", type=int, default=2_000_000, help="Limit rows for raw offers scan (projection-only)")
@@ -235,6 +236,37 @@ def main() -> None:
 
     edgar_store = _edgar_store_stats(args.edgar_store_dir)
 
+    # Snapshots index vs edgar store alignment
+    snapshots_alignment = {}
+    if args.snapshots_index_parquet and args.snapshots_index_parquet.exists():
+        try:
+            snap_df = pd.read_parquet(args.snapshots_index_parquet)
+            snap_count = len(snap_df)
+            snap_unique_cik = int(snap_df["cik"].nunique()) if "cik" in snap_df.columns else 0
+            # Check how many snapshots have edgar data
+            edgar_df = None
+            try:
+                import pyarrow.dataset as ds
+                dset = ds.dataset(str(args.edgar_store_dir), format="parquet", partitioning="hive")
+                edgar_df = dset.to_table(columns=["cik", "crawled_date_day"] if "crawled_date_day" in [f.name for f in dset.schema] else ["cik"]).to_pandas()
+            except Exception:
+                pass
+            if edgar_df is not None and "cik" in snap_df.columns:
+                snap_ciks = set(snap_df["cik"].dropna().astype(str))
+                edgar_ciks = set(edgar_df["cik"].dropna().astype(str))
+                cik_overlap = len(snap_ciks & edgar_ciks)
+                snapshots_alignment = {
+                    "snapshots_count": snap_count,
+                    "snapshots_unique_cik": snap_unique_cik,
+                    "edgar_unique_cik": len(edgar_ciks),
+                    "cik_overlap": cik_overlap,
+                    "cik_coverage_rate": cik_overlap / len(snap_ciks) if snap_ciks else 0,
+                }
+            else:
+                snapshots_alignment = {"snapshots_count": snap_count, "snapshots_unique_cik": snap_unique_cik}
+        except Exception as e:
+            logger.warning("snapshots_index alignment check failed: %s", e)
+
     if raw_offers["version"] is None:
         fail_reasons.append("raw_offers Delta version missing")
     if raw_edgar["version"] is None:
@@ -260,6 +292,7 @@ def main() -> None:
         "offers_core_v2": offers_core,
         "offers_text_full": offers_text,
         "edgar_store": edgar_store,
+        "snapshots_alignment": snapshots_alignment,
         "data_morphology": {
             "offers_core_v2": "Entity subset full trajectory (limit_entities from MANIFEST)",
             "offers_text_full": "Full raw scan filtered/deduped text panel (manifest counters prove)",
@@ -296,6 +329,11 @@ def main() -> None:
         "- **edgar_store:** Full raw aggregation aligned to snapshots",
         "",
     ]
+    if snapshots_alignment:
+        md_lines.append("## Snapshots-EDGAR Alignment\n")
+        for k, v in snapshots_alignment.items():
+            md_lines.append(f"- **{k}:** {v}")
+        md_lines.append("")
     if fail_reasons:
         md_lines.append("## Fail reasons\n")
         for r in fail_reasons:

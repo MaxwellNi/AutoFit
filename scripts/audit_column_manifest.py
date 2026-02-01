@@ -373,6 +373,7 @@ def main() -> None:
     parser.add_argument("--edgar_recompute_required", type=int, default=1, help="If 0, EDGAR recompute failures do not gate FAIL (use when 4090 lacks data parity with 3090)")
     parser.add_argument("--require_deltalake", type=int, default=0)
     parser.add_argument("--text_required_mode", type=int, default=0)
+    parser.add_argument("--contract_path", type=Path, default=None, help="Path to column_contract_v3.yaml (overrides v2)")
     args = parser.parse_args()
 
     if args.require_deltalake:
@@ -423,7 +424,12 @@ def main() -> None:
     if args.text_required_mode and not has_offers_text:
         fail_reasons.append("text_required_mode=1 but offers_text table missing")
     elif args.text_required_mode and has_offers_text:
-        contract_path = repo_root / "configs" / "column_contract_v2.yaml"
+        # Use --contract_path if provided, else fallback to v3 then v2
+        contract_path = args.contract_path
+        if not contract_path or not contract_path.exists():
+            contract_path = repo_root / "configs" / "column_contract_v3.yaml"
+        if not contract_path.exists():
+            contract_path = repo_root / "configs" / "column_contract_v2.yaml"
         if contract_path.exists():
             try:
                 import yaml
@@ -434,6 +440,7 @@ def main() -> None:
                 if missing_text:
                     fail_reasons.append(f"offers_text missing MUST_KEEP per contract: {missing_text}")
                 report["offers_text_must_keep_missing"] = missing_text
+                report["contract_path_used"] = str(contract_path)
             except Exception as e:
                 logger.warning("Could not validate offers_text against contract: %s", e)
 

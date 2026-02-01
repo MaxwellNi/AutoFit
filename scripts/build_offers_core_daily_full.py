@@ -39,9 +39,10 @@ def main() -> None:
     parser.add_argument("--overwrite", type=int, default=0)
     parser.add_argument("--chunk_rows", type=int, default=None)
     parser.add_argument("--limit_rows", type=int, default=None)
+    parser.add_argument("--output_base", type=str, default="offers_core_daily", help="Base name: offers_core_snapshot or offers_core_daily")
     args = parser.parse_args()
 
-    out_core = args.output_dir / "offers_core_daily.parquet"
+    out_core = args.output_dir / f"{args.output_base}.parquet"
     out_static = args.output_dir / "offers_static.parquet"
     if out_core.exists() and args.overwrite != 1:
         print(f"ERROR: {out_core} exists and --overwrite 0.", file=sys.stderr)
@@ -212,6 +213,7 @@ def main() -> None:
         "date_min": date_min,
         "date_max": date_max,
         "snapshot_col": SNAPSHOT_COL,
+        "output_base": args.output_base,
         "git_head": git_head,
         "built_at": datetime.now(timezone.utc).isoformat().replace("+00:00", "Z"),
     }
