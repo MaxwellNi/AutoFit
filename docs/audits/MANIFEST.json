@@ -43,6 +43,22 @@
     {
       "path": "docs/audits/raw_cardinality_coverage_full_daily_20260129_073037.md",
       "sha256": "427d210c4be98a738d846542b6c8993a117d9c62090fc28ebb7dde50c7e6ed9f"
+    },
+    {
+      "path": "docs/audits/raw_offers_profile_20260201_211317.md",
+      "sha256": "d94c9da9ddca7d884f381f1a3523953583dad73dc439ef9f34e83836ed5ce1f7"
+    },
+    {
+      "path": "docs/audits/raw_edgar_profile_20260201_211317.md",
+      "sha256": "d2a4bdb6f33ca98d6c829c1a73f03aeae31f51ea7a7f72f582bffac42e20dc9a"
+    },
+    {
+      "path": "docs/audits/column_contract_wide_20260201_211317.md",
+      "sha256": "c7b2ab436bd2e67d5dcfb90feb68026de3feb06dc2fcc81ec59c528a95e70e43"
+    },
+    {
+      "path": "docs/audits/BLOCK3_READY_WIDE_20260201_211317.md",
+      "sha256": "017eba56a562c0b253f694e6d98aa8642228bca328e97ae8965b1e5c4aa8bca9"
     }
   ]
 }

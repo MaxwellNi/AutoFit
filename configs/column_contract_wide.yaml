@@ -1,126 +1,427 @@
 categorical_distinct_max: 200000
 edgar_store:
-  high_value: []
-  must_keep:
-  - ex_99_files
-  - company_name
-  - ex_second_files
-  - form_type
-  - filing_date
-  - incorporation_state
-  - category
-  - entity_type
-  - country_state
-  - extra_docs
-  - fiscal_year_end
-  - accession_number
-  - file_number
-  - exchanges
-  - film_number
-  - extra_submission
-  - cik
-  - ein
+  high_value:
   - is_inline_XBRL
+  - is_XBRL
+  must_keep:
   - acceptance_datetime
-  - htm_files
-  - flags
+  - accession_number
   - business_address
-  - items
+  - category
+  - cik
+  - company_name
+  - country_state
+  - description
+  - ein
+  - entity_type
+  - exchanges
+  - extra_docs
+  - extra_submission
+  - ex_second_files
+  - ex_99_files
   - filed_date
+  - file_number
+  - file_type
+  - file_url
+  - file_weigth
+  - filing_date
+  - film_number
+  - fiscal_year_end
+  - flags
   - former_names
+  - form_type
+  - htm_files
+  - html_table
+  - incorporation_state
+  - investor_website
+  - items
+  - is_inline_XBRL
+  - is_XBRL
+  - mailing_address
+  - phone
+  - sic
+  - sic_description
+  - submission
+  - tickers
+  - url_form
+  - website
+  - xml_files
+  - processed_datetime
+  - submission_offering_data
+  - submission_form_data
 non_null_min: 0.001
 offers_core_daily:
   can_drop: &id001
   - hash_id
   - link
+exclude_nested:
+  - comments
+  - financial_statements_files
+  - images_of_description_url
+  - investors
+  - location
+  - market_tags
+  - media_mentions
+  - team
+  - pdf_links
+  - perks
+  - questions
+  - reasons_to_invest
+  - social_media
+  - updates
+  - use_of_funds
+  - videos_of_description_url
+  - slide_decks
   derived_structured:
   - text_len
   - num_tokens_est
   - num_urls
   - num_hashtags
-  high_value: &id002 []
-  must_keep:
-  - company_website
-  - front_image_url
-  - datetime_open_offering
-  - financial_condition
-  - company_logo
+  high_value: &id002
   - is_investable
-  - company_type
-  - date_of_formation
-  - datetime_maturity
-  - platform_country
-  - datetime_close_offering
-  - company_legal_name
-  - regulation
-  - offer_id
   - is_testing_the_waters
+  - funding_goal
+  - funding_goal_maximum
+  - funding_raised
+  - investors_count
+  - interest_rate
+  - number_of_days_left
+  - number_of_employees
+  - price_per_share
+  - ratio_of_revenue_max
+  - ratio_of_revenue_min
+  - revenue_sharing_percent
+  - safe_discount
+  - ticket_amount_increment
+  - ticket_amount_maximum
+  - ticket_amount_minimum
+  - valuation_cap
+  - valuation_pre_money
+  - duplicated
+  - discount_rate
+  - number_of_securities
+  - invested
+  - co_invested
+  - equity_offered
+  - equity_offered_maximum
+  - price_per_bond
+  - revenue
+  - interest_rate_final
+  - expected_return
+  - expected_return_maximum
+  - valuation_post_money
+  - expected_multiple
+  - reserved
+  - deposited
+  - ltv
+  - cac
+  - churn
+  must_keep:
+  - offer_id
+  - appears_in_landing_page
+  - is_investable
+  - is_testing_the_waters
+  - platform_country
+  - regulation
+  - status
+  - url
+  - web_fundraising_status
+  - allow_crypto_payments
+  - cik
+  - comments
+  - company_email
+  - company_legal_name
+  - company_logo
+  - company_name
+  - company_type
+  - company_website
+  - crawled_date
+  - datetime_close_offering
+  - datetime_form_filing
+  - datetime_maturity
+  - datetime_open_offering
+  - date_of_formation
+  - description_text
+  - file_number
+  - financial_condition
+  - financial_forecasts
+  - financial_risks
   - financial_statements_files
   - fiscal_year_end_date
-  - financial_forecasts
-  - appears_in_landing_page
-  - status
-  - description_text
-  - financial_risks
-  - file_number
-  - allow_crypto_payments
-  - url
-  - cik
-  - datetime_form_filing
-  - company_email
-  - crawled_date
-  - comments
-  - company_name
-  - web_fundraising_status
-  - duplicated
-  - is_funded
-  - platform_name
+  - front_image_url
+  - front_video_link
+  - front_video_transcript
+  - funding_goal
+  - funding_goal_maximum
+  - funding_raised
+  - has_another_round
+  - has_funding_history
+  - hash_id
+  - headline
+  - images_of_description_url
+  - image_cover_video_url_mobile
+  - instagram_link
+  - investment_agreement_pdf_link
+  - investment_type
+  - investors
   - investors_count
+  - interest_rate
+  - is_funded
+  - location
+  - market_tags
+  - media_mentions
+  - non_national_investors
+  - number_of_days_left
+  - number_of_employees
+  - regulated_url
+  - team
+  - offering_purpose
+  - offering_status
+  - pdf_links
+  - perks
+  - platform_name
+  - platform_fee
+  - price_per_share
+  - product_description
+  - questions
+  - ratio_of_revenue_max
+  - ratio_of_revenue_min
+  - reasons_to_invest
+  - revenue_sharing_percent
+  - safe_discount
+  - security_type
+  - social_media
+  - term_length
+  - ticket_amount_increment
+  - ticket_amount_maximum
+  - ticket_amount_minimum
+  - updates
+  - use_of_funds
+  - valuation_cap
+  - valuation_pre_money
+  - videos_of_description_url
+  - duplicated
+  - crawled_date_day
+  - processed_datetime
+  - company_description
+  - currency
+  - discount_rate
+  - slide_decks
+  - title
+  - security_name
+  - number_of_securities
+  - invested
+  - co_invested
+  - equity_offered
+  - equity_offered_maximum
+  - company_number
+  - price_per_bond
+  - revenue
+  - fully_diluted_shares
+  - interest_rate_final
+  - company_exit
+  - company_exit_date
+  - is_real_estate
+  - expected_return
+  - expected_return_maximum
+  - maturity
+  - valuation_post_money
+  - expected_multiple
+  - price_scheme
+  - repayment_stage
+  - repayment_finalized
+  - reserved
+  - deposited
+  - ltv
+  - cac
+  - churn
+  - total_approved_credit_limit
+  - total_credit_operations
+  - business_agent_count
+  - total_clients_count
+  - average_annual_ticket
+  - gross_revenue
+  - net_revenue
+  - valuation_floor
+  - equity_offered_minimum
+  - expected_multiple_maximum
+  - link
   - funding_goal_usd
+  - funding_goal_maximum_usd
   - funding_raised_usd
+  - ticket_amount_maximum_usd
+  - ticket_amount_minimum_usd
+  - valuation_pre_money_usd
+  - valuation_post_money_usd
+  - valuation_cap_usd
+  - valuation_floor_usd
+  - price_per_share_usd
+  - price_per_bond_usd
+  - invested_usd
+  - co_invested_usd
+  - reserved_usd
+  - deposited_usd
+  - gross_revenue_usd
+  - net_revenue_usd
+  - revenue_usd
+  - term_sheet
+  - entity_id
+  - snapshot_ts
 offers_core_snapshot:
   can_drop: *id001
   derived_only: []
   high_value: *id002
   must_keep:
-  - company_website
-  - front_image_url
-  - datetime_open_offering
-  - financial_condition
-  - company_logo
-  - is_investable
-  - company_type
-  - date_of_formation
-  - datetime_maturity
-  - platform_country
-  - datetime_close_offering
-  - company_legal_name
-  - regulation
   - offer_id
+  - appears_in_landing_page
+  - is_investable
   - is_testing_the_waters
+  - platform_country
+  - regulation
+  - status
+  - url
+  - web_fundraising_status
+  - allow_crypto_payments
+  - cik
+  - comments
+  - company_email
+  - company_legal_name
+  - company_logo
+  - company_name
+  - company_type
+  - company_website
+  - crawled_date
+  - datetime_close_offering
+  - datetime_form_filing
+  - datetime_maturity
+  - datetime_open_offering
+  - date_of_formation
+  - description_text
+  - file_number
+  - financial_condition
+  - financial_forecasts
+  - financial_risks
   - financial_statements_files
   - fiscal_year_end_date
-  - financial_forecasts
-  - appears_in_landing_page
-  - status
-  - description_text
-  - financial_risks
-  - file_number
-  - allow_crypto_payments
-  - url
-  - cik
-  - datetime_form_filing
-  - company_email
-  - crawled_date
-  - comments
-  - company_name
-  - web_fundraising_status
-  - duplicated
-  - is_funded
-  - platform_name
+  - front_image_url
+  - front_video_link
+  - front_video_transcript
+  - funding_goal
+  - funding_goal_maximum
+  - funding_raised
+  - has_another_round
+  - has_funding_history
+  - hash_id
+  - headline
+  - images_of_description_url
+  - image_cover_video_url_mobile
+  - instagram_link
+  - investment_agreement_pdf_link
+  - investment_type
+  - investors
   - investors_count
+  - interest_rate
+  - is_funded
+  - location
+  - market_tags
+  - media_mentions
+  - non_national_investors
+  - number_of_days_left
+  - number_of_employees
+  - regulated_url
+  - team
+  - offering_purpose
+  - offering_status
+  - pdf_links
+  - perks
+  - platform_name
+  - platform_fee
+  - price_per_share
+  - product_description
+  - questions
+  - ratio_of_revenue_max
+  - ratio_of_revenue_min
+  - reasons_to_invest
+  - revenue_sharing_percent
+  - safe_discount
+  - security_type
+  - social_media
+  - term_length
+  - ticket_amount_increment
+  - ticket_amount_maximum
+  - ticket_amount_minimum
+  - updates
+  - use_of_funds
+  - valuation_cap
+  - valuation_pre_money
+  - videos_of_description_url
+  - duplicated
+  - crawled_date_day
+  - processed_datetime
+  - company_description
+  - currency
+  - discount_rate
+  - slide_decks
+  - title
+  - security_name
+  - number_of_securities
+  - invested
+  - co_invested
+  - equity_offered
+  - equity_offered_maximum
+  - company_number
+  - price_per_bond
+  - revenue
+  - fully_diluted_shares
+  - interest_rate_final
+  - company_exit
+  - company_exit_date
+  - is_real_estate
+  - expected_return
+  - expected_return_maximum
+  - maturity
+  - valuation_post_money
+  - expected_multiple
+  - price_scheme
+  - repayment_stage
+  - repayment_finalized
+  - reserved
+  - deposited
+  - ltv
+  - cac
+  - churn
+  - total_approved_credit_limit
+  - total_credit_operations
+  - business_agent_count
+  - total_clients_count
+  - average_annual_ticket
+  - gross_revenue
+  - net_revenue
+  - valuation_floor
+  - equity_offered_minimum
+  - expected_multiple_maximum
+  - link
   - funding_goal_usd
+  - funding_goal_maximum_usd
   - funding_raised_usd
+  - ticket_amount_maximum_usd
+  - ticket_amount_minimum_usd
+  - valuation_pre_money_usd
+  - valuation_post_money_usd
+  - valuation_cap_usd
+  - valuation_floor_usd
+  - price_per_share_usd
+  - price_per_bond_usd
+  - invested_usd
+  - co_invested_usd
+  - reserved_usd
+  - deposited_usd
+  - gross_revenue_usd
+  - net_revenue_usd
+  - revenue_usd
+  - term_sheet
+  - entity_id
+  - snapshot_ts
 offers_text:
   must_keep:
   - entity_id
@@ -142,4 +443,4 @@ offers_text:
   - reasons_to_invest_text
   - updates_text
   - questions_text
-stamp: '20260201_201246'
+stamp: '20260201_212323'

@@ -79,7 +79,7 @@ def main() -> None:
     if args.contract_v3.exists():
         v3 = yaml.safe_load(args.contract_v3.read_text(encoding="utf-8")) or {}
 
-    def candidate_cols(df: pd.DataFrame, nn_min: float, distinct_max: int) -> tuple[List[str], List[str], List[str]]:
+    def candidate_cols(df: pd.DataFrame, nn_min: float, distinct_max: int, default_keep_unknown: bool = True) -> tuple[List[str], List[str], List[str]]:
         must = []
         high_value = []
         derived_only = []
@@ -87,35 +87,61 @@ def main() -> None:
             return must, high_value, derived_only
         nn_col = "non_null_rate_sample" if "non_null_rate_sample" in df.columns else "approx_non_null_rate"
         if nn_col not in df.columns:
-            nn_col = [c for c in df.columns if "non_null" in c.lower() or "approx" in c.lower()][0] if any("non_null" in str(c).lower() for c in df.columns) else None
+            nn_col = [c for c in df.columns if "non_null" in str(c).lower() or "approx" in str(c).lower()]
+            nn_col = nn_col[0] if nn_col else None
         for _, row in df.iterrows():
             col = str(row["column"])
             nnr = row.get(nn_col) if nn_col else None
-            nnr = float(nnr) if nnr is not None and pd.notna(nnr) else 0.0
-            if nnr < nn_min:
+            nnr_val = float(nnr) if nnr is not None and pd.notna(nnr) else None
+            if nnr_val is not None and nnr_val < nn_min and not default_keep_unknown:
+                continue
+            if nnr_val is None and not default_keep_unknown:
                 continue
             std = row.get("std_sample")
             distinct = row.get("distinct_sample")
             distinct = int(distinct) if distinct is not None and pd.notna(distinct) else None
-            dtype = str(row.get("dtype", ""))
             if distinct is not None and distinct > distinct_max:
                 if "text" in col.lower() or "description" in col.lower() or "headline" in col.lower():
                     derived_only.append(col)
+                elif default_keep_unknown:
+                    must.append(col)
                 continue
             must.append(col)
             if std is not None and float(std) > 0:
                 high_value.append(col)
         return must, high_value, derived_only
 
-    offers_must, offers_high, offers_derived = candidate_cols(inv_offers, args.non_null_min, args.categorical_distinct_max)
-    edgar_must, edgar_high, _ = candidate_cols(inv_edgar, args.non_null_min, args.categorical_distinct_max)
+    offers_must, offers_high, offers_derived = candidate_cols(inv_offers, args.non_null_min, args.categorical_distinct_max, default_keep_unknown=True)
+    edgar_must, edgar_high, _ = candidate_cols(inv_edgar, args.non_null_min, args.categorical_distinct_max, default_keep_unknown=True)
+
+    def _delta_schema_cols(path: Path) -> List[str]:
+        try:
+            from deltalake import DeltaTable
+            dt = DeltaTable(str(path))
+            return [f.name for f in dt.schema().fields]
+        except Exception:
+            return []
+
+    raw_offers_cols = _delta_schema_cols(repo_root / "data/raw/offers")
+    raw_edgar_cols = _delta_schema_cols(repo_root / "data/raw/edgar/accessions")
+    inv_offers_cols = set(inv_offers["column"].tolist()) if not inv_offers.empty and "column" in inv_offers.columns else set()
+    inv_edgar_cols = set(inv_edgar["column"].tolist()) if not inv_edgar.empty and "column" in inv_edgar.columns else set()
+    for c in raw_offers_cols:
+        if c not in offers_must and c not in inv_offers_cols:
+            offers_must.append(c)
+    for c in inv_offers_cols - set(offers_must):
+        offers_must.append(c)
+    for c in raw_edgar_cols:
+        if c not in edgar_must and c not in inv_edgar_cols:
+            edgar_must.append(c)
+    for c in inv_edgar_cols - set(edgar_must):
+        edgar_must.append(c)
 
     core_v3 = v3.get("offers_core_snapshot", v3.get("offers_core_daily", {}))
     v3_must = set(core_v3.get("must_keep", []))
     for c in v3_must:
         if c not in offers_must:
-            if inv_offers.empty or c in inv_offers["column"].tolist():
-                offers_must.append(c)
+            offers_must.append(c)
 
     stamp = datetime.now(timezone.utc).strftime("%Y%m%d_%H%M%S")
     wide = {

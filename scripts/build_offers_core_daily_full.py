@@ -51,8 +51,9 @@ def main() -> None:
             snap = c.get("offers_core_snapshot", c.get("offers_core_daily", {}))
             must = snap.get("must_keep", [])
             should = snap.get("should_add", [])
+            can_drop = set(snap.get("can_drop", []))
             for col in must + should:
-                if col not in core_cols and col in ("funding_goal_usd", "funding_raised_usd", "investors_count", "is_funded", "cik", "link", "hash_id", "datetime_open_offering", "datetime_close_offering"):
+                if col not in core_cols and col not in can_drop:
                     core_cols.append(col)
         except Exception:
             pass
@@ -79,11 +80,19 @@ def main() -> None:
     active_files = len(files_list)
 
     schema_names = [f.name for f in dt.schema().fields]
-    read_cols = [c for c in core_cols + [DEDUP_COL] if c in schema_names]
+    schema_types = {f.name: str(f.type) for f in dt.schema().fields}
+    def _is_nested(col: str) -> bool:
+        t = schema_types.get(col, "")
+        tl = t.lower()
+        return "list" in tl or "struct" in tl or "map" in tl or "array" in tl
+    read_cols = [c for c in core_cols + [DEDUP_COL] if c in schema_names and not _is_nested(c)]
     if DEDUP_COL not in read_cols and "processed_datetime" in schema_names:
         read_cols.append("processed_datetime")
     if "crawled_date_day" not in read_cols:
         read_cols.append("crawled_date_day")
+    excluded_nested = [c for c in core_cols + [DEDUP_COL] if c in schema_names and _is_nested(c)]
+    if excluded_nested:
+        print(f"build_offers_core_daily: excluded nested cols: {excluded_nested}", flush=True)
 
     chunk_rows = args.chunk_rows
     if chunk_rows is None:
