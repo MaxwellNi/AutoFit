@@ -37,10 +37,6 @@
       "sha256": "b2d01d0c0d0a9249adfbb5dfc9b0d03030f4c1322785c4c2e6e0d000ac94bbbe"
     },
     {
-      "path": "docs/audits/raw_cardinality_coverage_20260129_073037.md",
-      "sha256": "427d210c4be98a738d846542b6c8993a117d9c62090fc28ebb7dde50c7e6ed9f"
-    },
-    {
       "path": "docs/audits/raw_cardinality_coverage_full_daily_20260129_073037.md",
       "sha256": "427d210c4be98a738d846542b6c8993a117d9c62090fc28ebb7dde50c7e6ed9f"
     },
@@ -63,6 +59,22 @@
     {
       "path": "docs/audits/raw_cardinality_coverage_wide_20260201_211317_20260129_073037.md",
       "sha256": "427d210c4be98a738d846542b6c8993a117d9c62090fc28ebb7dde50c7e6ed9f"
+    },
+    {
+      "path": "docs/audits/raw_cardinality_coverage_20260129_073037.md",
+      "sha256": "427d210c4be98a738d846542b6c8993a117d9c62090fc28ebb7dde50c7e6ed9f"
+    },
+    {
+      "path": "docs/audits/raw_edgar_profile_20260202_002156.md",
+      "sha256": "0e2f0ca82288638f6fb05711fe7bd692d3083c1625063ee519e1a5483b8d3175"
+    },
+    {
+      "path": "docs/audits/raw_offers_profile_20260202_035832.md",
+      "sha256": "133a7da27ac4479f5a8f0993b547ae9121257c6911e19d3fa77224d64fbb124e"
+    },
+    {
+      "path": "docs/audits/raw_edgar_profile_20260202_035832.md",
+      "sha256": "0e2f0ca82288638f6fb05711fe7bd692d3083c1625063ee519e1a5483b8d3175"
     }
   ]
 }

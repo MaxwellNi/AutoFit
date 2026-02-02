@@ -385,6 +385,7 @@ def main() -> None:
     parser.add_argument("--offers_core", type=Path, required=True)
     parser.add_argument("--offers_static", type=Path, required=True)
     parser.add_argument("--offers_text", type=Path, default=None, help="Path to offers_text.parquet (for NBI/NCI)")
+    parser.add_argument("--offers_extras", type=Path, default=None, help="Path to offers_extras_daily.parquet (nested-derived)")
     parser.add_argument("--edgar_dir", type=Path, required=True)
     parser.add_argument("--edgar_recompute_dir", type=Path, default=None, help="Deprecated: fallback not used for PASS; only for debug dump")
     parser.add_argument("--raw_offers_delta", type=Path, required=True)
@@ -398,7 +399,7 @@ def main() -> None:
     parser.add_argument("--edgar_recompute_required", type=int, default=1, help="If 0, EDGAR recompute failures do not gate FAIL (use when 4090 lacks data parity with 3090)")
     parser.add_argument("--require_deltalake", type=int, default=0)
     parser.add_argument("--text_required_mode", type=int, default=0)
-    parser.add_argument("--contract_path", type=Path, default=None, help="Path to column_contract_v3.yaml (overrides v2)")
+    parser.add_argument("--contract_path", type=Path, default=repo_root / "configs/column_contract_wide.yaml", help="Path to column_contract_wide.yaml")
     args = parser.parse_args()
 
     if args.require_deltalake:
@@ -424,17 +425,44 @@ def main() -> None:
 
     core_cols = _parquet_schema(args.offers_core)
     static_cols = _parquet_schema(args.offers_static)
+    extras_cols = _parquet_schema(args.offers_extras) if args.offers_extras else []
     edgar_cols = _edgar_store_schema(args.edgar_dir, logger)
     report["offers_core_columns"] = core_cols
+    report["offers_extras_columns"] = extras_cols
     report["offers_static_columns"] = static_cols
     report["edgar_store_columns_sample"] = edgar_cols[:40]
 
-    # Modeling requirements from run_full_benchmark.py
-    report["modeling_required_cols"] = list(RUN_FULL_BENCHMARK_REQUIRED_COLS)
-    missing_keep = [c for c in RUN_FULL_BENCHMARK_REQUIRED_COLS if c not in core_cols]
+    # Contract-driven requirements (wide)
+    if not args.contract_path or not args.contract_path.exists():
+        fail_reasons.append("contract_path missing (column_contract_wide.yaml required)")
+        contract = {}
+    else:
+        try:
+            import yaml
+            contract = yaml.safe_load(args.contract_path.read_text(encoding="utf-8")) or {}
+        except Exception:
+            contract = {}
+            fail_reasons.append("contract_path unreadable")
+
+    contract_core = contract.get("offers_core_daily", contract.get("offers_core_snapshot", {}))
+    nested_raw = contract_core.get("nested_columns", [])
+    derived_nested = contract_core.get("derived_nested", [])
+    if not derived_nested and nested_raw:
+        for c in nested_raw:
+            derived_nested.extend([f"{c}__json", f"{c}__len", f"{c}__hash"])
+    required_core = list(dict.fromkeys(
+        contract_core.get("must_keep", []) +
+        contract_core.get("derived_structured", []) +
+        derived_nested
+    ))
+    required_core = [c for c in required_core if c not in nested_raw]
+    processed_cols = set(core_cols) | set(extras_cols)
+    missing_keep = [c for c in required_core if c not in processed_cols]
     if missing_keep:
-        fail_reasons.append(f"MUST_KEEP missing in offers_core: {missing_keep}")
-    report["must_keep_in_core"] = [c for c in RUN_FULL_BENCHMARK_REQUIRED_COLS if c in core_cols]
+        fail_reasons.append(f"MUST_KEEP missing in processed (core+extras): {missing_keep[:20]}")
+    report["contract_path_used"] = str(args.contract_path)
+    report["modeling_required_cols"] = list(RUN_FULL_BENCHMARK_REQUIRED_COLS)
+    report["must_keep_in_processed"] = [c for c in required_core if c in processed_cols]
     report["must_keep_missing"] = missing_keep
 
     # Narrative: belong to offers_text table, NOT offers_core
@@ -449,23 +477,16 @@ def main() -> None:
     if args.text_required_mode and not has_offers_text:
         fail_reasons.append("text_required_mode=1 but offers_text table missing")
     elif args.text_required_mode and has_offers_text:
-        # Use --contract_path if provided, else fallback to v3 then v2
-        contract_path = args.contract_path
-        if not contract_path or not contract_path.exists():
-            contract_path = repo_root / "configs" / "column_contract_v3.yaml"
-        if not contract_path.exists():
-            contract_path = repo_root / "configs" / "column_contract_v2.yaml"
-        if contract_path.exists():
+        if args.contract_path and args.contract_path.exists():
             try:
                 import yaml
-                contract = yaml.safe_load(contract_path.read_text(encoding="utf-8"))
+                contract = yaml.safe_load(args.contract_path.read_text(encoding="utf-8"))
                 text_must = contract.get("offers_text", {}).get("must_keep", [])
                 text_cols = _parquet_schema(offers_text_path)
                 missing_text = [c for c in text_must if c not in text_cols]
                 if missing_text:
                     fail_reasons.append(f"offers_text missing MUST_KEEP per contract: {missing_text}")
                 report["offers_text_must_keep_missing"] = missing_text
-                report["contract_path_used"] = str(contract_path)
             except Exception as e:
                 logger.warning("Could not validate offers_text against contract: %s", e)
 
@@ -515,7 +536,7 @@ def main() -> None:
     report["raw_offers_missingness_sample"] = {k: v for k, v in raw_missingness.items() if not np.isnan(v)}
 
     # MUST_KEEP / CAN_DROP / SHOULD_ADD / MUST_ADD_TABLE
-    must_keep = list(report["must_keep_in_core"])
+    must_keep = list(report.get("must_keep_in_processed", []))
     can_drop = [c for c in core_cols if c not in must_keep and (c.startswith("url") or c.startswith("link") or "image" in c or "video_link" in c or c in ["hash_id", "comments"])]
     if not can_drop:
         can_drop = [c for c in core_cols if c not in must_keep and c not in ["funding_goal_usd", "funding_raised_usd", "investors_count", "is_funded", "snapshot_ts", "crawled_date", "crawled_date_day"]][:15]
@@ -571,17 +592,19 @@ def main() -> None:
         "",
         "**Gate:** " + ("PASS" if report["gate_passed"] else "FAIL"),
         "",
-        "## MUST_KEEP (outcome + trajectory)",
+        f"**Contract:** {report.get('contract_path_used', '')}",
         "",
-        "- " + ", ".join(report["must_keep"]),
-        "- Rationale: Entity keys, time axis, and numerics required by run_full_benchmark.py for label construction and time-series features.",
+        "## MUST_KEEP (contract-wide, core+extras)",
+        "",
+        "- " + ", ".join(report["must_keep"][:50]),
+        "- Rationale: Column contract wide (must_keep + derived_structured + derived_nested).",
         "",
         "## CAN_DROP",
         "",
         "- " + ", ".join(report["can_drop"][:15]),
         "- Rationale: Unused identifiers/URLs or heavy arrays in core; safe to drop for modeling.",
         "",
-        "## SHOULD_ADD (next version v3)",
+        "## SHOULD_ADD (next version)",
         "",
         "- " + (", ".join(report["should_add"][:15]) if report["should_add"] else "(none or not meeting missingness/variance)"),
         "- Rationale: " + report["should_add_note"],
@@ -589,7 +612,7 @@ def main() -> None:
         "## MUST_ADD_TABLE",
         "",
         "- " + ", ".join(report["must_add_table"]) if report["must_add_table"] else "(offers_text exists or N/A)",
-        "- Rationale: offers_text for NBI/NCI narrative concepts.",
+        "- Rationale: offers_text for narrative concepts.",
         "",
         "## Narrative columns (offers_text, NOT offers_core)",
         "",

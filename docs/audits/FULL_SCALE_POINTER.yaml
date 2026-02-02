@@ -1,20 +1,20 @@
 analysis:
-  column_manifest: runs/orchestrator/20260129_073037/analysis/wide_20260201_211317/column_manifest.json
-  dir: runs/orchestrator/20260129_073037/analysis/wide_20260201_211317
-  freeze_candidates: runs/orchestrator/20260129_073037/analysis/wide_20260201_211317/freeze_candidates.json
-  raw_cardinality_coverage: runs/orchestrator/20260129_073037/analysis/wide_20260201_211317/raw_cardinality_coverage_wide_20260201_211317.json
+  column_manifest: runs/orchestrator/20260129_073037/analysis/wide_20260202_035832/column_manifest.json
+  dir: runs/orchestrator/20260129_073037/analysis/wide_20260202_035832
+  freeze_candidates: runs/orchestrator/20260129_073037/analysis/wide_20260202_035832/freeze_candidates.json
+  raw_cardinality_coverage: runs/orchestrator/20260129_073037/analysis/wide_20260202_035832/raw_cardinality_coverage_wide_20260202_035832.json
 edgar_store_full_daily:
-  dir: runs/edgar_feature_store_full_daily_wide_20260201_211317
+  dir: runs/edgar_feature_store_full_daily_wide_20260202_035832
 multiscale_full:
-  dir: runs/multiscale_full_wide_20260201_211317
+  dir: runs/multiscale_full_wide_20260202_035832
 offers_core_daily:
-  dir: runs/offers_core_full_daily_wide_20260201_211317
+  dir: runs/offers_core_full_daily_wide_20260202_035832
 offers_core_snapshot:
-  dir: runs/offers_core_full_snapshot_wide_20260201_211317
+  dir: runs/offers_core_full_snapshot_wide_20260202_035832
 offers_text:
   dir: runs/offers_text_v1_20260129_073037_full
 snapshots_index:
-  cik_day: runs/offers_core_full_daily_wide_20260201_211317/snapshots_index/snapshots_cik_day.parquet
-  offer_day: runs/offers_core_full_daily_wide_20260201_211317/snapshots_index/snapshots_offer_day.parquet
-stamp: '20260201_211317'
+  cik_day: runs/offers_core_full_daily_wide_20260202_035832/snapshots_index/snapshots_cik_day.parquet
+  offer_day: runs/offers_core_full_daily_wide_20260202_035832/snapshots_index/snapshots_offer_day.parquet
+stamp: '20260202_035832'
 variant: TRAIN_WIDE_FINAL

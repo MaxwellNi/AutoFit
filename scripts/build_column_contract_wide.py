@@ -51,6 +51,33 @@ def _profile_to_inventory_df(profile: Dict[str, Any]) -> pd.DataFrame:
     return pd.DataFrame(rows) if rows else pd.DataFrame()
 
 
+def _delta_schema_cols(path: Path) -> List[str]:
+    try:
+        from deltalake import DeltaTable
+        dt = DeltaTable(str(path))
+        return [f.name for f in dt.schema().fields]
+    except Exception:
+        return []
+
+
+def _delta_schema_types(path: Path) -> Dict[str, str]:
+    try:
+        from deltalake import DeltaTable
+        dt = DeltaTable(str(path))
+        return {f.name: str(f.type) for f in dt.schema().fields}
+    except Exception:
+        return {}
+
+
+def _nested_cols_from_schema(schema_types: Dict[str, str]) -> List[str]:
+    nested = []
+    for col, t in schema_types.items():
+        tl = str(t).lower()
+        if "list" in tl or "struct" in tl or "map" in tl or "array" in tl:
+            nested.append(col)
+    return nested
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(description="Build column_contract_wide from inventory.")
     parser.add_argument("--inventory_offers", type=Path, default=None, help="raw_offers_column_inventory.parquet")
@@ -114,16 +141,13 @@ def main() -> None:
     offers_must, offers_high, offers_derived = candidate_cols(inv_offers, args.non_null_min, args.categorical_distinct_max, default_keep_unknown=True)
     edgar_must, edgar_high, _ = candidate_cols(inv_edgar, args.non_null_min, args.categorical_distinct_max, default_keep_unknown=True)
 
-    def _delta_schema_cols(path: Path) -> List[str]:
-        try:
-            from deltalake import DeltaTable
-            dt = DeltaTable(str(path))
-            return [f.name for f in dt.schema().fields]
-        except Exception:
-            return []
-
     raw_offers_cols = _delta_schema_cols(repo_root / "data/raw/offers")
     raw_edgar_cols = _delta_schema_cols(repo_root / "data/raw/edgar/accessions")
+    raw_offers_types = _delta_schema_types(repo_root / "data/raw/offers")
+    nested_raw_cols = _nested_cols_from_schema(raw_offers_types)
+    nested_derived_cols = []
+    for c in nested_raw_cols:
+        nested_derived_cols.extend([f"{c}__json", f"{c}__len", f"{c}__hash"])
     inv_offers_cols = set(inv_offers["column"].tolist()) if not inv_offers.empty and "column" in inv_offers.columns else set()
     inv_edgar_cols = set(inv_edgar["column"].tolist()) if not inv_edgar.empty and "column" in inv_edgar.columns else set()
     for c in raw_offers_cols:
@@ -152,12 +176,16 @@ def main() -> None:
             "must_keep": list(dict.fromkeys(offers_must)),
             "high_value": offers_high,
             "derived_only": offers_derived[:30],
+            "nested_columns": nested_raw_cols,
+            "derived_nested": nested_derived_cols,
             "can_drop": core_v3.get("can_drop", []),
         },
         "offers_core_daily": {
             "must_keep": list(dict.fromkeys(offers_must)),
             "high_value": offers_high,
             "derived_structured": ["text_len", "num_tokens_est", "num_urls", "num_hashtags"],
+            "nested_columns": nested_raw_cols,
+            "derived_nested": nested_derived_cols,
             "can_drop": core_v3.get("can_drop", []),
         },
         "offers_text": {"must_keep": v3.get("offers_text", {}).get("must_keep", ["headline", "title", "description_text", "company_description"])},
@@ -182,13 +210,15 @@ def main() -> None:
         f"- must_keep: {len(wide['offers_core_snapshot']['must_keep'])} columns",
         f"- high_value (std>0): {len(wide['offers_core_snapshot']['high_value'])}",
         f"- derived_only (text len/tokens): {wide['offers_core_daily']['derived_structured']}",
+        f"- nested_columns: {len(wide['offers_core_snapshot']['nested_columns'])}",
+        f"- derived_nested: {len(wide['offers_core_snapshot']['derived_nested'])}",
         "",
         "## edgar_store",
         f"- must_keep: {len(wide['edgar_store']['must_keep'])} columns",
         "",
         "## vs v3",
         "- v3 coverage_min=0.05; wide uses 0.001",
-        "- Arrays/text: raw not in core; derived (text_len, num_tokens_est) in core_daily",
+        "- Arrays/text: nested raw not in core; derived __json/__len/__hash are frozen",
     ]
     out_md.write_text("\n".join(md_lines), encoding="utf-8")
     print(f"Wrote {out_md}", flush=True)

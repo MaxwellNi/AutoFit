@@ -1,8 +1,6 @@
 categorical_distinct_max: 200000
 edgar_store:
-  high_value:
-  - is_inline_XBRL
-  - is_XBRL
+  high_value: []
   must_keep:
   - acceptance_datetime
   - accession_number
@@ -54,68 +52,64 @@ offers_core_daily:
   can_drop: &id001
   - hash_id
   - link
-exclude_nested:
-  - comments
-  - financial_statements_files
-  - images_of_description_url
-  - investors
-  - location
-  - market_tags
-  - media_mentions
-  - team
-  - pdf_links
-  - perks
-  - questions
-  - reasons_to_invest
-  - social_media
-  - updates
-  - use_of_funds
-  - videos_of_description_url
-  - slide_decks
+  derived_nested: &id002
+  - comments__json
+  - comments__len
+  - comments__hash
+  - financial_statements_files__json
+  - financial_statements_files__len
+  - financial_statements_files__hash
+  - images_of_description_url__json
+  - images_of_description_url__len
+  - images_of_description_url__hash
+  - investors__json
+  - investors__len
+  - investors__hash
+  - location__json
+  - location__len
+  - location__hash
+  - market_tags__json
+  - market_tags__len
+  - market_tags__hash
+  - media_mentions__json
+  - media_mentions__len
+  - media_mentions__hash
+  - team__json
+  - team__len
+  - team__hash
+  - pdf_links__json
+  - pdf_links__len
+  - pdf_links__hash
+  - perks__json
+  - perks__len
+  - perks__hash
+  - questions__json
+  - questions__len
+  - questions__hash
+  - reasons_to_invest__json
+  - reasons_to_invest__len
+  - reasons_to_invest__hash
+  - social_media__json
+  - social_media__len
+  - social_media__hash
+  - updates__json
+  - updates__len
+  - updates__hash
+  - use_of_funds__json
+  - use_of_funds__len
+  - use_of_funds__hash
+  - videos_of_description_url__json
+  - videos_of_description_url__len
+  - videos_of_description_url__hash
+  - slide_decks__json
+  - slide_decks__len
+  - slide_decks__hash
   derived_structured:
   - text_len
   - num_tokens_est
   - num_urls
   - num_hashtags
-  high_value: &id002
-  - is_investable
-  - is_testing_the_waters
-  - funding_goal
-  - funding_goal_maximum
-  - funding_raised
-  - investors_count
-  - interest_rate
-  - number_of_days_left
-  - number_of_employees
-  - price_per_share
-  - ratio_of_revenue_max
-  - ratio_of_revenue_min
-  - revenue_sharing_percent
-  - safe_discount
-  - ticket_amount_increment
-  - ticket_amount_maximum
-  - ticket_amount_minimum
-  - valuation_cap
-  - valuation_pre_money
-  - duplicated
-  - discount_rate
-  - number_of_securities
-  - invested
-  - co_invested
-  - equity_offered
-  - equity_offered_maximum
-  - price_per_bond
-  - revenue
-  - interest_rate_final
-  - expected_return
-  - expected_return_maximum
-  - valuation_post_money
-  - expected_multiple
-  - reserved
-  - deposited
-  - ltv
-  - cac
-  - churn
+  high_value: &id003 []
   must_keep:
   - offer_id
   - appears_in_landing_page
@@ -267,10 +261,29 @@ exclude_nested:
   - term_sheet
   - entity_id
   - snapshot_ts
+  nested_columns: &id004
+  - comments
+  - financial_statements_files
+  - images_of_description_url
+  - investors
+  - location
+  - market_tags
+  - media_mentions
+  - team
+  - pdf_links
+  - perks
+  - questions
+  - reasons_to_invest
+  - social_media
+  - updates
+  - use_of_funds
+  - videos_of_description_url
+  - slide_decks
 offers_core_snapshot:
   can_drop: *id001
+  derived_nested: *id002
   derived_only: []
-  high_value: *id002
+  high_value: *id003
   must_keep:
   - offer_id
   - appears_in_landing_page
@@ -422,6 +435,7 @@ offers_core_snapshot:
   - term_sheet
   - entity_id
   - snapshot_ts
+  nested_columns: *id004
 offers_text:
   must_keep:
   - entity_id
@@ -443,4 +457,4 @@ offers_text:
   - reasons_to_invest_text
   - updates_text
   - questions_text
-stamp: '20260201_212323'
+stamp: '20260202_044635'

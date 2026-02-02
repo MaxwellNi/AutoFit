@@ -34,7 +34,7 @@ def main() -> None:
     df = df.dropna(subset=["cik", "snapshot_ts"])
     df["snapshot_ts"] = pd.to_datetime(df["snapshot_ts"], errors="coerce", utc=True)
     df["snapshot_day"] = df["snapshot_ts"].dt.date
-    df["crawled_date_day"] = df["snapshot_ts"]
+    df["crawled_date_day"] = df["snapshot_day"].astype(str)
     df = df.dropna(subset=["snapshot_ts"])
 
     args.output_dir.mkdir(parents=True, exist_ok=True)

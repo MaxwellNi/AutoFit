@@ -63,67 +63,183 @@ def _delta_version_and_files(path: Path) -> Tuple[Optional[int], int]:
         return None, 0
 
 
-def _structured_columns_from_contract(contract_path: Path) -> List[str]:
-    """Load core_snapshot + core_daily + derived_structured from column_contract_wide."""
+def _key_df_from_parquet(path: Path) -> pd.DataFrame:
+    """Load minimal keys (entity_id, crawled_date_day) from parquet with fallbacks."""
+    import pyarrow.parquet as pq
+    schema = pq.read_schema(path)
+    cols = schema.names
+    read_cols = [c for c in ["entity_id", "platform_name", "offer_id", "crawled_date_day", "crawled_date", "snapshot_ts"] if c in cols]
+    df = pd.read_parquet(path, columns=read_cols)
+    if "entity_id" not in df.columns:
+        if "platform_name" in df.columns and "offer_id" in df.columns:
+            df["entity_id"] = df["platform_name"].astype(str) + "|" + df["offer_id"].astype(str)
+        else:
+            raise RuntimeError(f"{path} missing entity_id or platform_name/offer_id")
+    if "crawled_date_day" not in df.columns:
+        if "crawled_date" in df.columns:
+            df["crawled_date_day"] = pd.to_datetime(df["crawled_date"], errors="coerce", utc=True).dt.date.astype(str)
+        elif "snapshot_ts" in df.columns:
+            df["crawled_date_day"] = pd.to_datetime(df["snapshot_ts"], errors="coerce", utc=True).dt.date.astype(str)
+        else:
+            raise RuntimeError(f"{path} missing crawled_date_day/crawled_date/snapshot_ts")
+    return df[["entity_id", "crawled_date_day"]].dropna().drop_duplicates()
+
+
+def _structured_columns_from_contract(contract_path: Path) -> tuple[List[str], List[str]]:
+    """Load structured columns and nested raw columns from column_contract_wide."""
     if not contract_path or not contract_path.exists():
-        return []
+        return [], []
     try:
         import yaml
         c = yaml.safe_load(contract_path.read_text(encoding="utf-8"))
         snap = c.get("offers_core_snapshot", {})
         daily = c.get("offers_core_daily", {})
+        nested_raw = list(dict.fromkeys(snap.get("nested_columns", []) + daily.get("nested_columns", [])))
+        derived_nested = list(dict.fromkeys(snap.get("derived_nested", []) + daily.get("derived_nested", [])))
         cols = list(dict.fromkeys(
             snap.get("must_keep", []) + snap.get("high_value", []) +
             daily.get("must_keep", []) + daily.get("high_value", []) +
-            daily.get("derived_structured", [])
+            daily.get("derived_structured", []) + derived_nested
         ))
-        text_exclude = {"headline", "title", "description_text", "company_description", "financial_condition"}
-        return [x for x in cols if x not in text_exclude]
+        text_exclude = set(c.get("offers_text", {}).get("must_keep", []))
+        text_exclude |= {"headline", "title", "description_text", "company_description", "financial_condition"}
+        cols = [x for x in cols if x not in text_exclude]
+        return cols, nested_raw
     except Exception:
-        return []
+        return [], []
 
 
 def _raw_structured_signal_entity_day(
-    raw_path: Path, struct_cols: List[str], logger: logging.Logger, limit_rows: Optional[int] = None
+    raw_path: Path,
+    struct_cols: List[str],
+    nested_cols: List[str],
+    logger: logging.Logger,
+    limit_rows: Optional[int] = None,
 ) -> tuple[int, int]:
-    """Stream raw offers, count (entity_id, crawled_date_day) where any struct col non-null. Returns (total_rows, entity_day_count)."""
-    if not struct_cols:
+    """Stream raw offers, count (entity_id, day) where any struct col non-null. Returns (total_rows, entity_day_count)."""
+    if not struct_cols and not nested_cols:
         return 0, 0
     try:
         from deltalake import DeltaTable
+        import pyarrow as pa
+        import pyarrow.compute as pc
         dt = DeltaTable(str(raw_path))
         dset = dt.to_pyarrow_dataset()
         schema_names = [f.name for f in dset.schema]
-        read_cols = [c for c in struct_cols + ["platform_name", "offer_id", "crawled_date_day"] if c in schema_names]
-        if not read_cols or "crawled_date_day" not in read_cols:
-            return 0, 0
-        if "platform_name" not in schema_names or "offer_id" not in schema_names:
-            return 0, 0
+        day_col = "crawled_date_day" if "crawled_date_day" in schema_names else ("crawled_date" if "crawled_date" in schema_names else ("snapshot_ts" if "snapshot_ts" in schema_names else None))
+        if not day_col:
+            raise RuntimeError("raw offers missing day column (crawled_date_day/crawled_date)")
+        struct_cols = [c for c in struct_cols if c not in {"entity_id", "platform_name", "offer_id", "snapshot_ts", "crawled_date_day", "crawled_date"}]
+        nested_cols = [c for c in nested_cols if c not in {"entity_id", "platform_name", "offer_id", "snapshot_ts", "crawled_date_day", "crawled_date"}]
+        read_cols = list(dict.fromkeys([c for c in (struct_cols + nested_cols + ["platform_name", "offer_id", day_col]) if c in schema_names]))
+        if "platform_name" not in read_cols or "offer_id" not in read_cols or day_col not in read_cols:
+            raise RuntimeError("raw offers missing key columns for structured-signal scan")
         seen: set = set()
         total = 0
         for batch in dset.scanner(columns=read_cols, batch_size=200_000).to_batches():
-            df = batch.to_pandas()
-            total += len(df)
-            pn = df["platform_name"].apply(lambda x: str(x) if pd.notna(x) else "")
-            oid = df["offer_id"].apply(lambda x: str(x) if pd.notna(x) else "")
-            df = df.assign(entity_id=pn + "|" + oid)
-            df["_day"] = pd.to_datetime(df["crawled_date_day"], errors="coerce").dt.date
-            struct_set = [c for c in struct_cols if c in df.columns]
-            if not struct_set:
+            total += batch.num_rows
+            # Build signal mask via Arrow (safe for nested)
+            mask = None
+            for col in struct_cols + nested_cols:
+                if col not in batch.schema.names:
+                    continue
+                idx = batch.schema.get_field_index(col)
+                if idx < 0:
+                    continue
+                arr = batch.column(idx)
+                if isinstance(arr, pa.ChunkedArray):
+                    try:
+                        arr = arr.combine_chunks()
+                    except Exception:
+                        pass
+                if col in nested_cols:
+                    try:
+                        lengths = pc.list_value_length(arr)
+                        present = pc.greater(lengths, 0)
+                    except Exception:
+                        present = pc.invert(pc.is_null(arr))
+                else:
+                    present = pc.invert(pc.is_null(arr))
+                present = pc.fill_null(present, False)
+                if isinstance(present, pa.ChunkedArray):
+                    try:
+                        present = present.combine_chunks()
+                    except Exception:
+                        pass
+                mask = present if mask is None else pc.or_(mask, present)
+            if mask is None:
                 continue
-            has_signal = df[struct_set].notna().any(axis=1)
-            sub = df.loc[has_signal, ["entity_id", "_day"]].drop_duplicates()
+            if isinstance(mask, pa.ChunkedArray):
+                mask = mask.combine_chunks()
+            mask_np = mask.to_numpy(zero_copy_only=False)
+            if mask_np is None or not mask_np.any():
+                if limit_rows and total >= limit_rows:
+                    break
+                continue
+
+            table = pa.Table.from_batches([batch])
+            key_df = table.select([c for c in ["platform_name", "offer_id", day_col] if c in table.column_names]).to_pandas()
+            key_df = key_df.loc[mask_np]
+            if key_df.empty:
+                if limit_rows and total >= limit_rows:
+                    break
+                continue
+            pn = key_df["platform_name"].apply(lambda x: str(x) if pd.notna(x) else "")
+            oid = key_df["offer_id"].apply(lambda x: str(x) if pd.notna(x) else "")
+            key_df["entity_id"] = pn + "|" + oid
+            key_df["_day"] = pd.to_datetime(key_df[day_col], errors="coerce", utc=True).dt.date
+            sub = key_df[["entity_id", "_day"]].drop_duplicates()
             for t in sub.itertuples(index=False):
                 eid = str(getattr(t, "entity_id", ""))
                 day_val = getattr(t, "_day", None)
-                day_str = str(day_val) if day_val is not None and (not hasattr(day_val, "__len__") or len(str(day_val)) < 30) else ""
+                day_str = str(day_val) if day_val is not None else ""
                 seen.add((eid, day_str))
             if limit_rows and total >= limit_rows:
                 break
         return total, len(seen)
     except Exception as e:
-        logger.warning("raw_structured_signal scan failed: %s", e)
-        return 0, 0
+        raise RuntimeError(f"raw_structured_signal scan failed: {e}")
+
+
+def _raw_entity_day_count(raw_path: Path, logger: logging.Logger, limit_rows: Optional[int] = None) -> int:
+    """Count distinct (entity_id, day) from raw offers (no structured filter)."""
+    try:
+        from deltalake import DeltaTable
+        import pyarrow as pa
+        dt = DeltaTable(str(raw_path))
+        dset = dt.to_pyarrow_dataset()
+        schema_names = [f.name for f in dset.schema]
+        day_col = "crawled_date_day" if "crawled_date_day" in schema_names else ("crawled_date" if "crawled_date" in schema_names else ("snapshot_ts" if "snapshot_ts" in schema_names else None))
+        if not day_col:
+            raise RuntimeError("raw offers missing day column (crawled_date_day/crawled_date)")
+        read_cols = list(dict.fromkeys([c for c in ["platform_name", "offer_id", day_col] if c in schema_names]))
+        if "platform_name" not in read_cols or "offer_id" not in read_cols or day_col not in read_cols:
+            raise RuntimeError("raw offers missing key columns for entity-day scan")
+        seen: set = set()
+        total = 0
+        for batch in dset.scanner(columns=read_cols, batch_size=200_000).to_batches():
+            total += batch.num_rows
+            table = pa.Table.from_batches([batch])
+            df = table.to_pandas()
+            if df.empty:
+                if limit_rows and total >= limit_rows:
+                    break
+                continue
+            pn = df["platform_name"].apply(lambda x: str(x) if pd.notna(x) else "")
+            oid = df["offer_id"].apply(lambda x: str(x) if pd.notna(x) else "")
+            df["entity_id"] = pn + "|" + oid
+            df["_day"] = pd.to_datetime(df[day_col], errors="coerce", utc=True).dt.date
+            sub = df[["entity_id", "_day"]].drop_duplicates()
+            for t in sub.itertuples(index=False):
+                eid = str(getattr(t, "entity_id", ""))
+                day_val = getattr(t, "_day", None)
+                day_str = str(day_val) if day_val is not None else ""
+                seen.add((eid, day_str))
+            if limit_rows and total >= limit_rows:
+                break
+        return len(seen)
+    except Exception as e:
+        raise RuntimeError(f"raw_entity_day scan failed: {e}")
 
 
 def _raw_offers_stats(path: Path, logger: logging.Logger, limit_rows: Optional[int] = None) -> Dict[str, Any]:
@@ -134,32 +250,24 @@ def _raw_offers_stats(path: Path, logger: logging.Logger, limit_rows: Optional[i
         from deltalake import DeltaTable
         dt = DeltaTable(str(path))
         dset = dt.to_pyarrow_dataset()
-        cols = ["platform_name", "offer_id", "crawled_date_day"]
         schema_names = [f.name for f in dset.schema]
-        read_cols = [c for c in cols if c in schema_names]
-        if not read_cols:
+        day_col = "crawled_date_day" if "crawled_date_day" in schema_names else ("crawled_date" if "crawled_date" in schema_names else ("snapshot_ts" if "snapshot_ts" in schema_names else None))
+        if not day_col:
             return {"version": ver, "active_files": nfiles, "row_count_total": 0, "row_count_by_year": {}}
-        scanner = dset.scanner(columns=read_cols, batch_size=200_000)
-        frames = []
-        seen = 0
+        scanner = dset.scanner(columns=[day_col], batch_size=200_000)
+        total = 0
+        by_year: Dict[str, int] = {}
         for batch in scanner.to_batches():
             df = batch.to_pandas()
-            frames.append(df)
-            seen += len(df)
-            if limit_rows and seen >= limit_rows:
+            total += len(df)
+            if not df.empty:
+                years = pd.to_datetime(df[day_col], errors="coerce").dt.year
+                vc = years.dropna().astype(int).value_counts().to_dict()
+                for k, v in vc.items():
+                    by_year[str(k)] = by_year.get(str(k), 0) + int(v)
+            if limit_rows and total >= limit_rows:
                 break
-        if not frames:
-            return {"version": ver, "active_files": nfiles, "row_count_total": 0, "row_count_by_year": {}}
-        df = pd.concat(frames, ignore_index=True)
-        if limit_rows and len(df) > limit_rows:
-            df = df.head(limit_rows)
-        if "crawled_date_day" in df.columns:
-            df["_year"] = pd.to_datetime(df["crawled_date_day"], errors="coerce").dt.year
-            by_year = df["_year"].dropna().astype(int).value_counts().sort_index().to_dict()
-            by_year = {str(k): int(v) for k, v in by_year.items()}
-        else:
-            by_year = {}
-        return {"version": ver, "active_files": nfiles, "row_count_total": int(len(df)), "row_count_by_year": by_year}
+        return {"version": ver, "active_files": nfiles, "row_count_total": int(total), "row_count_by_year": by_year}
     except Exception as e:
         logger.warning("raw_offers scan failed: %s", e)
         return {"version": ver, "active_files": nfiles, "row_count_total": None, "row_count_by_year": {}}
@@ -173,32 +281,24 @@ def _raw_edgar_stats(path: Path, logger: logging.Logger, limit_rows: Optional[in
         from deltalake import DeltaTable
         dt = DeltaTable(str(path))
         dset = dt.to_pyarrow_dataset()
-        cols = ["cik", "filed_date"]
         schema_names = [f.name for f in dset.schema]
-        read_cols = [c for c in cols if c in schema_names]
-        if not read_cols:
+        day_col = "filed_date" if "filed_date" in schema_names else ("filing_date" if "filing_date" in schema_names else None)
+        if not day_col:
             return {"version": ver, "active_files": nfiles, "row_count_total": 0, "row_count_by_year": {}}
-        scanner = dset.scanner(columns=read_cols, batch_size=200_000)
-        frames = []
-        seen = 0
+        scanner = dset.scanner(columns=[day_col], batch_size=200_000)
+        total = 0
+        by_year: Dict[str, int] = {}
         for batch in scanner.to_batches():
             df = batch.to_pandas()
-            frames.append(df)
-            seen += len(df)
-            if limit_rows and seen >= limit_rows:
+            total += len(df)
+            if not df.empty:
+                years = pd.to_datetime(df[day_col], errors="coerce").dt.year
+                vc = years.dropna().astype(int).value_counts().to_dict()
+                for k, v in vc.items():
+                    by_year[str(k)] = by_year.get(str(k), 0) + int(v)
+            if limit_rows and total >= limit_rows:
                 break
-        if not frames:
-            return {"version": ver, "active_files": nfiles, "row_count_total": 0, "row_count_by_year": {}}
-        df = pd.concat(frames, ignore_index=True)
-        if limit_rows and len(df) > limit_rows:
-            df = df.head(limit_rows)
-        if "filed_date" in df.columns:
-            df["_year"] = pd.to_datetime(df["filed_date"], errors="coerce").dt.year
-            by_year = df["_year"].dropna().astype(int).value_counts().sort_index().to_dict()
-            by_year = {str(k): int(v) for k, v in by_year.items()}
-        else:
-            by_year = {}
-        return {"version": ver, "active_files": nfiles, "row_count_total": int(len(df)), "row_count_by_year": by_year}
+        return {"version": ver, "active_files": nfiles, "row_count_total": int(total), "row_count_by_year": by_year}
     except Exception as e:
         logger.warning("raw_edgar scan failed: %s", e)
         return {"version": ver, "active_files": nfiles, "row_count_total": None, "row_count_by_year": {}}
@@ -267,10 +367,21 @@ def main() -> None:
 
     raw_limit = None if args.raw_scan_limit == 0 else args.raw_scan_limit
     raw_offers = _raw_offers_stats(args.raw_offers_delta, logger, limit_rows=raw_limit)
-    struct_cols = _structured_columns_from_contract(args.contract_wide or repo_root / "configs/column_contract_wide.yaml")
-    raw_struct_total, raw_struct_entity_day = _raw_structured_signal_entity_day(
-        args.raw_offers_delta, struct_cols, logger, limit_rows=raw_limit
-    )
+    struct_cols, nested_cols = _structured_columns_from_contract(args.contract_wide or repo_root / "configs/column_contract_wide.yaml")
+    raw_struct_total = 0
+    raw_struct_entity_day = 0
+    try:
+        raw_struct_total, raw_struct_entity_day = _raw_structured_signal_entity_day(
+            args.raw_offers_delta, struct_cols, nested_cols, logger, limit_rows=raw_limit
+        )
+    except Exception as e:
+        fail_reasons.append(str(e))
+
+    raw_entity_day_total = 0
+    try:
+        raw_entity_day_total = _raw_entity_day_count(args.raw_offers_delta, logger, limit_rows=raw_limit)
+    except Exception as e:
+        fail_reasons.append(str(e))
     raw_offers["row_count_total_no_cap"] = raw_offers.get("row_count_total")
     if raw_limit:
         raw_offers["sample_ratio"] = raw_limit
@@ -287,15 +398,16 @@ def main() -> None:
         "selection_note": "offers_core_full_daily",
         "manifest_selection": offers_core_manifest.get("selection", {}),
     }
-    if raw_struct_entity_day == 0 and offers_core["row_count"] > 0 and struct_cols:
-        raw_struct_entity_day = offers_core["row_count"]
-        logger.info("structured_signal scan failed; using offers_core row_count as fallback for entity_day")
+    if struct_cols and raw_struct_entity_day == 0:
+        fail_reasons.append("structured_signal entity-day count is 0 (scan failed or no signal detected)")
+    if raw_entity_day_total == 0:
+        fail_reasons.append("raw entity-day total is 0 (scan failed)")
 
     raw_vs_core_coverage: Dict[str, Any] = {}
-    if raw_offers.get("row_count_total") and raw_offers["row_count_total"] > 0 and offers_core["row_count"] > 0:
-        raw_vs_core_coverage["raw_row_count"] = raw_offers["row_count_total"]
-        raw_vs_core_coverage["core_row_count"] = offers_core["row_count"]
-        raw_vs_core_coverage["core_row_ratio"] = offers_core["row_count"] / raw_offers["row_count_total"]
+    if raw_entity_day_total > 0 and offers_core["row_count"] > 0:
+        raw_vs_core_coverage["raw_entity_day_count"] = raw_entity_day_total
+        raw_vs_core_coverage["core_entity_day_count"] = offers_core["row_count"]
+        raw_vs_core_coverage["core_coverage_rate"] = offers_core["row_count"] / raw_entity_day_total
 
     offers_text_manifest_path = args.offers_text_full_dir / "MANIFEST.json"
     if not offers_text_manifest_path.exists():
@@ -331,42 +443,52 @@ def main() -> None:
         edgar_store["manifest_exists"] = False
         fail_reasons.append("edgar_store_full_daily MANIFEST.json required but not found")
 
-    # Snapshots index vs edgar store alignment
+    # Snapshots index vs edgar store alignment (pair-level)
     snapshots_alignment = {}
     if args.snapshots_index_parquet and args.snapshots_index_parquet.exists():
         try:
             snap_df = pd.read_parquet(args.snapshots_index_parquet)
-            snap_count = len(snap_df)
-            snap_unique_cik = int(snap_df["cik"].nunique()) if "cik" in snap_df.columns else 0
-            # Check how many snapshots have edgar data
-            edgar_df = None
-            try:
-                import pyarrow.dataset as ds
-                dset = ds.dataset(str(args.edgar_store_dir), format="parquet", partitioning="hive")
-                edgar_df = dset.to_table(columns=["cik", "crawled_date_day"] if "crawled_date_day" in [f.name for f in dset.schema] else ["cik"]).to_pandas()
-            except Exception:
-                pass
-            if edgar_df is not None and "cik" in snap_df.columns:
-                snap_ciks = set(snap_df["cik"].dropna().astype(str))
-                edgar_ciks = set(edgar_df["cik"].dropna().astype(str))
-                cik_overlap = len(snap_ciks & edgar_ciks)
-                cik_gap = snap_ciks - edgar_ciks
-                snapshots_alignment = {
-                    "snapshots_count": snap_count,
-                    "snapshots_unique_cik": snap_unique_cik,
-                    "edgar_unique_cik": len(edgar_ciks),
-                    "cik_overlap": cik_overlap,
-                    "cik_coverage_rate": cik_overlap / len(snap_ciks) if snap_ciks else 0,
-                    "snapshots_to_edgar_coverage": cik_overlap / snap_count if snap_count else 0,
-                    "cik_gap_count": len(cik_gap),
-                    "gap_reasons_top_k": [
-                        "cik_in_snapshots_not_in_edgar_store",
-                        "date_range_mismatch_possible",
-                        "raw_edgar_no_filing_for_cik",
-                    ][:3],
-                }
-            else:
-                snapshots_alignment = {"snapshots_count": snap_count, "snapshots_unique_cik": snap_unique_cik}
+            if "crawled_date_day" not in snap_df.columns and "snapshot_ts" in snap_df.columns:
+                snap_df["crawled_date_day"] = pd.to_datetime(snap_df["snapshot_ts"], errors="coerce", utc=True).dt.date.astype(str)
+            snap_df = snap_df.dropna(subset=["cik", "crawled_date_day"])
+            snap_df["cik"] = snap_df["cik"].astype(str)
+            snap_pairs = snap_df[["cik", "crawled_date_day"]].drop_duplicates()
+            total_pairs = len(snap_pairs)
+
+            import pyarrow.dataset as ds
+            dset = ds.dataset(str(args.edgar_store_dir), format="parquet", partitioning="hive")
+            edgar_cols = [c for c in ["cik", "crawled_date_day"] if c in [f.name for f in dset.schema]]
+            edgar_df = dset.to_table(columns=edgar_cols).to_pandas()
+            if "crawled_date_day" not in edgar_df.columns and "snapshot_ts" in edgar_df.columns:
+                edgar_df["crawled_date_day"] = pd.to_datetime(edgar_df["snapshot_ts"], errors="coerce", utc=True).dt.date.astype(str)
+            edgar_df = edgar_df.dropna(subset=["cik", "crawled_date_day"])
+            edgar_df["cik"] = edgar_df["cik"].astype(str)
+            edgar_pairs = edgar_df[["cik", "crawled_date_day"]].drop_duplicates()
+
+            matched = snap_pairs.merge(edgar_pairs, on=["cik", "crawled_date_day"], how="inner")
+            matched_pairs = len(matched)
+            edgar_ciks = set(edgar_pairs["cik"].dropna().astype(str))
+
+            # Gap reasons
+            missing = snap_pairs.merge(edgar_pairs, on=["cik", "crawled_date_day"], how="left", indicator=True)
+            missing = missing[missing["_merge"] == "left_only"].drop(columns=["_merge"])
+            reason_counts: Dict[str, int] = {"cik_not_in_edgar_store": 0, "date_mismatch": 0}
+            if not missing.empty:
+                reason_counts["cik_not_in_edgar_store"] = int((~missing["cik"].isin(edgar_ciks)).sum())
+                reason_counts["date_mismatch"] = int((missing["cik"].isin(edgar_ciks)).sum())
+                debug_dir = args.output_dir / "debug"
+                debug_dir.mkdir(parents=True, exist_ok=True)
+                missing.head(1000).to_csv(debug_dir / "snapshots_edgar_missing_pairs_sample.csv", index=False)
+
+            snapshots_alignment = {
+                "snapshots_pairs_total": total_pairs,
+                "snapshots_pairs_matched": matched_pairs,
+                "snapshots_to_edgar_coverage": (matched_pairs / total_pairs) if total_pairs else 0,
+                "snapshots_unique_cik": int(snap_pairs["cik"].nunique()),
+                "edgar_unique_cik": int(edgar_pairs["cik"].nunique()),
+                "gap_reasons_top_k": sorted(reason_counts, key=lambda k: -reason_counts[k])[:3],
+                "gap_reason_counts": reason_counts,
+            }
         except Exception as e:
             logger.warning("snapshots_index alignment check failed: %s", e)
 
@@ -375,7 +497,7 @@ def main() -> None:
     if raw_edgar["version"] is None:
         fail_reasons.append("raw_edgar Delta version missing")
     if args.snapshots_index_parquet and args.snapshots_index_parquet.exists():
-        if not snapshots_alignment or ("cik_coverage_rate" not in snapshots_alignment and "snapshots_to_edgar_coverage" not in snapshots_alignment):
+        if not snapshots_alignment or "snapshots_to_edgar_coverage" not in snapshots_alignment:
             fail_reasons.append("snapshots_to_edgar coverage metrics required when snapshots_index provided")
 
     if args.reference_json and args.reference_json.exists():
@@ -392,16 +514,26 @@ def main() -> None:
             fail_reasons.append(f"raw_edgar active_files mismatch: ref={re_.get('active_files')} vs current={raw_edgar.get('active_files')}")
 
     text_coverage: Dict[str, Any] = {}
-    if raw_offers.get("row_count_total") and offers_text.get("row_count"):
-        text_coverage["raw_rows"] = raw_offers["row_count_total"]
-        text_coverage["text_rows"] = offers_text["row_count"]
-        text_coverage["text_coverage_rate"] = offers_text["row_count"] / raw_offers["row_count_total"] if raw_offers["row_count_total"] else 0
+    try:
+        offers_text_parquet = args.offers_text_full_dir / "offers_text.parquet"
+        if offers_text_parquet.exists():
+            core_keys = _key_df_from_parquet(args.offers_core_parquet)
+            text_keys = _key_df_from_parquet(offers_text_parquet)
+            if not core_keys.empty and not text_keys.empty:
+                matched = core_keys.merge(text_keys, on=["entity_id", "crawled_date_day"], how="inner")
+                text_coverage["core_pairs_total"] = len(core_keys)
+                text_coverage["text_pairs_total"] = len(text_keys)
+                text_coverage["matched_pairs"] = len(matched)
+                text_coverage["text_coverage_rate"] = len(matched) / len(core_keys) if len(core_keys) else 0
+    except Exception as e:
+        fail_reasons.append(f"text coverage computation failed: {e}")
 
     offers_core_entity_day = offers_core["row_count"]
     struct_covered = offers_core_entity_day / raw_struct_entity_day if raw_struct_entity_day else 0.0
     report = {
         "host": host,
         "raw_offers_total_rows": raw_offers.get("row_count_total"),
+        "raw_entity_day_total": raw_entity_day_total,
         "raw_structured_signal_entity_day_count": raw_struct_entity_day,
         "offers_core_entity_day_count": offers_core_entity_day,
         "structured_signal_covered_by_core": struct_covered,
@@ -435,6 +567,7 @@ def main() -> None:
         "## Structured-Signal Coverage",
         "",
         f"- raw_offers_total_rows: {report.get('raw_offers_total_rows')}",
+        f"- raw_entity_day_total: {report.get('raw_entity_day_total')}",
         f"- raw_structured_signal_entity_day_count: {report.get('raw_structured_signal_entity_day_count')}",
         f"- offers_core_entity_day_count: {report.get('offers_core_entity_day_count')}",
         f"- structured_signal_covered_by_core: {report.get('structured_signal_covered_by_core')}",
@@ -451,8 +584,8 @@ def main() -> None:
         "",
         "## Coverage",
         "",
-        f"- **raw vs core:** {raw_vs_core_coverage.get('core_row_ratio', 'N/A')}",
-        f"- **text coverage:** {text_coverage.get('text_coverage_rate', 'N/A')}",
+        f"- **raw vs core (entity-day):** {raw_vs_core_coverage.get('core_coverage_rate', 'N/A')}",
+        f"- **text coverage (pairs):** {text_coverage.get('text_coverage_rate', 'N/A')}",
         "",
         "## Snapshots→EDGAR Coverage",
         "",
