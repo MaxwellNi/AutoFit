@@ -1,6 +1,7 @@
 #!/bin/bash
 #SBATCH --job-name=wide_freeze_cpu
 #SBATCH --partition=batch
+#SBATCH --qos=normal
 #SBATCH --cpus-per-task=28
 #SBATCH --mem=120G
 #SBATCH --time=2-00:00:00
