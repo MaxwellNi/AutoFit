@@ -22,6 +22,24 @@ echo "WIDE_STAMP=${WIDE_STAMP}"
 echo "WIDE_ANALYSIS=${WIDE_ANALYSIS}"
 echo "SQLITE_DIR=${SQLITE_DIR}"
 
+# Preflight: ensure deltalake is available
+if ! python - <<'PY' >/dev/null 2>&1
+import deltalake  # noqa: F401
+print("deltalake_ok", deltalake.__version__)
+PY
+then
+  echo "deltalake missing; attempting install in active env..."
+  if command -v micromamba >/dev/null 2>&1; then
+    micromamba install -y -c conda-forge deltalake
+  else
+    python -m pip install deltalake
+  fi
+  python - <<'PY'
+import deltalake
+print("deltalake_ok", deltalake.__version__)
+PY
+fi
+
 # 1) Raw inventory
 PYTHONUNBUFFERED=1 python scripts/profile_raw_delta_columns.py \
   --raw_delta data/raw/offers --mode offers \
