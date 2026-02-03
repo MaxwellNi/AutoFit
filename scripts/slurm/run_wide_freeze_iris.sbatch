@@ -1,9 +1,8 @@
 #!/bin/bash
-#SBATCH --job-name=wide_freeze
-#SBATCH --partition=gpu
-#SBATCH --gres=gpu:1
-#SBATCH --cpus-per-task=16
-#SBATCH --mem=128G
+#SBATCH --job-name=wide_freeze_cpu
+#SBATCH --partition=batch
+#SBATCH --cpus-per-task=28
+#SBATCH --mem=120G
 #SBATCH --time=2-00:00:00
 #SBATCH --output=runs/slurm/%x_%j.out
 #SBATCH --error=runs/slurm/%x_%j.err
@@ -26,6 +25,9 @@ fi
 
 export PYTHONPATH=src
 export PYTHONUNBUFFERED=1
+export OMP_NUM_THREADS="${SLURM_CPUS_PER_TASK:-1}"
+export OPENBLAS_NUM_THREADS="${SLURM_CPUS_PER_TASK:-1}"
+export MKL_NUM_THREADS="${SLURM_CPUS_PER_TASK:-1}"
 
 # Defaults (override via sbatch --export)
 export WIDE_STAMP="${WIDE_STAMP:-$(date +%Y%m%d_%H%M%S)}"
