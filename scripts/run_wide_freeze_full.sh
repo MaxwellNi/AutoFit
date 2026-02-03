@@ -40,6 +40,24 @@ print("deltalake_ok", deltalake.__version__)
 PY
 fi
 
+# Preflight: ensure duckdb is available (faster dedup backend)
+if ! python - <<'PY' >/dev/null 2>&1
+import duckdb  # noqa: F401
+print("duckdb_ok", duckdb.__version__)
+PY
+then
+  echo "duckdb missing; attempting install in active env..."
+  if command -v micromamba >/dev/null 2>&1; then
+    micromamba install -y -c conda-forge duckdb
+  else
+    python -m pip install duckdb
+  fi
+  python - <<'PY'
+import duckdb
+print("duckdb_ok", duckdb.__version__)
+PY
+fi
+
 # 1) Raw inventory
 PYTHONUNBUFFERED=1 python scripts/profile_raw_delta_columns.py \
   --raw_delta data/raw/offers --mode offers \
@@ -74,6 +92,7 @@ python scripts/build_offers_core_full_snapshot.py \
   --output_dir "runs/offers_core_full_snapshot_wide_${WIDE_STAMP}" \
   --overwrite 1 \
   --sqlite_dir "${SQLITE_DIR}" \
+  --dedup_backend duckdb \
   --min_free_gb "${MIN_FREE_GB}" \
   2>&1 | tee "${LOGS}/build_snapshot_wide_${WIDE_STAMP}.log"
 
