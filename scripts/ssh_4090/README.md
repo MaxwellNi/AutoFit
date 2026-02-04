@@ -48,6 +48,9 @@ CLUSTER_HOST=access1 CLUSTER_USER=npin \
 LOCAL_ROOT=/Users/ni.pin/project/repo_root \
 WIDE_STAMP=20260203_225620 \
 bash scripts/pull_outputs_from_cluster.sh
+
+# ULHPC default login is access-iris.uni.lu:8022 (already defaulted in script)
+# If needed: CLUSTER_HOST=access-iris.uni.lu SSH_PORT=8022 ...
 ```
 
 Alternative (if cluster can reach your Mac): from cluster, push to Mac:

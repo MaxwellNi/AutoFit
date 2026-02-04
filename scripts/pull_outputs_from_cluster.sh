@@ -3,7 +3,8 @@ set -euo pipefail
 
 # Run this script on your Mac (or any machine that can SSH to the cluster).
 
-CLUSTER_HOST="${CLUSTER_HOST:-access1}"
+# ULHPC login endpoint uses non-default SSH port 8022.
+CLUSTER_HOST="${CLUSTER_HOST:-access-iris.uni.lu}"
 CLUSTER_USER="${CLUSTER_USER:-npin}"
 CLUSTER="${CLUSTER_USER}@${CLUSTER_HOST}"
 CLUSTER_REPO_ROOT="${CLUSTER_REPO_ROOT:-/home/users/npin/repo_root}"
@@ -12,7 +13,8 @@ CLUSTER_RUNS_ROOT="${CLUSTER_RUNS_ROOT:-/work/projects/eint/runs}"
 LOCAL_ROOT="${LOCAL_ROOT:-$(pwd)}"
 LOCAL_RUNS="${LOCAL_RUNS:-${LOCAL_ROOT}/runs}"
 WIDE_STAMP="${WIDE_STAMP:-20260203_225620}"
-SSH_PORT="${SSH_PORT:-22}"
+SSH_PORT="${SSH_PORT:-8022}"
+SSH_EXTRA_OPTS="${SSH_EXTRA_OPTS:-}"
 
 RSYNC_OPTS="${RSYNC_OPTS:--av --partial --progress}"
 
@@ -22,14 +24,14 @@ sync_dir() {
   local src="$1"
   local dest="$2"
   echo "Pull: ${CLUSTER}:${src} -> ${dest}"
-  rsync ${RSYNC_OPTS} -e "ssh -p ${SSH_PORT}" "${CLUSTER}:${src%/}/" "${dest%/}/"
+  rsync ${RSYNC_OPTS} -e "ssh -p ${SSH_PORT} ${SSH_EXTRA_OPTS}" "${CLUSTER}:${src%/}/" "${dest%/}/"
 }
 
 sync_file() {
   local src="$1"
   local dest="$2"
   echo "Pull: ${CLUSTER}:${src} -> ${dest}"
-  rsync ${RSYNC_OPTS} -e "ssh -p ${SSH_PORT}" "${CLUSTER}:${src}" "${dest}"
+  rsync ${RSYNC_OPTS} -e "ssh -p ${SSH_PORT} ${SSH_EXTRA_OPTS}" "${CLUSTER}:${src}" "${dest}"
 }
 
 # Core outputs
