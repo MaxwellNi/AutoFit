@@ -40,3 +40,16 @@ INDEX=8 bash scripts/ssh_4090/launch_iris_4090.sh
 - `runs/orchestrator/20260129_073037/analysis/wide_${WIDE_STAMP}`
 - `runs/offers_text_v1_20260129_073037_full` (if referenced in audits)
 - `runs/selections/b11_v2_canonical/sampled_entities.json`
+
+## Data sync (via Mac)
+From the cluster host, sync outputs to your Mac:
+```bash
+MAC_HOST=<mac-host-or-ip> MAC_USER=<mac-user> \
+WIDE_STAMP=20260203_225620 bash scripts/sync_outputs_to_mac.sh
+```
+
+From your Mac, sync to 4090:
+```bash
+REMOTE_HOST=4090 REMOTE_USER=pni \
+WIDE_STAMP=20260203_225620 bash scripts/sync_outputs_to_4090.sh
+```
