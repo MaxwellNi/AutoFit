@@ -1,89 +1,78 @@
 # Execution Plan (Wide Freeze WIDE2)
 
-This plan mirrors the required Step A–D sequence and maps to the full pipeline script.
+This plan is updated with the actual execution history in this thread and the current handoff path (cluster -> Mac -> 4090).
 
-## Step A — Wide Build (Snapshot/Daily + Extras + MANIFEST)
-**Objective:** Rebuild `offers_core_snapshot/daily` with full wide columns and nested derived features, including complete MANIFEST fields.
+## Current Progress Snapshot
+- Completed: Steps 1-3 for `WIDE_STAMP=20260203_225620`.
+- Not completed: Steps 4-10.
+- Known successful artifacts:
+  - `runs/offers_core_full_snapshot_wide_20260203_225620/offers_core_snapshot.parquet`
+  - `runs/offers_core_full_snapshot_wide_20260203_225620/MANIFEST.json`
+- Known failed attempts:
+  - `11029034`: OOM at Step 4.
+  - `11029184`: failed before Step 4 due to missing `bash` in `srun`.
 
-Run via the pipeline script:
-- `scripts/run_wide_freeze_full.sh` (Steps 3–7)
+## Work Already Done (Code/Scripts)
+1. Added robust resume pipeline:
+   - `scripts/run_wide_freeze_from_daily.sh` (Step 4-10)
+   - `scripts/slurm/run_wide_freeze_aion_from_daily.sbatch`
+2. Added OOM protection:
+   - `DUCKDB_MEMORY_LIMIT_GB` and `DUCKDB_THREADS` in `scripts/build_offers_core_full_daily.py`
+   - default limits exported in sbatch wrappers.
+3. Added runtime hardening:
+   - `BASH_BIN` detection in sbatch wrappers.
+   - dependency preflight (`duckdb`, `deltalake`) in resume sbatch.
+4. Added monitor automation:
+   - `scripts/monitor_wide_freeze_resume.sh`
+   - `scripts/slurm/monitor_wide_freeze_aion.sbatch`
+5. Added 4090 local adapters:
+   - `scripts/ssh_4090/*.sh`
+6. Added sync path:
+   - cluster push Mac: `scripts/sync_outputs_to_mac.sh`
+   - Mac push 4090: `scripts/sync_outputs_to_4090.sh`
+   - Mac pull cluster (preferred): `scripts/pull_outputs_from_cluster.sh`
 
-Key outputs:
-- `runs/offers_core_full_snapshot_wide_${WIDE_STAMP}/offers_core_snapshot.parquet`
-- `runs/offers_core_full_snapshot_wide_${WIDE_STAMP}/offers_extras_snapshot.parquet`
-- `runs/offers_core_full_daily_wide_${WIDE_STAMP}/offers_core_daily.parquet`
-- `runs/offers_core_full_daily_wide_${WIDE_STAMP}/offers_extras_daily.parquet`
-- `MANIFEST.json` in each directory (with output_columns, dropped_columns, schema, rows, versions)
+## Active Queue Status (Cluster)
+- `5168794` pending (`wide_freeze_aion_resume`)
+- `5168809` pending (`wide_freeze_aion_resume`)
+- `5168800` pending (`monitor_wide_freeze_aion`)
+- Reason: `Priority` (no running job yet).
 
-## Step B — Raw Inventory (10M Samples)
-**Objective:** Produce reproducible raw inventory parquet and public audit anchors.
+## Next Action Plan
 
-Outputs (under analysis):
-- `raw_offers_profile.json/.md`
-- `raw_edgar_profile.json/.md`
-- `raw_*_inventory.parquet`
-- `docs/audits/raw_*_profile_${WIDE_STAMP}.md` + MANIFEST update
+### A. Finish data transfer chain
+1. On Mac, authenticate to ULHPC using the intended key (`id_ed25519_iris`).
+2. Pull cluster outputs to Mac:
+   - `bash scripts/pull_outputs_from_cluster.sh`
+3. Push pulled outputs from Mac to 4090:
+   - `bash scripts/sync_outputs_to_4090.sh`
 
-## Step C — Highest-Tier Audits (No Fallbacks)
-**Objective:** Ensure full-scan coverage and strict value-level checks.
-
-Audits:
-- `scripts/audit_column_manifest.py`
-  - Uses `configs/column_contract_wide.yaml`
-  - EDGAR recompute requires `total_compared >= 200` and `diff_count == 0`
-- `scripts/audit_raw_cardinality_coverage.py`
-  - `raw_scan_limit=0`
-  - Computes raw entity-day totals, structured-signal totals, text coverage by keys, pair-level snapshots→edgar coverage
-  - Writes debug samples under `analysis/**/debug`
-
-## Step D — Pointer & Candidate Selection
-**Objective:** Ensure single source of truth for Block 3.
-
-Outputs:
-- `runs/orchestrator/20260129_073037/analysis/wide_${WIDE_STAMP}/freeze_candidates.{json,md}`
-- Updated `docs/audits/FULL_SCALE_POINTER.yaml`
-- `freeze_pointer_status.{json,md}`
-- `docs/audits/MANIFEST.json` updated with anchor hashes
-
----
-
-# Recommended Execution (Iris/Aion Slurm)
-
-## Update code
+### B. Execute remaining steps on 4090
+Run Step 4-10 directly on 4090 (non-SLURM):
 ```bash
-cd ~/repo_root
-git pull --ff-only
+WIDE_STAMP=20260203_225620 bash scripts/ssh_4090/run_wide_freeze_aion_from_daily_4090.sh
 ```
 
-## Submit job (iris or aion)
-```bash
-sbatch -M iris scripts/slurm/run_wide_freeze_iris.sbatch
-# or
-sbatch -M aion scripts/slurm/run_wide_freeze_iris.sbatch
-```
+### C. Validate completion gates
+Required for completion:
+- Step 4: `runs/offers_core_full_daily_wide_20260203_225620/offers_core_daily.parquet`, `MANIFEST.json`
+- Step 5: `runs/offers_core_full_daily_wide_20260203_225620/snapshots_index/`
+- Step 6: `runs/edgar_feature_store_full_daily_wide_20260203_225620/edgar_features/`
+- Step 7: `runs/multiscale_full_wide_20260203_225620/MANIFEST.json`
+- Step 8: `analysis/wide_20260203_225620/column_manifest.{json,md}`
+- Step 9: `analysis/wide_20260203_225620/raw_cardinality_coverage_wide_20260203_225620.{json,md}`
+- Step 10: `analysis/wide_20260203_225620/freeze_candidates.{json,md}` and updated `docs/audits/FULL_SCALE_POINTER.yaml`
 
-## Optional resource overrides
-```bash
-sbatch -M iris --partition=bigmem --time=2-00:00:00 scripts/slurm/run_wide_freeze_iris.sbatch
-```
+## Fallback Rules (if 4090 run fails)
+1. OOM in Step 4:
+   - `DUCKDB_THREADS=4`
+   - `DUCKDB_MEMORY_LIMIT_GB=<~60% of RAM>`
+2. Missing dependency:
+   - install in active env, rerun same command.
+3. Missing input paths:
+   - re-run sync scripts for the missing directories only.
 
-## Environment overrides
-```bash
-sbatch -M iris --export=ALL,WIDE_STAMP=20260203_120000,SQLITE_DIR=/work/$USER/sqlite_wide2,MIN_FREE_GB=200 \
-  scripts/slurm/run_wide_freeze_iris.sbatch
-```
-
----
-
-# Resource Guidance (for full run)
-- **CPU:** 1 node, 28 cores
-- **RAM:** 120–150 GB
-- **Disk:** > 200 GB free for SQLite + intermediates
-- **Walltime:** 1–2 days (I/O bound)
-
----
-
-# Gate Success Criteria (Block 3)
-- `column_manifest.json`: `must_keep_missing == 0`, `edgar_recompute.total_compared >= 200`, `diff_count == 0`
-- `raw_cardinality_coverage.json`: full-scan counts, pair-level snapshots→edgar coverage, no fallback
-- `FULL_SCALE_POINTER.yaml` points to the **WIDE2** paths only
+## Block 3 Exit Criteria
+- All Step 4-10 artifacts exist and are internally consistent.
+- Audit JSON/MD outputs present and PASS thresholds met.
+- `FULL_SCALE_POINTER.yaml` points only to final wide paths for `WIDE_STAMP=20260203_225620`.
