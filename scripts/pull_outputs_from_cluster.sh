@@ -23,6 +23,10 @@ mkdir -p "${LOCAL_RUNS}" "${LOCAL_ROOT}/docs/audits" "${LOCAL_ROOT}/configs"
 sync_dir() {
   local src="$1"
   local dest="$2"
+  if ! ssh -p "${SSH_PORT}" ${SSH_EXTRA_OPTS} "${CLUSTER}" "[ -d \"${src}\" ]"; then
+    echo "Skip (missing remote dir): ${CLUSTER}:${src}"
+    return 0
+  fi
   echo "Pull: ${CLUSTER}:${src} -> ${dest}"
   rsync ${RSYNC_OPTS} -e "ssh -p ${SSH_PORT} ${SSH_EXTRA_OPTS}" "${CLUSTER}:${src%/}/" "${dest%/}/"
 }
@@ -30,6 +34,10 @@ sync_dir() {
 sync_file() {
   local src="$1"
   local dest="$2"
+  if ! ssh -p "${SSH_PORT}" ${SSH_EXTRA_OPTS} "${CLUSTER}" "[ -f \"${src}\" ]"; then
+    echo "Skip (missing remote file): ${CLUSTER}:${src}"
+    return 0
+  fi
   echo "Pull: ${CLUSTER}:${src} -> ${dest}"
   rsync ${RSYNC_OPTS} -e "ssh -p ${SSH_PORT} ${SSH_EXTRA_OPTS}" "${CLUSTER}:${src}" "${dest}"
 }
