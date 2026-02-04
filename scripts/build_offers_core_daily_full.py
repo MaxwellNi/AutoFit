@@ -96,7 +96,7 @@ def _align_columns(df: pd.DataFrame, cols: List[str]) -> pd.DataFrame:
 def _arrow_type_for(type_str: str, override: Optional[str] = None):
     import pyarrow as pa
     if override == "string":
-        return pa.string()
+        return pa.large_string()
     if override == "float":
         return pa.float64()
     tl = str(type_str).lower()
@@ -106,7 +106,7 @@ def _arrow_type_for(type_str: str, override: Optional[str] = None):
         return pa.float64()
     if "timestamp" in tl or "date" in tl:
         return pa.string()
-    return pa.string()
+    return pa.large_string()
 
 
 def _arrow_schema_for(cols: List[str], schema_types: Dict[str, str], overrides: Dict[str, str]):
@@ -313,6 +313,23 @@ def _write_part_parquet(
 ) -> int:
     import pyarrow as pa
     import pyarrow.parquet as pq
+
+    # Coerce pandas dtypes to match schema (avoid ArrowTypeError on datetime->string)
+    try:
+        for field in schema:
+            col = field.name
+            if col not in df.columns:
+                continue
+            if pa.types.is_string(field.type) or pa.types.is_large_string(field.type):
+                if pd.api.types.is_datetime64_any_dtype(df[col]) or pd.api.types.is_datetime64tz_dtype(df[col]):
+                    df[col] = df[col].astype("string")
+                elif not pd.api.types.is_string_dtype(df[col]):
+                    df[col] = df[col].astype("string")
+            elif pa.types.is_float64(field.type):
+                if not pd.api.types.is_numeric_dtype(df[col]):
+                    df[col] = pd.to_numeric(df[col], errors="coerce")
+    except Exception:
+        pass
 
     out_dir.mkdir(parents=True, exist_ok=True)
     out_path = out_dir / f"{prefix}_part_{part_idx:06d}.parquet"

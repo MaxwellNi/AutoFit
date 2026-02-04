@@ -259,8 +259,8 @@ offers_core_daily:
   - net_revenue_usd
   - revenue_usd
   - term_sheet
-  - entity_id
   - snapshot_ts
+  - entity_id
   nested_columns: &id004
   - comments
   - financial_statements_files
@@ -433,8 +433,8 @@ offers_core_snapshot:
   - net_revenue_usd
   - revenue_usd
   - term_sheet
-  - entity_id
   - snapshot_ts
+  - entity_id
   nested_columns: *id004
 offers_text:
   must_keep:
@@ -457,4 +457,4 @@ offers_text:
   - reasons_to_invest_text
   - updates_text
   - questions_text
-stamp: '20260202_044635'
+stamp: '20260203_215656'

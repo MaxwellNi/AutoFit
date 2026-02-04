@@ -1,6 +1,5 @@
 #!/usr/bin/env bash
-# Full wide-freeze pipeline with audits and pointer update.
-# Safe defaults; override via env vars (WIDE_STAMP, SQLITE_DIR, MIN_FREE_GB, RAW_SAMPLE_ROWS_OFFERS, RAW_SAMPLE_ROWS_EDGAR).
+# Resume wide-freeze pipeline from daily build (steps 4-10).
 set -euo pipefail
 export PYTHONUNBUFFERED=1
 
@@ -13,92 +12,23 @@ WIDE_ANALYSIS="${ANALYSIS_BASE}/wide_${WIDE_STAMP}"
 LOGS="${WIDE_ANALYSIS}/logs"
 mkdir -p "$LOGS" "${WIDE_ANALYSIS}/debug"
 
-RAW_SAMPLE_ROWS_OFFERS="${RAW_SAMPLE_ROWS_OFFERS:-10000000}"
-RAW_SAMPLE_ROWS_EDGAR="${RAW_SAMPLE_ROWS_EDGAR:-10000000}"
 SQLITE_DIR="${SQLITE_DIR:-${SLURM_TMPDIR:-runs/_sqlite_wide_${WIDE_STAMP}}}"
 MIN_FREE_GB="${MIN_FREE_GB:-200}"
 
+SNAPSHOT_DIR="runs/offers_core_full_snapshot_wide_${WIDE_STAMP}"
+if [ ! -f "${SNAPSHOT_DIR}/offers_core_snapshot.parquet" ]; then
+  echo "ERROR: snapshot not found at ${SNAPSHOT_DIR}/offers_core_snapshot.parquet" >&2
+  exit 2
+fi
+
 echo "WIDE_STAMP=${WIDE_STAMP}"
 echo "WIDE_ANALYSIS=${WIDE_ANALYSIS}"
+echo "SNAPSHOT_DIR=${SNAPSHOT_DIR}"
 echo "SQLITE_DIR=${SQLITE_DIR}"
-
-# Preflight: ensure deltalake is available
-if ! python - <<'PY' >/dev/null 2>&1
-import deltalake  # noqa: F401
-print("deltalake_ok", deltalake.__version__)
-PY
-then
-  echo "deltalake missing; attempting install in active env..."
-  if command -v micromamba >/dev/null 2>&1; then
-    micromamba install -y -c conda-forge deltalake
-  else
-    python -m pip install deltalake
-  fi
-  python - <<'PY'
-import deltalake
-print("deltalake_ok", deltalake.__version__)
-PY
-fi
-
-# Preflight: ensure duckdb is available (faster dedup backend)
-if ! python - <<'PY' >/dev/null 2>&1
-import duckdb  # noqa: F401
-print("duckdb_ok", duckdb.__version__)
-PY
-then
-  echo "duckdb missing; attempting install in active env..."
-  if command -v micromamba >/dev/null 2>&1; then
-    micromamba install -y -c conda-forge duckdb
-  else
-    python -m pip install duckdb
-  fi
-  python - <<'PY'
-import duckdb
-print("duckdb_ok", duckdb.__version__)
-PY
-fi
-
-# 1) Raw inventory
-PYTHONUNBUFFERED=1 python scripts/profile_raw_delta_columns.py \
-  --raw_delta data/raw/offers --mode offers \
-  --scan_sample_rows "${RAW_SAMPLE_ROWS_OFFERS}" \
-  --output_json "${WIDE_ANALYSIS}/raw_offers_profile.json" \
-  --output_md   "${WIDE_ANALYSIS}/raw_offers_profile.md" \
-  --inventory_out "${WIDE_ANALYSIS}/raw_offers_inventory.parquet" \
-  --docs_audits_dir docs/audits --audit_stamp "${WIDE_STAMP}" \
-  2>&1 | tee "${LOGS}/raw_inventory_offers_${WIDE_STAMP}.log"
-
-PYTHONUNBUFFERED=1 python scripts/profile_raw_delta_columns.py \
-  --raw_delta data/raw/edgar/accessions --mode edgar \
-  --scan_sample_rows "${RAW_SAMPLE_ROWS_EDGAR}" \
-  --output_json "${WIDE_ANALYSIS}/raw_edgar_profile.json" \
-  --output_md   "${WIDE_ANALYSIS}/raw_edgar_profile.md" \
-  --inventory_out "${WIDE_ANALYSIS}/raw_edgar_inventory.parquet" \
-  --docs_audits_dir docs/audits --audit_stamp "${WIDE_STAMP}" \
-  2>&1 | tee "${LOGS}/raw_inventory_edgar_${WIDE_STAMP}.log"
-
-# 2) Wide contract
-python scripts/build_column_contract_wide.py \
-  --inventory_offers "${WIDE_ANALYSIS}/raw_offers_inventory.parquet" \
-  --inventory_edgar "${WIDE_ANALYSIS}/raw_edgar_inventory.parquet" \
-  --output_yaml configs/column_contract_wide.yaml \
-  --output_md "docs/audits/column_contract_wide_${WIDE_STAMP}.md" \
-  2>&1 | tee "${LOGS}/column_contract_wide_${WIDE_STAMP}.log"
-
-# 3) offers_core_full_snapshot_wide (full scan)
-python scripts/build_offers_core_full_snapshot.py \
-  --raw_offers_delta data/raw/offers \
-  --contract configs/column_contract_wide.yaml \
-  --output_dir "runs/offers_core_full_snapshot_wide_${WIDE_STAMP}" \
-  --overwrite 1 \
-  --sqlite_dir "${SQLITE_DIR}" \
-  --dedup_backend duckdb \
-  --min_free_gb "${MIN_FREE_GB}" \
-  2>&1 | tee "${LOGS}/build_snapshot_wide_${WIDE_STAMP}.log"
 
 # 4) offers_core_full_daily_wide
 python scripts/build_offers_core_full_daily.py \
-  --snapshot_dir "runs/offers_core_full_snapshot_wide_${WIDE_STAMP}" \
+  --snapshot_dir "${SNAPSHOT_DIR}" \
   --output_dir "runs/offers_core_full_daily_wide_${WIDE_STAMP}" \
   --overwrite 1 \
   --backend duckdb \
@@ -175,4 +105,4 @@ python scripts/inspect_freeze_pointer.py \
   --output_dir "${WIDE_ANALYSIS}" \
   2>&1 | tee "${LOGS}/freeze_pointer_status_${WIDE_STAMP}.log"
 
-echo "Wide freeze complete. WIDE_STAMP=${WIDE_STAMP}"
+echo "Wide freeze resume complete. WIDE_STAMP=${WIDE_STAMP}"

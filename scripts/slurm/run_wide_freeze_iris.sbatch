@@ -1,8 +1,12 @@
-#!/bin/bash
-#SBATCH --job-name=wide_freeze_cpu
+#!/bin/bash -l
+#SBATCH --job-name=wide_freeze_iris
 #SBATCH --partition=batch
-#SBATCH --cpus-per-task=28
-#SBATCH --mem=120G
+#SBATCH --qos=normal
+#SBATCH -N 1
+#SBATCH --ntasks-per-node=2
+#SBATCH --ntasks-per-socket=1
+#SBATCH -c 14
+#SBATCH --mem=0
 #SBATCH --time=2-00:00:00
 #SBATCH --output=runs/slurm/%x_%j.out
 #SBATCH --error=runs/slurm/%x_%j.err
@@ -40,5 +44,6 @@ export HOST_TAG="${HOST_TAG:-iris}"
 echo "WIDE_STAMP=${WIDE_STAMP}"
 echo "SQLITE_DIR=${SQLITE_DIR}"
 echo "REPO_ROOT=${REPO_ROOT}"
+echo "SLURM_CLUSTER_NAME=${SLURM_CLUSTER_NAME:-unknown}"
 
-bash scripts/run_wide_freeze_full.sh
+srun --ntasks=1 --cpus-per-task="${SLURM_CPUS_PER_TASK:-1}" bash scripts/run_wide_freeze_full.sh
