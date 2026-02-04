@@ -42,7 +42,15 @@ INDEX=8 bash scripts/ssh_4090/launch_iris_4090.sh
 - `runs/selections/b11_v2_canonical/sampled_entities.json`
 
 ## Data sync (via Mac)
-From the cluster host, sync outputs to your Mac:
+Preferred: run this on your Mac to pull outputs from cluster:
+```bash
+CLUSTER_HOST=access1 CLUSTER_USER=npin \
+LOCAL_ROOT=/Users/ni.pin/project/repo_root \
+WIDE_STAMP=20260203_225620 \
+bash scripts/pull_outputs_from_cluster.sh
+```
+
+Alternative (if cluster can reach your Mac): from cluster, push to Mac:
 ```bash
 MAC_HOST=<mac-host-or-ip> MAC_USER=<mac-user> \
 WIDE_STAMP=20260203_225620 bash scripts/sync_outputs_to_mac.sh
