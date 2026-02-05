@@ -365,11 +365,20 @@ def compose_from_profile(profile_path: Path, config_path: Optional[Path] = None)
     return composer.compose(meta_features)
 
 
+def get_profile_path_from_pointer(pointer_path: Path = Path("docs/audits/FULL_SCALE_POINTER.yaml")) -> Path:
+    """Resolve profile path from FreezePointer."""
+    import yaml
+    data = yaml.safe_load(pointer_path.read_text(encoding="utf-8"))
+    stamp = data["stamp"]
+    # Profile is stored under orchestrator analysis
+    return Path(f"runs/orchestrator/20260129_073037/block3_{stamp}/profile/profile.json")
+
+
 if __name__ == "__main__":
-    # Example usage
+    # Example usage - resolve path via pointer
     import sys
     
-    profile_path = Path("runs/orchestrator/20260129_073037/block3_20260203_225620/profile/profile.json")
+    profile_path = get_profile_path_from_pointer()
     
     if profile_path.exists():
         result = compose_from_profile(profile_path)

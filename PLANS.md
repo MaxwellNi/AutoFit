@@ -94,9 +94,8 @@ python scripts/run_block3_benchmark.py \
 
 ### AutoFit Selection
 ```bash
-python scripts/run_auto_fit.py \
-    --profile runs/orchestrator/20260129_073037/block3_20260203_225620/profile/profile.json \
-    --config configs/block3.yaml
+python scripts/run_auto_fit.py --config configs/block3.yaml
+# Profile path resolved automatically via FreezePointer
 ```
 
 ---
@@ -104,17 +103,20 @@ python scripts/run_auto_fit.py \
 ## Artifacts Reference
 
 ### Freeze Artifacts (READ-ONLY)
-- `runs/offers_core_full_daily_wide_20260203_225620/offers_core_daily.parquet`
-- `runs/offers_text_v1_20260129_073037_full/offers_text.parquet`
-- `runs/edgar_feature_store_full_daily_wide_20260201_211317/`
+All paths resolved via `docs/audits/FULL_SCALE_POINTER.yaml`:
+- `${pointer.offers_core_daily.dir}/offers_core_daily.parquet`
+- `${pointer.offers_text.dir}/offers_text.parquet`
+- `${pointer.edgar_store_full_daily.dir}/`
+
+**Hard Rule**: No hard-coded stamp paths in production code.
 
 ### Block 3 Outputs
-- Verification: `runs/orchestrator/.../block3_20260203_225620/verify/`
-- Profile: `runs/orchestrator/.../block3_20260203_225620/profile/`
-- Benchmark: `runs/benchmarks/block3_20260203_225620/`
+- Verification: `runs/orchestrator/.../block3_${stamp}/verify/`
+- Profile: `runs/orchestrator/.../block3_${stamp}/profile/`
+- Benchmark: `runs/benchmarks/block3_${stamp}/`
 
 ---
 
 ## Commit History
 - `3ce5509` WIDE2 freeze seal complete, all gates PASS
-- (pending) Block 3 infrastructure + benchmark harness + docs
+- `5ca7fd8` Block3 init: benchmark harness + autofit + concept bottleneck + docs

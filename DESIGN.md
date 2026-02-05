@@ -40,9 +40,12 @@ docs/audits/FULL_SCALE_POINTER.yaml
         │
         ▼ (resolved by FreezePointer)
         │
-        ├─> offers_core_daily: runs/offers_core_full_daily_wide_20260203_225620/offers_core_daily.parquet
-        ├─> offers_text:       runs/offers_text_v1_20260129_073037_full/offers_text.parquet
-        └─> edgar_store:       runs/edgar_feature_store_full_daily_wide_20260201_211317/edgar_features/**
+        ├─> offers_core_daily: ${pointer.offers_core_daily.dir}/offers_core_daily.parquet
+        ├─> offers_text:       ${pointer.offers_text.dir}/offers_text.parquet
+        └─> edgar_store:       ${pointer.edgar_store_full_daily.dir}/edgar_features/**
+
+Note: All paths are resolved dynamically via FreezePointer.
+      No hard-coded stamp paths in production code.
 ```
 
 ### Join Keys
@@ -55,8 +58,8 @@ docs/audits/FULL_SCALE_POINTER.yaml
 ```python
 from src.narrative.data_preprocessing.block3_dataset import Block3Dataset
 
-ds = Block3Dataset()
-ds.run_consistency_checks()     # Verify referential integrity
+ds = Block3Dataset.from_pointer()  # Loads from FULL_SCALE_POINTER.yaml
+ds.run_consistency_checks()        # Verify referential integrity
 
 core_df = ds.get_offers_core_daily()
 text_df = ds.get_offers_text()
