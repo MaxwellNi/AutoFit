@@ -145,16 +145,16 @@
       "sha256": "0e2f0ca82288638f6fb05711fe7bd692d3083c1625063ee519e1a5483b8d3175"
     },
     {
-      "path": "docs/audits/raw_cardinality_coverage_wide_20260203_225620_20260129_073037.md",
-      "sha256": "427d210c4be98a738d846542b6c8993a117d9c62090fc28ebb7dde50c7e6ed9f"
-    },
-    {
       "path": "docs/audits/FULL_SCALE_POINTER.yaml",
       "sha256": "46bf273343c053adeb6ed5fb3c46858bfea107bdc30472dda7010ecd68a454a3"
     },
     {
       "path": "docs/audits/BLOCK3_READY_WIDE_20260203_225620.md",
-      "sha256": "a80d5f60cf903e1b25f1387466d764eed809ddd61d7f6871ebb0830dcb0473bc"
+      "sha256": "eee2f99248281c3b35d3b59325fde0ea9e701a76cdbae69fc8ec2a7fcf042a55"
+    },
+    {
+      "path": "docs/audits/raw_cardinality_coverage_wide_20260203_225620_20260129_073037.md",
+      "sha256": "427d210c4be98a738d846542b6c8993a117d9c62090fc28ebb7dde50c7e6ed9f"
     }
   ]
 }
