@@ -22,6 +22,7 @@ class ModelConfig:
     params: Dict[str, Any] = field(default_factory=dict)
     supports_quantiles: bool = False
     supports_probabilistic: bool = False
+    supports_missing: bool = False  # Handles missing values natively
     requires_sequences: bool = False
     optional_dependency: Optional[str] = None  # Package name if optional
 
