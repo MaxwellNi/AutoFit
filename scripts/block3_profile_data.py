@@ -459,9 +459,12 @@ def main():
     # Load dataset
     ds = Block3Dataset.from_pointer(args.pointer)
     
-    # Determine output directory
+    # Determine output directory (pointer-resolved)
     if args.output_dir is None:
-        output_dir = Path(f"runs/orchestrator/20260129_073037/block3_{ds.pointer.stamp}/profile")
+        # Use pointer-resolved base path
+        from src.narrative.auto_fit.rule_based_composer import get_profile_path_from_pointer
+        profile_dir = get_profile_path_from_pointer(args.pointer)
+        output_dir = profile_dir.parent
     else:
         output_dir = args.output_dir
     

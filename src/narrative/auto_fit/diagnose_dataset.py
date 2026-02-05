@@ -3,7 +3,6 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Dict, Optional, Sequence, Iterable
 import json
-import json
 
 import numpy as np
 import pandas as pd
@@ -25,8 +24,6 @@ def diagnose_dataset(
     time_col: str = "crawled_date",
     value_cols: Optional[Sequence[str]] = None,
     target_col: Optional[str] = None,
-    output_dir: Optional[Path] = None,
-) -> Dict[str, float]:
     output_dir: Optional[Path] = None,
 ) -> Dict[str, float]:
     """
@@ -112,7 +109,6 @@ def diagnose_dataset(
                 exog_strength = float(np.nanmean(exog_corrs))
 
     diagnostics = {
-    diagnostics = {
         "missing_rate": missing_rate,
         "periodicity_score": periodicity_score,
         "long_memory_score": long_memory_score,
@@ -122,19 +118,6 @@ def diagnose_dataset(
         "exog_strength": exog_strength,
         "n_rows": float(len(d)),
         "n_series": float(d[key_col].nunique() if key_col in d.columns else 0),
-        "mean_time_delta_days": mean_time_delta,
-        "std_time_delta_days": std_time_delta,
-    }
-
-    if output_dir is not None:
-        out_dir = Path(output_dir)
-        out_dir.mkdir(parents=True, exist_ok=True)
-        (out_dir / "diagnostics.json").write_text(
-            json.dumps(diagnostics, indent=2, ensure_ascii=False), encoding="utf-8"
-        )
-        pd.DataFrame([diagnostics]).to_parquet(out_dir / "diagnostics_table.parquet", index=False)
-
-    return diagnostics
         "mean_time_delta_days": mean_time_delta,
         "std_time_delta_days": std_time_delta,
     }

@@ -1,0 +1,199 @@
+# Block 3 Tasks Configuration
+# All paths resolved via docs/audits/FULL_SCALE_POINTER.yaml
+
+# Global settings
+pointer_path: docs/audits/FULL_SCALE_POINTER.yaml
+output_base: runs/benchmarks
+
+# Anti-leakage settings
+anti_leakage:
+  strict_temporal_split: true
+  gap_days: 0  # Days between train and val/test
+  verify_no_future_features: true
+
+# Task definitions
+tasks:
+  task1_outcome:
+    description: "Outcome Prediction (classification + regression + ranking)"
+    targets:
+      - total_amount_sold
+      - number_investors
+      - success_binary
+    horizons: [7, 14, 30, 60]  # K = early snapshot days
+    ablations:
+      - core_only
+      - +text
+      - +edgar
+      - full
+    metrics:
+      classification:
+        - auc
+        - prauc
+        - logloss
+        - brier
+      regression:
+        - mae
+        - rmse
+      ranking:
+        - ndcg@10
+        - spearman
+    split:
+      train_end: "2024-06-30"
+      val_end: "2024-12-31"
+      test_start: "2025-01-01"
+
+  task2_forecast:
+    description: "Trajectory Forecasting (multi-horizon + quantiles)"
+    targets:
+      - total_amount_sold
+      - number_investors
+    horizons: [7, 14, 30, 60]  # H = forecast horizon
+    context_lengths: [30, 60, 90]
+    ablations:
+      - core_only
+      - +text
+      - +edgar
+      - full
+    metrics:
+      point:
+        - mae
+        - rmse
+        - smape
+        - mase
+      quantile:
+        - pinball_50
+        - pinball_90
+      probabilistic:
+        - crps
+        - interval_coverage_90
+    split:
+      train_end: "2024-06-30"
+      val_end: "2024-12-31"
+      test_start: "2025-01-01"
+
+  task3_risk_adjust:
+    description: "EDGAR-conditioned Risk Adjustment (robustness + shift)"
+    targets:
+      - total_amount_sold
+    horizons: [14, 30]
+    ablations:
+      - core_only
+      - +edgar
+      - full
+    ood_modes:
+      - year_shift
+      - sector_shift
+    metrics:
+      - mae
+      - rmse
+      - calibration_error
+      - performance_gap
+    split:
+      train_end: "2023-12-31"  # Pre-2024
+      val_end: "2024-12-31"
+      test_start: "2025-01-01"  # OOD test
+
+  task4_narrative_shift:
+    description: "Narrative Shift & GenAI Era Effect (DiD + mediation)"
+    targets:
+      - total_amount_sold
+      - number_investors
+    treatment_year: 2023  # GenAI era starts
+    placebo_years: [2021, 2022]
+    mediators:
+      - nbi  # Narrative Behavior Index
+      - nci  # Narrative Content Index
+    ablations:
+      - core_only
+      - +text
+      - full
+    metrics:
+      - did_estimate
+      - did_ci_lower
+      - did_ci_upper
+      - placebo_did
+      - proportion_mediated
+    split:
+      train_end: "2022-12-31"  # Pre-GenAI
+      val_end: "2022-12-31"
+      test_start: "2023-01-01"  # GenAI era
+
+# Model categories for benchmarking
+model_categories:
+  statistical:
+    - SeasonalNaive
+    - AutoARIMA
+    - ETS
+    - Theta
+    - MSTL
+
+  ml_tabular:
+    classification:
+      - LogisticRegression
+      - RandomForest
+      - HistGradientBoosting
+      - LightGBM
+      - XGBoost
+      - CatBoost
+    regression:
+      - Ridge
+      - Lasso
+      - ElasticNet
+      - SVR
+      - KNN
+      - RandomForest
+      - HistGradientBoosting
+      - LightGBM
+      - XGBoost
+      - CatBoost
+    ranking:
+      - LightGBMRanker
+      - XGBoostRanker
+
+  deep_classical:
+    - NBEATS
+    - NHITS
+    - TFT
+    - DeepAR
+
+  transformer_sota:
+    - PatchTST
+    - iTransformer
+    - TimeMixer
+    - TimesNet
+    - Autoformer
+    - FEDformer
+    - Informer
+
+  gluonts:
+    - DeepAR
+    - WaveNet
+    - SimpleFeedForward
+
+  foundation:
+    - TimesFM
+    - Chronos
+    - Moirai
+    - LagLlama
+
+  irregular_aware:
+    - GRU_D
+    - SAITS
+    - NeuralCDE
+
+# Training settings
+training:
+  max_epochs: 100
+  patience: 10
+  batch_size: 64
+  learning_rate: 0.001
+  weight_decay: 0.0001
+
+# Smoke test settings
+smoke_test:
+  n_entities: 100
+  horizons: [7, 14]
+  targets: [total_amount_sold]
+  ablations: [core_only]
+  models: [SeasonalNaive, LightGBM]
+  max_epochs: 5

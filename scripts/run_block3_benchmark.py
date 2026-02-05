@@ -8,10 +8,14 @@ Includes support for:
 - Ablation configurations (core-only, +text, +edgar, +multiscale)
 - Comprehensive metrics (point, probabilistic, coverage)
 - Leaderboard generation
+- Task-based benchmarking (Task1-4)
 
 Usage:
     python scripts/run_block3_benchmark.py --config configs/block3.yaml
     python scripts/run_block3_benchmark.py --smoke-test
+    python scripts/run_block3_benchmark.py --task outcome --models LightGBM XGBoost
+    python scripts/run_block3_benchmark.py --list-models
+    python scripts/run_block3_benchmark.py --list-tasks
 """
 from __future__ import annotations
 
@@ -33,6 +37,18 @@ import yaml
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from src.narrative.data_preprocessing.block3_dataset import Block3Dataset
+from src.narrative.block3.models import (
+    get_model,
+    list_models,
+    get_preset_models,
+    check_model_available,
+    MODEL_CATEGORIES,
+)
+from src.narrative.block3.tasks import (
+    get_task,
+    list_tasks,
+    TaskBase,
+)
 
 
 @dataclass
@@ -470,6 +486,102 @@ class BenchmarkHarness:
             targets=["funding_raised_usd"],
         )
     
+    def run_task_benchmark(
+        self,
+        task_name: str,
+        model_names: Optional[List[str]] = None,
+        ablation_names: Optional[List[str]] = None,
+    ):
+        """
+        Run benchmark for a specific task.
+        
+        Args:
+            task_name: Task identifier (outcome, forecast, risk, narrative)
+            model_names: Optional list of model names to run
+            ablation_names: Optional list of ablation configs
+        """
+        print("=" * 80)
+        print(f"Block 3 Task Benchmark: {task_name}")
+        print("=" * 80)
+        
+        # Get task
+        task = get_task(task_name)
+        
+        # Get ablations
+        if ablation_names is None:
+            ablation_names = ["core_only", "core_text", "core_edgar", "full"]
+        
+        ablation_map = {a["name"]: a for a in self.config.ablations["feature_sets"]}
+        
+        # Build dataset for task
+        print(f"\nBuilding dataset for task: {task_name}...")
+        task_data = task.build_dataset()
+        
+        # Get splits
+        splits = task.get_splits(task_data)
+        print(f"  Train: {len(splits['train']):,}, Val: {len(splits['val']):,}, Test: {len(splits['test']):,}")
+        
+        # Determine models to run
+        if model_names is None:
+            # Use appropriate models based on task type
+            if task_name in ("outcome", "task1"):
+                model_names = ["LogisticRegression", "RandomForest", "LightGBM", "XGBoost"]
+            elif task_name in ("forecast", "task2"):
+                model_names = ["SeasonalNaive", "AutoARIMA", "LightGBM", "XGBoost", "NBEATS"]
+            else:
+                model_names = ["LightGBM", "XGBoost"]
+        
+        # Run each model
+        for model_name in model_names:
+            if not check_model_available(model_name):
+                print(f"  Skipping {model_name} (not available)")
+                continue
+            
+            for ablation_name in ablation_names:
+                print(f"\n  Running {model_name} with {ablation_name}...")
+                
+                try:
+                    model = get_model(model_name)
+                    result = task.run(model, task_data, splits)
+                    
+                    # Convert to ModelResult
+                    model_result = ModelResult(
+                        model_name=model_name,
+                        model_category=self._get_model_category(model_name),
+                        ablation=ablation_name,
+                        horizon=getattr(task.config, "horizon", 0),
+                        context_length=getattr(task.config, "context_length", 0),
+                        target=getattr(task.config, "target", ""),
+                        mae=result.metrics.get("mae"),
+                        rmse=result.metrics.get("rmse"),
+                        smape=result.metrics.get("smape"),
+                        wape=result.metrics.get("wape"),
+                        train_time_seconds=result.train_time,
+                    )
+                    
+                    # Add task-specific metrics
+                    if "auc" in result.metrics:
+                        model_result.auc = result.metrics["auc"]
+                    if "prauc" in result.metrics:
+                        model_result.prauc = result.metrics["prauc"]
+                    
+                    self.results.append(model_result)
+                    
+                    print(f"    Metrics: {result.metrics}")
+                    
+                except Exception as e:
+                    print(f"    Error: {e}")
+        
+        # Save results
+        self.save_results()
+    
+    def _get_model_category(self, model_name: str) -> str:
+        """Get category for a model name."""
+        for cat, models in MODEL_CATEGORIES.items():
+            if model_name in models:
+                return cat
+        return "unknown"
+    
     def save_results(self):
         """Save benchmark results."""
         # Convert to DataFrame
@@ -510,7 +622,33 @@ def main():
     parser.add_argument("--config", type=Path, default=Path("configs/block3.yaml"))
     parser.add_argument("--smoke-test", action="store_true", help="Run minimal smoke test")
     parser.add_argument("--verify-first", action="store_true", default=True, help="Verify freeze before running")
+    parser.add_argument("--task", type=str, help="Run specific task (outcome, forecast, risk, narrative)")
+    parser.add_argument("--models", nargs="+", help="Models to run")
+    parser.add_argument("--ablations", nargs="+", help="Ablation configs to run")
+    parser.add_argument("--list-models", action="store_true", help="List available models")
+    parser.add_argument("--list-tasks", action="store_true", help="List available tasks")
+    parser.add_argument("--preset", choices=["smoke_test", "quick", "standard", "comprehensive"],
+                        help="Use a preset model configuration")
     args = parser.parse_args()
+    
+    # List modes (no data loading)
+    if args.list_models:
+        print("Available Models by Category:")
+        print("=" * 60)
+        for cat, models in list_models().items():
+            print(f"\n{cat}:")
+            for m in models:
+                avail = "✓" if check_model_available(m) else "✗"
+                print(f"  [{avail}] {m}")
+        return
+    
+    if args.list_tasks:
+        print("Available Tasks:")
+        print("=" * 60)
+        for task_name in list_tasks():
+            task = get_task(task_name)
+            print(f"\n{task_name}: {task.description}")
+        return
     
     # Load config
     config = BenchmarkConfig.load(args.config)
@@ -536,11 +674,27 @@ def main():
     # Create harness
     harness = BenchmarkHarness(config, dataset)
     
+    # Determine models from preset or args
+    model_names = args.models
+    if args.preset:
+        preset_models = get_preset_models(args.preset)
+        model_names = [m.config.name for m in preset_models]
+        print(f"Using preset '{args.preset}': {model_names}")
+    
     # Run benchmark
     if args.smoke_test:
         harness.run_smoke_test()
+    elif args.task:
+        harness.run_task_benchmark(
+            task_name=args.task,
+            model_names=model_names,
+            ablation_names=args.ablations,
+        )
     else:
-        harness.run_benchmark()
+        harness.run_benchmark(
+            model_names=model_names,
+            ablation_names=args.ablations,
+        )
 
 
 if __name__ == "__main__":
