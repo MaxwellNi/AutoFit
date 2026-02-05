@@ -1,0 +1,338 @@
+# Block 3 Benchmark Configuration
+# WIDE2 Freeze Stamp: 20260203_225620
+# Variant: TRAIN_WIDE_FINAL
+
+# Data source (read-only)
+data:
+  pointer: docs/audits/FULL_SCALE_POINTER.yaml
+  stamp: "20260203_225620"
+  variant: TRAIN_WIDE_FINAL
+
+# Target variables
+targets:
+  primary:
+    - funding_raised_usd
+    - investors_count
+  secondary:
+    - is_funded
+    - funding_goal_usd
+
+# Forecasting horizons (in days)
+horizons:
+  - 1
+  - 7
+  - 14
+  - 30
+
+# Context window (lookback in days)
+context_lengths:
+  - 30
+  - 60
+  - 90
+
+# Train/Val/Test split policy
+split:
+  method: temporal  # temporal | entity_holdout | combined
+  train_end: "2025-06-30"
+  val_end: "2025-09-30"
+  test_end: "2025-12-31"
+  embargo_days: 7  # Gap between splits to prevent leakage
+  entity_holdout_frac: 0.0  # Set > 0 for entity holdout
+
+# Metrics
+metrics:
+  point:
+    - MAE
+    - RMSE
+    - sMAPE
+    - WAPE
+    - MASE
+  probabilistic:
+    - QuantileLoss
+    - CRPS
+  coverage:
+    quantiles: [0.1, 0.5, 0.9]
+
+# Baseline categories
+baselines:
+  # (i) Statistical baselines (StatsForecast)
+  statistical:
+    - name: ARIMA
+      library: statsforecast
+      class: AutoARIMA
+      params: {}
+    - name: ETS
+      library: statsforecast
+      class: AutoETS
+      params: {}
+    - name: Theta
+      library: statsforecast
+      class: AutoTheta
+      params: {}
+    - name: SeasonalNaive
+      library: statsforecast
+      class: SeasonalNaive
+      params:
+        season_length: 7
+  
+  # (ii) ML Tabular (LightGBM/XGBoost)
+  ml_tabular:
+    - name: LightGBM
+      library: lightgbm
+      class: LGBMRegressor
+      params:
+        n_estimators: 500
+        learning_rate: 0.05
+        max_depth: 8
+        num_leaves: 31
+    - name: XGBoost
+      library: xgboost
+      class: XGBRegressor
+      params:
+        n_estimators: 500
+        learning_rate: 0.05
+        max_depth: 6
+  
+  # (iii) Deep Classical (NeuralForecast)
+  deep_classical:
+    - name: LSTM
+      library: neuralforecast
+      class: LSTM
+      params:
+        hidden_size: 128
+        num_layers: 2
+        max_steps: 500
+    - name: GRU
+      library: neuralforecast
+      class: GRU
+      params:
+        hidden_size: 128
+        num_layers: 2
+        max_steps: 500
+    - name: TCN
+      library: neuralforecast
+      class: TCN
+      params:
+        hidden_size: 128
+        kernel_size: 3
+        max_steps: 500
+    - name: NBEATS
+      library: neuralforecast
+      class: NBEATS
+      params:
+        stack_types: ["trend", "seasonality"]
+        max_steps: 500
+    - name: NHITS
+      library: neuralforecast
+      class: NHITS
+      params:
+        stack_types: ["identity", "identity", "identity"]
+        max_steps: 500
+    - name: TFT
+      library: neuralforecast
+      class: TFT
+      params:
+        hidden_size: 128
+        max_steps: 500
+  
+  # (iv) Transformer SOTA (THUML Time-Series-Library)
+  transformer_sota:
+    repo: https://github.com/thuml/Time-Series-Library
+    commit: "main"  # Pin specific commit in production
+    models:
+      - name: Autoformer
+        class: Autoformer
+        supports_exog: true
+        supports_prob: false
+      - name: Informer
+        class: Informer
+        supports_exog: true
+        supports_prob: false
+      - name: FEDformer
+        class: FEDformer
+        supports_exog: true
+        supports_prob: false
+      - name: PatchTST
+        class: PatchTST
+        supports_exog: false
+        supports_prob: false
+      - name: iTransformer
+        class: iTransformer
+        supports_exog: true
+        supports_prob: false
+      - name: TimesNet
+        class: TimesNet
+        supports_exog: true
+        supports_prob: false
+      - name: Crossformer
+        class: Crossformer
+        supports_exog: true
+        supports_prob: false
+      - name: SCINet
+        class: SCINet
+        supports_exog: false
+        supports_prob: false
+      - name: TimeMixer
+        class: TimeMixer
+        supports_exog: true
+        supports_prob: false
+      - name: TimeMixerPP
+        class: TimeMixer
+        variant: pp
+        supports_exog: true
+        supports_prob: false
+  
+  # (v) GluonTS probabilistic models
+  gluonts:
+    - name: DeepAR
+      library: gluonts
+      class: DeepAREstimator
+      params:
+        prediction_length: 7
+        num_layers: 2
+        hidden_size: 40
+    - name: Transformer
+      library: gluonts
+      class: TransformerEstimator
+      params:
+        prediction_length: 7
+        d_model: 64
+        nhead: 4
+    - name: MQCNN
+      library: gluonts
+      class: MQCNNEstimator
+      params:
+        prediction_length: 7
+  
+  # (vi) Foundation / Pretrained models
+  foundation:
+    - name: Chronos-T5-Small
+      library: chronos
+      class: ChronosPipeline
+      params:
+        model_name: "amazon/chronos-t5-small"
+      mode: zero_shot
+      supports_exog: false
+      supports_prob: true
+    - name: Chronos-T5-Base
+      library: chronos
+      class: ChronosPipeline
+      params:
+        model_name: "amazon/chronos-t5-base"
+      mode: zero_shot
+      supports_exog: false
+      supports_prob: true
+    - name: Lag-Llama
+      library: lag_llama
+      class: LagLlamaForecaster
+      params:
+        context_length: 32
+      mode: zero_shot
+      supports_exog: false
+      supports_prob: true
+    - name: TimesFM
+      library: timesfm
+      class: TimesFM
+      params: {}
+      mode: zero_shot
+      supports_exog: false
+      supports_prob: false
+      note: "Google checkpoint, requires auth"
+    - name: Moirai-Small
+      library: uni2ts
+      class: MoiraiForecast
+      params:
+        model_name: "salesforce/moirai-1.0-R-small"
+      mode: zero_shot
+      supports_exog: false
+      supports_prob: true
+    - name: Moirai-Base
+      library: uni2ts
+      class: MoiraiForecast
+      params:
+        model_name: "salesforce/moirai-1.0-R-base"
+      mode: fine_tune_lite
+      supports_exog: false
+      supports_prob: true
+
+# Ablation configurations
+ablations:
+  feature_sets:
+    - name: core_only
+      use_text: false
+      use_edgar: false
+      use_multiscale: false
+    - name: core_text
+      use_text: true
+      use_edgar: false
+      use_multiscale: false
+    - name: core_edgar
+      use_text: false
+      use_edgar: true
+      use_multiscale: false
+    - name: core_multiscale
+      use_text: false
+      use_edgar: false
+      use_multiscale: true
+    - name: full
+      use_text: true
+      use_edgar: true
+      use_multiscale: true
+
+# AutoFit composer configuration
+autofit:
+  enabled: true
+  
+  # Rule-based composer thresholds
+  rules:
+    backbone_selection:
+      ssm_threshold: 0.2  # long_memory_score > this -> prefer SSM
+      transformer_threshold: 0.3  # periodicity_score > this -> prefer Transformer
+      decomp_threshold: 0.4  # nonstationarity_score > this -> prefer Decomp
+    
+    fusion_selection:
+      exog_threshold: 0.15  # exog_strength > this -> enable fusion
+      film_threshold: 0.2
+      cross_attn_threshold: 0.3
+      bridge_token_threshold: 0.4
+    
+    loss_selection:
+      heavy_tail_threshold: 0.5  # -> prefer Huber/StudentT
+      quantile_targets: true  # Always include quantile loss
+    
+    regularization:
+      high_missing_threshold: 0.5  # missing_rate > this -> stronger dropout
+      irregular_threshold: 0.3  # irregular_score > this -> time masking
+  
+  # Learnable strategy (future extension)
+  learnable:
+    method: null  # null | bandit | bayesian | rl
+    budget: 50  # Number of evaluations
+
+# Training configuration
+training:
+  seed: 42
+  batch_size: 64
+  max_epochs: 100
+  early_stopping_patience: 10
+  gradient_clip: 1.0
+  
+  # Resource limits
+  max_gpu_memory_gb: 20
+  max_train_time_hours: 4
+
+# Output configuration
+output:
+  base_dir: runs/orchestrator/20260129_073037/block3_20260203_225620/benchmark
+  leaderboard: leaderboard.parquet
+  per_model_dir: models
+  logs_dir: logs
+
+# Smoke test configuration (minimal run)
+smoke_test:
+  n_entities: 10
+  horizons: [1, 7]
+  baselines:
+    - SeasonalNaive
+    - LightGBM
+  max_time_seconds: 60

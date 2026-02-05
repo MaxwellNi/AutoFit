@@ -1,72 +1,91 @@
 # Agent Context
 
 ## Mission
-Upgrade `TRAIN_WIDE_FINAL` to a true wide feature freeze with highest-tier audits, so future modeling does not require backfilling features. This is the last data freeze before Block 3 training.
+Block 3 modeling on the finalized WIDE2 freeze (`TRAIN_WIDE_FINAL`). The freeze is complete with all gates PASS. No feature backfilling is required.
+
+## Current State (as of 2026-02-04)
+- **WIDE2 Freeze: COMPLETE** (stamp `20260203_225620`)
+- All 5 gates PASS:
+  - `pointer_valid`: PASS
+  - `column_manifest`: PASS
+  - `raw_cardinality_coverage`: PASS
+  - `freeze_candidates`: PASS
+  - `offer_day_coverage_exact`: PASS
+- Block 3 entry verified via `scripts/block3_verify_freeze.py`
 
 ## Hard Constraints
-- Only commit/push: `scripts/`, `configs/`, `docs/audits/`, and `docs/audits/MANIFEST.json`.
+- Only commit/push: `scripts/`, `src/`, `configs/`, `docs/`, except patterns below.
 - Never commit anything under `runs/`.
 - Never create/track files whose **names** contain: `cursor`, `prompt`, `recovery`, `runbook`, `decision`, `transcript` (case-insensitive).
 - All tracked files must be **English** only.
-- Block 3 must read **only** `docs/audits/FULL_SCALE_POINTER.yaml`.
+- Block 3 must read **only** `docs/audits/FULL_SCALE_POINTER.yaml` (via `FreezePointer` class).
+- **Freeze artifacts are read-only**: never modify files under `runs/*_20260203_225620/`.
 
-## Current State (as of 2026-02-04)
-- `WIDE_STAMP=20260203_225620` has completed Steps 1-3 only.
-- Step 3 output exists:
-  - `runs/offers_core_full_snapshot_wide_20260203_225620/offers_core_snapshot.parquet`
-  - `runs/offers_core_full_snapshot_wide_20260203_225620/MANIFEST.json`
-- Step 4+ outputs are not complete yet (daily directory exists but no final artifacts).
-- Active/pending queue jobs:
-  - `5168794` (`wide_freeze_aion_resume`) `PENDING` reason `Priority`
-  - `5168809` (`wide_freeze_aion_resume`) `PENDING` reason `Priority`
-  - `5168800` (`monitor_wide_freeze_aion`) `PENDING` reason `Priority`
-- Last observed pending rank in `batch` was approximately 389-391.
+## Block 3 Architecture
 
-## Execution History Captured From This Thread
-1. Full run `11029034` executed Steps 1-3 and then failed at Step 4 with OOM.
-2. Resume run `11029184` failed before Step 4 due to `bash: No such file or directory` inside `srun`.
-3. Resource mismatch fixed (`ntasks-per-node=1`, `-c 16`) after submission error: `CPU count per node can not be satisfied`.
-4. Added `BASH_BIN` detection and hard-fail behavior in aion sbatch wrappers.
-5. Added DuckDB controls for daily build:
-   - `DUCKDB_MEMORY_LIMIT_GB`
-   - `DUCKDB_THREADS`
-6. Added dependency preflight in resume sbatch (`duckdb`, `deltalake`).
-7. Added monitor loop and monitor sbatch for auto-check/auto-resubmit behavior:
-   - `scripts/monitor_wide_freeze_resume.sh`
-   - `scripts/slurm/monitor_wide_freeze_aion.sbatch`
-8. Added 4090 non-SLURM adapters under `scripts/ssh_4090/`.
-9. Added sync workflows:
-   - Cluster push to Mac: `scripts/sync_outputs_to_mac.sh`
-   - Mac push to 4090: `scripts/sync_outputs_to_4090.sh`
-   - Mac pull from cluster (preferred): `scripts/pull_outputs_from_cluster.sh`
-10. Connectivity findings:
-   - Cluster host cannot directly reach 4090 from this environment (no VPN path).
-   - Mac DNS/port issues were resolved in scripts by defaulting ULHPC login to `access-iris.uni.lu:8022`.
-   - Current remaining blocker on Mac is SSH auth to ULHPC (`Permission denied (publickey)`), not routing.
+### Data Flow
+```
+docs/audits/FULL_SCALE_POINTER.yaml
+        │
+        ▼
+FreezePointer (src/narrative/data_preprocessing/block3_dataset.py)
+        │
+        ├─> offers_core_daily (parquet)
+        ├─> offers_text (parquet)
+        └─> edgar_feature_store (parquet)
+                │
+                ▼
+        Block3Dataset (lazy loading + explicit joins)
+                │
+                ▼
+        BenchmarkHarness (scripts/run_block3_benchmark.py)
+                │
+                ├─> Statistical baselines
+                ├─> ML Tabular (LightGBM, XGBoost)
+                ├─> Deep Classical (N-BEATS, TFT)
+                ├─> Transformer SOTA (PatchTST, iTransformer, TimeMixer)
+                ├─> GluonTS (DeepAR, WaveNet)
+                └─> Foundation (TimesFM, Chronos)
+```
 
-## Key Scripts (Updated)
-- Full pipeline: `scripts/run_wide_freeze_full.sh`
-- Resume pipeline (Step 4-10): `scripts/run_wide_freeze_from_daily.sh`
-- Aion full sbatch: `scripts/slurm/run_wide_freeze_aion.sbatch`
-- Aion resume sbatch: `scripts/slurm/run_wide_freeze_aion_from_daily.sbatch`
-- Monitor loop: `scripts/monitor_wide_freeze_resume.sh`
-- Monitor sbatch: `scripts/slurm/monitor_wide_freeze_aion.sbatch`
-- 4090 local runners: `scripts/ssh_4090/*.sh`
-- Sync helpers:
-  - `scripts/pull_outputs_from_cluster.sh`
-  - `scripts/sync_outputs_to_mac.sh`
-  - `scripts/sync_outputs_to_4090.sh`
+### Join Keys
+- `entity_id` + `crawled_date_day`: offers_core ↔ offers_text
+- `cik` + `crawled_date_day`: offers_core ↔ edgar_store
 
-## Commit Trail (Thread-Relevant)
+### AutoFit Meta-Features
+From `scripts/block3_profile_data.py`:
+- `nonstationarity_score`, `periodicity_score`, `multiscale_score`
+- `long_memory_score`, `irregular_score`, `heavy_tail_score`
+- `exog_strength`, `edgar_strength`, `text_strength`, `missing_rate`
+
+## Key Scripts (Block 3)
+- Freeze verification: `scripts/block3_verify_freeze.py`
+- Data profiling: `scripts/block3_profile_data.py`
+- Benchmark harness: `scripts/run_block3_benchmark.py`
+- Dataset interface: `src/narrative/data_preprocessing/block3_dataset.py`
+- AutoFit composer: `src/narrative/auto_fit/rule_based_composer.py`
+- Concept bottleneck: `src/narrative/explainability/concept_bottleneck.py`
+
+## Block 3 Configuration
+- Config file: `configs/block3.yaml`
+- Targets: `total_amount_sold`, `number_investors`, `days_to_close`
+- Horizons: [7, 14, 30, 60]
+- Context lengths: [30, 60, 90]
+- Metrics: RMSE, MAE, MAPE, SMAPE, CRPS (probabilistic)
+
+## Commit Trail
+- `3ce5509` WIDE2 freeze seal complete, all gates PASS.
 - `47a8db3` Add 4090 adapters and wide-freeze updates.
 - `1a15ea6` Add mac-hop sync scripts for 4090 workflow.
-- `2ac1477` Add Mac-side pull script for cluster outputs.
-- `299c216` Use ULHPC login host/port defaults for pull sync.
 
-## Pending Work
-1. Resolve Mac -> ULHPC SSH key auth (`id_ed25519_iris` expected).
-2. Pull data from cluster to Mac with `scripts/pull_outputs_from_cluster.sh`.
-3. Push pulled artifacts from Mac to 4090 with `scripts/sync_outputs_to_4090.sh`.
-4. On 4090, run Step 4-10:
-   - `WIDE_STAMP=20260203_225620 bash scripts/ssh_4090/run_wide_freeze_aion_from_daily_4090.sh`
-5. Validate Step 4-10 artifacts and pointer before Block 3 handoff.
+## Pending Work (Block 3)
+1. ✅ Freeze verification script
+2. ✅ Unified dataset interface
+3. ✅ Data profiling for AutoFit
+4. ✅ Benchmark harness with 6 baseline categories
+5. ✅ AutoFit rule-based composer
+6. ✅ Concept bottleneck for interpretability
+7. ⏳ Run smoke test to verify harness
+8. ⏳ Full benchmark run with all baselines
+9. ⏳ AutoFit model selection based on profile
+10. ⏳ TCAV-style concept importance analysis

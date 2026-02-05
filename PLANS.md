@@ -1,78 +1,120 @@
-# Execution Plan (Wide Freeze WIDE2)
+# Execution Plan (Block 3 Modeling)
 
-This plan is updated with the actual execution history in this thread and the current handoff path (cluster -> Mac -> 4090).
+This plan tracks Block 3 implementation after the WIDE2 freeze seal (stamp `20260203_225620`).
 
-## Current Progress Snapshot
-- Completed: Steps 1-3 for `WIDE_STAMP=20260203_225620`.
-- Not completed: Steps 4-10.
-- Known successful artifacts:
-  - `runs/offers_core_full_snapshot_wide_20260203_225620/offers_core_snapshot.parquet`
-  - `runs/offers_core_full_snapshot_wide_20260203_225620/MANIFEST.json`
-- Known failed attempts:
-  - `11029034`: OOM at Step 4.
-  - `11029184`: failed before Step 4 due to missing `bash` in `srun`.
+## ✅ WIDE2 Freeze Complete
+All steps completed, all gates PASS:
+- `pointer_valid`: PASS
+- `column_manifest`: PASS
+- `raw_cardinality_coverage`: PASS
+- `freeze_candidates`: PASS
+- `offer_day_coverage_exact`: PASS
 
-## Work Already Done (Code/Scripts)
-1. Added robust resume pipeline:
-   - `scripts/run_wide_freeze_from_daily.sh` (Step 4-10)
-   - `scripts/slurm/run_wide_freeze_aion_from_daily.sbatch`
-2. Added OOM protection:
-   - `DUCKDB_MEMORY_LIMIT_GB` and `DUCKDB_THREADS` in `scripts/build_offers_core_full_daily.py`
-   - default limits exported in sbatch wrappers.
-3. Added runtime hardening:
-   - `BASH_BIN` detection in sbatch wrappers.
-   - dependency preflight (`duckdb`, `deltalake`) in resume sbatch.
-4. Added monitor automation:
-   - `scripts/monitor_wide_freeze_resume.sh`
-   - `scripts/slurm/monitor_wide_freeze_aion.sbatch`
-5. Added 4090 local adapters:
-   - `scripts/ssh_4090/*.sh`
-6. Added sync path:
-   - cluster push Mac: `scripts/sync_outputs_to_mac.sh`
-   - Mac push 4090: `scripts/sync_outputs_to_4090.sh`
-   - Mac pull cluster (preferred): `scripts/pull_outputs_from_cluster.sh`
+Verification: `scripts/block3_verify_freeze.py`
 
-## Active Queue Status (Cluster)
-- `5168794` pending (`wide_freeze_aion_resume`)
-- `5168809` pending (`wide_freeze_aion_resume`)
-- `5168800` pending (`monitor_wide_freeze_aion`)
-- Reason: `Priority` (no running job yet).
+---
 
-## Next Action Plan
+## Block 3 Implementation Status
 
-### A. Finish data transfer chain
-1. On Mac, authenticate to ULHPC using the intended key (`id_ed25519_iris`).
-2. Pull cluster outputs to Mac:
-   - `bash scripts/pull_outputs_from_cluster.sh`
-3. Push pulled outputs from Mac to 4090:
-   - `bash scripts/sync_outputs_to_4090.sh`
+### Phase A: Infrastructure (COMPLETE)
+- [x] Freeze verification script (`scripts/block3_verify_freeze.py`)
+- [x] Unified dataset interface (`src/narrative/data_preprocessing/block3_dataset.py`)
+- [x] Data profiling script (`scripts/block3_profile_data.py`)
+- [x] Block 3 configuration (`configs/block3.yaml`)
 
-### B. Execute remaining steps on 4090
-Run Step 4-10 directly on 4090 (non-SLURM):
+### Phase B: Benchmark Framework (COMPLETE)
+- [x] Benchmark harness (`scripts/run_block3_benchmark.py`)
+- [x] Statistical baselines (SeasonalNaive)
+- [x] ML Tabular (LightGBM, XGBoost, CatBoost)
+- [x] Deep Classical (N-BEATS, TFT)
+- [x] Transformer SOTA (PatchTST, iTransformer, TimeMixer)
+- [x] GluonTS (DeepAR, WaveNet)
+- [x] Foundation (TimesFM, Chronos, Moirai)
+
+### Phase C: AutoFit (COMPLETE)
+- [x] Rule-based composer (`src/narrative/auto_fit/rule_based_composer.py`)
+- [x] Meta-feature extraction via profiler
+
+### Phase D: Interpretability (COMPLETE)
+- [x] Concept bottleneck (`src/narrative/explainability/concept_bottleneck.py`)
+- [x] Concept bank with 10 concepts
+- [x] Marginal contribution logging
+
+### Phase E: Execution (IN PROGRESS)
+- [ ] Smoke test (10 entities, 2 horizons, 2 baselines, <1 min)
+- [ ] Full benchmark run
+- [ ] AutoFit model selection
+- [ ] Leaderboard generation
+
+### Phase F: Analysis (NOT STARTED)
+- [ ] TCAV-style concept importance analysis
+- [ ] Ablation study (core_only vs full)
+- [ ] Horizon sensitivity analysis
+- [ ] Error analysis by entity type
+
+---
+
+## Block 3 Profile Results
+From `runs/orchestrator/20260129_073037/block3_20260203_225620/profile/profile.json`:
+
+| Meta-Feature            | Value  |
+|-------------------------|--------|
+| `nonstationarity_score` | 0.5000 |
+| `periodicity_score`     | 0.5156 |
+| `multiscale_score`      | 0.7324 |
+| `long_memory_score`     | 0.0404 |
+| `irregular_score`       | 1.2317 |
+| `heavy_tail_score`      | 1.0000 |
+| `exog_strength`         | 0.0000 |
+| `edgar_strength`        | 0.0000 |
+| `text_strength`         | 0.0000 |
+| `missing_rate`          | 0.7068 |
+
+### AutoFit Recommendation (based on profile)
+- **Backbone**: TimeMixer (multiscale_score > 0.7)
+- **Fusion**: none (exog_strength < 0.1)
+- **Loss**: Huber (heavy_tail_score > 0.3)
+
+---
+
+## Next Actions
+
+### Immediate (Smoke Test)
 ```bash
-WIDE_STAMP=20260203_225620 bash scripts/ssh_4090/run_wide_freeze_aion_from_daily_4090.sh
+cd ~/projects/repo_root
+python scripts/run_block3_benchmark.py --smoke-test
 ```
 
-### C. Validate completion gates
-Required for completion:
-- Step 4: `runs/offers_core_full_daily_wide_20260203_225620/offers_core_daily.parquet`, `MANIFEST.json`
-- Step 5: `runs/offers_core_full_daily_wide_20260203_225620/snapshots_index/`
-- Step 6: `runs/edgar_feature_store_full_daily_wide_20260203_225620/edgar_features/`
-- Step 7: `runs/multiscale_full_wide_20260203_225620/MANIFEST.json`
-- Step 8: `analysis/wide_20260203_225620/column_manifest.{json,md}`
-- Step 9: `analysis/wide_20260203_225620/raw_cardinality_coverage_wide_20260203_225620.{json,md}`
-- Step 10: `analysis/wide_20260203_225620/freeze_candidates.{json,md}` and updated `docs/audits/FULL_SCALE_POINTER.yaml`
+### Full Benchmark
+```bash
+python scripts/run_block3_benchmark.py \
+    --config configs/block3.yaml \
+    --output-dir runs/benchmarks/block3_20260203_225620
+```
 
-## Fallback Rules (if 4090 run fails)
-1. OOM in Step 4:
-   - `DUCKDB_THREADS=4`
-   - `DUCKDB_MEMORY_LIMIT_GB=<~60% of RAM>`
-2. Missing dependency:
-   - install in active env, rerun same command.
-3. Missing input paths:
-   - re-run sync scripts for the missing directories only.
+### AutoFit Selection
+```bash
+python scripts/run_auto_fit.py \
+    --profile runs/orchestrator/20260129_073037/block3_20260203_225620/profile/profile.json \
+    --config configs/block3.yaml
+```
 
-## Block 3 Exit Criteria
-- All Step 4-10 artifacts exist and are internally consistent.
-- Audit JSON/MD outputs present and PASS thresholds met.
-- `FULL_SCALE_POINTER.yaml` points only to final wide paths for `WIDE_STAMP=20260203_225620`.
+---
+
+## Artifacts Reference
+
+### Freeze Artifacts (READ-ONLY)
+- `runs/offers_core_full_daily_wide_20260203_225620/offers_core_daily.parquet`
+- `runs/offers_text_v1_20260129_073037_full/offers_text.parquet`
+- `runs/edgar_feature_store_full_daily_wide_20260201_211317/`
+
+### Block 3 Outputs
+- Verification: `runs/orchestrator/.../block3_20260203_225620/verify/`
+- Profile: `runs/orchestrator/.../block3_20260203_225620/profile/`
+- Benchmark: `runs/benchmarks/block3_20260203_225620/`
+
+---
+
+## Commit History
+- `3ce5509` WIDE2 freeze seal complete, all gates PASS
+- (pending) Block 3 infrastructure + benchmark harness + docs
