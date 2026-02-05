@@ -2,17 +2,25 @@
 """
 Scan runs for freeze candidates; recommend SELECTED based on MANIFEST
 (rows_scanned ~112M for offers, built_at, delta_version).
+When --stamp is provided, only artifacts matching that stamp are considered SELECTED.
 """
 from __future__ import annotations
 
 import argparse
 import json
+import re
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any, Dict, List
+from typing import Any, Dict, List, Optional
 
 repo_root = Path(__file__).resolve().parent.parent
 TARGET_OFFERS_ROWS = 112_000_000
+
+
+def _extract_stamp(name: str) -> Optional[str]:
+    """Extract YYYYMMDD_HHMMSS stamp from directory name."""
+    m = re.search(r"(\d{8}_\d{6})", name)
+    return m.group(1) if m else None
 
 
 def _manifest_if_exists(dir_path: Path) -> Dict[str, Any] | None:
@@ -48,9 +56,15 @@ def _list_candidates(runs: Path, prefix: str) -> List[Dict[str, Any]]:
     return sorted(candidates, key=lambda x: (x.get("built_at") or ""), reverse=True)
 
 
-def _recommend_selected(candidates: List[Dict[str, Any]], artifact_type: str) -> str | None:
+def _recommend_selected(candidates: List[Dict[str, Any]], artifact_type: str, stamp: Optional[str] = None) -> str | None:
     if not candidates:
         return None
+    # If stamp is specified, filter to only those matching the stamp
+    if stamp:
+        stamped = [c for c in candidates if stamp in c.get("name", "")]
+        if not stamped:
+            return None
+        candidates = stamped
     with_manifest = [c for c in candidates if c.get("manifest_exists")]
     if not with_manifest:
         return candidates[0].get("path")
@@ -72,6 +86,7 @@ def _recommend_selected(candidates: List[Dict[str, Any]], artifact_type: str) ->
 def main() -> None:
     parser = argparse.ArgumentParser(description="Freeze candidates with SELECTED recommendation.")
     parser.add_argument("--output_dir", type=Path, required=True)
+    parser.add_argument("--stamp", type=str, default=None, help="If provided, only select artifacts matching this stamp (e.g., 20260203_225620)")
     args = parser.parse_args()
 
     runs = repo_root / "runs"
@@ -86,6 +101,7 @@ def main() -> None:
     result: Dict[str, Any] = {
         "checked_at": datetime.now(timezone.utc).isoformat().replace("+00:00", "Z"),
         "target_offers_rows": TARGET_OFFERS_ROWS,
+        "stamp_filter": args.stamp,
         "candidates": {},
         "selected": {},
         "is_full_scale": {},
@@ -94,7 +110,7 @@ def main() -> None:
     for key, prefix in cats.items():
         cands = _list_candidates(runs, prefix)
         result["candidates"][key] = cands
-        sel = _recommend_selected(cands, key)
+        sel = _recommend_selected(cands, key, stamp=args.stamp)
         result["selected"][key] = sel
         if sel:
             sel_entry = next((c for c in cands if c.get("path") == sel), None)

@@ -86,7 +86,12 @@ def _key_df_from_parquet(path: Path) -> pd.DataFrame:
 
 
 def _structured_columns_from_contract(contract_path: Path) -> tuple[List[str], List[str]]:
-    """Load structured columns and nested raw columns from column_contract_wide."""
+    """Load structured columns and nested raw columns from column_contract_wide.
+    
+    Returns:
+        struct_cols: Scalar columns only (no nested, no derived_nested __json/__len/__hash)
+        nested_raw: Raw nested columns (list-type columns in raw data)
+    """
     if not contract_path or not contract_path.exists():
         return [], []
     try:
@@ -96,14 +101,22 @@ def _structured_columns_from_contract(contract_path: Path) -> tuple[List[str], L
         daily = c.get("offers_core_daily", {})
         nested_raw = list(dict.fromkeys(snap.get("nested_columns", []) + daily.get("nested_columns", [])))
         derived_nested = list(dict.fromkeys(snap.get("derived_nested", []) + daily.get("derived_nested", [])))
+        # Build struct_cols WITHOUT derived_nested (those are derived from nested, not in raw)
         cols = list(dict.fromkeys(
             snap.get("must_keep", []) + snap.get("high_value", []) +
             daily.get("must_keep", []) + daily.get("high_value", []) +
-            daily.get("derived_structured", []) + derived_nested
+            daily.get("derived_structured", [])
         ))
+        # Exclude text columns
         text_exclude = set(c.get("offers_text", {}).get("must_keep", []))
         text_exclude |= {"headline", "title", "description_text", "company_description", "financial_condition"}
         cols = [x for x in cols if x not in text_exclude]
+        # Exclude nested columns (they're returned separately)
+        cols = [x for x in cols if x not in nested_raw]
+        # Exclude derived_nested columns (they don't exist in raw)
+        cols = [x for x in cols if x not in derived_nested]
+        # Exclude any __json, __len, __hash pattern
+        cols = [x for x in cols if not ("__json" in x or "__len" in x or "__hash" in x)]
         return cols, nested_raw
     except Exception:
         return [], []
@@ -116,8 +129,13 @@ def _raw_structured_signal_entity_day(
     logger: logging.Logger,
     limit_rows: Optional[int] = None,
 ) -> tuple[int, int]:
-    """Stream raw offers, count (entity_id, day) where any struct col non-null. Returns (total_rows, entity_day_count)."""
-    if not struct_cols and not nested_cols:
+    """Stream raw offers, count (entity_id, day) where any struct col non-null. Returns (total_rows, entity_day_count).
+    
+    NOTE: nested_cols are NOT scanned for presence - only struct_cols are used for the structured signal mask.
+    This avoids PyArrow nested data conversion issues and is sufficient for the audit purpose:
+    the structured signal coverage metric is about whether we have core scalar features on a given entity-day.
+    """
+    if not struct_cols:
         return 0, 0
     try:
         from deltalake import DeltaTable
@@ -129,18 +147,20 @@ def _raw_structured_signal_entity_day(
         day_col = "crawled_date_day" if "crawled_date_day" in schema_names else ("crawled_date" if "crawled_date" in schema_names else ("snapshot_ts" if "snapshot_ts" in schema_names else None))
         if not day_col:
             raise RuntimeError("raw offers missing day column (crawled_date_day/crawled_date)")
+        # Only use struct_cols (exclude nested to avoid PyArrow conversion issues)
         struct_cols = [c for c in struct_cols if c not in {"entity_id", "platform_name", "offer_id", "snapshot_ts", "crawled_date_day", "crawled_date"}]
-        nested_cols = [c for c in nested_cols if c not in {"entity_id", "platform_name", "offer_id", "snapshot_ts", "crawled_date_day", "crawled_date"}]
-        read_cols = list(dict.fromkeys([c for c in (struct_cols + nested_cols + ["platform_name", "offer_id", day_col]) if c in schema_names]))
+        struct_cols = [c for c in struct_cols if c in schema_names]
+        read_cols = list(dict.fromkeys(["platform_name", "offer_id", day_col] + struct_cols))
+        read_cols = [c for c in read_cols if c in schema_names]
         if "platform_name" not in read_cols or "offer_id" not in read_cols or day_col not in read_cols:
             raise RuntimeError("raw offers missing key columns for structured-signal scan")
         seen: set = set()
         total = 0
         for batch in dset.scanner(columns=read_cols, batch_size=200_000).to_batches():
             total += batch.num_rows
-            # Build signal mask via Arrow (safe for nested)
+            # Build signal mask via Arrow (struct cols only, no nested)
             mask = None
-            for col in struct_cols + nested_cols:
+            for col in struct_cols:
                 if col not in batch.schema.names:
                     continue
                 idx = batch.schema.get_field_index(col)
@@ -151,34 +171,38 @@ def _raw_structured_signal_entity_day(
                     try:
                         arr = arr.combine_chunks()
                     except Exception:
-                        pass
-                if col in nested_cols:
-                    try:
-                        lengths = pc.list_value_length(arr)
-                        present = pc.greater(lengths, 0)
-                    except Exception:
-                        present = pc.invert(pc.is_null(arr))
-                else:
-                    present = pc.invert(pc.is_null(arr))
+                        continue
+                present = pc.invert(pc.is_null(arr))
                 present = pc.fill_null(present, False)
                 if isinstance(present, pa.ChunkedArray):
                     try:
                         present = present.combine_chunks()
                     except Exception:
-                        pass
+                        continue
                 mask = present if mask is None else pc.or_(mask, present)
             if mask is None:
                 continue
             if isinstance(mask, pa.ChunkedArray):
-                mask = mask.combine_chunks()
-            mask_np = mask.to_numpy(zero_copy_only=False)
+                try:
+                    mask = mask.combine_chunks()
+                except Exception:
+                    continue
+            try:
+                mask_np = mask.to_numpy(zero_copy_only=False)
+            except Exception:
+                continue
             if mask_np is None or not mask_np.any():
                 if limit_rows and total >= limit_rows:
                     break
                 continue
 
-            table = pa.Table.from_batches([batch])
-            key_df = table.select([c for c in ["platform_name", "offer_id", day_col] if c in table.column_names]).to_pandas()
+            # Extract just the key columns to pandas
+            key_cols = ["platform_name", "offer_id", day_col]
+            key_batch = pa.RecordBatch.from_arrays(
+                [batch.column(batch.schema.get_field_index(c)) for c in key_cols],
+                names=key_cols
+            )
+            key_df = pa.Table.from_batches([key_batch]).to_pandas()
             key_df = key_df.loc[mask_np]
             if key_df.empty:
                 if limit_rows and total >= limit_rows:
@@ -450,6 +474,9 @@ def main() -> None:
             snap_df = pd.read_parquet(args.snapshots_index_parquet)
             if "crawled_date_day" not in snap_df.columns and "snapshot_ts" in snap_df.columns:
                 snap_df["crawled_date_day"] = pd.to_datetime(snap_df["snapshot_ts"], errors="coerce", utc=True).dt.date.astype(str)
+            else:
+                # Normalize crawled_date_day to string (date only, no timezone)
+                snap_df["crawled_date_day"] = pd.to_datetime(snap_df["crawled_date_day"], errors="coerce", utc=True).dt.date.astype(str)
             snap_df = snap_df.dropna(subset=["cik", "crawled_date_day"])
             snap_df["cik"] = snap_df["cik"].astype(str)
             snap_pairs = snap_df[["cik", "crawled_date_day"]].drop_duplicates()
@@ -461,6 +488,9 @@ def main() -> None:
             edgar_df = dset.to_table(columns=edgar_cols).to_pandas()
             if "crawled_date_day" not in edgar_df.columns and "snapshot_ts" in edgar_df.columns:
                 edgar_df["crawled_date_day"] = pd.to_datetime(edgar_df["snapshot_ts"], errors="coerce", utc=True).dt.date.astype(str)
+            else:
+                # Normalize crawled_date_day to string (date only, no timezone)
+                edgar_df["crawled_date_day"] = pd.to_datetime(edgar_df["crawled_date_day"], errors="coerce", utc=True).dt.date.astype(str)
             edgar_df = edgar_df.dropna(subset=["cik", "crawled_date_day"])
             edgar_df["cik"] = edgar_df["cik"].astype(str)
             edgar_pairs = edgar_df[["cik", "crawled_date_day"]].drop_duplicates()
@@ -529,14 +559,17 @@ def main() -> None:
         fail_reasons.append(f"text coverage computation failed: {e}")
 
     offers_core_entity_day = offers_core["row_count"]
-    struct_covered = offers_core_entity_day / raw_struct_entity_day if raw_struct_entity_day else 0.0
+    # NOTE: struct_coverage is the ratio of core entity-days to raw structured-signal entity-days
+    # This can be >1 if core includes entity-days without structured signal (which is expected)
+    # Renamed from "structured_signal_covered_by_core" to "core_to_raw_structured_ratio" for clarity
+    struct_ratio = offers_core_entity_day / raw_struct_entity_day if raw_struct_entity_day else 0.0
     report = {
         "host": host,
         "raw_offers_total_rows": raw_offers.get("row_count_total"),
         "raw_entity_day_total": raw_entity_day_total,
         "raw_structured_signal_entity_day_count": raw_struct_entity_day,
         "offers_core_entity_day_count": offers_core_entity_day,
-        "structured_signal_covered_by_core": struct_covered,
+        "core_to_raw_structured_ratio": struct_ratio,
         "raw_offers": raw_offers,
         "raw_edgar": raw_edgar,
         "offers_core_full_daily": offers_core,
@@ -570,7 +603,7 @@ def main() -> None:
         f"- raw_entity_day_total: {report.get('raw_entity_day_total')}",
         f"- raw_structured_signal_entity_day_count: {report.get('raw_structured_signal_entity_day_count')}",
         f"- offers_core_entity_day_count: {report.get('offers_core_entity_day_count')}",
-        f"- structured_signal_covered_by_core: {report.get('structured_signal_covered_by_core')}",
+        f"- core_to_raw_structured_ratio: {report.get('core_to_raw_structured_ratio')} (can be >1 if core includes entity-days without structured signal)",
         "",
         "## Raw vs Full-Daily Processed",
         "",
