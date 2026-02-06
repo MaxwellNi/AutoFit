@@ -5,6 +5,7 @@ Provides unified interfaces for:
 - Task protocols with leakage validation
 - Preprocessing (missing values, scaling)
 - Metrics with bootstrap confidence intervals
+- OOD evaluation with significance tests
 """
 from . import tasks
 from . import models
@@ -53,6 +54,22 @@ from .metrics import (
     compute_all_metrics,
 )
 
+# OOD Evaluation
+from .ood_evaluation import (
+    OODShiftType,
+    create_year_shift_split,
+    create_sector_shift_split,
+    create_size_shift_split,
+    SignificanceResult,
+    paired_t_test,
+    wilcoxon_test,
+    bootstrap_comparison,
+    diebold_mariano_test,
+    OODDegradation,
+    compute_ood_degradation,
+    compute_ood_robustness_score,
+)
+
 __all__ = [
     # Submodules
     "tasks",
@@ -92,4 +109,17 @@ __all__ = [
     "METRIC_REGISTRY",
     "get_metrics_for_task",
     "compute_all_metrics",
+    # OOD Evaluation
+    "OODShiftType",
+    "create_year_shift_split",
+    "create_sector_shift_split",
+    "create_size_shift_split",
+    "SignificanceResult",
+    "paired_t_test",
+    "wilcoxon_test",
+    "bootstrap_comparison",
+    "diebold_mariano_test",
+    "OODDegradation",
+    "compute_ood_degradation",
+    "compute_ood_robustness_score",
 ]
