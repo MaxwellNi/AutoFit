@@ -16,6 +16,7 @@ Usage:
     python scripts/run_block3_benchmark.py --task outcome --models LightGBM XGBoost
     python scripts/run_block3_benchmark.py --list-models
     python scripts/run_block3_benchmark.py --list-tasks
+    python scripts/run_block3_benchmark.py --preset smoke_test  # Leaderboard + skipped table
 """
 from __future__ import annotations
 
@@ -49,6 +50,33 @@ from src.narrative.block3.tasks import (
     list_tasks,
     TaskBase,
 )
+# Import new unified modules
+from src.narrative.block3.preprocessing import (
+    set_global_seed,
+    get_seed_sequence,
+    MissingPolicy,
+    get_missing_policy,
+    ScalingPolicy,
+    PreprocessConfig,
+    UnifiedPreprocessor,
+)
+from src.narrative.block3.metrics import (
+    rmse as metric_rmse,
+    mae as metric_mae,
+    mape as metric_mape,
+    smape as metric_smape,
+    bootstrap_ci,
+    METRIC_REGISTRY,
+    compute_all_metrics,
+)
+from src.narrative.block3.protocol import (
+    get_protocol,
+    LeakageValidator,
+    TASK_PROTOCOLS,
+)
+
+# Global seed for reproducibility
+GLOBAL_SEED = 42
 
 
 @dataclass
@@ -74,6 +102,23 @@ class BenchmarkConfig:
 
 
 @dataclass
+class SkippedModel:
+    """Info about a model that was skipped."""
+    model_name: str
+    model_category: str
+    skip_reason: str
+    details: str = ""
+    
+    def to_dict(self) -> Dict[str, str]:
+        return {
+            "model_name": self.model_name,
+            "model_category": self.model_category,
+            "skip_reason": self.skip_reason,
+            "details": self.details,
+        }
+
+
+@dataclass
 class ModelResult:
     """Result from a single model run."""
     model_name: str
@@ -90,6 +135,10 @@ class ModelResult:
     wape: Optional[float] = None
     mase: Optional[float] = None
     
+    # Bootstrap CI for primary metric (MAE)
+    mae_ci_lower: Optional[float] = None
+    mae_ci_upper: Optional[float] = None
+    
     # Probabilistic metrics
     quantile_loss: Optional[float] = None
     crps: Optional[float] = None
@@ -104,6 +153,7 @@ class ModelResult:
     inference_time_seconds: Optional[float] = None
     peak_memory_gb: Optional[float] = None
     n_parameters: Optional[int] = None
+    seed: int = GLOBAL_SEED
     
     def to_dict(self) -> Dict[str, Any]:
         return {
@@ -118,6 +168,8 @@ class ModelResult:
             "smape": self.smape,
             "wape": self.wape,
             "mase": self.mase,
+            "mae_ci_lower": self.mae_ci_lower,
+            "mae_ci_upper": self.mae_ci_upper,
             "quantile_loss": self.quantile_loss,
             "crps": self.crps,
             "coverage_10": self.coverage_10,
@@ -127,20 +179,50 @@ class ModelResult:
             "inference_time_seconds": self.inference_time_seconds,
             "peak_memory_gb": self.peak_memory_gb,
             "n_parameters": self.n_parameters,
+            "seed": self.seed,
         }
 
 
 class BenchmarkHarness:
     """Main benchmark orchestrator."""
     
-    def __init__(self, config: BenchmarkConfig, dataset: Block3Dataset):
+    def __init__(
+        self,
+        config: BenchmarkConfig,
+        dataset: Block3Dataset,
+        seed: int = GLOBAL_SEED,
+        compute_ci: bool = False,
+        n_bootstrap: int = 1000,
+    ):
         self.config = config
         self.dataset = dataset
+        self.seed = seed
+        self.compute_ci = compute_ci
+        self.n_bootstrap = n_bootstrap
         self.results: List[ModelResult] = []
+        self.skipped_models: List[SkippedModel] = []
+        
+        # Set global seed for reproducibility
+        set_global_seed(seed)
         
         # Setup output directory
         self.output_dir = Path(config.output["base_dir"])
         self.output_dir.mkdir(parents=True, exist_ok=True)
+    
+    def _record_skipped(
+        self,
+        model_name: str,
+        model_category: str,
+        reason: str,
+        details: str = "",
+    ):
+        """Record a skipped model."""
+        self.skipped_models.append(SkippedModel(
+            model_name=model_name,
+            model_category=model_category,
+            skip_reason=reason,
+            details=details,
+        ))
     
     def prepare_data(
         self,
@@ -193,37 +275,52 @@ class BenchmarkHarness:
         y_true: np.ndarray,
         y_pred: np.ndarray,
         y_pred_quantiles: Optional[Dict[float, np.ndarray]] = None,
-    ) -> Dict[str, float]:
-        """Compute all metrics."""
+        with_ci: bool = False,
+    ) -> Dict[str, Any]:
+        """
+        Compute all metrics using unified metrics module.
+        
+        Args:
+            y_true: Ground truth values
+            y_pred: Predicted values
+            y_pred_quantiles: Optional quantile predictions
+            with_ci: Whether to compute bootstrap confidence intervals
+        
+        Returns:
+            Dictionary of metrics (float or BootstrapCI if with_ci=True)
+        """
         metrics = {}
         
         # Filter NaN
         mask = ~(np.isnan(y_true) | np.isnan(y_pred))
-        y_true = y_true[mask]
-        y_pred = y_pred[mask]
+        y_true_clean = y_true[mask]
+        y_pred_clean = y_pred[mask]
         
-        if len(y_true) == 0:
+        if len(y_true_clean) == 0:
             return metrics
         
-        # MAE
-        metrics["mae"] = float(np.mean(np.abs(y_true - y_pred)))
-        
-        # RMSE
-        metrics["rmse"] = float(np.sqrt(np.mean((y_true - y_pred) ** 2)))
-        
-        # sMAPE
-        denom = np.abs(y_true) + np.abs(y_pred)
-        smape = np.where(denom > 0, 2 * np.abs(y_true - y_pred) / denom, 0)
-        metrics["smape"] = float(np.mean(smape) * 100)
+        # Use unified metrics module
+        metrics["mae"] = metric_mae(y_true_clean, y_pred_clean)
+        metrics["rmse"] = metric_rmse(y_true_clean, y_pred_clean)
+        metrics["smape"] = metric_smape(y_true_clean, y_pred_clean)
         
         # WAPE
-        if np.sum(np.abs(y_true)) > 0:
-            metrics["wape"] = float(np.sum(np.abs(y_true - y_pred)) / np.sum(np.abs(y_true)) * 100)
+        if np.sum(np.abs(y_true_clean)) > 0:
+            metrics["wape"] = float(np.sum(np.abs(y_true_clean - y_pred_clean)) / np.sum(np.abs(y_true_clean)) * 100)
         
         # MASE (assuming seasonal naive baseline with period 1)
-        naive_mae = np.mean(np.abs(np.diff(y_true))) if len(y_true) > 1 else 1.0
+        naive_mae = np.mean(np.abs(np.diff(y_true_clean))) if len(y_true_clean) > 1 else 1.0
         if naive_mae > 0:
             metrics["mase"] = metrics["mae"] / naive_mae
+        
+        # Bootstrap CI for MAE
+        if with_ci and len(y_true_clean) >= 10:
+            mae_ci = bootstrap_ci(
+                y_true_clean, y_pred_clean, metric_mae,
+                n_bootstrap=self.n_bootstrap, seed=self.seed
+            )
+            metrics["mae_ci_lower"] = mae_ci.ci_lower
+            metrics["mae_ci_upper"] = mae_ci.ci_upper
         
         # Probabilistic metrics (if quantiles provided)
         if y_pred_quantiles:
@@ -231,7 +328,7 @@ class BenchmarkHarness:
             ql_sum = 0
             for q, y_q in y_pred_quantiles.items():
                 y_q = y_q[mask]
-                errors = y_true - y_q
+                errors = y_true_clean - y_q
                 ql = np.where(errors > 0, q * errors, (q - 1) * errors)
                 ql_sum += np.mean(ql)
             metrics["quantile_loss"] = float(ql_sum / len(y_pred_quantiles))
@@ -242,9 +339,9 @@ class BenchmarkHarness:
                     y_q = y_pred_quantiles[q][mask]
                     if q == 0.5:
                         # P50 should be close to median
-                        metrics[f"coverage_{int(q*100)}"] = float(np.mean(y_true <= y_q))
+                        metrics[f"coverage_{int(q*100)}"] = float(np.mean(y_true_clean <= y_q))
                     else:
-                        metrics[f"coverage_{int(q*100)}"] = float(np.mean(y_true <= y_q))
+                        metrics[f"coverage_{int(q*100)}"] = float(np.mean(y_true_clean <= y_q))
         
         return metrics
     
@@ -622,14 +719,23 @@ class BenchmarkHarness:
         return "unknown"
     
     def save_results(self):
-        """Save benchmark results."""
-        # Convert to DataFrame
+        """Save benchmark results including skipped models table."""
+        # Convert results to DataFrame
         records = [r.to_dict() for r in self.results]
         df = pd.DataFrame(records)
+        
+        # Convert skipped models to DataFrame
+        skipped_records = [s.to_dict() for s in self.skipped_models]
+        df_skipped = pd.DataFrame(skipped_records)
         
         # Handle empty results
         if len(df) == 0:
             print("\nNo results to save.")
+            # Still save skipped models if any
+            if len(df_skipped) > 0:
+                skipped_path = self.output_dir / "skipped_models.parquet"
+                df_skipped.to_parquet(skipped_path)
+                print(f"Saved skipped models to {skipped_path}")
             return
         
         # Save leaderboard
@@ -637,11 +743,20 @@ class BenchmarkHarness:
         df.to_parquet(leaderboard_path)
         print(f"\nSaved leaderboard to {leaderboard_path}")
         
+        # Save skipped models
+        if len(df_skipped) > 0:
+            skipped_path = self.output_dir / "skipped_models.parquet"
+            df_skipped.to_parquet(skipped_path)
+            print(f"Saved skipped models to {skipped_path}")
+        
         # Save summary JSON
         summary = {
             "generated_at": datetime.now(timezone.utc).isoformat().replace("+00:00", "Z"),
+            "seed": self.seed,
             "n_results": len(self.results),
+            "n_skipped": len(self.skipped_models),
             "models_run": list(df["model_name"].unique()) if "model_name" in df.columns else [],
+            "models_skipped": list(df_skipped["model_name"].unique()) if len(df_skipped) > 0 else [],
             "ablations_run": list(df["ablation"].unique()) if "ablation" in df.columns else [],
             "targets_run": list(df["target"].unique()) if "target" in df.columns else [],
             "horizons_run": [int(h) for h in df["horizon"].unique()] if "horizon" in df.columns else [],
@@ -658,7 +773,17 @@ class BenchmarkHarness:
         
         if len(df) > 0 and "mae" in df.columns:
             leaderboard = df.dropna(subset=["mae"]).sort_values("mae")
-            print(leaderboard[["model_name", "ablation", "horizon", "target", "mae", "rmse"]].head(20).to_string(index=False))
+            display_cols = ["model_name", "ablation", "horizon", "target", "mae", "rmse"]
+            if "mae_ci_lower" in df.columns:
+                display_cols.extend(["mae_ci_lower", "mae_ci_upper"])
+            print(leaderboard[display_cols].head(20).to_string(index=False))
+        
+        # Print skipped models table
+        if len(df_skipped) > 0:
+            print("\n" + "=" * 80)
+            print("Skipped Models")
+            print("=" * 80)
+            print(df_skipped.to_string(index=False))
 
 
 def main():
@@ -673,6 +798,9 @@ def main():
     parser.add_argument("--list-tasks", action="store_true", help="List available tasks")
     parser.add_argument("--preset", choices=["smoke_test", "quick", "standard", "comprehensive"],
                         help="Use a preset model configuration")
+    parser.add_argument("--seed", type=int, default=42, help="Random seed for reproducibility")
+    parser.add_argument("--compute-ci", action="store_true", help="Compute bootstrap confidence intervals")
+    parser.add_argument("--n-bootstrap", type=int, default=1000, help="Number of bootstrap samples")
     args = parser.parse_args()
     
     # List modes (no data loading)
@@ -693,6 +821,9 @@ def main():
             task = get_task(task_name)
             print(f"\n{task_name}: {task.description}")
         return
+    
+    # Set global seed
+    set_global_seed(args.seed)
     
     # Load config
     config = BenchmarkConfig.load(args.config)
@@ -715,8 +846,14 @@ def main():
     # Load dataset
     dataset = Block3Dataset.from_pointer(Path(config.data["pointer"]))
     
-    # Create harness
-    harness = BenchmarkHarness(config, dataset)
+    # Create harness with reproducibility settings
+    harness = BenchmarkHarness(
+        config,
+        dataset,
+        seed=args.seed,
+        compute_ci=args.compute_ci,
+        n_bootstrap=args.n_bootstrap,
+    )
     
     # Determine models from preset or args
     model_names = args.models
