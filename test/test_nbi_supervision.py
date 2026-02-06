@@ -7,6 +7,7 @@ def test_nbi_supervision_loaders(tmp_path):
     base = tmp_path
     # goemotions
     go_dir = base / "goemotions"
+    go_dir.mkdir(parents=True, exist_ok=True)
     pd.DataFrame(
         {
             "text": ["a", "b"],
@@ -16,6 +17,7 @@ def test_nbi_supervision_loaders(tmp_path):
     ).to_parquet(go_dir / "train.parquet", index=False)
     # financial phrasebank
     fp_dir = base / "financial_phrasebank"
+    fp_dir.mkdir(parents=True, exist_ok=True)
     pd.DataFrame(
         {
             "sentence": ["x", "y"],
@@ -24,6 +26,7 @@ def test_nbi_supervision_loaders(tmp_path):
     ).to_parquet(fp_dir / "train.parquet", index=False)
     # media_frames
     mf_dir = base / "media_frames"
+    mf_dir.mkdir(parents=True, exist_ok=True)
     pd.DataFrame(
         {
             "text": ["m"],

@@ -281,6 +281,8 @@ def scan_edgar(
     *,
     base_dir: Optional[Path] = None,
     columns: Optional[Sequence[str]] = None,
+    limit_rows: Optional[int] = None,
+    batch_size: int = 65536,
 ) -> pd.DataFrame:
     """
     Scan EDGAR accessions parquet with predicate pushdown for entity_ids + time_range.
