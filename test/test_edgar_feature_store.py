@@ -6,7 +6,6 @@ from narrative.data_preprocessing.edgar_feature_store import (
     aggregate_edgar_features,
     extract_edgar_features,
 )
-)
 
 
 def _payload(total, sold=None):

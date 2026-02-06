@@ -14,7 +14,6 @@ def test_nbi_supervision_loaders(tmp_path):
             "split": ["train", "train"],
         }
     ).to_parquet(go_dir / "train.parquet", index=False)
-    ).to_parquet(go_dir / "train.parquet", index=False)
     # financial phrasebank
     fp_dir = base / "financial_phrasebank"
     pd.DataFrame(
@@ -23,7 +22,6 @@ def test_nbi_supervision_loaders(tmp_path):
             "label": [0, 1],
         }
     ).to_parquet(fp_dir / "train.parquet", index=False)
-    ).to_parquet(fp_dir / "train.parquet", index=False)
     # media_frames
     mf_dir = base / "media_frames"
     pd.DataFrame(
@@ -31,7 +29,6 @@ def test_nbi_supervision_loaders(tmp_path):
             "text": ["m"],
             "frame": ["econ"],
         }
-    ).to_parquet(mf_dir / "train.parquet", index=False)
     ).to_parquet(mf_dir / "train.parquet", index=False)
 
     datasets = load_all_supervision(base)

@@ -74,9 +74,7 @@ class ParquetOffersDataset(Dataset):  # type: ignore[misc]
         max_snapshots: Optional[int] = None,
         use_first_k: bool = True,
     ):
-        max_snapshots: Optional[int] = None,
-        use_first_k: bool = True,
-    ):
+        """Initialize the dataset."""
         if torch is None:  # pragma: no cover
             raise ImportError("torch is required for ParquetOffersDataset")
 

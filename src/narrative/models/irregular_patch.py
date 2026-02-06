@@ -105,10 +105,6 @@ class IrregularPatchEmbed(nn.Module):
             else:
                 mask = torch.ones((feats.shape[0],), device=x.device, dtype=torch.bool)
             mask_list.append(mask)
-                mask[-valid_len:] = True
-            else:
-                mask = torch.ones((feats.shape[0],), device=x.device, dtype=torch.bool)
-            mask_list.append(mask)
 
         patches = torch.stack([self.proj(p) for p in patches_list], dim=0)
         patches = self.drop(patches)

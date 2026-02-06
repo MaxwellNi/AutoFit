@@ -126,11 +126,7 @@ class ModelWithModules(nn.Module):
         ssm_causal: bool = True,
         ssm_kernel_size: int = 5,
     ):
-        ssm_variant: str = "mamba",
-        ssm_chunk_size: Optional[int] = None,
-        ssm_causal: bool = True,
-        ssm_kernel_size: int = 5,
-    ):
+        """Initialize the wrapped model with optional module adapters."""
         super().__init__()
         self.base_model = base_model
         self.nonstat = NonStatAdapter(n_features) if flags.nonstat else None
@@ -225,13 +221,12 @@ class ModelWithFusion(nn.Module):
         fused = self.fusion(x, edgar_x=edgar_x, edgar_mask=edgar_mask, attn_mask=None)
         return self.base_model(fused.x)
 
+
 __all__ = [
     "ModuleFlags",
     "NonStatAdapter",
     "MultiScaleBranch",
     "SSMEncoderAdapter",
     "ModelWithModules",
-    "ModelWithFusion",
-]
     "ModelWithFusion",
 ]

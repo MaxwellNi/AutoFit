@@ -1,3 +1,4 @@
+"""Budget-based hyperparameter search using successive halving."""
 from __future__ import annotations
 
 from dataclasses import dataclass
@@ -12,19 +13,23 @@ import torch
 import torch.nn as nn
 from torch.utils.data import DataLoader
 
-from narrative.models.local_registry import build_local_model
+try:
+    from narrative.models.local_registry import build_local_model
+except ImportError:
+    build_local_model = None
 
 
 @dataclass
 class SearchResult:
+    """Result of a single candidate training run."""
     candidate: Dict
     val_loss: float
     epochs: int
     checkpoint_path: Optional[str] = None
-    checkpoint_path: Optional[str] = None
 
 
 def _set_seed(seed: int) -> None:
+    """Set random seeds for reproducibility."""
     import random
     random.seed(seed)
     np.random.seed(seed)
@@ -34,10 +39,11 @@ def _set_seed(seed: int) -> None:
 
 
 def _make_loaders(X: np.ndarray, y: np.ndarray, batch_size: int = 32):
+    """Create train/val/test data loaders."""
     def _to_tensor(arr):
         try:
             return torch.from_numpy(arr).float()
-        except RuntimeError as exc:  # fallback for torch builds w/o numpy
+        except RuntimeError as exc:
             if "Numpy is not available" in str(exc):
                 return torch.tensor(arr.tolist(), dtype=torch.float32)
             raise
@@ -77,10 +83,18 @@ def _train_candidate(
     early_stopping_patience: Optional[int] = None,
     checkpoint_path: Optional[Path] = None,
 ) -> float:
-    early_stopping_patience: Optional[int] = None,
-    checkpoint_path: Optional[Path] = None,
-) -> float:
+    """Train a candidate model and return validation loss."""
+    if build_local_model is None:
+        raise ImportError("narrative.models.local_registry not available")
+    
     _set_seed(seed)
+    
+    # Make data loaders
+    train_loader, val_loader, _ = _make_loaders(X, y)
+    
+    # Determine input dimension
+    enc_in = X.shape[-1] if X.ndim > 1 else 1
+    
     model = build_local_model(
         name=candidate["backbone"],
         seq_len=seq_len,
@@ -91,13 +105,10 @@ def _train_candidate(
         edgar_dim=int(candidate.get("edgar_dim", enc_in)),
         **(candidate.get("model_cfg") or {}),
     ).to(device)
-        **(candidate.get("model_cfg") or {}),
-    ).to(device)
 
     criterion = nn.MSELoss()
     opt = torch.optim.AdamW(model.parameters(), lr=float(candidate.get("lr", 1e-3)))
     best_val = float("inf")
-    no_improve = 0
     no_improve = 0
 
     for _ in range(epochs):
@@ -140,6 +151,7 @@ def _train_candidate(
 
     return best_val
 
+
 def successive_halving(
     candidates: List[Dict],
     X: np.ndarray,
@@ -154,25 +166,10 @@ def successive_halving(
     output_dir: Optional[Path] = None,
     early_stopping_patience: Optional[int] = None,
 ) -> Tuple[List[SearchResult], Dict]:
-    output_dir: Optional[Path] = None,
-    early_stopping_patience: Optional[int] = None,
-) -> Tuple[List[SearchResult], Dict]:
+    """Run successive halving search over candidates."""
     active = list(candidates)
     all_results: List[SearchResult] = []
 
-    if output_dir is not None:
-        output_dir = Path(output_dir)
-        output_dir.mkdir(parents=True, exist_ok=True)
-
-    for budget in budgets:
-        scored: List[SearchResult] = []
-        for idx, cand in enumerate(active):
-            ckpt = None
-            if output_dir is not None:
-                ckpt = output_dir / "checkpoints" / f"cand_{idx}_budget{budget}.pt"
-                meta_path = output_dir / "checkpoints" / f"cand_{idx}_budget{budget}.json"
-                meta_path.parent.mkdir(parents=True, exist_ok=True)
-                meta_path.write_text(json.dumps(cand, indent=2), encoding="utf-8")
     if output_dir is not None:
         output_dir = Path(output_dir)
         output_dir.mkdir(parents=True, exist_ok=True)
@@ -192,14 +189,18 @@ def successive_halving(
                 X,
                 y,
                 seq_len=seq_len,
-                enc_in=enc_in,
                 epochs=int(budget),
                 device=device,
                 seed=seed,
                 early_stopping_patience=early_stopping_patience,
                 checkpoint_path=ckpt,
             )
-            scored.append(SearchResult(candidate=cand, val_loss=val_loss, epochs=int(budget), checkpoint_path=str(ckpt) if ckpt else None))
+            scored.append(SearchResult(
+                candidate=cand,
+                val_loss=val_loss,
+                epochs=int(budget),
+                checkpoint_path=str(ckpt) if ckpt else None
+            ))
         scored.sort(key=lambda r: r.val_loss)
         all_results.extend(scored)
         keep = max(1, len(scored) // reduction_factor)
@@ -225,18 +226,14 @@ def train_candidate(
     early_stopping_patience: Optional[int] = None,
     checkpoint_path: Optional[Path] = None,
 ) -> float:
+    """Public wrapper for training a candidate."""
     return _train_candidate(
         candidate,
         X,
         y,
         seq_len=seq_len,
-        enc_in=enc_in,
         epochs=epochs,
         device=device,
-        seed=seed,
-        early_stopping_patience=early_stopping_patience,
-        checkpoint_path=checkpoint_path,
-    )
         seed=seed,
         early_stopping_patience=early_stopping_patience,
         checkpoint_path=checkpoint_path,
