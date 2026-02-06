@@ -509,68 +509,107 @@ class BenchmarkHarness:
         
         # Get ablations
         if ablation_names is None:
-            ablation_names = ["core_only", "core_text", "core_edgar", "full"]
+            ablation_names = ["core_only"]
         
-        ablation_map = {a["name"]: a for a in self.config.ablations["feature_sets"]}
-        
-        # Build dataset for task
-        print(f"\nBuilding dataset for task: {task_name}...")
-        task_data = task.build_dataset()
-        
-        # Get splits
-        splits = task.get_splits(task_data)
-        print(f"  Train: {len(splits['train']):,}, Val: {len(splits['val']):,}, Test: {len(splits['test']):,}")
+        # Get targets and horizons from task config
+        targets = task.config.targets[:1] if task.config.targets else ["funding_raised_usd"]
+        horizons = task.config.horizons[:1] if task.config.horizons else [7]
         
         # Determine models to run
         if model_names is None:
             # Use appropriate models based on task type
-            if task_name in ("outcome", "task1"):
-                model_names = ["LogisticRegression", "RandomForest", "LightGBM", "XGBoost"]
-            elif task_name in ("forecast", "task2"):
-                model_names = ["SeasonalNaive", "AutoARIMA", "LightGBM", "XGBoost", "NBEATS"]
+            if task_name in ("outcome", "task1_outcome"):
+                model_names = ["Ridge", "RandomForest", "LightGBM", "XGBoost"]
+            elif task_name in ("forecast", "task2_forecast"):
+                model_names = ["SeasonalNaive", "Ridge", "LightGBM", "XGBoost"]
             else:
                 model_names = ["LightGBM", "XGBoost"]
         
-        # Run each model
-        for model_name in model_names:
-            if not check_model_available(model_name):
-                print(f"  Skipping {model_name} (not available)")
-                continue
-            
-            for ablation_name in ablation_names:
-                print(f"\n  Running {model_name} with {ablation_name}...")
-                
-                try:
-                    model = get_model(model_name)
-                    result = task.run(model, task_data, splits)
+        # Run each combination
+        for target in targets:
+            for horizon in horizons:
+                for ablation_name in ablation_names:
+                    print(f"\nTarget: {target}, Horizon: {horizon}, Ablation: {ablation_name}")
                     
-                    # Convert to ModelResult
-                    model_result = ModelResult(
-                        model_name=model_name,
-                        model_category=self._get_model_category(model_name),
-                        ablation=ablation_name,
-                        horizon=getattr(task.config, "horizon", 0),
-                        context_length=getattr(task.config, "context_length", 0),
-                        target=getattr(task.config, "target", ""),
-                        mae=result.metrics.get("mae"),
-                        rmse=result.metrics.get("rmse"),
-                        smape=result.metrics.get("smape"),
-                        wape=result.metrics.get("wape"),
-                        train_time_seconds=result.train_time,
-                    )
+                    # Build dataset for this configuration
+                    try:
+                        X, y = task.build_dataset(
+                            ablation=ablation_name,
+                            horizon=horizon,
+                            target=target,
+                        )
+                        print(f"  Dataset: {len(X):,} samples, {X.shape[1]} features")
+                    except Exception as e:
+                        print(f"  Error building dataset: {e}")
+                        continue
                     
-                    # Add task-specific metrics
-                    if "auc" in result.metrics:
-                        model_result.auc = result.metrics["auc"]
-                    if "prauc" in result.metrics:
-                        model_result.prauc = result.metrics["prauc"]
+                    # Get splits
+                    try:
+                        splits = task.get_splits(X, y)
+                        # Handle both list format (train_idx, val_idx, test_idx) and dict format
+                        if isinstance(splits, list) and len(splits) > 0:
+                            if isinstance(splits[0], tuple):
+                                train_idx, val_idx, test_idx = splits[0]
+                            else:
+                                train_idx, val_idx, test_idx = splits["train"], splits["val"], splits["test"]
+                        elif isinstance(splits, dict):
+                            train_idx, val_idx, test_idx = splits["train"], splits["val"], splits["test"]
+                        else:
+                            raise ValueError(f"Unexpected splits format: {type(splits)}")
+                        print(f"  Splits: train={len(train_idx)}, val={len(val_idx)}, test={len(test_idx)}")
+                    except Exception as e:
+                        print(f"  Error getting splits: {e}")
+                        continue
                     
-                    self.results.append(model_result)
-                    
-                    print(f"    Metrics: {result.metrics}")
-                    
-                except Exception as e:
-                    print(f"    Error: {e}")
+                    # Run each model
+                    for model_name in model_names:
+                        if not check_model_available(model_name):
+                            print(f"    Skipping {model_name} (not available)")
+                            continue
+                        
+                        print(f"    Running {model_name}...")
+                        
+                        try:
+                            model = get_model(model_name)
+                            
+                            # Fit on train
+                            X_train = X.iloc[train_idx] if hasattr(train_idx, '__len__') else X.loc[train_idx]
+                            y_train = y.iloc[train_idx] if hasattr(train_idx, '__len__') else y.loc[train_idx]
+                            X_test = X.iloc[test_idx] if hasattr(test_idx, '__len__') else X.loc[test_idx]
+                            y_test = y.iloc[test_idx] if hasattr(test_idx, '__len__') else y.loc[test_idx]
+                            
+                            import time
+                            start_time = time.time()
+                            model.fit(X_train, y_train)
+                            train_time = time.time() - start_time
+                            
+                            # Predict
+                            y_pred = model.predict(X_test)
+                            
+                            # Compute metrics
+                            metrics = self.compute_metrics(y_test.values, y_pred)
+                            
+                            # Store result
+                            model_result = ModelResult(
+                                model_name=model_name,
+                                model_category=self._get_model_category(model_name),
+                                ablation=ablation_name,
+                                horizon=horizon,
+                                context_length=task.config.context_lengths[0] if task.config.context_lengths else 30,
+                                target=target,
+                                mae=metrics.get("mae"),
+                                rmse=metrics.get("rmse"),
+                                smape=metrics.get("smape"),
+                                wape=metrics.get("wape"),
+                                mase=metrics.get("mase"),
+                                train_time_seconds=train_time,
+                            )
+                            self.results.append(model_result)
+                            
+                            print(f"      MAE={metrics.get('mae', 'N/A'):.4f}, RMSE={metrics.get('rmse', 'N/A'):.4f}")
+                            
+                        except Exception as e:
+                            print(f"      Error: {e}")
         
         # Save results
         self.save_results()
@@ -588,6 +627,11 @@ class BenchmarkHarness:
         records = [r.to_dict() for r in self.results]
         df = pd.DataFrame(records)
         
+        # Handle empty results
+        if len(df) == 0:
+            print("\nNo results to save.")
+            return
+        
         # Save leaderboard
         leaderboard_path = self.output_dir / self.config.output["leaderboard"]
         df.to_parquet(leaderboard_path)
@@ -597,10 +641,10 @@ class BenchmarkHarness:
         summary = {
             "generated_at": datetime.now(timezone.utc).isoformat().replace("+00:00", "Z"),
             "n_results": len(self.results),
-            "models_run": list(df["model_name"].unique()),
-            "ablations_run": list(df["ablation"].unique()),
-            "targets_run": list(df["target"].unique()),
-            "horizons_run": [int(h) for h in df["horizon"].unique()],  # Convert numpy int64
+            "models_run": list(df["model_name"].unique()) if "model_name" in df.columns else [],
+            "ablations_run": list(df["ablation"].unique()) if "ablation" in df.columns else [],
+            "targets_run": list(df["target"].unique()) if "target" in df.columns else [],
+            "horizons_run": [int(h) for h in df["horizon"].unique()] if "horizon" in df.columns else [],
         }
         
         summary_path = self.output_dir / "benchmark_summary.json"

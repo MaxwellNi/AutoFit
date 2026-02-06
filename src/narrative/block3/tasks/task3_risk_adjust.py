@@ -311,7 +311,7 @@ def create_task3_config(
     """Create default Task 3 configuration."""
     return TaskConfig(
         name="task3_risk_adjust",
-        targets=targets or ["total_amount_sold"],
+        targets=targets or ["funding_raised_usd"],
         horizons=horizons or [14, 30],
         context_lengths=[],
         ablations=["core_only", "+edgar", "full"],  # Explicit EDGAR ablation

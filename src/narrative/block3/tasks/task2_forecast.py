@@ -4,10 +4,14 @@ Task 2: Trajectory Forecasting.
 
 Multi-horizon time series forecasting with quantile/probabilistic outputs.
 
-Targets:
-- total_amount_sold: Cumulative funding trajectory
-- number_investors: Investor count trajectory  
-- daily_amount: Daily funding inflow
+Targets (actual freeze columns):
+- funding_raised_usd: Cumulative funding trajectory
+- investors_count: Investor count trajectory  
+- delta_funding_raised: Daily funding inflow
+
+Legacy mappings:
+- total_amount_sold -> funding_raised_usd
+- number_investors -> investors_count
 
 Anti-leakage: Context window uses only past values; prediction horizons are strictly future.
 """
@@ -277,7 +281,7 @@ def create_task2_config(
     """Create default Task 2 configuration."""
     return TaskConfig(
         name="task2_forecast",
-        targets=targets or ["total_amount_sold", "number_investors"],
+        targets=targets or ["funding_raised_usd", "investors_count"],
         horizons=horizons or [7, 14, 30, 60],  # H = forecast horizon
         context_lengths=context_lengths or [30, 60, 90],
         ablations=["core_only", "+text", "+edgar", "full"],

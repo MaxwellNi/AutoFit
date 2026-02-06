@@ -384,7 +384,7 @@ def create_task4_config(
     """Create default Task 4 configuration."""
     return TaskConfig(
         name="task4_narrative_shift",
-        targets=targets or ["total_amount_sold", "number_investors"],
+        targets=targets or ["funding_raised_usd", "investors_count"],
         horizons=[0],  # Not applicable
         context_lengths=[],
         ablations=["core_only", "+text", "full"],

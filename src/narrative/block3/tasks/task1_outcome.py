@@ -5,11 +5,15 @@ Task 1: Outcome Prediction.
 Predict final offering outcomes using early-K snapshot features.
 This is a classification + regression + ranking task.
 
-Targets:
-- success_binary: Whether offering reached funding goal
-- total_amount_sold: Final amount raised (regression)
-- days_to_close: Days until offering closes (regression)
-- ranking: Relative performance among contemporaneous offerings
+Targets (mapped from freeze data columns):
+- is_funded: Whether offering was funded (binary classification)
+- funding_raised_usd: Final amount raised in USD (regression)
+- investors_count: Total number of investors (regression)
+
+Legacy targets (auto-mapped):
+- success_binary -> is_funded
+- total_amount_sold -> funding_raised_usd
+- number_investors -> investors_count
 
 Anti-leakage: Only use features available at snapshot K days after launch.
 """
@@ -102,11 +106,25 @@ class Task1OutcomePrediction(TaskBase):
     
     description = TASK1_DESCRIPTION
     
+    # Column name mappings from legacy to actual freeze columns
+    COLUMN_MAP = {
+        # Legacy -> Actual
+        "total_amount_sold": "funding_raised_usd",
+        "success_binary": "is_funded",
+        "number_investors": "investors_count",
+        # For success_binary derivation
+        "total_offering_amount": "funding_goal_usd",
+    }
+    
     def __init__(self, config: TaskConfig, dataset=None):
         super().__init__(config, dataset)
         self._core_df = None
         self._text_df = None
         self._edgar_df = None
+    
+    def _map_target(self, target: str) -> str:
+        """Map legacy target names to actual data columns."""
+        return self.COLUMN_MAP.get(target, target)
     
     def _load_data(self):
         """Lazy load data."""
@@ -132,7 +150,7 @@ class Task1OutcomePrediction(TaskBase):
         target: str,
     ) -> Tuple[pd.DataFrame, pd.Series]:
         """
-        Build early-K snapshot features.
+        Build early-K snapshot features (vectorized implementation).
         
         For each entity:
         1. Find first observation date (launch date proxy)
@@ -153,66 +171,63 @@ class Task1OutcomePrediction(TaskBase):
         
         core_df[date_col] = pd.to_datetime(core_df[date_col])
         
-        # Group by entity and find first/last dates
-        entity_info = core_df.groupby("entity_id").agg({
-            date_col: ["min", "max"],
-        }).reset_index()
-        entity_info.columns = ["entity_id", "first_date", "last_date"]
+        # Vectorized: compute first/last dates per entity
+        entity_stats = core_df.groupby("entity_id")[date_col].agg(["min", "max"])
+        entity_stats.columns = ["first_date", "last_date"]
+        entity_stats["snapshot_date"] = entity_stats["first_date"] + pd.Timedelta(days=K)
         
-        # Calculate snapshot date = first_date + K days
-        entity_info["snapshot_date"] = entity_info["first_date"] + pd.Timedelta(days=K)
+        # Map target name
+        actual_target = self._map_target(target)
         
-        # For each entity, get features at snapshot date (or closest prior)
-        features_list = []
-        labels_list = []
+        # Get final row per entity (for labels)
+        idx_last = core_df.groupby("entity_id")[date_col].idxmax()
+        final_rows = core_df.loc[idx_last].set_index("entity_id")
         
-        for _, row in entity_info.iterrows():
-            entity_id = row["entity_id"]
-            snapshot_date = row["snapshot_date"]
-            last_date = row["last_date"]
-            
-            # Get entity data up to snapshot date (anti-leakage)
-            entity_data = core_df[
-                (core_df["entity_id"] == entity_id) &
-                (core_df[date_col] <= snapshot_date)
-            ]
-            
-            if len(entity_data) == 0:
-                continue
-            
-            # Use last available observation as features
-            feature_row = entity_data.iloc[-1].copy()
-            
-            # Get final outcome (last observation)
-            final_data = core_df[core_df["entity_id"] == entity_id]
-            if len(final_data) == 0:
-                continue
-            
-            final_row = final_data.iloc[-1]
-            
-            # Extract label
-            if target in final_row:
-                label = final_row[target]
-            elif target == "success_binary":
-                # Derive from total_amount_sold vs goal
-                if "total_amount_sold" in final_row and "total_offering_amount" in final_row:
-                    label = 1 if final_row["total_amount_sold"] >= final_row["total_offering_amount"] * 0.5 else 0
-                else:
-                    continue
+        # Get snapshot row per entity (last row before snapshot_date)
+        # Merge snapshot_date into core_df
+        core_df = core_df.merge(
+            entity_stats[["snapshot_date"]].reset_index(),
+            on="entity_id",
+            how="left"
+        )
+        
+        # Filter to rows before snapshot date
+        snapshot_mask = core_df[date_col] <= core_df["snapshot_date"]
+        snapshot_df = core_df[snapshot_mask].copy()
+        
+        # Get last row per entity before snapshot
+        idx_snapshot = snapshot_df.groupby("entity_id")[date_col].idxmax()
+        feature_rows = snapshot_df.loc[idx_snapshot].set_index("entity_id")
+        
+        # Extract labels from final_rows
+        if actual_target in final_rows.columns:
+            labels = final_rows[actual_target]
+        elif target == "success_binary" or actual_target == "is_funded":
+            if "is_funded" in final_rows.columns:
+                labels = final_rows["is_funded"]
             else:
-                continue
-            
-            if pd.isna(label):
-                continue
-            
-            features_list.append(feature_row)
-            labels_list.append(label)
+                # Derive from funding columns
+                goal_col = self._map_target("total_offering_amount")
+                raised_col = self._map_target("total_amount_sold")
+                if raised_col in final_rows.columns and goal_col in final_rows.columns:
+                    labels = (final_rows[raised_col] >= final_rows[goal_col] * 0.5).astype(int)
+                else:
+                    raise ValueError(f"Cannot derive labels for target={target}")
+        else:
+            raise ValueError(f"Target column '{actual_target}' not found in data")
         
-        if len(features_list) == 0:
+        # Align features and labels
+        common_entities = feature_rows.index.intersection(labels.dropna().index)
+        X = feature_rows.loc[common_entities]
+        y = labels.loc[common_entities]
+        
+        # Filter out rows with NaN labels
+        valid_mask = ~y.isna()
+        X = X[valid_mask]
+        y = y[valid_mask]
+        
+        if len(X) == 0:
             raise ValueError(f"No valid samples for Task1 with K={K}, target={target}")
-        
-        X = pd.DataFrame(features_list)
-        y = pd.Series(labels_list, index=X.index)
         
         # Apply ablation
         X = self._build_ablation_features(X, self._text_df, self._edgar_df, ablation)
@@ -254,9 +269,10 @@ class Task1OutcomePrediction(TaskBase):
         Regression: MAE, RMSE
         Ranking: NDCG@K, Spearman
         """
-        target = self.config.targets[0] if self.config.targets else "total_amount_sold"
+        target = self.config.targets[0] if self.config.targets else "funding_raised_usd"
+        actual_target = self._map_target(target)
         
-        if target in ["success_binary"]:
+        if target in ["success_binary", "is_funded"] or actual_target == "is_funded":
             # Classification metrics
             return {
                 "auc": safe_auc,
@@ -281,7 +297,7 @@ def create_task1_config(
     """Create default Task 1 configuration."""
     return TaskConfig(
         name="task1_outcome",
-        targets=targets or ["total_amount_sold", "success_binary"],
+        targets=targets or ["funding_raised_usd", "is_funded"],
         horizons=horizons or [7, 14, 30, 60],  # K = early snapshot days
         context_lengths=[],  # Not applicable for Task 1
         ablations=["core_only", "+text", "+edgar", "full"],

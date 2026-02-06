@@ -11,14 +11,21 @@ anti_leakage:
   gap_days: 0  # Days between train and val/test
   verify_no_future_features: true
 
+# Column mappings (legacy -> actual freeze columns)
+column_mappings:
+  total_amount_sold: funding_raised_usd
+  success_binary: is_funded
+  number_investors: investors_count
+  total_offering_amount: funding_goal_usd
+
 # Task definitions
 tasks:
   task1_outcome:
     description: "Outcome Prediction (classification + regression + ranking)"
     targets:
-      - total_amount_sold
-      - number_investors
-      - success_binary
+      - funding_raised_usd
+      - investors_count
+      - is_funded
     horizons: [7, 14, 30, 60]  # K = early snapshot days
     ablations:
       - core_only
@@ -45,8 +52,8 @@ tasks:
   task2_forecast:
     description: "Trajectory Forecasting (multi-horizon + quantiles)"
     targets:
-      - total_amount_sold
-      - number_investors
+      - funding_raised_usd
+      - investors_count
     horizons: [7, 14, 30, 60]  # H = forecast horizon
     context_lengths: [30, 60, 90]
     ablations:
@@ -74,7 +81,7 @@ tasks:
   task3_risk_adjust:
     description: "EDGAR-conditioned Risk Adjustment (robustness + shift)"
     targets:
-      - total_amount_sold
+      - funding_raised_usd
     horizons: [14, 30]
     ablations:
       - core_only
@@ -96,8 +103,8 @@ tasks:
   task4_narrative_shift:
     description: "Narrative Shift & GenAI Era Effect (DiD + mediation)"
     targets:
-      - total_amount_sold
-      - number_investors
+      - funding_raised_usd
+      - investors_count
     treatment_year: 2023  # GenAI era starts
     placebo_years: [2021, 2022]
     mediators:
@@ -193,7 +200,7 @@ training:
 smoke_test:
   n_entities: 100
   horizons: [7, 14]
-  targets: [total_amount_sold]
+  targets: [funding_raised_usd]
   ablations: [core_only]
   models: [SeasonalNaive, LightGBM]
   max_epochs: 5
