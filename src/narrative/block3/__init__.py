@@ -70,6 +70,21 @@ from .ood_evaluation import (
     compute_ood_robustness_score,
 )
 
+# DiD Analysis
+from .did_analysis import (
+    DiDEstimator,
+    DiDResult,
+    EventStudyResult,
+    MediationResult,
+    simple_did,
+    regression_did,
+    bootstrap_did,
+    check_parallel_trends,
+    run_placebo_test,
+    mediation_analysis,
+    event_study,
+)
+
 __all__ = [
     # Submodules
     "tasks",
@@ -122,4 +137,16 @@ __all__ = [
     "OODDegradation",
     "compute_ood_degradation",
     "compute_ood_robustness_score",
+    # DiD Analysis
+    "DiDEstimator",
+    "DiDResult",
+    "EventStudyResult",
+    "MediationResult",
+    "simple_did",
+    "regression_did",
+    "bootstrap_did",
+    "check_parallel_trends",
+    "run_placebo_test",
+    "mediation_analysis",
+    "event_study",
 ]

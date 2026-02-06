@@ -6,6 +6,10 @@ readme = "QUICK_START.md"
 requires-python = ">=3.9"
 dependencies = ["deltalake", "duckdb"]
 
+[tool.pytest.ini_options]
+pythonpath = ["src"]
+testpaths = ["test"]
+
 [tool.black]
 line-length = 100
 
