@@ -41,16 +41,23 @@ Verification: `scripts/block3_verify_freeze.py`
 - [x] Marginal contribution logging
 
 ### Phase E: Execution (IN PROGRESS)
-- [ ] Smoke test (10 entities, 2 horizons, 2 baselines, <1 min)
-- [ ] Full benchmark run
-- [ ] AutoFit model selection
+- [x] GPU benchmark execution (deep_classical, transformer_sota)
+- [x] ml_tabular partial run (XGBoost, LightGBM)
+- [ ] ⚠️ Fix panel data compatibility for deep/transformer models
+- [ ] ⚠️ Fix statistical models (data scale overflow)
+- [ ] Complete ml_tabular for all tasks/ablations
+- [ ] Foundation models (Chronos, TimesFM)
 - [ ] Leaderboard generation
 
-### Phase F: Analysis (NOT STARTED)
+**Detailed Status**: See [docs/BLOCK3_MODEL_STATUS.md](docs/BLOCK3_MODEL_STATUS.md)
+
+### Phase F: Analysis (BLOCKED)
 - [ ] TCAV-style concept importance analysis
 - [ ] Ablation study (core_only vs full)
 - [ ] Horizon sensitivity analysis
 - [ ] Error analysis by entity type
+
+**Note**: Blocked pending valid deep/transformer results.
 
 ---
 
@@ -77,26 +84,46 @@ From `runs/orchestrator/20260129_073037/block3_20260203_225620/profile/profile.j
 
 ---
 
+## Current Benchmark Results (2026-02-07)
+
+### Paper-Ready Results
+| Model | Category | MAE | Status |
+|-------|----------|-----|--------|
+| XGBoost | ml_tabular | **274,952** | ✅ Paper-ready |
+| LightGBM | ml_tabular | 360,834 | ✅ Paper-ready |
+
+### Blocked Results (Fallback)
+| Category | Models | Issue |
+|----------|--------|-------|
+| deep_classical | NBEATS, NHITS, TFT, DeepAR | Panel data incompatibility |
+| transformer_sota | PatchTST, iTransformer, TimesNet, TSMixer | Same as above |
+| statistical | AutoARIMA, ETS, Theta, MSTL | Data scale overflow |
+
+See [docs/BLOCK3_MODEL_STATUS.md](docs/BLOCK3_MODEL_STATUS.md) for full details.
+
+---
+
 ## Next Actions
 
-### Immediate (Smoke Test)
+### Priority 1: Complete ml_tabular (Immediate)
 ```bash
-cd ~/projects/repo_root
-python scripts/run_block3_benchmark.py --smoke-test
+# Run all ml_tabular models for all tasks
+for TASK in task1_outcome task2_forecast task3_risk_adjust; do
+  for ABL in core_only full; do
+    python scripts/run_block3_benchmark_shard.py \
+      --task $TASK --category ml_tabular --ablation $ABL \
+      --preset standard \
+      --output-dir runs/benchmarks/block3_20260203_225620_4090_standard/$TASK/ml_tabular/$ABL
+  done
+done
 ```
 
-### Full Benchmark
-```bash
-python scripts/run_block3_benchmark.py \
-    --config configs/block3.yaml \
-    --output-dir runs/benchmarks/block3_20260203_225620
-```
+### Priority 2: Fix Deep/Transformer Models
+- Implement entity-sampling in `src/narrative/block3/models/deep_models.py`
+- Or switch to panel-aware backend (pytorch-forecasting, tsai)
 
-### AutoFit Selection
-```bash
-python scripts/run_auto_fit.py --config configs/block3.yaml
-# Profile path resolved automatically via FreezePointer
-```
+### Priority 3: Fix Statistical Models
+- Implement entity-sampling in `src/narrative/block3/models/statistical.py`
 
 ---
 

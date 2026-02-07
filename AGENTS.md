@@ -3,7 +3,7 @@
 ## Mission
 Block 3 modeling on the finalized WIDE2 freeze (`TRAIN_WIDE_FINAL`). The freeze is complete with all gates PASS. No feature backfilling is required.
 
-## Current State (as of 2026-02-04)
+## Current State (as of 2026-02-07)
 - **WIDE2 Freeze: COMPLETE** (stamp `20260203_225620`)
 - All 5 gates PASS:
   - `pointer_valid`: PASS
@@ -12,6 +12,12 @@ Block 3 modeling on the finalized WIDE2 freeze (`TRAIN_WIDE_FINAL`). The freeze 
   - `freeze_candidates`: PASS
   - `offer_day_coverage_exact`: PASS
 - Block 3 entry verified via `scripts/block3_verify_freeze.py`
+
+### Benchmark Progress
+- **Paper-Ready**: 2 models (XGBoost MAE=274,952, LightGBM MAE=360,834)
+- **Blocked**: Deep/Transformer models using fallback (panel data incompatibility)
+- **Not Run**: Statistical (data scale overflow), Foundation (missing deps)
+- **Full Status**: See [docs/BLOCK3_MODEL_STATUS.md](docs/BLOCK3_MODEL_STATUS.md)
 
 ## Hard Constraints
 - Only commit/push: `scripts/`, `src/`, `configs/`, `docs/`, except patterns below.
@@ -85,7 +91,11 @@ From `scripts/block3_profile_data.py`:
 4. ✅ Benchmark harness with 6 baseline categories
 5. ✅ AutoFit rule-based composer
 6. ✅ Concept bottleneck for interpretability
-7. ⏳ Run smoke test to verify harness
-8. ⏳ Full benchmark run with all baselines
-9. ⏳ AutoFit model selection based on profile
-10. ⏳ TCAV-style concept importance analysis
+7. ✅ GPU benchmark execution (deep_classical, transformer_sota) - fallback mode
+8. ✅ ml_tabular partial run (XGBoost, LightGBM paper-ready)
+9. ⚠️ **BLOCKED**: Fix panel data compatibility for deep/transformer models
+10. ⚠️ **BLOCKED**: Fix statistical models (data scale overflow)
+11. ⏳ Complete ml_tabular for all tasks/ablations
+12. ⏳ Foundation models (Chronos, TimesFM)
+13. ⏳ AutoFit model selection based on profile
+14. ⏳ TCAV-style concept importance analysis

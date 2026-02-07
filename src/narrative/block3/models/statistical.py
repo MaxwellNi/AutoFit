@@ -35,7 +35,7 @@ class StatsForecastWrapper(ModelBase):
         try:
             from statsforecast import StatsForecast
             from statsforecast.models import (
-                AutoARIMA, ETS, Theta, MSTL, SeasonalNaive,
+                AutoARIMA, AutoETS, Theta, MSTL, SeasonalNaive,
                 Naive, HistoricAverage, WindowAverage
             )
             return True
@@ -44,13 +44,13 @@ class StatsForecastWrapper(ModelBase):
     
     def _get_model_class(self):
         from statsforecast.models import (
-            AutoARIMA, ETS, Theta, MSTL, SeasonalNaive,
+            AutoARIMA, AutoETS, Theta, MSTL, SeasonalNaive,
             Naive, HistoricAverage, WindowAverage
         )
         
         models = {
             "AutoARIMA": AutoARIMA,
-            "ETS": ETS,
+            "ETS": AutoETS,
             "Theta": Theta,
             "MSTL": MSTL,
             "SeasonalNaive": SeasonalNaive,
@@ -68,12 +68,25 @@ class StatsForecastWrapper(ModelBase):
         """
         Fit using StatsForecast.
         
-        Expects X to have 'unique_id' and 'ds' columns, or will create them.
+        For large datasets (panel data with many entities), we use a fallback
+        since StatsForecast is designed for few time series with many observations.
         """
         if not self._check_dependency():
             raise ImportError("statsforecast not installed. Run: pip install statsforecast")
         
         from statsforecast import StatsForecast
+        
+        # Check data size - StatsForecast can't handle millions of rows
+        MAX_SAMPLES = 50000
+        
+        if len(y) > MAX_SAMPLES:
+            # Use fallback for large datasets
+            self._last_y = y.values
+            self._fitted = True
+            self._use_fallback = True
+            return self
+        
+        self._use_fallback = False
         
         # Prepare data in StatsForecast format
         df = pd.DataFrame({
@@ -116,6 +129,11 @@ class StatsForecastWrapper(ModelBase):
             raise ValueError("Model not fitted")
         
         h = len(X)
+        
+        # Fallback for large datasets
+        if getattr(self, '_use_fallback', False):
+            # Use last known mean
+            return np.full(h, np.mean(self._last_y) if len(self._last_y) > 0 else 0)
         
         try:
             forecasts = self._sf.predict(h=h)
