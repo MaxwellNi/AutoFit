@@ -96,7 +96,7 @@ class DeepModelWrapper(ModelBase):
         elif self.model_name == "DeepAR":
             return model_class(
                 **common_params,
-                hidden_size=self.model_kwargs.get("hidden_size", 64),
+                lstm_hidden_size=self.model_kwargs.get("hidden_size", 64),
             )
         elif self.model_name == "PatchTST":
             return model_class(
