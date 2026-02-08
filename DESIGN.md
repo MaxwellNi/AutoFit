@@ -138,6 +138,21 @@ else:
 ### Concept Bottleneck
 Location: `src/narrative/explainability/concept_bottleneck.py`
 
+### Panel Data Design (NeuralForecast Models)
+All 19 NeuralForecast models receive entity-sampled panel data:
+- `_build_panel_df()`: samples up to 200 entities, requires min 20 obs each
+- Panel format: `unique_id` (entity), `ds` (date), `y` (target)
+- 5 models require `n_series` parameter: iTransformer, TSMixer, RMoK, SOFTS, StemGNN
+- `n_series` is computed dynamically as `panel["unique_id"].nunique()`
+
+### Benchmark Execution Design
+Dual-GPU parallel execution via `scripts/run_block3_full_4090.sh`:
+- GPU0: `deep_classical` + `transformer_sota` + `foundation`
+- GPU1: `ml_tabular` + `statistical` + `irregular`
+- 3 tasks × 2 ablations (core_only, full) = 6 shards per category
+- Results aggregated via `scripts/aggregate_block3_results.py`
+- n_series-affected models re-run via `scripts/rerun_nseries_models.sh`
+
 Concept Categories:
 - **Risk**: financial_risk, market_risk, operational_risk
 - **Sentiment**: optimism, pessimism, uncertainty

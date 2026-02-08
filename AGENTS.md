@@ -22,8 +22,16 @@ Block 3 modeling on the finalized WIDE2 freeze (`TRAIN_WIDE_FINAL`). The freeze 
   - `foundation` (3): Chronos, Moirai, TimesFM
   - `irregular` (2): GRU-D, SAITS
 - **Panel Data Fix**: ALL categories now receive `train_raw`/`target`/`horizon` kwargs
+- **n_series Fix**: Dynamic `n_series=panel["unique_id"].nunique()` for iTransformer/TSMixer/RMoK/SOFTS/StemGNN (was hardcoded to 1)
 - **Dependencies**: NeuralForecast 3.1.4, PyTorch 2.7.1+cu128, Chronos, uni2ts, PyPOTS, StatsForecast
-- **Pending**: Full benchmark run on 4090 (dual GPU) + 3090 (dual GPU)
+- **4090 Benchmark**: IN PROGRESS — tmux `b3_full`, dual GPU, output `runs/benchmarks/block3_20260203_225620_4090_final/`
+  - GPU0: deep_classical + transformer_sota + foundation (task3 in progress)
+  - GPU1: ml_tabular (task1 in progress, SVR running)
+  - 12/36 shards complete, 336 metric records, 21 models evaluated so far
+  - n_series bug: iTransformer/TSMixer/RMoK/SOFTS/StemGNN fallback in this run; re-run script ready
+- **3090**: SSH unreachable (ift-severn.cege.ucl.ac.uk timeout)
+- **Iris SLURM**: All jobs OOM at 100GB; fixed to 128GB, not yet resubmitted
+- **Live Results**: See [docs/BLOCK3_RESULTS.md](docs/BLOCK3_RESULTS.md)
 - **Full Status**: See [docs/BLOCK3_MODEL_STATUS.md](docs/BLOCK3_MODEL_STATUS.md)
 
 ## Hard Constraints
@@ -75,6 +83,10 @@ From `scripts/block3_profile_data.py`:
 - Freeze verification: `scripts/block3_verify_freeze.py`
 - Data profiling: `scripts/block3_profile_data.py`
 - Benchmark harness (shard): `scripts/run_block3_benchmark_shard.py`
+- Results aggregator: `scripts/aggregate_block3_results.py`
+- n_series re-run: `scripts/rerun_nseries_models.sh`
+- 4090 dual-GPU launcher: `scripts/run_block3_full_4090.sh`
+- tmux conda wrapper: `scripts/launch_b3_tmux.sh`
 - Dataset interface: `src/narrative/data_preprocessing/block3_dataset.py`
 - AutoFit composer: `src/narrative/auto_fit/rule_based_composer.py`
 - Concept bottleneck: `src/narrative/explainability/concept_bottleneck.py`
@@ -95,6 +107,8 @@ From `scripts/block3_profile_data.py`:
 - Metrics: RMSE, MAE, MAPE, SMAPE, CRPS (probabilistic)
 
 ## Commit Trail
+- `014ac92` Fix n_series dynamic computation, SLURM mem 128G, 4090 launch scripts.
+- `fcbe970` Model registry rewrite: 44 models, panel data fix, all 6 categories.
 - `3ce5509` WIDE2 freeze seal complete, all gates PASS.
 - `47a8db3` Add 4090 adapters and wide-freeze updates.
 - `1a15ea6` Add mac-hop sync scripts for 4090 workflow.

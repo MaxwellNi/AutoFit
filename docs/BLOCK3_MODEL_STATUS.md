@@ -1,20 +1,21 @@
 # Block 3 Model Benchmark Status
 
-> Last Updated: 2026-02-08 UTC
+> Last Updated: 2026-02-08 11:00 UTC
 > Freeze Stamp: `20260203_225620`
 > Model Registry: **44 models across 6 categories**
+> 4090 Benchmark: **IN PROGRESS** (12/36 shards, 336 records, 21 models evaluated)
 
 ## Executive Summary
 
-| Category | Models | Count | Panel-Aware | Status |
-|----------|--------|-------|-------------|--------|
-| **statistical** | AutoARIMA, AutoETS, AutoTheta, MSTL, SF_SeasonalNaive | 5 | ✅ Entity-sampled (50 entities) | 🔧 Ready to run |
-| **ml_tabular** | LogisticRegression, Ridge, … MeanPredictor | 15 | N/A (tabular) | 🔧 Ready to run |
-| **deep_classical** | NBEATS, NHITS, TFT, DeepAR | 4 | ✅ Entity-sampled (200 entities) | 🔧 Ready to run |
-| **transformer_sota** | PatchTST, iTransformer, … StemGNN | 15 | ✅ Entity-sampled (200 entities) | 🔧 Ready to run |
-| **foundation** | Chronos, Moirai, TimesFM | 3 | ✅ Entity contexts (200 entities) | 🔧 Ready to run |
-| **irregular** | GRU-D, SAITS | 2 | ✅ 3-D masked panel (100 entities) | 🔧 Ready to run |
-| **TOTAL** | | **44** | | |
+| Category | Models | Count | Panel-Aware | 4090 Status |
+|----------|--------|-------|-------------|-------------|
+| **statistical** | AutoARIMA, AutoETS, AutoTheta, MSTL, SF_SeasonalNaive | 5 | ✅ Entity-sampled (50 entities) | ⏳ Pending (GPU1 queue) |
+| **ml_tabular** | LogisticRegression, Ridge, … MeanPredictor | 15 | N/A (tabular) | 🔄 In progress (SVR running) |
+| **deep_classical** | NBEATS, NHITS, TFT, DeepAR | 4 | ✅ Entity-sampled (200 entities) | ✅ Tasks 1-2 done |
+| **transformer_sota** | PatchTST, iTransformer, … StemGNN | 15 | ✅ Entity-sampled (200 entities) | ⚠️ 5 models fallback (n_series bug, re-run ready) |
+| **foundation** | Chronos, Moirai, TimesFM | 3 | ✅ Entity contexts (200 entities) | ✅ Tasks 1-2 done (TimesFM not installed) |
+| **irregular** | GRU-D, SAITS | 2 | ✅ 3-D masked panel (100 entities) | ⏳ Pending (GPU1 queue) |
+| **TOTAL** | | **44** | | 12/36 shards |
 
 ---
 
@@ -167,8 +168,20 @@ All panel-aware categories use entity-sampled panel construction:
 
 ## Pending
 
-1. ⏳ Full benchmark run on 4090 (2× RTX 4090, 24GB each)
-2. ⏳ Full benchmark run on 3090 (2× RTX 3090)
-3. ⏳ Results leaderboard + paper LaTeX tables
-4. ⏳ AutoFit model selection based on data profile
-5. ⏳ TCAV-style concept importance analysis
+1. 🔄 Full benchmark on 4090 — 12/36 shards done, GPU0 on task3, GPU1 on ml_tabular task1
+2. ⏳ n_series re-run for iTransformer/TSMixer/RMoK/SOFTS/StemGNN (`scripts/rerun_nseries_models.sh`)
+3. ⏳ Full benchmark on 3090 (SSH unreachable)
+4. ⏳ Iris SLURM resubmit (mem fixed to 128GB)
+5. ⏳ Results leaderboard + paper LaTeX tables
+6. ⏳ AutoFit model selection based on data profile
+7. ⏳ TCAV-style concept importance analysis
+
+## Known Issues
+
+| Issue | Models Affected | Fix | Status |
+|-------|----------------|-----|--------|
+| n_series=1 hardcoded | iTransformer, TSMixer, RMoK, SOFTS, StemGNN | `014ac92`: dynamic `panel.nunique()` | ✅ Fixed, re-run pending |
+| TimesFM not installed | TimesFM | No pip package available | ❌ Blocked |
+| LogisticRegression on regression target | LogisticRegression | Expected — classifier on continuous target | ℹ️ By design |
+| Iris OOM at 100GB | All models on Iris | `128GB` mem in sbatch | ✅ Fixed, not resubmitted |
+| 3090 unreachable | — | SSH timeout to ift-severn | ⏳ Retry later |
