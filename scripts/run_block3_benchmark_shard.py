@@ -532,7 +532,7 @@ class BenchmarkShard:
             horizons = self.preset_config.horizons
             
             # Run each combination
-            for target in targets[:1]:  # Primary target only for sharding
+            for target in targets:  # ALL targets for KDD'26 full paper
                 for horizon in horizons:
                     logger.info(f"\nTarget: {target}, Horizon: {horizon}")
                     
