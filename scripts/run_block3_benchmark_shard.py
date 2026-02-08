@@ -455,10 +455,11 @@ class BenchmarkShard:
             # Get model
             model = get_model(model_name)
             
-            # Train - pass raw DataFrames to deep/foundation models for panel data
+            # Train - pass raw DataFrames to ALL panel-aware model categories
             train_start = time.time()
             fit_kwargs = {}
-            if self.category in ("deep_classical", "transformer_sota", "foundation"):
+            if self.category in ("deep_classical", "transformer_sota", "foundation",
+                                 "statistical", "irregular"):
                 fit_kwargs["train_raw"] = train
                 fit_kwargs["target"] = target
                 fit_kwargs["horizon"] = horizon

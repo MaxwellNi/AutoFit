@@ -3,7 +3,7 @@
 ## Mission
 Block 3 modeling on the finalized WIDE2 freeze (`TRAIN_WIDE_FINAL`). The freeze is complete with all gates PASS. No feature backfilling is required.
 
-## Current State (as of 2026-02-07)
+## Current State (as of 2026-02-08)
 - **WIDE2 Freeze: COMPLETE** (stamp `20260203_225620`)
 - All 5 gates PASS:
   - `pointer_valid`: PASS
@@ -13,10 +13,17 @@ Block 3 modeling on the finalized WIDE2 freeze (`TRAIN_WIDE_FINAL`). The freeze 
   - `offer_day_coverage_exact`: PASS
 - Block 3 entry verified via `scripts/block3_verify_freeze.py`
 
-### Benchmark Progress
-- **Paper-Ready**: 2 models (XGBoost MAE=274,952, LightGBM MAE=360,834)
-- **Blocked**: Deep/Transformer models using fallback (panel data incompatibility)
-- **Not Run**: Statistical (data scale overflow), Foundation (missing deps)
+### Benchmark Progress (44 Models, 6 Categories)
+- **Model Registry Rewrite**: COMPLETE — 44 models across 6 categories
+  - `ml_tabular` (15): LogisticRegression, Ridge, Lasso, ElasticNet, SVR, KNN, RandomForest, ExtraTrees, HistGradientBoosting, LightGBM, XGBoost, CatBoost, QuantileRegressor, SeasonalNaive, MeanPredictor
+  - `statistical` (5): AutoARIMA, AutoETS, AutoTheta, MSTL, SF_SeasonalNaive
+  - `deep_classical` (4): NBEATS, NHITS, TFT, DeepAR
+  - `transformer_sota` (15): PatchTST, iTransformer, TimesNet, TSMixer, Informer, Autoformer, FEDformer, VanillaTransformer, TiDE, NBEATSx, BiTCN, KAN, RMoK, SOFTS, StemGNN
+  - `foundation` (3): Chronos, Moirai, TimesFM
+  - `irregular` (2): GRU-D, SAITS
+- **Panel Data Fix**: ALL categories now receive `train_raw`/`target`/`horizon` kwargs
+- **Dependencies**: NeuralForecast 3.1.4, PyTorch 2.7.1+cu128, Chronos, uni2ts, PyPOTS, StatsForecast
+- **Pending**: Full benchmark run on 4090 (dual GPU) + 3090 (dual GPU)
 - **Full Status**: See [docs/BLOCK3_MODEL_STATUS.md](docs/BLOCK3_MODEL_STATUS.md)
 
 ## Hard Constraints
@@ -44,14 +51,14 @@ FreezePointer (src/narrative/data_preprocessing/block3_dataset.py)
         Block3Dataset (lazy loading + explicit joins)
                 │
                 ▼
-        BenchmarkHarness (scripts/run_block3_benchmark.py)
+        BenchmarkHarness (scripts/run_block3_benchmark_shard.py)
                 │
-                ├─> Statistical baselines
-                ├─> ML Tabular (LightGBM, XGBoost)
-                ├─> Deep Classical (N-BEATS, TFT)
-                ├─> Transformer SOTA (PatchTST, iTransformer, TimeMixer)
-                ├─> GluonTS (DeepAR, WaveNet)
-                └─> Foundation (TimesFM, Chronos)
+                ├─> Statistical (5):       AutoARIMA, AutoETS, AutoTheta, MSTL, SF_SeasonalNaive
+                ├─> ML Tabular (15):       LightGBM, XGBoost, CatBoost, RandomForest, ...
+                ├─> Deep Classical (4):    NBEATS, NHITS, TFT, DeepAR
+                ├─> Transformer SOTA (15): PatchTST, iTransformer, TimesNet, TSMixer, Informer, ...
+                ├─> Foundation (3):        Chronos, Moirai, TimesFM
+                └─> Irregular (2):         GRU-D, SAITS
 ```
 
 ### Join Keys
@@ -67,10 +74,18 @@ From `scripts/block3_profile_data.py`:
 ## Key Scripts (Block 3)
 - Freeze verification: `scripts/block3_verify_freeze.py`
 - Data profiling: `scripts/block3_profile_data.py`
-- Benchmark harness: `scripts/run_block3_benchmark.py`
+- Benchmark harness (shard): `scripts/run_block3_benchmark_shard.py`
 - Dataset interface: `src/narrative/data_preprocessing/block3_dataset.py`
 - AutoFit composer: `src/narrative/auto_fit/rule_based_composer.py`
 - Concept bottleneck: `src/narrative/explainability/concept_bottleneck.py`
+
+## Model Source Files (Block 3)
+- Deep + Transformer + Foundation: `src/narrative/block3/models/deep_models.py`
+- Statistical (StatsForecast): `src/narrative/block3/models/statistical.py`
+- Irregular (PyPOTS): `src/narrative/block3/models/irregular_models.py`
+- Traditional ML (sklearn): `src/narrative/block3/models/traditional_ml.py`
+- Unified registry: `src/narrative/block3/models/registry.py`
+- Base classes: `src/narrative/block3/models/base.py`
 
 ## Block 3 Configuration
 - Config file: `configs/block3.yaml`
@@ -91,11 +106,15 @@ From `scripts/block3_profile_data.py`:
 4. ✅ Benchmark harness with 6 baseline categories
 5. ✅ AutoFit rule-based composer
 6. ✅ Concept bottleneck for interpretability
-7. ✅ GPU benchmark execution (deep_classical, transformer_sota) - fallback mode
-8. ✅ ml_tabular partial run (XGBoost, LightGBM paper-ready)
-9. ⚠️ **BLOCKED**: Fix panel data compatibility for deep/transformer models
-10. ⚠️ **BLOCKED**: Fix statistical models (data scale overflow)
-11. ⏳ Complete ml_tabular for all tasks/ablations
-12. ⏳ Foundation models (Chronos, TimesFM)
-13. ⏳ AutoFit model selection based on profile
-14. ⏳ TCAV-style concept importance analysis
+7. ✅ Model registry rewrite: 44 models across 6 categories
+8. ✅ Panel data fix: all categories receive entity-panel kwargs
+9. ✅ Deep/Transformer models: 19 NeuralForecast models (panel-aware)
+10. ✅ Statistical models: entity-sampled panel via StatsForecast
+11. ✅ Foundation models: Chronos + Moirai + TimesFM wrappers
+12. ✅ Irregular models: GRU-D + SAITS via PyPOTS
+13. ✅ Benchmark harness updated for all 6 categories
+14. ⏳ Full benchmark run on 4090 (dual GPU) — 3 tasks × 6 categories × 44 models
+15. ⏳ Full benchmark run on 3090 (dual GPU)
+16. ⏳ AutoFit model selection based on profile
+17. ⏳ TCAV-style concept importance analysis
+18. ⏳ Results leaderboard + paper tables

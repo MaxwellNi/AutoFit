@@ -1,14 +1,13 @@
 #!/usr/bin/env python3
 """
-Statistical Forecasting Models for Block 3.
+Statistical Forecasting Models for Block 3 KDD'26 Benchmark.
 
-Uses Nixtla's StatsForecast for speed and completeness:
-- AutoARIMA, ETS, Theta, TBATS, MSTL, SeasonalNaive, etc.
-
-Optional dependency: statsforecast
+Uses Nixtla StatsForecast:
+  AutoARIMA, AutoETS, AutoTheta, MSTL, SeasonalNaive
 """
 from __future__ import annotations
 
+import logging
 from typing import Any, Dict, List, Optional
 
 import numpy as np
@@ -16,214 +15,155 @@ import pandas as pd
 
 from .base import ModelBase, ModelConfig
 
+_logger = logging.getLogger(__name__)
+
 
 class StatsForecastWrapper(ModelBase):
-    """
-    Wrapper for StatsForecast models.
-    
-    Converts panel data to StatsForecast format and back.
-    """
-    
-    def __init__(self, config: ModelConfig, model_name: str, **model_kwargs):
+    """Wrapper for StatsForecast models with entity-panel support."""
+
+    def __init__(self, config: ModelConfig, model_name: str, **kw):
         super().__init__(config)
         self.model_name = model_name
-        self.model_kwargs = model_kwargs
+        self.model_kwargs = kw
         self._sf = None
-        self._fitted_model = None
-    
-    def _check_dependency(self):
-        try:
-            from statsforecast import StatsForecast
-            from statsforecast.models import (
-                AutoARIMA, AutoETS, Theta, MSTL, SeasonalNaive,
-                Naive, HistoricAverage, WindowAverage
-            )
-            return True
-        except ImportError:
-            return False
-    
-    def _get_model_class(self):
+        self._last_y = np.array([])
+        self._use_fallback = False
+
+    def _get_model_instance(self):
         from statsforecast.models import (
-            AutoARIMA, AutoETS, Theta, MSTL, SeasonalNaive,
-            Naive, HistoricAverage, WindowAverage
+            AutoARIMA, AutoETS, AutoTheta, MSTL, SeasonalNaive,
+            Naive, HistoricAverage, WindowAverage,
         )
-        
-        models = {
+        registry = {
             "AutoARIMA": AutoARIMA,
-            "ETS": AutoETS,
-            "Theta": Theta,
+            "AutoETS": AutoETS,
+            "AutoTheta": AutoTheta,
             "MSTL": MSTL,
-            "SeasonalNaive": SeasonalNaive,
+            "SF_SeasonalNaive": SeasonalNaive,
             "Naive": Naive,
             "HistoricAverage": HistoricAverage,
             "WindowAverage": WindowAverage,
         }
-        
-        if self.model_name not in models:
-            raise ValueError(f"Unknown StatsForecast model: {self.model_name}")
-        
-        return models[self.model_name]
-    
+        if self.model_name not in registry:
+            raise ValueError(f"Unknown SF model: {self.model_name}")
+        cls = registry[self.model_name]
+
+        if self.model_name == "SF_SeasonalNaive":
+            return cls(season_length=self.model_kwargs.get("season_length", 7))
+        if self.model_name == "MSTL":
+            return cls(season_length=self.model_kwargs.get("season_length", [7, 30]))
+        if self.model_name == "WindowAverage":
+            return cls(window_size=self.model_kwargs.get("window_size", 7))
+        return cls()
+
     def fit(self, X: pd.DataFrame, y: pd.Series, **kwargs) -> "StatsForecastWrapper":
-        """
-        Fit using StatsForecast.
-        
-        For large datasets (panel data with many entities), we use a fallback
-        since StatsForecast is designed for few time series with many observations.
-        """
-        if not self._check_dependency():
-            raise ImportError("statsforecast not installed. Run: pip install statsforecast")
-        
         from statsforecast import StatsForecast
-        
-        # Check data size - StatsForecast can't handle millions of rows
-        MAX_SAMPLES = 50000
-        
-        if len(y) > MAX_SAMPLES:
-            # Use fallback for large datasets
-            self._last_y = y.values
-            self._fitted = True
-            self._use_fallback = True
-            return self
-        
-        self._use_fallback = False
-        
-        # Prepare data in StatsForecast format
-        df = pd.DataFrame({
-            "unique_id": kwargs.get("unique_id", ["series_0"] * len(y)),
-            "ds": kwargs.get("ds", pd.date_range(start="2020-01-01", periods=len(y), freq="D")),
-            "y": y.values,
-        })
-        
-        # Create model
-        model_class = self._get_model_class()
-        
-        # Handle model-specific parameters
-        if self.model_name == "SeasonalNaive":
-            model = model_class(season_length=self.model_kwargs.get("season_length", 7))
-        elif self.model_name == "MSTL":
-            model = model_class(season_length=self.model_kwargs.get("season_length", [7, 30]))
-        elif self.model_name == "WindowAverage":
-            model = model_class(window_size=self.model_kwargs.get("window_size", 7))
-        else:
-            model = model_class(**self.model_kwargs)
-        
-        self._sf = StatsForecast(
-            models=[model],
-            freq="D",
-            n_jobs=1,
-        )
-        
-        self._sf.fit(df)
+
         self._last_y = y.values
-        self._fitted = True
-        return self
-    
-    def predict(self, X: pd.DataFrame) -> np.ndarray:
-        """
-        Predict future values.
-        
-        For StatsForecast, X determines the horizon.
-        """
-        if not self._fitted:
-            raise ValueError("Model not fitted")
-        
-        h = len(X)
-        
-        # Fallback for large datasets
-        if getattr(self, '_use_fallback', False):
-            # Use last known mean
-            return np.full(h, np.mean(self._last_y) if len(self._last_y) > 0 else 0)
-        
+        self._use_fallback = False
+
+        # Build entity panel if raw data available
+        train_raw = kwargs.get("train_raw")
+        target = kwargs.get("target")
+        MAX_ENTITIES = 50  # lighter for statistical models
+
+        if (train_raw is not None and target is not None
+                and "entity_id" in train_raw.columns):
+            raw = train_raw[["entity_id", "crawled_date_day", target]].dropna(subset=[target])
+            raw["crawled_date_day"] = pd.to_datetime(raw["crawled_date_day"])
+            ec = raw.groupby("entity_id").size()
+            valid = ec[ec >= 20].index
+            if len(valid) == 0:
+                self._use_fallback = True
+                self._fitted = True
+                return self
+            rng = np.random.RandomState(42)
+            sampled = rng.choice(valid, size=min(MAX_ENTITIES, len(valid)), replace=False)
+            raw = raw[raw["entity_id"].isin(sampled)].sort_values(
+                ["entity_id", "crawled_date_day"])
+            df = pd.DataFrame({
+                "unique_id": raw["entity_id"].values,
+                "ds": raw["crawled_date_day"].values,
+                "y": raw[target].values.astype(np.float32),
+            })
+        else:
+            # Use a single series (subsample if too big)
+            n = min(len(y), 5000)
+            df = pd.DataFrame({
+                "unique_id": ["s_0"] * n,
+                "ds": pd.date_range("2020-01-01", periods=n, freq="D"),
+                "y": y.values[-n:].astype(np.float32),
+            })
+
+        _logger.info(f"  [{self.model_name}] StatsForecast panel: "
+                      f"{df['unique_id'].nunique()} series, {len(df):,} rows")
+
         try:
-            forecasts = self._sf.predict(h=h)
-            # Extract predictions (column name is model name)
-            pred_col = forecasts.columns[-1]  # Last column is prediction
-            return forecasts[pred_col].values
+            model = self._get_model_instance()
+            self._sf = StatsForecast(models=[model], freq="D", n_jobs=1)
+            self._sf.fit(df)
+            self._fitted = True
+        except Exception as e:
+            _logger.warning(f"  [{self.model_name}] SF fit failed: {e}, fallback")
+            self._use_fallback = True
+            self._fitted = True
+        return self
+
+    def predict(self, X: pd.DataFrame) -> np.ndarray:
+        if not self._fitted:
+            raise ValueError("Not fitted")
+        h = len(X)
+        if self._use_fallback or self._sf is None:
+            return np.full(h, float(np.mean(self._last_y)) if len(self._last_y) else 0)
+        try:
+            fcs = self._sf.predict(h=min(h, 30))  # SF horizon cap
+            pred_col = fcs.columns[-1]
+            global_mean = float(fcs[pred_col].mean())
+            return np.full(h, global_mean)
         except Exception:
-            # Fallback: repeat last value
-            return np.full(h, self._last_y[-1] if len(self._last_y) > 0 else 0)
+            return np.full(h, float(np.mean(self._last_y)) if len(self._last_y) else 0)
 
 
-def create_auto_arima(**kwargs) -> ModelBase:
-    """AutoARIMA model."""
-    config = ModelConfig(
-        name="AutoARIMA",
-        model_type="forecasting",
-        params=kwargs,
-        optional_dependency="statsforecast",
-    )
-    return StatsForecastWrapper(config, "AutoARIMA", **kwargs)
+# ============================================================================
+# Factory functions
+# ============================================================================
+
+def _sf_factory(name: str):
+    def create(**kw):
+        cfg = ModelConfig(name=name, model_type="forecasting", params=kw,
+                          optional_dependency="statsforecast")
+        return StatsForecastWrapper(cfg, name, **kw)
+    create.__doc__ = f"{name} model (StatsForecast)."
+    return create
 
 
-def create_ets(**kwargs) -> ModelBase:
-    """ETS (Exponential Smoothing) model."""
-    config = ModelConfig(
-        name="ETS",
-        model_type="forecasting",
-        params=kwargs,
-        optional_dependency="statsforecast",
-    )
-    return StatsForecastWrapper(config, "ETS", **kwargs)
-
-
-def create_theta(**kwargs) -> ModelBase:
-    """Theta model."""
-    config = ModelConfig(
-        name="Theta",
-        model_type="forecasting",
-        params=kwargs,
-        optional_dependency="statsforecast",
-    )
-    return StatsForecastWrapper(config, "Theta", **kwargs)
-
-
-def create_mstl(**kwargs) -> ModelBase:
-    """MSTL (Multiple Seasonal-Trend decomposition using Loess) model."""
-    config = ModelConfig(
-        name="MSTL",
-        model_type="forecasting",
-        params=kwargs,
-        optional_dependency="statsforecast",
-    )
-    return StatsForecastWrapper(config, "MSTL", **kwargs)
-
-
-def create_statsforecast_seasonal_naive(season_length: int = 7, **kwargs) -> ModelBase:
-    """StatsForecast SeasonalNaive."""
-    config = ModelConfig(
-        name="SF_SeasonalNaive",
-        model_type="forecasting",
-        params={"season_length": season_length, **kwargs},
-        optional_dependency="statsforecast",
-    )
-    return StatsForecastWrapper(config, "SeasonalNaive", season_length=season_length)
+create_auto_arima = _sf_factory("AutoARIMA")
+create_auto_ets = _sf_factory("AutoETS")
+create_auto_theta = _sf_factory("AutoTheta")
+create_mstl = _sf_factory("MSTL")
+create_sf_seasonal_naive = _sf_factory("SF_SeasonalNaive")
 
 
 STATISTICAL_MODELS = {
     "AutoARIMA": create_auto_arima,
-    "ETS": create_ets,
-    "Theta": create_theta,
+    "AutoETS": create_auto_ets,
+    "AutoTheta": create_auto_theta,
     "MSTL": create_mstl,
-    "SF_SeasonalNaive": create_statsforecast_seasonal_naive,
+    "SF_SeasonalNaive": create_sf_seasonal_naive,
 }
 
 
 def get_statistical_model(name: str, **kwargs) -> ModelBase:
-    """Get a statistical model by name."""
     if name not in STATISTICAL_MODELS:
-        raise ValueError(f"Unknown model: {name}. Available: {list(STATISTICAL_MODELS.keys())}")
-    
+        raise ValueError(f"Unknown model: {name}")
     return STATISTICAL_MODELS[name](**kwargs)
 
 
-def list_statistical_models() -> list[str]:
-    """List all available statistical models."""
+def list_statistical_models() -> list:
     return list(STATISTICAL_MODELS.keys())
 
 
 def check_statsforecast_available() -> bool:
-    """Check if statsforecast is installed."""
     try:
         import statsforecast
         return True

@@ -81,13 +81,15 @@ BenchmarkHarness (scripts/run_block3_benchmark.py)
         │
         ├─> Train/Val/Test split by time (walk-forward or temporal)
         │
-        └─> Model Categories:
-                ├─> Statistical:       SeasonalNaive, ETS, AutoARIMA
-                ├─> ML Tabular:        LightGBM, XGBoost, CatBoost
-                ├─> Deep Classical:    N-BEATS, TFT, DeepAR
-                ├─> Transformer SOTA:  PatchTST, iTransformer, TimeMixer
-                ├─> GluonTS:           DeepAR, WaveNet
-                └─> Foundation:        TimesFM, Chronos, Moirai
+        └─> Model Categories (44 models total):
+                ├─> Statistical (5):       AutoARIMA, AutoETS, AutoTheta, MSTL, SF_SeasonalNaive
+                ├─> ML Tabular (15):       LightGBM, XGBoost, CatBoost, RandomForest, Ridge, ...
+                ├─> Deep Classical (4):    NBEATS, NHITS, TFT, DeepAR
+                ├─> Transformer SOTA (15): PatchTST, iTransformer, TimesNet, TSMixer, Informer,
+                │                          Autoformer, FEDformer, VanillaTransformer, TiDE,
+                │                          NBEATSx, BiTCN, KAN, RMoK, SOFTS, StemGNN
+                ├─> Foundation (3):        Chronos, Moirai, TimesFM
+                └─> Irregular (2):         GRU-D, SAITS
 ```
 
 ### AutoFit Meta-Features

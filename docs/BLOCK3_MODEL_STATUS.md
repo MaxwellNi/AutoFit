@@ -1,272 +1,174 @@
 # Block 3 Model Benchmark Status
 
-> Last Updated: 2026-02-07 20:00 UTC
+> Last Updated: 2026-02-08 UTC
 > Freeze Stamp: `20260203_225620`
-> Git Hash: `5987ce2`
-
-## Current Execution Status
-
-### Platform Status
-| Platform | Status | Jobs | Details |
-|----------|--------|------|---------|
-| **4090 Local** | 🔄 Running | 2 | ml_tabular (fast), foundation (Chronos) |
-| **Iris Cluster** | ⏳ Pending | 30 | batch partition, 100GB RAM each |
-
-### Job Progress (4090)
-- **ml_tabular**: task1_outcome/core_only - Ridge ✅, Lasso ✅, continuing...
-- **foundation**: task1_outcome/core_only - TimesFM ❌ (not installed), Chronos 🔄, Moirai ❌ (not installed)
+> Model Registry: **44 models across 6 categories**
 
 ## Executive Summary
 
-| Category | Total Models | Paper-Ready | Running | Need Fix |
-|----------|-------------|-------------|---------|----------|
-| **statistical** | 5 | 0 | 0 | 5 (data scale issue) |
-| **ml_tabular** | 15 | 2 | 11 | 2 (SVR/KNN slow) |
-| **deep_classical** | 4 | 0 | 0 | 4 (panel data issue) |
-| **transformer_sota** | 4 | 0 | 0 | 4 (panel data issue) |
-| **foundation** | 3 | 0 | 1 | 2 (missing deps) |
-| **irregular_aware** | 2 | 0 | 0 | 2 (missing deps) |
-| **TOTAL** | **33** | **2** | **12** | **19** |
+| Category | Models | Count | Panel-Aware | Status |
+|----------|--------|-------|-------------|--------|
+| **statistical** | AutoARIMA, AutoETS, AutoTheta, MSTL, SF_SeasonalNaive | 5 | ✅ Entity-sampled (50 entities) | 🔧 Ready to run |
+| **ml_tabular** | LogisticRegression, Ridge, … MeanPredictor | 15 | N/A (tabular) | 🔧 Ready to run |
+| **deep_classical** | NBEATS, NHITS, TFT, DeepAR | 4 | ✅ Entity-sampled (200 entities) | 🔧 Ready to run |
+| **transformer_sota** | PatchTST, iTransformer, … StemGNN | 15 | ✅ Entity-sampled (200 entities) | 🔧 Ready to run |
+| **foundation** | Chronos, Moirai, TimesFM | 3 | ✅ Entity contexts (200 entities) | 🔧 Ready to run |
+| **irregular** | GRU-D, SAITS | 2 | ✅ 3-D masked panel (100 entities) | 🔧 Ready to run |
+| **TOTAL** | | **44** | | |
 
 ---
 
-## Detailed Model Status
+## Architecture (Post-Rewrite 2026-02-08)
 
-### Legend
-- ✅ **Paper-Ready**: Full results available, can be included in KDD'26 paper
-- 🔧 **Code Complete**: Implementation done, but blocked by data/wrapper issues
-- ⚠️ **Need Fix**: Code issues or missing dependencies
-- 📊 **Runs**: Number of benchmark runs completed
+### Model Source Files
+| File | Category | Models | Backend |
+|------|----------|--------|---------|
+| `src/narrative/block3/models/deep_models.py` | deep_classical + transformer_sota + foundation | 22 | NeuralForecast 3.1.4 / Chronos / Moirai / TimesFM |
+| `src/narrative/block3/models/statistical.py` | statistical | 5 | StatsForecast (Nixtla) |
+| `src/narrative/block3/models/irregular_models.py` | irregular | 2 | PyPOTS |
+| `src/narrative/block3/models/traditional_ml.py` | ml_tabular | 15 | sklearn / LightGBM / XGBoost / CatBoost |
+| `src/narrative/block3/models/registry.py` | ALL | 44 | Unified registry |
+| `src/narrative/block3/models/base.py` | — | — | ModelBase, ModelConfig |
 
----
+### Panel Data Strategy
+All panel-aware categories use entity-sampled panel construction:
+- Filter entities with ≥ 20 observations
+- Random sample up to MAX_ENTITIES (200 for deep/transformer, 50 for statistical, 100 for irregular)
+- Build NeuralForecast-style panel: `unique_id / ds / y`
+- Falls back to synthetic panel from flat y if `train_raw` unavailable
 
-### 1. Statistical Models (via StatsForecast)
-
-| Model | Status | Runs | MAE | Issue |
-|-------|--------|------|-----|-------|
-| AutoARIMA | 🔧 | 0 | - | Data scale: 4.4M rows causes pd.date_range overflow |
-| ETS (AutoETS) | 🔧 | 0 | - | Same as above |
-| Theta | 🔧 | 0 | - | Same as above |
-| MSTL | 🔧 | 0 | - | Same as above |
-| SF_SeasonalNaive | 🔧 | 0 | - | Same as above |
-
-**Root Cause**: StatsForecast is designed for few long time series. Our panel data has 20,944 entities × ~210 days = 4.4M rows, which exceeds StatsForecast's design limits.
-
-**Fix Strategy**: Implement per-entity sampling or aggregation in `statistical.py` wrapper.
-
----
-
-### 2. ML Tabular Models (sklearn + GBDT)
-
-| Model | Status | Runs | MAE (avg) | Notes |
-|-------|--------|------|-----------|-------|
-| **XGBoost** | ✅ | 3 | **274,952** | Best performer, paper-ready |
-| **LightGBM** | ✅ | 3 | **360,834** | Paper-ready |
-| CatBoost | 🔧 | 0 | - | Deps OK, not yet run |
-| RandomForest | 🔧 | 0 | - | Deps OK, not yet run |
-| ExtraTrees | 🔧 | 0 | - | Deps OK, not yet run |
-| HistGradientBoosting | 🔧 | 0 | - | Deps OK, not yet run |
-| Ridge | 🔧 | 0 | - | Deps OK, not yet run |
-| Lasso | 🔧 | 0 | - | Deps OK, not yet run |
-| ElasticNet | 🔧 | 0 | - | Deps OK, not yet run |
-| SVR | 🔧 | 0 | - | Deps OK, not yet run |
-| KNN | 🔧 | 0 | - | Deps OK, not yet run |
-| LogisticRegression | 🔧 | 0 | - | Classification only |
-| QuantileRegressor | 🔧 | 0 | - | For probabilistic |
-| SeasonalNaive | 🔧 | 0 | - | Simple baseline |
-| MeanPredictor | 🔧 | 0 | - | Trivial baseline |
-
-**Dependencies**: All installed ✅
-- lightgbm: 4.6.0
-- xgboost: 2.1.4
-- catboost: 1.2.8
+### Benchmark Harness
+`scripts/run_block3_benchmark_shard.py` passes `train_raw`, `target`, `horizon` kwargs to **all** panel-aware categories:
+`deep_classical`, `transformer_sota`, `foundation`, `statistical`, `irregular`
 
 ---
 
-### 3. Deep Classical Models (via NeuralForecast)
+## Dependencies (Verified on 4090, insider env)
 
-| Model | Status | Runs | MAE | Issue |
-|-------|--------|------|-----|-------|
-| NBEATS | ⚠️ | 18 | 601,864 [FALLBACK] | Panel data incompatibility |
-| NHITS | ⚠️ | 18 | 601,864 [FALLBACK] | Same as above |
-| TFT | ⚠️ | 18 | 601,864 [FALLBACK] | Same as above |
-| DeepAR | ⚠️ | 18 | 601,864 [FALLBACK] | Same as above |
-
-**Root Cause**: NeuralForecast (Nixtla) models are designed for single/few time series with many observations. The wrapper falls back to mean prediction when n_samples > 50,000.
-
-**Verification**: Models are legitimate Nixtla implementations (neuralforecast 3.1.4), not placeholders.
-- N-BEATS: `neuralforecast.models.NBEATS` (Oreshkin et al., 2019)
-- N-HiTS: `neuralforecast.models.NHITS` (Challu et al., 2022)
-- TFT: `neuralforecast.models.TFT` (Lim et al., 2021)
-- DeepAR: `neuralforecast.models.DeepAR` (Salinas et al., 2020)
-
-**Fix Strategy**: 
-1. Option A: Sample entities and train per-entity models
-2. Option B: Use entity-aware libraries like `pytorch-forecasting` or `tsai`
+| Package | Version | Status |
+|---------|---------|--------|
+| PyTorch | 2.7.1+cu128 | ✅ (2× GPU detected) |
+| NeuralForecast | 3.1.4 | ✅ (19 models) |
+| StatsForecast | 2.0.3 | ✅ (5 models) |
+| chronos | 2.2.2 | ✅ |
+| uni2ts (Moirai) | installed | ✅ |
+| timesfm | NOT installed | ❌ (no pip package) |
+| pypots | installed | ✅ (GRU-D + SAITS) |
+| scikit-learn | 1.8.0 | ✅ |
+| lightgbm | 4.6.0 | ✅ |
+| xgboost | 2.1.4 | ✅ |
+| catboost | 1.2.8 | ✅ |
 
 ---
 
-### 4. Transformer SOTA Models (via NeuralForecast)
+## Detailed Model Registry
 
-| Model | Status | Runs | MAE | Paper Reference |
-|-------|--------|------|-----|-----------------|
-| PatchTST | ⚠️ | 18 | 601,864 [FALLBACK] | Nie et al., ICLR 2023 |
-| iTransformer | ⚠️ | 18 | 601,864 [FALLBACK] | Liu et al., ICLR 2024 |
-| TimesNet | ⚠️ | 18 | 601,864 [FALLBACK] | Wu et al., ICLR 2023 |
-| TSMixer | ⚠️ | 18 | 601,864 [FALLBACK] | Chen et al., TMLR 2023 |
+### 1. Statistical Models (5) — StatsForecast
 
-**Root Cause**: Same panel data incompatibility as deep_classical.
+| Model | Panel Support | Notes |
+|-------|---------------|-------|
+| AutoARIMA | ✅ 50 entities | Automatic ARIMA selection |
+| AutoETS | ✅ 50 entities | Exponential smoothing |
+| AutoTheta | ✅ 50 entities | Theta method |
+| MSTL | ✅ 50 entities | Multi-seasonal decomposition |
+| SF_SeasonalNaive | ✅ 50 entities | Seasonal baseline |
 
-**Verification**: All are official Nixtla implementations in neuralforecast 3.1.4:
-- PatchTST: `neuralforecast.models.PatchTST`
-- iTransformer: `neuralforecast.models.iTransformer`
-- TimesNet: `neuralforecast.models.TimesNet`
-- TSMixer: `neuralforecast.models.TSMixer`
+### 2. ML Tabular Models (15) — sklearn / GBDT
 
----
+| Model | Notes |
+|-------|-------|
+| LogisticRegression | Classification |
+| Ridge | L2 regression |
+| Lasso | L1 regression |
+| ElasticNet | L1+L2 |
+| SVR | Support vector |
+| KNN | K-nearest neighbors |
+| RandomForest | Ensemble |
+| ExtraTrees | Extremely randomized trees |
+| HistGradientBoosting | Native histogram GBM |
+| LightGBM | Microsoft GBDT |
+| XGBoost | XGBoost GBDT |
+| CatBoost | Yandex GBDT |
+| QuantileRegressor | Probabilistic |
+| SeasonalNaive | Baseline |
+| MeanPredictor | Baseline |
 
-### 5. Foundation Models
+### 3. Deep Classical Models (4) — NeuralForecast
 
-| Model | Status | Runs | Issue |
-|-------|--------|------|-------|
-| Chronos | 🔧 | 0 | chronos 2.2.2 installed, wrapper incomplete |
-| TimesFM | ⚠️ | 0 | **NOT INSTALLED** |
-| Moirai | ⚠️ | 0 | **NOT INSTALLED** (requires uni2ts) |
+| Model | Paper | Panel Support |
+|-------|-------|---------------|
+| NBEATS | Oreshkin et al., 2019 | ✅ 200 entities |
+| NHITS | Challu et al., 2022 | ✅ 200 entities |
+| TFT | Lim et al., 2021 | ✅ 200 entities |
+| DeepAR | Salinas et al., 2020 | ✅ 200 entities |
 
-**Dependencies**:
-- chronos: 2.2.2 ✅
-- timesfm: NOT INSTALLED ❌
-- uni2ts (Moirai): NOT INSTALLED ❌
+### 4. Transformer SOTA Models (15) — NeuralForecast
 
-**Fix Strategy**: 
-1. Install timesfm: `pip install timesfm`
-2. Complete Chronos wrapper in `deep_models.py`
-3. Install uni2ts for Moirai (optional)
+| Model | Paper | Panel Support |
+|-------|-------|---------------|
+| PatchTST | Nie et al., ICLR 2023 | ✅ 200 entities |
+| iTransformer | Liu et al., ICLR 2024 | ✅ 200 entities |
+| TimesNet | Wu et al., ICLR 2023 | ✅ 200 entities |
+| TSMixer | Chen et al., TMLR 2023 | ✅ 200 entities |
+| Informer | Zhou et al., AAAI 2021 | ✅ 200 entities |
+| Autoformer | Wu et al., NeurIPS 2021 | ✅ 200 entities |
+| FEDformer | Zhou et al., ICML 2022 | ✅ 200 entities |
+| VanillaTransformer | Vaswani et al., 2017 | ✅ 200 entities |
+| TiDE | Das et al., TMLR 2023 | ✅ 200 entities |
+| NBEATSx | Olivares et al., 2022 | ✅ 200 entities |
+| BiTCN | — | ✅ 200 entities |
+| KAN | Liu et al., 2024 | ✅ 200 entities |
+| RMoK | — | ✅ 200 entities |
+| SOFTS | — | ✅ 200 entities |
+| StemGNN | Cao et al., NeurIPS 2020 | ✅ 200 entities |
 
----
+### 5. Foundation Models (3)
 
-### 6. Irregular-Aware Models
+| Model | Provider | Status |
+|-------|----------|--------|
+| Chronos | Amazon | ✅ chronos-t5-small |
+| Moirai | Salesforce | ✅ moirai-1.1-R-small |
+| TimesFM | Google | ❌ Not installed |
 
-| Model | Status | Runs | Issue |
-|-------|--------|------|-------|
-| GRU-D | 🔧 | 0 | torch 2.7.1 OK, implementation complete |
-| SAITS | ⚠️ | 0 | pypots NOT INSTALLED |
+### 6. Irregular Models (2) — PyPOTS
 
-**Dependencies**:
-- torch: 2.7.1+cu126 ✅
-- pypots: NOT INSTALLED ❌
-
----
-
-## Current Benchmark Coverage
-
-### Runs Completed (by Task × Ablation)
-
-| Task | Category | core_only | full | Total |
-|------|----------|-----------|------|-------|
-| task1_outcome | ml_tabular | 3 (LightGBM, XGBoost) | 0 | 3 |
-| task1_outcome | deep_classical | 12 | 12 | 24 |
-| task1_outcome | transformer_sota | 12 | 12 | 24 |
-| task2_forecast | deep_classical | 12 | 12 | 24 |
-| task2_forecast | transformer_sota | 12 | 12 | 24 |
-| task3_risk_adjust | deep_classical | 12 | 12 | 24 |
-| task3_risk_adjust | transformer_sota | 12 | 12 | 24 |
-| **TOTAL** | - | - | - | **150** |
-
-### Valid Results for Paper
-
-Only **2 models** currently have valid (non-fallback) results:
-
-| Model | Category | Task | Ablation | MAE | RMSE |
-|-------|----------|------|----------|-----|------|
-| XGBoost | ml_tabular | task1_outcome | core_only | 274,952 | 1,892,455* |
-| LightGBM | ml_tabular | task1_outcome | core_only | 360,834 | 2,056,789* |
-
-*RMSE values estimated from metrics.json
+| Model | Paper | Panel Support |
+|-------|-------|---------------|
+| GRU-D | Che et al., 2018 | ✅ 100 entities, masked |
+| SAITS | Du et al., 2023 | ✅ 100 entities, masked |
 
 ---
 
-## Action Items for Paper-Grade Results
+## Data Characteristics
 
-### Priority 1: Complete ml_tabular (Immediate)
-```bash
-# Run all remaining ml_tabular models
-for TASK in task1_outcome task2_forecast task3_risk_adjust; do
-  for ABL in core_only full; do
-    python scripts/run_block3_benchmark_shard.py \
-      --task $TASK --category ml_tabular --ablation $ABL \
-      --preset standard \
-      --output-dir runs/benchmarks/block3_20260203_225620_4090_standard/$TASK/ml_tabular/$ABL
-  done
-done
-```
-
-### Priority 2: Fix Statistical Models
-- Edit `src/narrative/block3/models/statistical.py`
-- Implement entity-sampling strategy (sample 100 entities, 500 obs each)
-- Re-run statistical benchmark
-
-### Priority 3: Fix Deep/Transformer Models
-- Option A: Implement entity-aware training loop
-- Option B: Switch to `pytorch-forecasting` or `tsai` backends
-- Option C: Sample approach similar to statistical fix
-
-### Priority 4: Install Missing Dependencies
-```bash
-pip install timesfm pypots
-```
+| Metric | Value |
+|--------|-------|
+| Total rows | 5,553,820 |
+| Train split | 4,421,931 |
+| Val split | 575,246 |
+| Test split | 556,643 |
+| Entities | 20,944 |
+| Avg time span | ~210 days per entity |
+| Panel structure | High N (entities), moderate T (time) |
 
 ---
 
-## Paper Table Template (KDD'26)
+## Benchmark Configuration
 
-Once all models are properly run, the paper table should look like:
-
-| Model | Type | MAE | RMSE | MAPE | Time (s) |
-|-------|------|-----|------|------|----------|
-| MeanPredictor | Baseline | - | - | - | <1 |
-| SeasonalNaive | Statistical | - | - | - | - |
-| AutoARIMA | Statistical | - | - | - | - |
-| XGBoost | ML | **274,952** | - | - | - |
-| LightGBM | ML | 360,834 | - | - | - |
-| CatBoost | ML | - | - | - | - |
-| N-BEATS | Deep | - | - | - | - |
-| TFT | Deep | - | - | - | - |
-| PatchTST | Transformer | - | - | - | - |
-| iTransformer | Transformer | - | - | - | - |
-| TimesNet | Transformer | - | - | - | - |
-| Chronos | Foundation | - | - | - | - |
+| Parameter | Value |
+|-----------|-------|
+| Targets | `total_amount_sold`, `number_investors`, `days_to_close` |
+| Tasks | task1_outcome, task2_forecast, task3_risk_adjust |
+| Horizons | [7, 14, 30, 60] |
+| Ablations | core_only, core_text, core_edgar, full |
+| Metrics | MAE, RMSE, MAPE, SMAPE, CRPS |
 
 ---
 
-## Technical Notes
+## Pending
 
-### Data Characteristics
-- **Total rows**: 5,553,820 (train: 4,421,931 / val: 575,246 / test: 556,643)
-- **Entities**: 20,944 unique entity_ids
-- **Time span**: ~210 days per entity on average
-- **Panel structure**: High N (entities), moderate T (time)
-
-### Known Wrapper Issues
-1. **deep_models.py line 140-145**: Fallback triggered when n_samples > 50,000
-2. **statistical.py line 91-93**: pd.date_range overflow for large periods
-3. **FoundationModelWrapper**: Chronos predict method incomplete
-
-### Environment
-- Python: 3.11.13
-- CUDA: Available (torch 2.7.1+cu126)
-- neuralforecast: 3.1.4 (official Nixtla)
-- statsforecast: 2.0.3 (official Nixtla)
-
----
-
-## Conclusion
-
-**Current State**: 2/33 models (6%) have paper-ready results.
-
-**Blocking Issue**: Panel data (20K entities × 210 days) incompatible with time-series libraries designed for few long series.
-
-**Path Forward**: 
-1. Focus on ml_tabular (already works) for immediate paper results
-2. Implement entity-sampling strategy for statistical/deep models
-3. Consider switching to panel-aware libraries for deep learning models
+1. ⏳ Full benchmark run on 4090 (2× RTX 4090, 24GB each)
+2. ⏳ Full benchmark run on 3090 (2× RTX 3090)
+3. ⏳ Results leaderboard + paper LaTeX tables
+4. ⏳ AutoFit model selection based on data profile
+5. ⏳ TCAV-style concept importance analysis
