@@ -103,7 +103,7 @@ class DeepModelWrapper(ModelBase):
         self._last_y = np.array([])
         self._use_fallback = False
 
-    def _get_model(self, h: int):
+    def _get_model(self, h: int, n_series: int = 1):
         from neuralforecast.models import (
             NBEATS, NHITS, TFT, DeepAR,
             PatchTST, iTransformer, TimesNet, TSMixer,
@@ -143,14 +143,20 @@ class DeepModelWrapper(ModelBase):
         if self.model_name == "PatchTST":
             return cls(**common, patch_len=16, stride=8)
         if self.model_name == "iTransformer":
-            return cls(**common, n_series=1)
+            return cls(**common, n_series=n_series)
         if self.model_name in ("TimesNet", "Informer", "Autoformer", "FEDformer",
                                 "VanillaTransformer", "TiDE"):
             return cls(**common, hidden_size=64)
         if self.model_name == "NBEATSx":
             return cls(**common, stack_types=["trend", "seasonality"])
+        if self.model_name == "TSMixer":
+            return cls(**common, n_series=n_series)
+        if self.model_name == "RMoK":
+            return cls(**common, n_series=n_series)
+        if self.model_name == "SOFTS":
+            return cls(**common, n_series=n_series)
         if self.model_name == "StemGNN":
-            return cls(**common, n_series=1)
+            return cls(**common, n_series=n_series)
         return cls(**common)
 
     def fit(self, X: pd.DataFrame, y: pd.Series, **kwargs) -> "DeepModelWrapper":
@@ -167,7 +173,8 @@ class DeepModelWrapper(ModelBase):
         _logger.info(f"  [{self.model_name}] Training on panel "
                       f"({panel['unique_id'].nunique()} entities, {len(panel):,} rows)")
         try:
-            model = self._get_model(h)
+            n_series = panel["unique_id"].nunique()
+            model = self._get_model(h, n_series=n_series)
             self._nf = NeuralForecast(models=[model], freq="D")
             self._nf.fit(df=panel)
             self._fitted = True

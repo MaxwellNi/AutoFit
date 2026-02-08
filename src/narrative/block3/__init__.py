@@ -2,6 +2,7 @@
 Block 3 Benchmark Module.
 
 Provides unified interfaces for:
+- Unified protocol (Early-K, temporal splits, leakage guard)
 - Task protocols with leakage validation
 - Preprocessing (missing values, scaling)
 - Metrics with bootstrap confidence intervals
@@ -9,6 +10,19 @@ Provides unified interfaces for:
 """
 from . import tasks
 from . import models
+
+# Unified Protocol (CRITICAL - shared across all tasks)
+from .unified_protocol import (
+    TemporalSplitConfig,
+    EarlyKConfig,
+    SplitStats,
+    extract_early_k_snapshots,
+    get_entity_label_time,
+    apply_temporal_split,
+    LeakageGuard,
+    validate_no_leakage,
+    load_block3_tasks_config,
+)
 
 # Protocol
 from .protocol import (
@@ -89,6 +103,16 @@ __all__ = [
     # Submodules
     "tasks",
     "models",
+    # Unified Protocol (CRITICAL)
+    "TemporalSplitConfig",
+    "EarlyKConfig",
+    "SplitStats",
+    "extract_early_k_snapshots",
+    "get_entity_label_time",
+    "apply_temporal_split",
+    "LeakageGuard",
+    "validate_no_leakage",
+    "load_block3_tasks_config",
     # Protocol
     "TaskType",
     "FeatureAvailability",

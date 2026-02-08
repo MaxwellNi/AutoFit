@@ -1,15 +1,40 @@
 # Block 3 Tasks Configuration
 # All paths resolved via docs/audits/FULL_SCALE_POINTER.yaml
+#
+# CRITICAL UNIFIED PROTOCOL:
+# 1. Early-K definition: K = number of SNAPSHOTS (rows), NOT days
+# 2. Label time t0 = last snapshot in early-K window
+# 3. All features must be available at t0 (leakage guard enforced)
+# 4. Strict temporal splits: train_end < val_end < test_end (NO random)
 
 # Global settings
 pointer_path: docs/audits/FULL_SCALE_POINTER.yaml
 output_base: runs/benchmarks
+seed: 42
+date_col: crawled_date_day
+entity_col: entity_id
+
+# Unified temporal split (shared across ALL tasks)
+# CRITICAL: These dates are authoritative for reproducibility
+split:
+  method: temporal  # ONLY temporal allowed
+  train_end: "2025-06-30"
+  val_end: "2025-09-30"
+  test_end: "2025-12-31"
+  embargo_days: 7  # Gap between splits to prevent leakage
 
 # Anti-leakage settings
 anti_leakage:
   strict_temporal_split: true
-  gap_days: 0  # Days between train and val/test
+  gap_days: 7  # Days between train and val/test
   verify_no_future_features: true
+  fail_fast: true  # Raise RuntimeError on leakage
+
+# Early-K configuration (CRITICAL: K = snapshots, NOT days)
+early_k:
+  description: "K is number of SNAPSHOTS per entity, not days"
+  default_k: 30
+  available_k: [7, 14, 30, 60, 90]
 
 # Column mappings (legacy -> actual freeze columns)
 column_mappings:
@@ -17,6 +42,25 @@ column_mappings:
   success_binary: is_funded
   number_investors: investors_count
   total_offering_amount: funding_goal_usd
+
+# Ablation configurations (shared across tasks)
+ablations:
+  core_only:
+    use_text: false
+    use_edgar: false
+    description: "Core offering features only"
+  core_text:
+    use_text: true
+    use_edgar: false
+    description: "Core + text embeddings"
+  core_edgar:
+    use_text: false
+    use_edgar: true
+    description: "Core + EDGAR filing features"
+  full:
+    use_text: true
+    use_edgar: true
+    description: "All features: core + text + edgar"
 
 # Task definitions
 tasks:
@@ -26,11 +70,11 @@ tasks:
       - funding_raised_usd
       - investors_count
       - is_funded
-    horizons: [7, 14, 30, 60]  # K = early snapshot days
+    horizons: [7, 14, 30]  # K = early snapshot count (NOT days)
     ablations:
       - core_only
-      - +text
-      - +edgar
+      - core_text
+      - core_edgar
       - full
     metrics:
       classification:
@@ -41,25 +85,22 @@ tasks:
       regression:
         - mae
         - rmse
+        - smape
       ranking:
         - ndcg@10
         - spearman
-    split:
-      train_end: "2024-06-30"
-      val_end: "2024-12-31"
-      test_start: "2025-01-01"
 
   task2_forecast:
     description: "Trajectory Forecasting (multi-horizon + quantiles)"
     targets:
       - funding_raised_usd
       - investors_count
-    horizons: [7, 14, 30, 60]  # H = forecast horizon
-    context_lengths: [30, 60, 90]
+    horizons: [1, 7, 14, 30]  # H = forecast horizon in days
+    context_lengths: [30, 60, 90]  # Lookback in snapshots
     ablations:
       - core_only
-      - +text
-      - +edgar
+      - core_text
+      - core_edgar
       - full
     metrics:
       point:
@@ -73,57 +114,74 @@ tasks:
       probabilistic:
         - crps
         - interval_coverage_90
-    split:
-      train_end: "2024-06-30"
-      val_end: "2024-12-31"
-      test_start: "2025-01-01"
 
   task3_risk_adjust:
-    description: "EDGAR-conditioned Risk Adjustment (robustness + shift)"
-    targets:
-      - funding_raised_usd
-    horizons: [14, 30]
-    ablations:
-      - core_only
-      - +edgar
-      - full
-    ood_modes:
-      - year_shift
-      - sector_shift
-    metrics:
-      - mae
-      - rmse
-      - calibration_error
-      - performance_gap
-    split:
-      train_end: "2023-12-31"  # Pre-2024
-      val_end: "2024-12-31"
-      test_start: "2025-01-01"  # OOD test
-
-  task4_narrative_shift:
-    description: "Narrative Shift & GenAI Era Effect (DiD + mediation)"
+    description: "EDGAR-conditioned Risk Adjustment (OOD robustness)"
     targets:
       - funding_raised_usd
       - investors_count
-    treatment_year: 2023  # GenAI era starts
-    placebo_years: [2021, 2022]
-    mediators:
-      - nbi  # Narrative Behavior Index
-      - nci  # Narrative Content Index
+    horizons: [30]  # K = early snapshot count
     ablations:
       - core_only
-      - +text
+      - core_edgar
       - full
+    ood_slices:
+      size_shift:
+        column: funding_goal_usd
+        split_quantile: 0.5
+        description: "Small vs large offerings"
+      time_shift:
+        column: crawled_date_day
+        split_date: "2025-10-01"
+        description: "Recent vs older"
+      sector_shift:
+        column: sector
+        groups: ["Technology", "Real Estate", "Other"]
+        description: "Industry sectors"
     metrics:
-      - did_estimate
-      - did_ci_lower
-      - did_ci_upper
-      - placebo_did
-      - proportion_mediated
-    split:
-      train_end: "2022-12-31"  # Pre-GenAI
-      val_end: "2022-12-31"
-      test_start: "2023-01-01"  # GenAI era
+      - mae
+      - rmse
+      - degradation_pct
+      - robustness_score
+      - worst_slice_mae
+
+# Presets for benchmarking
+presets:
+  smoke:
+    description: "Minimal test run (< 2 min)"
+    max_entities: 100
+    max_rows: 1000
+    horizons: [7]
+    k_values: [7]
+    models_per_category: 1
+    n_bootstrap: 0
+    
+  quick:
+    description: "Quick validation (< 10 min)"
+    max_entities: 500
+    max_rows: 10000
+    horizons: [7, 14]
+    k_values: [14, 30]
+    models_per_category: 2
+    n_bootstrap: 100
+    
+  standard:
+    description: "Standard benchmark (< 1 hour per task)"
+    max_entities: null
+    max_rows: null
+    horizons: [7, 14, 30]
+    k_values: [7, 14, 30]
+    models_per_category: null
+    n_bootstrap: 500
+    
+  full:
+    description: "Full benchmark for paper (several hours)"
+    max_entities: null
+    max_rows: null
+    horizons: [1, 7, 14, 30]
+    k_values: [7, 14, 30, 60, 90]
+    models_per_category: null
+    n_bootstrap: 1000
 
 # Model categories for benchmarking
 model_categories:
@@ -135,33 +193,22 @@ model_categories:
     - MSTL
 
   ml_tabular:
-    classification:
-      - LogisticRegression
-      - RandomForest
-      - HistGradientBoosting
-      - LightGBM
-      - XGBoost
-      - CatBoost
-    regression:
-      - Ridge
-      - Lasso
-      - ElasticNet
-      - SVR
-      - KNN
-      - RandomForest
-      - HistGradientBoosting
-      - LightGBM
-      - XGBoost
-      - CatBoost
-    ranking:
-      - LightGBMRanker
-      - XGBoostRanker
+    - LightGBM
+    - XGBoost
+    - CatBoost
+    - RandomForest
+    - HistGradientBoosting
+    - Ridge
+    - Lasso
+    - ElasticNet
 
   deep_classical:
     - NBEATS
     - NHITS
     - TFT
     - DeepAR
+    - LSTM
+    - GRU
 
   transformer_sota:
     - PatchTST
@@ -172,18 +219,13 @@ model_categories:
     - FEDformer
     - Informer
 
-  gluonts:
-    - DeepAR
-    - WaveNet
-    - SimpleFeedForward
-
   foundation:
     - TimesFM
     - Chronos
     - Moirai
     - LagLlama
 
-  irregular_aware:
+  irregular:
     - GRU_D
     - SAITS
     - NeuralCDE
@@ -195,12 +237,3 @@ training:
   batch_size: 64
   learning_rate: 0.001
   weight_decay: 0.0001
-
-# Smoke test settings
-smoke_test:
-  n_entities: 100
-  horizons: [7, 14]
-  targets: [funding_raised_usd]
-  ablations: [core_only]
-  models: [SeasonalNaive, LightGBM]
-  max_epochs: 5
