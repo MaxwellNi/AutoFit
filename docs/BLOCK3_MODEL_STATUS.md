@@ -1,20 +1,32 @@
 # Block 3 Model Benchmark Status
 
-> Last Updated: 2026-02-07
+> Last Updated: 2026-02-07 20:00 UTC
 > Freeze Stamp: `20260203_225620`
-> Git Hash: `0a590a2`
+> Git Hash: `5987ce2`
+
+## Current Execution Status
+
+### Platform Status
+| Platform | Status | Jobs | Details |
+|----------|--------|------|---------|
+| **4090 Local** | 🔄 Running | 2 | ml_tabular (fast), foundation (Chronos) |
+| **Iris Cluster** | ⏳ Pending | 30 | batch partition, 100GB RAM each |
+
+### Job Progress (4090)
+- **ml_tabular**: task1_outcome/core_only - Ridge ✅, Lasso ✅, continuing...
+- **foundation**: task1_outcome/core_only - TimesFM ❌ (not installed), Chronos 🔄, Moirai ❌ (not installed)
 
 ## Executive Summary
 
-| Category | Total Models | Paper-Ready | Code Complete | Need Fix |
-|----------|-------------|-------------|---------------|----------|
-| **statistical** | 5 | 0 | 5 | 5 (data scale issue) |
-| **ml_tabular** | 15 | 2 | 15 | 0 |
-| **deep_classical** | 4 | 0 | 4 | 4 (panel data issue) |
-| **transformer_sota** | 4 | 0 | 4 | 4 (panel data issue) |
+| Category | Total Models | Paper-Ready | Running | Need Fix |
+|----------|-------------|-------------|---------|----------|
+| **statistical** | 5 | 0 | 0 | 5 (data scale issue) |
+| **ml_tabular** | 15 | 2 | 11 | 2 (SVR/KNN slow) |
+| **deep_classical** | 4 | 0 | 0 | 4 (panel data issue) |
+| **transformer_sota** | 4 | 0 | 0 | 4 (panel data issue) |
 | **foundation** | 3 | 0 | 1 | 2 (missing deps) |
-| **irregular_aware** | 2 | 0 | 1 | 1 (missing deps) |
-| **TOTAL** | **33** | **2** | **30** | **16** |
+| **irregular_aware** | 2 | 0 | 0 | 2 (missing deps) |
+| **TOTAL** | **33** | **2** | **12** | **19** |
 
 ---
 
