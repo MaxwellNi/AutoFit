@@ -63,7 +63,6 @@ submit_shard() {
     --output="slurm_logs/${jobname}_%j.out" \
     --error="slurm_logs/${jobname}_%j.err" \
     --wrap="${ACTIVATE} && cd ${REPO_ROOT} && python scripts/run_block3_benchmark_shard.py \
-      --stamp ${STAMP} --variant ${VARIANT} \
       --task ${task} --category ${cat} --ablation ${ablation} \
       --preset ${PRESET} --output-dir ${outdir}"
   echo "  Submitted: ${task}/${cat}/${ablation} (${partition})"
