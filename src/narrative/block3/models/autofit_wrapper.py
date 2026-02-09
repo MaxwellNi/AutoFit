@@ -273,7 +273,6 @@ class AutoFitV1Wrapper(ModelBase):
         self._selection_info: Dict[str, Any] = {}
 
     def fit(self, X: pd.DataFrame, y: pd.Series, **kwargs) -> "AutoFitV1Wrapper":
-        from src.narrative.auto_fit.rule_based_composer import compose_from_profile
         from src.narrative.block3.models.registry import get_model, check_model_available
 
         train_raw = kwargs.get("train_raw")
@@ -286,10 +285,23 @@ class AutoFitV1Wrapper(ModelBase):
             if train_raw is not None:
                 # v1 uses simpler meta-features from diagnose_dataset
                 from src.narrative.auto_fit.diagnose_dataset import diagnose_dataset
-                profile = diagnose_dataset(train_raw, target_col=target)
-                result = compose_from_profile(profile)
-                # v1 returns a backbone recommendation; map to registry model
-                backbone = result.get("backbone", "lightgbm") if isinstance(result, dict) else "lightgbm"
+                from src.narrative.auto_fit.rule_based_composer import RuleBasedComposer
+                # Sample to limit diagnose_dataset runtime on large panels
+                diag_df = train_raw
+                if len(train_raw) > 200_000 and "entity_id" in train_raw.columns:
+                    sampled_ids = train_raw["entity_id"].drop_duplicates().sample(
+                        n=min(500, train_raw["entity_id"].nunique()), random_state=42
+                    )
+                    diag_df = train_raw[train_raw["entity_id"].isin(sampled_ids)]
+                profile = diagnose_dataset(
+                    diag_df, target_col=target,
+                    key_col="entity_id", time_col="crawled_date_day",
+                )
+                # Use RuleBasedComposer directly with the dict (NOT compose_from_profile which expects a Path)
+                composer = RuleBasedComposer()
+                result = composer.compose(profile)
+                # result is a ComposedConfig dataclass; get backbone attribute
+                backbone = result.backbone if hasattr(result, "backbone") else "lightgbm"
                 backbone_to_model = {
                     "lightgbm": "LightGBM",
                     "xgboost": "XGBoost",
@@ -299,9 +311,15 @@ class AutoFitV1Wrapper(ModelBase):
                     "nhits": "NHITS",
                     "nbeats": "NBEATS",
                     "patchtst": "PatchTST",
+                    "itransformer": "iTransformer",
+                    "timemixer": "TSMixer",
+                    "timesnet": "TimesNet",
                     "autoarima": "AutoARIMA",
                     "autoets": "AutoETS",
                     "chronos": "Chronos",
+                    "moirai": "Moirai",
+                    "tft": "TFT",
+                    "deepar": "DeepAR",
                 }
                 selected_model = backbone_to_model.get(
                     backbone.lower().replace("-", "").replace("_", ""),
@@ -309,7 +327,7 @@ class AutoFitV1Wrapper(ModelBase):
                 )
                 self._selection_info = {
                     "profile": profile if isinstance(profile, dict) else {},
-                    "composer_result": result if isinstance(result, dict) else {},
+                    "composer_result": result.to_dict() if hasattr(result, "to_dict") else {},
                     "selected_model": selected_model,
                 }
         except Exception as e:
