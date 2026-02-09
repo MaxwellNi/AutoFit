@@ -53,6 +53,13 @@ def load_all_metrics(results_dir: Path) -> pd.DataFrame:
         category = parts[1]
         ablation = parts[2]
 
+        # Normalise split sub-dirs back to parent category
+        # transformer_sota_A/B/C → transformer_sota
+        for parent in ("transformer_sota",):
+            if category.startswith(parent + "_"):
+                category = parent
+                break
+
         # Load MANIFEST to get git hash and status
         manifest_path = metrics_path.parent / "MANIFEST.json"
         git_hash = "unknown"
@@ -66,7 +73,7 @@ def load_all_metrics(results_dir: Path) -> pd.DataFrame:
                 pass
 
         # Only include completed runs
-        if manifest_status != "completed":
+        if manifest_status not in ("completed", "partial", "partial_timeout"):
             logger.info(f"Skipping incomplete shard: {rel.parent} (status={manifest_status})")
             continue
 

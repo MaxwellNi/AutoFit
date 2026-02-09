@@ -54,6 +54,13 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple, Union
 
+
+# ── Per-model timeout ────────────────────────────────────────────────────────
+# SVR with RBF kernel on 100K rows takes ~1h45m per target.  With 8-12
+# targets per shard this blows past the 12h SLURM limit.  Reduce
+# SVR subsample to 10K rows to keep it under ~2 minutes per combo.
+_MODEL_TIMEOUT_SECONDS = int(os.environ.get("B3_MODEL_TIMEOUT", 1200))  # 20 min
+
 import numpy as np
 import pandas as pd
 import yaml
@@ -107,6 +114,23 @@ TASK_NAMES = ["task1_outcome", "task2_forecast", "task3_risk_adjust"]
 CATEGORY_NAMES = ["statistical", "ml_tabular", "deep_classical", "transformer_sota", "foundation", "irregular", "autofit"]
 ABLATION_NAMES = ["core_only", "core_text", "core_edgar", "full"]
 PRESET_NAMES = ["smoke", "quick", "standard", "full"]
+
+# Global reference for SIGTERM handler
+_ACTIVE_SHARD: Optional["BenchmarkShard"] = None
+
+def _sigterm_handler(signum, frame):
+    """Save partial results when SLURM sends SIGTERM before OOM/timeout kill."""
+    logger.warning(f"Received signal {signum}; saving partial results before exit...")
+    if _ACTIVE_SHARD is not None:
+        _ACTIVE_SHARD.manifest.status = "partial_timeout"
+        _ACTIVE_SHARD.manifest.finished_at = datetime.now(timezone.utc).isoformat()
+        _ACTIVE_SHARD._save_outputs(partial=False)
+        logger.warning(f"Saved {len(_ACTIVE_SHARD.metrics)} metric records before exit")
+    sys.exit(128 + signum)
+
+import signal
+signal.signal(signal.SIGTERM, _sigterm_handler)
+signal.signal(signal.SIGUSR1, _sigterm_handler)  # SLURM pre-emption
 
 
 @dataclass
@@ -496,23 +520,23 @@ class BenchmarkShard:
     ) -> Optional[ModelMetrics]:
         """Run a single model and return metrics."""
         logger.info(f"Running {model_name}...")
-        
+
         if not check_model_available(model_name):
             logger.warning(f"Model {model_name} not available, skipping")
             return None
-        
+
         try:
             # Prepare features
             X_train, y_train = self._prepare_features(train, target, horizon)
             X_test, y_test = self._prepare_features(test, target, horizon)
-            
+
             if len(X_train) < 10 or len(X_test) < 10:
                 logger.warning(f"Insufficient data for {model_name}")
                 return None
-            
+
             # Get model
             model = get_model(model_name)
-            
+
             # Train - pass raw DataFrames to ALL panel-aware model categories
             train_start = time.time()
             fit_kwargs = {}
@@ -523,7 +547,7 @@ class BenchmarkShard:
                 fit_kwargs["horizon"] = horizon
             model.fit(X_train, y_train, **fit_kwargs)
             train_time = time.time() - train_start
-            
+
             # Predict — pass entity mapping for panel-aware categories
             infer_start = time.time()
             predict_kwargs = {}
@@ -534,20 +558,19 @@ class BenchmarkShard:
                 predict_kwargs["horizon"] = horizon
             y_pred = model.predict(X_test, **predict_kwargs)
             infer_time = time.time() - infer_start
-            
+
             # ---- CONSTANT-PREDICTION GUARD ----
-            # If a model returns identical values for all test rows, flag it.
             if len(y_pred) > 1 and np.std(y_pred) == 0.0:
                 logger.warning(
                     f"  ⚠ CONSTANT-PREDICTION detected for {model_name} "
                     f"(target={target}, h={horizon}): all {len(y_pred)} "
                     f"predictions = {y_pred[0]:.4f}"
                 )
-            
+
             # Compute metrics
             n_bootstrap = self.preset_config.n_bootstrap
             metrics_dict = self._compute_metrics(y_test.values, y_pred, n_bootstrap)
-            
+
             result = ModelMetrics(
                 model_name=model_name,
                 category=self.category,
@@ -563,7 +586,7 @@ class BenchmarkShard:
                 git_hash=self.git_hash,
                 **metrics_dict,
             )
-            
+
             # Store predictions
             pred_df = pd.DataFrame({
                 "y_true": y_test.values,
@@ -575,11 +598,10 @@ class BenchmarkShard:
                 "target": target,
             })
             self.predictions.append(pred_df)
-            
+
             logger.info(f"  {model_name}: MAE={metrics_dict.get('mae', 'N/A'):.4f}, RMSE={metrics_dict.get('rmse', 'N/A'):.4f}")
-            
             return result
-            
+
         except Exception as e:
             logger.error(f"Error running {model_name}: {e}")
             logger.debug(traceback.format_exc())
@@ -587,6 +609,8 @@ class BenchmarkShard:
     
     def run(self) -> bool:
         """Run the benchmark shard."""
+        global _ACTIVE_SHARD
+        _ACTIVE_SHARD = self
         logger.info("=" * 80)
         logger.info(f"Block 3 Benchmark Shard")
         logger.info(f"  Task: {self.task}")
@@ -620,6 +644,9 @@ class BenchmarkShard:
                             self.manifest.n_models_run += 1
                         else:
                             self.manifest.n_models_failed += 1
+                    
+                    # Incremental save after each target-horizon combo
+                    self._save_outputs(partial=True)
             
             self.manifest.status = "completed"
             self.manifest.finished_at = datetime.now(timezone.utc).isoformat()
@@ -637,19 +664,23 @@ class BenchmarkShard:
         
         return True
     
-    def _save_outputs(self):
-        """Save shard outputs."""
+    def _save_outputs(self, partial: bool = False):
+        """Save shard outputs. Called incrementally and at final completion."""
         if not self.output_dir:
             logger.warning("No output directory specified, skipping save")
             return
         
         # Save manifest
         manifest_path = self.output_dir / "MANIFEST.json"
+        manifest_dict = self.manifest.to_dict()
+        if partial:
+            manifest_dict["status"] = "partial"
         manifest_path.write_text(
-            json.dumps(self.manifest.to_dict(), indent=2),
+            json.dumps(manifest_dict, indent=2),
             encoding="utf-8",
         )
-        logger.info(f"Saved manifest to {manifest_path}")
+        if not partial:
+            logger.info(f"Saved manifest to {manifest_path}")
         
         # Save metrics
         if self.metrics:
@@ -659,10 +690,13 @@ class BenchmarkShard:
                 json.dumps(metrics_records, indent=2),
                 encoding="utf-8",
             )
-            logger.info(f"Saved metrics to {metrics_path}")
+            if not partial:
+                logger.info(f"Saved metrics to {metrics_path}")
+            else:
+                logger.info(f"  [incremental] Saved {len(metrics_records)} metric records")
         
-        # Save predictions
-        if self.predictions:
+        # Save predictions (only on final save to avoid large IO)
+        if not partial and self.predictions:
             pred_df = pd.concat(self.predictions, ignore_index=True)
             pred_path = self.output_dir / "predictions.parquet"
             pred_df.to_parquet(pred_path)
