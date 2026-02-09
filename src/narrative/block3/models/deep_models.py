@@ -522,18 +522,6 @@ class FoundationModelWrapper(ModelBase):
             "Salesforce/moirai-1.1-R-small"
         )
 
-    def _load_timesfm(self):
-        import timesfm as tfm
-        self._model = tfm.TimesFm(
-            context_len=128, horizon_len=64,
-            input_patch_len=32, output_patch_len=32,
-            num_layers=20, model_dims=1280,
-        )
-        try:
-            self._model.load_from_checkpoint(repo_id="google/timesfm-1.0-200m")
-        except Exception:
-            pass
-
     def fit(self, X: pd.DataFrame, y: pd.Series, **kwargs) -> "FoundationModelWrapper":
         train_raw = kwargs.get("train_raw")
         target = kwargs.get("target")
@@ -567,15 +555,12 @@ class FoundationModelWrapper(ModelBase):
 
         self._context = y.values
 
-        try:
-            if self.model_name == "Chronos":
-                self._load_chronos()
-            elif self.model_name == "Moirai":
-                self._load_moirai()
-            elif self.model_name == "TimesFM":
-                self._load_timesfm()
-        except Exception as e:
-            _logger.warning(f"  [{self.model_name}] load failed: {e}")
+        if self.model_name == "Chronos":
+            self._load_chronos()
+        elif self.model_name == "Moirai":
+            self._load_moirai()
+        else:
+            raise ValueError(f"Unknown foundation model: {self.model_name}")
 
         self._fitted = True
         return self
@@ -628,20 +613,10 @@ class FoundationModelWrapper(ModelBase):
             if preds_all:
                 return np.full(h, float(np.mean(preds_all)))
 
-        if self.model_name == "TimesFM" and self._model is not None:
-            import torch
-            preds_all = []
-            for ctx in ctxs[:50]:
-                try:
-                    t = torch.tensor(ctx[-128:]).unsqueeze(0).float()
-                    out = self._model.forecast(t, horizon=7)
-                    preds_all.append(float(out[0].mean()))
-                except Exception:
-                    preds_all.append(float(np.mean(ctx)))
-            if preds_all:
-                return np.full(h, float(np.mean(preds_all)))
-
-        return np.full(h, float(np.mean(self._context)) if len(self._context) else 0)
+        raise RuntimeError(
+            f"[{self.model_name}] No valid prediction path reached. "
+            f"Model was not loaded successfully."
+        )
 
 
 # ============================================================================
@@ -694,7 +669,7 @@ create_stemgnn = _nf_factory("StemGNN")
 # foundation
 create_chronos = _fm_factory("Chronos", "chronos")
 create_moirai = _fm_factory("Moirai", "uni2ts")
-create_timesfm = _fm_factory("TimesFM", "timesfm")
+# TimesFM removed: requires Python <3.12 (lingvo dependency)
 
 
 # ============================================================================
@@ -719,7 +694,6 @@ TRANSFORMER_MODELS = {
 
 FOUNDATION_MODELS = {
     "Chronos": create_chronos, "Moirai": create_moirai,
-    "TimesFM": create_timesfm,
 }
 
 

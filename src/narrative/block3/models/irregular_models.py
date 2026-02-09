@@ -127,11 +127,11 @@ class GRUDWrapper(ModelBase):
 
         try:
             from pypots.imputation import SAITS as _check_pypots  # noqa: F401
-        except ImportError:
-            _logger.warning("  [GRU-D] PyPOTS not available, fallback")
-            self._use_fallback = True
-            self._fitted = True
-            return self
+        except ImportError as exc:
+            raise ImportError(
+                "[GRU-D] PyPOTS is required but not installed. "
+                "Install with: pip install pypots"
+            ) from exc
 
         try:
             # PyPOTS GRUD for imputation (not classification)
@@ -278,10 +278,11 @@ class SAITSWrapper(ModelBase):
                 f"imputed tail mean={self._fallback_val:.2f}"
             )
 
-        except ImportError:
-            _logger.warning("  [SAITS] PyPOTS not available, fallback")
-            self._use_fallback = True
-            self._fitted = True
+        except ImportError as exc:
+            raise ImportError(
+                "[SAITS] PyPOTS is required but not installed. "
+                "Install with: pip install pypots"
+            ) from exc
         except Exception as e:
             _logger.warning(f"  [SAITS] Training failed: {e}, fallback")
             self._use_fallback = True
