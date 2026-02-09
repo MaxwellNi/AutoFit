@@ -510,6 +510,10 @@ class BenchmarkShard:
         
         return metrics
     
+    # Classification-only models: skip for regression targets
+    _CLASSIFICATION_ONLY_MODELS = {"LogisticRegression"}
+    _CLASSIFICATION_TARGETS = {"is_funded"}
+
     def run_model(
         self,
         model_name: str,
@@ -521,6 +525,17 @@ class BenchmarkShard:
     ) -> Optional[ModelMetrics]:
         """Run a single model and return metrics."""
         logger.info(f"Running {model_name}...")
+
+        # Skip classification-only models for regression targets
+        if model_name in self._CLASSIFICATION_ONLY_MODELS and target not in self._CLASSIFICATION_TARGETS:
+            logger.info(f"  Skipping {model_name} (classification-only) for regression target={target}")
+            return None
+
+        # Skip regression-only linear models for binary classification targets
+        _REGRESSION_ONLY = {"Ridge", "Lasso", "ElasticNet", "SVR", "QuantileRegressor"}
+        if model_name in _REGRESSION_ONLY and target in self._CLASSIFICATION_TARGETS:
+            logger.info(f"  Skipping {model_name} (regression-only) for classification target={target}")
+            return None
 
         if not check_model_available(model_name):
             logger.warning(f"Model {model_name} not available, skipping")
@@ -628,6 +643,28 @@ class BenchmarkShard:
         logger.info(f"  Models: {self.models}")
         logger.info(f"  Preset: {self.preset}")
         logger.info("=" * 80)
+
+        # Resume support: load existing partial metrics
+        done_combos: set = set()  # (model_name, target, horizon) already done
+        if self.output_dir:
+            metrics_path = self.output_dir / "metrics.json"
+            if metrics_path.exists():
+                try:
+                    existing = json.loads(metrics_path.read_text())
+                    if isinstance(existing, list):
+                        for rec in existing:
+                            key = (rec.get("model_name",""), rec.get("target",""), rec.get("horizon",0))
+                            done_combos.add(key)
+                            # Reconstruct ModelMetrics from saved dict
+                            fields = {k for k in ModelMetrics.__dataclass_fields__}
+                            filtered = {k: v for k, v in rec.items() if k in fields}
+                            try:
+                                self.metrics.append(ModelMetrics(**filtered))
+                            except TypeError:
+                                pass  # skip malformed records
+                        logger.info(f"  [resume] Loaded {len(done_combos)} existing metric records")
+                except Exception as e:
+                    logger.warning(f"  [resume] Could not load existing metrics: {e}")
         
         try:
             # Get task config
@@ -647,6 +684,10 @@ class BenchmarkShard:
                     
                     # Run each model
                     for model_name in self.models:
+                        # Skip already-completed combos (resume support)
+                        if (model_name, target, horizon) in done_combos:
+                            logger.info(f"  [resume] Skipping {model_name} (already done for target={target}, h={horizon})")
+                            continue
                         result = self.run_model(model_name, train, val, test, target, horizon)
                         if result:
                             self.metrics.append(result)

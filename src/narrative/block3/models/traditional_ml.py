@@ -160,7 +160,7 @@ class ProductionGBDTWrapper(ModelBase):
 # ============================================================================
 
 def create_logistic_regression(**kwargs) -> ModelBase:
-    """Logistic Regression (classification ONLY)."""
+    """Logistic Regression (classification ONLY — skip for regression targets)."""
     from sklearn.linear_model import LogisticRegression
     config = ModelConfig(
         name="LogisticRegression",
@@ -168,7 +168,7 @@ def create_logistic_regression(**kwargs) -> ModelBase:
         params=kwargs,
     )
     model = LogisticRegression(
-        max_iter=2000,
+        max_iter=500,
         solver="lbfgs",
         C=1.0,
         **kwargs,
@@ -201,11 +201,16 @@ def create_elastic_net(**kwargs) -> ModelBase:
 
 
 def create_svr(**kwargs) -> ModelBase:
-    """Support Vector Regression — subsampled to 100K rows (O(n²) scaling)."""
+    """Support Vector Regression — subsampled to 10K rows (O(n²) scaling).
+
+    At 100K rows SVR with RBF kernel takes ~1h45m per target-horizon
+    combo.  Reducing to 10K keeps each run under ~2 minutes while still
+    giving the model enough data to learn from.
+    """
     from sklearn.svm import SVR
     config = ModelConfig(name="SVR", model_type="regression", params=kwargs)
     model = SVR(kernel="rbf", C=1.0, epsilon=0.1, **kwargs)
-    return SubsampledSklearnWrapper(config, model, max_rows=_SUBSAMPLE_LIMIT)
+    return SubsampledSklearnWrapper(config, model, max_rows=10_000)
 
 
 def create_knn_regressor(**kwargs) -> ModelBase:
