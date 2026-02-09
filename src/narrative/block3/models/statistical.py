@@ -28,6 +28,7 @@ class StatsForecastWrapper(ModelBase):
         self._sf = None
         self._last_y = np.array([])
         self._use_fallback = False
+        self._train_entity_set: set = set()
 
     def _get_model_instance(self):
         from statsforecast.models import (
@@ -79,6 +80,7 @@ class StatsForecastWrapper(ModelBase):
                 return self
             rng = np.random.RandomState(42)
             sampled = rng.choice(valid, size=min(MAX_ENTITIES, len(valid)), replace=False)
+            self._train_entity_set = set(sampled)
             raw = raw[raw["entity_id"].isin(sampled)].sort_values(
                 ["entity_id", "crawled_date_day"])
             df = pd.DataFrame({
@@ -109,7 +111,7 @@ class StatsForecastWrapper(ModelBase):
             self._fitted = True
         return self
 
-    def predict(self, X: pd.DataFrame) -> np.ndarray:
+    def predict(self, X: pd.DataFrame, **kwargs) -> np.ndarray:
         if not self._fitted:
             raise ValueError("Not fitted")
         h = len(X)
@@ -118,7 +120,44 @@ class StatsForecastWrapper(ModelBase):
         try:
             fcs = self._sf.predict(h=min(h, 30))  # SF horizon cap
             pred_col = fcs.columns[-1]
+
+            # Build per-entity forecast: last step per entity
+            if "unique_id" in fcs.columns or fcs.index.name == "unique_id":
+                if fcs.index.name == "unique_id":
+                    fcs = fcs.reset_index()
+                entity_fcs = (
+                    fcs.sort_values("ds")
+                    .groupby("unique_id")[pred_col]
+                    .last()
+                    .to_dict()
+                )
+            else:
+                entity_fcs = {}
+
             global_mean = float(fcs[pred_col].mean())
+
+            # Map to test rows via entity_id
+            test_raw = kwargs.get("test_raw")
+            target = kwargs.get("target")
+            if test_raw is not None and "entity_id" in test_raw.columns and entity_fcs:
+                if target and target in test_raw.columns:
+                    valid_mask = test_raw[target].notna()
+                    test_entities = test_raw.loc[valid_mask, "entity_id"].values
+                else:
+                    test_entities = test_raw["entity_id"].values
+
+                if len(test_entities) == h:
+                    y_pred = np.array([
+                        entity_fcs.get(eid, global_mean) for eid in test_entities
+                    ])
+                    _logger.info(
+                        f"  [{self.model_name}] Per-entity predict: "
+                        f"{len(entity_fcs)} entities, "
+                        f"{len(set(test_entities) & set(entity_fcs.keys()))}/{len(set(test_entities))} matched, "
+                        f"unique_preds={len(np.unique(np.round(y_pred, 4)))}"
+                    )
+                    return y_pred
+
             return np.full(h, global_mean)
         except Exception:
             return np.full(h, float(np.mean(self._last_y)) if len(self._last_y) else 0)

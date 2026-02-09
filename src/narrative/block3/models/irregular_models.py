@@ -103,6 +103,7 @@ class GRUDWrapper(ModelBase):
         self._fallback_val = 0.0
         self._use_fallback = False
         self._entity_tail_means: list[float] = []
+        self._entity_ids: list[str] = []
 
     def fit(self, X: pd.DataFrame, y: pd.Series, **kwargs) -> "GRUDWrapper":
         self._fallback_val = float(y.mean())
@@ -117,7 +118,7 @@ class GRUDWrapper(ModelBase):
             self._fitted = True
             return self
 
-        X_arr, mask, y_arr, _ = _build_irregular_features(
+        X_arr, mask, y_arr, entity_ids = _build_irregular_features(
             train_raw, target, max_entities=200, max_seq_len=120,
         )
         if X_arr is None:
@@ -165,9 +166,15 @@ class GRUDWrapper(ModelBase):
 
             # Use mean of last 7 imputed values per entity
             self._entity_tail_means = []
+            self._entity_ids = list(entity_ids) if entity_ids is not None else []
             for i in range(imputed.shape[0]):
                 tail = imputed[i, -7:, 0]
                 self._entity_tail_means.append(float(np.nanmean(tail)))
+
+            # Build entity -> tail_mean mapping
+            self._entity_pred_map = {}
+            for eid, tm in zip(self._entity_ids, self._entity_tail_means):
+                self._entity_pred_map[eid] = tm
 
             self._fallback_val = float(np.mean(self._entity_tail_means))
             self._fitted = True
@@ -183,10 +190,38 @@ class GRUDWrapper(ModelBase):
 
         return self
 
-    def predict(self, X: pd.DataFrame) -> np.ndarray:
+    def predict(self, X: pd.DataFrame, **kwargs) -> np.ndarray:
         if not self._fitted:
             raise ValueError("Not fitted")
-        return np.full(len(X), self._fallback_val)
+        h = len(X)
+
+        if self._use_fallback or not getattr(self, "_entity_pred_map", {}):
+            return np.full(h, self._fallback_val)
+
+        # Map per-entity predictions to test rows
+        test_raw = kwargs.get("test_raw")
+        target = kwargs.get("target")
+        if test_raw is not None and "entity_id" in test_raw.columns:
+            if target and target in test_raw.columns:
+                valid_mask = test_raw[target].notna()
+                test_entities = test_raw.loc[valid_mask, "entity_id"].values
+            else:
+                test_entities = test_raw["entity_id"].values
+
+            if len(test_entities) == h:
+                y_pred = np.array([
+                    self._entity_pred_map.get(eid, self._fallback_val)
+                    for eid in test_entities
+                ])
+                _logger.info(
+                    f"  [GRU-D] Per-entity predict: "
+                    f"{len(self._entity_pred_map)} entities, "
+                    f"{len(set(test_entities) & set(self._entity_pred_map.keys()))}/{len(set(test_entities))} matched, "
+                    f"unique_preds={len(np.unique(np.round(y_pred, 4)))}"
+                )
+                return y_pred
+
+        return np.full(h, self._fallback_val)
 
 
 # ============================================================================
@@ -210,6 +245,7 @@ class SAITSWrapper(ModelBase):
         self._model = None
         self._fallback_val = 0.0
         self._use_fallback = False
+        self._entity_pred_map: dict = {}
 
     def fit(self, X: pd.DataFrame, y: pd.Series, **kwargs) -> "SAITSWrapper":
         self._fallback_val = float(y.mean())
@@ -223,7 +259,7 @@ class SAITSWrapper(ModelBase):
             self._fitted = True
             return self
 
-        X_arr, mask, y_arr, _ = _build_irregular_features(
+        X_arr, mask, y_arr, entity_ids = _build_irregular_features(
             train_raw, target, max_entities=200, max_seq_len=120,
         )
         if X_arr is None:
@@ -267,9 +303,15 @@ class SAITSWrapper(ModelBase):
 
             # Use mean of last 7 imputed values per entity
             tail_means = []
+            eids = list(entity_ids) if entity_ids is not None else []
             for i in range(imputed.shape[0]):
                 tail = imputed[i, -7:, 0]
                 tail_means.append(float(np.nanmean(tail)))
+
+            # Build entity -> tail_mean mapping
+            self._entity_pred_map = {}
+            for eid, tm in zip(eids, tail_means):
+                self._entity_pred_map[eid] = tm
 
             self._fallback_val = float(np.mean(tail_means))
             self._fitted = True
@@ -290,10 +332,38 @@ class SAITSWrapper(ModelBase):
 
         return self
 
-    def predict(self, X: pd.DataFrame) -> np.ndarray:
+    def predict(self, X: pd.DataFrame, **kwargs) -> np.ndarray:
         if not self._fitted:
             raise ValueError("Not fitted")
-        return np.full(len(X), self._fallback_val)
+        h = len(X)
+
+        if self._use_fallback or not self._entity_pred_map:
+            return np.full(h, self._fallback_val)
+
+        # Map per-entity predictions to test rows
+        test_raw = kwargs.get("test_raw")
+        target = kwargs.get("target")
+        if test_raw is not None and "entity_id" in test_raw.columns:
+            if target and target in test_raw.columns:
+                valid_mask = test_raw[target].notna()
+                test_entities = test_raw.loc[valid_mask, "entity_id"].values
+            else:
+                test_entities = test_raw["entity_id"].values
+
+            if len(test_entities) == h:
+                y_pred = np.array([
+                    self._entity_pred_map.get(eid, self._fallback_val)
+                    for eid in test_entities
+                ])
+                _logger.info(
+                    f"  [SAITS] Per-entity predict: "
+                    f"{len(self._entity_pred_map)} entities, "
+                    f"{len(set(test_entities) & set(self._entity_pred_map.keys()))}/{len(set(test_entities))} matched, "
+                    f"unique_preds={len(np.unique(np.round(y_pred, 4)))}"
+                )
+                return y_pred
+
+        return np.full(h, self._fallback_val)
 
 
 # ============================================================================

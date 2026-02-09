@@ -439,6 +439,7 @@ class DeepModelWrapper(ModelBase):
         from neuralforecast import NeuralForecast
 
         h = kwargs.get("horizon", 7)
+        self._horizon = h
         self._last_y = y.values
         self._use_fallback = False
 
@@ -448,6 +449,9 @@ class DeepModelWrapper(ModelBase):
         )
         if panel is None:
             panel = _synthetic_panel(y)
+
+        # Store the entities used for training (for test-time mapping)
+        self._train_entities = set(panel["unique_id"].unique())
 
         n_series = panel["unique_id"].nunique()
         cfg = PRODUCTION_CONFIGS.get(self.model_name, {})
@@ -478,9 +482,9 @@ class DeepModelWrapper(ModelBase):
         return self
 
     # ------------------------------------------------------------------
-    # Predict
+    # Predict — per-entity forecast mapped to test rows
     # ------------------------------------------------------------------
-    def predict(self, X: pd.DataFrame) -> np.ndarray:
+    def predict(self, X: pd.DataFrame, **kwargs) -> np.ndarray:
         if not self._fitted:
             raise ValueError("Not fitted")
         h = len(X)
@@ -489,8 +493,57 @@ class DeepModelWrapper(ModelBase):
         try:
             fcs = self._nf.predict()
             pred_cols = [c for c in fcs.columns if c not in ("unique_id", "ds")]
-            return np.full(h, float(fcs[pred_cols[0]].mean()))
-        except Exception:
+            if not pred_cols:
+                return np.full(h, float(np.mean(self._last_y)) if len(self._last_y) else 0)
+
+            # Build per-entity forecast: last step value for each entity
+            if "unique_id" in fcs.columns or fcs.index.name == "unique_id":
+                if fcs.index.name == "unique_id":
+                    fcs = fcs.reset_index()
+                # For each entity, take the last forecast step (closest to horizon)
+                entity_fcs = (
+                    fcs.sort_values("ds")
+                    .groupby("unique_id")[pred_cols[0]]
+                    .last()
+                    .to_dict()
+                )
+            else:
+                # No entity info in forecast — global mean fallback
+                entity_fcs = {}
+
+            global_mean = float(fcs[pred_cols[0]].mean())
+
+            # Map forecasts to test rows using entity_id
+            test_raw = kwargs.get("test_raw")
+            target = kwargs.get("target")
+            if test_raw is not None and "entity_id" in test_raw.columns:
+                # Align test_raw with X (same valid-target mask)
+                if target and target in test_raw.columns:
+                    valid_mask = test_raw[target].notna()
+                    test_entities = test_raw.loc[valid_mask, "entity_id"].values
+                else:
+                    test_entities = test_raw["entity_id"].values
+
+                if len(test_entities) == h:
+                    y_pred = np.array([
+                        entity_fcs.get(eid, global_mean) for eid in test_entities
+                    ])
+                    _logger.info(
+                        f"  [{self.model_name}] Per-entity predict: "
+                        f"{len(entity_fcs)} entities forecasted, "
+                        f"{len(set(test_entities) & set(entity_fcs.keys()))}/{len(set(test_entities))} "
+                        f"test entities matched, unique_preds={len(np.unique(np.round(y_pred, 4)))}"
+                    )
+                    return y_pred
+
+            # Fallback: no entity mapping available
+            _logger.warning(
+                f"  [{self.model_name}] No entity mapping for predict, "
+                f"returning global mean={global_mean:.4f}"
+            )
+            return np.full(h, global_mean)
+        except Exception as e:
+            _logger.warning(f"  [{self.model_name}] predict failed: {e}")
             return np.full(h, float(np.mean(self._last_y)) if len(self._last_y) else 0)
 
 
@@ -526,6 +579,7 @@ class FoundationModelWrapper(ModelBase):
         train_raw = kwargs.get("train_raw")
         target = kwargs.get("target")
         MAX_E, MIN_O = 200, 20
+        self._entity_ids: List[str] = []  # track entity_id per context
 
         if (train_raw is not None and target is not None
                 and "entity_id" in train_raw.columns):
@@ -538,10 +592,11 @@ class FoundationModelWrapper(ModelBase):
             rng = np.random.RandomState(42)
             sampled = rng.choice(valid, size=min(MAX_E, len(valid)), replace=False)
             raw = raw[raw["entity_id"].isin(sampled)]
-            self._entity_contexts = [
-                grp[target].values.astype(np.float32)
-                for _, grp in raw.groupby("entity_id")
-            ]
+            self._entity_contexts = []
+            self._entity_ids = []
+            for eid, grp in raw.groupby("entity_id"):
+                self._entity_contexts.append(grp[target].values.astype(np.float32))
+                self._entity_ids.append(eid)
             _logger.info(f"  [{self.model_name}] {len(self._entity_contexts)} entity contexts")
         else:
             cs = max(MIN_O, len(y) // MAX_E)
@@ -565,11 +620,14 @@ class FoundationModelWrapper(ModelBase):
         self._fitted = True
         return self
 
-    def predict(self, X: pd.DataFrame) -> np.ndarray:
+    def predict(self, X: pd.DataFrame, **kwargs) -> np.ndarray:
         if not self._fitted:
             raise ValueError("Not fitted")
         h = len(X)
         ctxs = self._entity_contexts or [self._context]
+
+        # Build per-entity predictions
+        entity_preds: Dict[str, float] = {}
 
         if self.model_name == "Chronos" and self._model is not None:
             import torch
@@ -583,10 +641,13 @@ class FoundationModelWrapper(ModelBase):
                     preds_all.extend(med.cpu().numpy().tolist())
                 except Exception:
                     preds_all.extend([float(np.mean(c)) for c in batch])
-            if preds_all:
-                return np.full(h, float(np.mean(preds_all)))
+            # Map entity_id -> forecast
+            if self._entity_ids and len(preds_all) == len(self._entity_ids):
+                entity_preds = dict(zip(self._entity_ids, preds_all))
+            elif preds_all:
+                entity_preds = {f"s_{i}": p for i, p in enumerate(preds_all)}
 
-        if self.model_name == "Moirai" and hasattr(self, "_moirai_module"):
+        elif self.model_name == "Moirai" and hasattr(self, "_moirai_module"):
             import torch
             from uni2ts.model.moirai import MoiraiForecast
             preds_all = []
@@ -610,13 +671,51 @@ class FoundationModelWrapper(ModelBase):
                         preds_all.append(float(np.median(entry.samples.mean(axis=1))))
                 except Exception:
                     preds_all.append(float(np.mean(ctx)))
-            if preds_all:
-                return np.full(h, float(np.mean(preds_all)))
+            # Map entity_id -> forecast
+            eid_list = self._entity_ids[:50] if self._entity_ids else []
+            if eid_list and len(preds_all) == len(eid_list):
+                entity_preds = dict(zip(eid_list, preds_all))
+            elif preds_all:
+                entity_preds = {f"s_{i}": p for i, p in enumerate(preds_all)}
 
-        raise RuntimeError(
-            f"[{self.model_name}] No valid prediction path reached. "
-            f"Model was not loaded successfully."
+        else:
+            raise RuntimeError(
+                f"[{self.model_name}] No valid prediction path reached. "
+                f"Model was not loaded successfully."
+            )
+
+        if not entity_preds:
+            return np.full(h, float(np.mean(self._context)) if len(self._context) else 0)
+
+        global_mean = float(np.mean(list(entity_preds.values())))
+
+        # Map to test rows via entity_id
+        test_raw = kwargs.get("test_raw")
+        target = kwargs.get("target")
+        if test_raw is not None and "entity_id" in test_raw.columns:
+            if target and target in test_raw.columns:
+                valid_mask = test_raw[target].notna()
+                test_entities = test_raw.loc[valid_mask, "entity_id"].values
+            else:
+                test_entities = test_raw["entity_id"].values
+
+            if len(test_entities) == h:
+                y_pred = np.array([
+                    entity_preds.get(eid, global_mean) for eid in test_entities
+                ])
+                _logger.info(
+                    f"  [{self.model_name}] Per-entity predict: "
+                    f"{len(entity_preds)} entities, "
+                    f"{len(set(test_entities) & set(entity_preds.keys()))}/{len(set(test_entities))} matched, "
+                    f"unique_preds={len(np.unique(np.round(y_pred, 4)))}"
+                )
+                return y_pred
+
+        # No entity mapping — global mean fallback
+        _logger.warning(
+            f"  [{self.model_name}] No entity mapping, returning global mean"
         )
+        return np.full(h, global_mean)
 
 
 # ============================================================================

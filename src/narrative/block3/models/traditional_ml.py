@@ -141,7 +141,7 @@ class ProductionGBDTWrapper(ModelBase):
         _logger.info(f"  [{model_name}] Training complete ✓")
         return self
 
-    def predict(self, X: pd.DataFrame) -> np.ndarray:
+    def predict(self, X: pd.DataFrame, **kwargs) -> np.ndarray:
         return self.model.predict(X)
 
     def predict_proba(self, X: pd.DataFrame) -> np.ndarray:
@@ -401,7 +401,7 @@ class QuantileRegressor(ModelBase):
         self._fitted = True
         return self
 
-    def predict(self, X: pd.DataFrame) -> np.ndarray:
+    def predict(self, X: pd.DataFrame, **kwargs) -> np.ndarray:
         return self.model.predict(X)
 
 

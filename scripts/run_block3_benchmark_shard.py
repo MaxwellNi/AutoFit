@@ -524,10 +524,25 @@ class BenchmarkShard:
             model.fit(X_train, y_train, **fit_kwargs)
             train_time = time.time() - train_start
             
-            # Predict
+            # Predict — pass entity mapping for panel-aware categories
             infer_start = time.time()
-            y_pred = model.predict(X_test)
+            predict_kwargs = {}
+            if self.category in ("deep_classical", "transformer_sota", "foundation",
+                                 "statistical", "irregular"):
+                predict_kwargs["test_raw"] = test
+                predict_kwargs["target"] = target
+                predict_kwargs["horizon"] = horizon
+            y_pred = model.predict(X_test, **predict_kwargs)
             infer_time = time.time() - infer_start
+            
+            # ---- CONSTANT-PREDICTION GUARD ----
+            # If a model returns identical values for all test rows, flag it.
+            if len(y_pred) > 1 and np.std(y_pred) == 0.0:
+                logger.warning(
+                    f"  ⚠ CONSTANT-PREDICTION detected for {model_name} "
+                    f"(target={target}, h={horizon}): all {len(y_pred)} "
+                    f"predictions = {y_pred[0]:.4f}"
+                )
             
             # Compute metrics
             n_bootstrap = self.preset_config.n_bootstrap

@@ -63,7 +63,7 @@ class ModelBase(ABC):
         pass
     
     @abstractmethod
-    def predict(self, X: pd.DataFrame) -> np.ndarray:
+    def predict(self, X: pd.DataFrame, **kwargs) -> np.ndarray:
         """
         Make point predictions.
         
@@ -201,7 +201,7 @@ class GradientBoostingWrapper(ModelBase):
         self._feature_names = list(X.columns)
         return self
     
-    def predict(self, X: pd.DataFrame) -> np.ndarray:
+    def predict(self, X: pd.DataFrame, **kwargs) -> np.ndarray:
         return self.model.predict(X)
     
     def predict_proba(self, X: pd.DataFrame) -> np.ndarray:
@@ -230,7 +230,7 @@ class NaiveForecaster(ModelBase):
         self._fitted = True
         return self
     
-    def predict(self, X: pd.DataFrame) -> np.ndarray:
+    def predict(self, X: pd.DataFrame, **kwargs) -> np.ndarray:
         n = len(X)
         if self._last_values is not None and len(self._last_values) > 0:
             # Repeat seasonal pattern
