@@ -1,0 +1,22 @@
+\begin{table}[t]
+\centering
+\caption{Horizon analysis for \texttt{funding\_raised\_usd} (MAE, top-10 models). All tasks and ablations aggregated.}
+\label{tab:horizons}
+\small
+\begin{tabular}{lrrrrc}
+\toprule
+Model & $h{=}1$ & $h{=}7$ & $h{=}14$ & $h{=}30$ & Avg \\
+\midrule
+XGBoost & 469,788 & 469,788 & 469,788 & 469,788 & 469,788 \\
+LightGBM & 480,602 & 480,602 & 480,602 & 480,602 & 480,602 \\
+HistGradientBoosting & 500,905 & 500,905 & 500,905 & 500,905 & 500,905 \\
+CatBoost & 602,553 & 602,553 & 602,553 & 602,553 & 602,553 \\
+Moirai & 691,983 & 691,983 & 691,983 & 691,983 & 691,983 \\
+SAITS & 1,079,209 & 1,079,209 & 1,079,209 & 1,079,208 & 1,079,209 \\
+GRU-D & 1,079,210 & 1,079,208 & 1,079,210 & 1,079,209 & 1,079,209 \\
+FEDformer & 5,852,860 & 4,616,452 & 5,973,542 & 7,029,681 & 5,868,134 \\
+iTransformer & 6,625,097 & 6,889,195 & 8,000,469 & 7,125,348 & 7,160,027 \\
+SOFTS & 7,255,272 & 7,647,989 & 7,867,929 & 7,417,981 & 7,547,293 \\
+\bottomrule
+\end{tabular}
+\end{table}

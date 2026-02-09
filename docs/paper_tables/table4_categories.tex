@@ -1,0 +1,18 @@
+\begin{table}[t]
+\centering
+\caption{Best model per category. Overall rank based on geometric mean of per-target normalized MAE.}
+\label{tab:category_champions}
+\small
+\begin{tabular}{llrrrr}
+\toprule
+Category & Champion & fund MAE & inv MAE & isf MAE & Rank \\
+\midrule
+foundation & \textbf{Moirai} & 691,983 & 306.5 & 0.3624 & \#2 \\
+irregular & \textbf{SAITS} & 1,079,209 & 311.4 & 0.3074 & \#7 \\
+ml\_tabular & \textbf{XGBoost} & 469,788 & 197.2 & --- & \#3 \\
+deep\_classical & \textbf{DeepAR} & 7,784,553 & 401.6 & 0.1803 & \#14 \\
+transformer\_sota & \textbf{VanillaTransformer} & --- & 403.3 & 0.1711 & \#1 \\
+statistical & \textbf{SF\_SeasonalNaive} & 12,148,596 & 422.3 & 0.1774 & \#27 \\
+\bottomrule
+\end{tabular}
+\end{table}
