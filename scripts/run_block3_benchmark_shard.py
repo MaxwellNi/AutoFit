@@ -42,6 +42,7 @@ Usage:
 from __future__ import annotations
 
 import argparse
+import gc
 import json
 import logging
 import os
@@ -606,6 +607,14 @@ class BenchmarkShard:
             logger.error(f"Error running {model_name}: {e}")
             logger.debug(traceback.format_exc())
             return None
+        finally:
+            # Eagerly release model and intermediate arrays
+            for _v in ("model", "X_train", "y_train", "X_test", "y_test",
+                        "y_pred", "pred_df"):
+                try:
+                    del locals()[_v]
+                except KeyError:
+                    pass
     
     def run(self) -> bool:
         """Run the benchmark shard."""
@@ -644,6 +653,13 @@ class BenchmarkShard:
                             self.manifest.n_models_run += 1
                         else:
                             self.manifest.n_models_failed += 1
+                        # Explicit GC after each model to prevent OOM
+                        gc.collect()
+                        try:
+                            import torch
+                            torch.cuda.empty_cache()
+                        except (ImportError, RuntimeError):
+                            pass
                     
                     # Incremental save after each target-horizon combo
                     self._save_outputs(partial=True)
