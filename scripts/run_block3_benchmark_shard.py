@@ -373,21 +373,79 @@ class BenchmarkShard:
         
         return train, val, test
     
+    # ------------------------------------------------------------------
+    # Leakage-safe drop sets: when predicting one target, all
+    # co-determined / synonym / derivative columns MUST be removed.
+    # ------------------------------------------------------------------
+    _TARGET_LEAK_GROUPS: Dict[str, set] = {
+        "funding_raised_usd": {
+            "funding_raised_usd", "funding_raised",          # same value, diff currency
+            "is_funded",                                      # derived: raised >= goal
+            "investors_count", "non_national_investors",      # co-determined
+        },
+        "investors_count": {
+            "investors_count", "non_national_investors",
+            "funding_raised_usd", "funding_raised",
+            "is_funded",
+        },
+        "is_funded": {
+            "is_funded",
+            "funding_raised_usd", "funding_raised",
+            "investors_count", "non_national_investors",
+        },
+        "funding_goal_usd": {
+            "funding_goal_usd", "funding_goal",
+            "funding_goal_maximum", "funding_goal_maximum_usd",
+        },
+    }
+
+    # Columns that must ALWAYS be dropped from features (identifiers / dates)
+    _ALWAYS_DROP: set = {
+        "entity_id", "crawled_date_day", "cik", "date",
+        "offer_id", "snapshot_ts", "crawled_date", "processed_datetime",
+    }
+
     def _prepare_features(
         self,
         df: pd.DataFrame,
         target: str,
         horizon: int,
     ) -> Tuple[pd.DataFrame, pd.Series]:
-        """Prepare features and target for a model."""
-        # Get numeric feature columns
-        drop_cols = {"entity_id", "crawled_date_day", "cik", target, "date"}
-        numeric_cols = df.select_dtypes(include=[np.number]).columns
+        """Prepare features and target for a model.
+
+        CRITICAL changes for KDD'26 correctness:
+        1. Drop ALL co-determined / synonym columns for the current target
+           (see _TARGET_LEAK_GROUPS) — prevents target-synonym leakage.
+        2. Use dropna() on target instead of fillna(0) — NaN ≠ zero funding.
+        3. Synchronise X and y indices after dropping NaN targets.
+        """
+        # --- 1. Drop NaN targets (NOT fill with 0) ---
+        valid_mask = df[target].notna()
+        df_clean = df[valid_mask].copy()
+
+        if len(df_clean) == 0:
+            logger.warning(f"No valid target values for {target}")
+            return pd.DataFrame(), pd.Series(dtype=np.float64)
+
+        # --- 2. Build leakage-safe drop set ---
+        leak_group = self._TARGET_LEAK_GROUPS.get(target, {target})
+        drop_cols = self._ALWAYS_DROP | leak_group
+
+        numeric_cols = df_clean.select_dtypes(include=[np.number]).columns
         feature_cols = [c for c in numeric_cols if c not in drop_cols]
-        
-        X = df[feature_cols].fillna(0)
-        y = df[target].fillna(0)
-        
+
+        n_leaked_dropped = len(leak_group) - 1  # minus target itself
+        if n_leaked_dropped > 0:
+            actually_present = [c for c in (leak_group - {target}) if c in df_clean.columns]
+            if actually_present:
+                logger.info(
+                    f"  [LEAKAGE GUARD] Dropped {len(actually_present)} "
+                    f"co-determined cols for target={target}: {actually_present}"
+                )
+
+        X = df_clean[feature_cols].fillna(0)
+        y = df_clean[target]
+
         return X, y
     
     def _compute_metrics(
@@ -656,6 +714,7 @@ def main():
     
     # Other
     parser.add_argument("--verify-first", action="store_true", default=True, help="Verify freeze before running")
+    parser.add_argument("--no-verify-first", dest="verify_first", action="store_false", help="Skip freeze verification")
     
     args = parser.parse_args()
     
