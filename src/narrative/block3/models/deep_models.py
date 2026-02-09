@@ -439,7 +439,13 @@ class DeepModelWrapper(ModelBase):
         from neuralforecast import NeuralForecast
 
         h = kwargs.get("horizon", 7)
+        # Clamp NF horizon to at least 7: NeuralForecast models (especially
+        # NBEATS with trend/seasonality stacks) produce degenerate forecasts
+        # when h=1 because val_size=1 gives insufficient validation signal.
+        # We train with h_nf >= 7 and use the last step's forecast at predict.
+        h_nf = max(h, 7)
         self._horizon = h
+        self._horizon_nf = h_nf
         self._last_y = y.values
         self._use_fallback = False
 
@@ -466,11 +472,11 @@ class DeepModelWrapper(ModelBase):
             f"scaler={cfg.get('scaler_type','?')}"
         )
         try:
-            model = self._get_model(h, n_series=n_series)
-            # val_size=h → last h timesteps of each series used for validation
+            model = self._get_model(h_nf, n_series=n_series)
+            # val_size=h_nf → last h_nf timesteps of each series used for validation
             # This enables proper early stopping via the patience parameter.
             self._nf = NeuralForecast(models=[model], freq="D")
-            self._nf.fit(df=panel, val_size=h)
+            self._nf.fit(df=panel, val_size=h_nf)
             self._fitted = True
             _logger.info(f"  [{self.model_name}] Training complete ✓")
         except Exception as e:
@@ -488,6 +494,7 @@ class DeepModelWrapper(ModelBase):
         if not self._fitted:
             raise ValueError("Not fitted")
         h = len(X)
+        req_horizon = kwargs.get("horizon", self._horizon)
         if self._use_fallback or self._nf is None:
             return np.full(h, float(np.mean(self._last_y)) if len(self._last_y) else 0)
         try:
@@ -496,22 +503,28 @@ class DeepModelWrapper(ModelBase):
             if not pred_cols:
                 return np.full(h, float(np.mean(self._last_y)) if len(self._last_y) else 0)
 
-            # Build per-entity forecast: last step value for each entity
+            # Build per-entity forecast using the requested horizon step.
+            # NF may produce h_nf >= req_horizon steps; use step[req_horizon-1]
+            # (the forecast at exactly the requested horizon).
             if "unique_id" in fcs.columns or fcs.index.name == "unique_id":
                 if fcs.index.name == "unique_id":
                     fcs = fcs.reset_index()
-                # For each entity, take the last forecast step (closest to horizon)
+                # Sort by ds, then pick the step at index `req_horizon - 1`
+                # (or last step if fewer steps available)
+                def _pick_horizon_step(grp):
+                    vals = grp.sort_values("ds")[pred_cols[0]].values
+                    idx = min(req_horizon - 1, len(vals) - 1)
+                    return float(vals[idx])
                 entity_fcs = (
-                    fcs.sort_values("ds")
-                    .groupby("unique_id")[pred_cols[0]]
-                    .last()
+                    fcs.groupby("unique_id")
+                    .apply(_pick_horizon_step)
                     .to_dict()
                 )
             else:
                 # No entity info in forecast — global mean fallback
                 entity_fcs = {}
 
-            global_mean = float(fcs[pred_cols[0]].mean())
+            global_mean = float(np.mean(list(entity_fcs.values()))) if entity_fcs else float(fcs[pred_cols[0]].mean())
 
             # Map forecasts to test rows using entity_id
             test_raw = kwargs.get("test_raw")

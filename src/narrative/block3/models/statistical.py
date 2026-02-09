@@ -114,11 +114,34 @@ class StatsForecastWrapper(ModelBase):
     def predict(self, X: pd.DataFrame, **kwargs) -> np.ndarray:
         if not self._fitted:
             raise ValueError("Not fitted")
-        h = len(X)
+        n_test = len(X)
         if self._use_fallback or self._sf is None:
-            return np.full(h, float(np.mean(self._last_y)) if len(self._last_y) else 0)
+            return np.full(n_test, float(np.mean(self._last_y)) if len(self._last_y) else 0)
         try:
-            fcs = self._sf.predict(h=min(h, 30))  # SF horizon cap
+            # Use the actual forecast horizon from kwargs, NOT len(X)
+            forecast_h = kwargs.get("horizon", 30)
+            forecast_h = max(1, min(forecast_h, 30))  # clamp [1, 30]
+
+            # Try predict with requested horizon; retry with smaller h on shape errors
+            fcs = None
+            for try_h in [forecast_h, 14, 7, 1]:
+                try:
+                    fcs = self._sf.predict(h=try_h)
+                    break
+                except ValueError as ve:
+                    _logger.warning(
+                        f"  [{self.model_name}] SF predict(h={try_h}) failed: {ve}, "
+                        f"retrying with smaller h"
+                    )
+                    continue
+
+            if fcs is None:
+                _logger.warning(
+                    f"  [{self.model_name}] All SF predict attempts failed, "
+                    f"returning training mean fallback"
+                )
+                return np.full(n_test, float(np.mean(self._last_y)) if len(self._last_y) else 0)
+
             pred_col = fcs.columns[-1]
 
             # Build per-entity forecast: last step per entity
@@ -146,7 +169,7 @@ class StatsForecastWrapper(ModelBase):
                 else:
                     test_entities = test_raw["entity_id"].values
 
-                if len(test_entities) == h:
+                if len(test_entities) == n_test:
                     y_pred = np.array([
                         entity_fcs.get(eid, global_mean) for eid in test_entities
                     ])
@@ -158,9 +181,13 @@ class StatsForecastWrapper(ModelBase):
                     )
                     return y_pred
 
-            return np.full(h, global_mean)
-        except Exception:
-            return np.full(h, float(np.mean(self._last_y)) if len(self._last_y) else 0)
+            return np.full(n_test, global_mean)
+        except Exception as exc:
+            _logger.warning(
+                f"  [{self.model_name}] predict failed: {exc}, "
+                f"returning training mean fallback"
+            )
+            return np.full(n_test, float(np.mean(self._last_y)) if len(self._last_y) else 0)
 
 
 # ============================================================================
