@@ -26,6 +26,7 @@ from .deep_models import (
     get_deep_model,
 )
 from .irregular_models import IRREGULAR_MODELS, get_irregular_model
+from .autofit_wrapper import AUTOFIT_MODELS
 
 
 # ============================================================================
@@ -39,6 +40,7 @@ MODEL_CATEGORIES: Dict[str, List[str]] = {
     "transformer_sota": list(TRANSFORMER_MODELS.keys()),
     "foundation":       list(FOUNDATION_MODELS.keys()),
     "irregular":        list(IRREGULAR_MODELS.keys()),
+    "autofit":          list(AUTOFIT_MODELS.keys()),
 }
 
 # Flattened registry for direct lookup
@@ -49,6 +51,7 @@ _ALL_MODELS.update(DEEP_MODELS)
 _ALL_MODELS.update(TRANSFORMER_MODELS)
 _ALL_MODELS.update(FOUNDATION_MODELS)
 _ALL_MODELS.update(IRREGULAR_MODELS)
+_ALL_MODELS.update(AUTOFIT_MODELS)
 
 
 # ============================================================================

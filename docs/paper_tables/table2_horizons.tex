@@ -1,0 +1,63 @@
+% Horizon breakdown: task1_outcome — funding_raised_usd
+\begin{table}[htbp]
+\centering
+\small
+\caption{Per-horizon MAE for \texttt{task1_outcome} — \texttt{funding\_raised\_usd}}
+\label{tab:task1_outcome_horizons}
+\begin{tabular}{llc c c c}
+\toprule
+Category & Model & h=1 & h=7 & h=14 & h=30 \\
+\midrule
+  foundation & Moirai & 691982.79 & 691982.79 & 691982.79 & 691982.79 \\
+  irregular & SAITS & 1079209.19 & 1079209.00 & 1079208.99 & 1079208.33 \\
+  irregular & GRU-D & 1079209.80 & 1079208.33 & 1079209.55 & 1079209.40 \\
+  foundation & Chronos & 7730716.04 & 7734414.27 & 7734719.32 & 7737216.80 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+% Horizon breakdown: task2_forecast — funding_raised_usd
+\begin{table}[htbp]
+\centering
+\small
+\caption{Per-horizon MAE for \texttt{task2_forecast} — \texttt{funding\_raised\_usd}}
+\label{tab:task2_forecast_horizons}
+\begin{tabular}{llc c c c}
+\toprule
+Category & Model & h=1 & h=7 & h=14 & h=30 \\
+\midrule
+  foundation & Moirai & 691982.79 & 691982.79 & 691982.79 & 691982.79 \\
+  irregular & SAITS & 1079209.19 & 1079209.00 & 1079208.99 & 1079208.33 \\
+  irregular & GRU-D & 1079209.80 & 1079208.33 & 1079209.55 & 1079209.40 \\
+  foundation & Chronos & 7730716.04 & 7734414.27 & 7734719.32 & 7737216.80 \\
+  statistical & SF\_SeasonalNaive & 12128995.80 & 12156277.02 & 12156277.02 & 12152835.67 \\
+  statistical & AutoETS & 12247777.86 & 12248074.72 & 12248396.00 & 12249063.99 \\
+  statistical & AutoARIMA & 12249530.39 & 12255132.93 & 12261699.39 & 12276719.60 \\
+  statistical & MSTL & 12560050.46 & 12737585.90 & 12398087.00 & 12398087.00 \\
+  statistical & AutoTheta & 12343670.48 & 12631224.10 & 12966741.08 & 13733851.03 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+% Horizon breakdown: task3_risk_adjust — funding_raised_usd
+\begin{table}[htbp]
+\centering
+\small
+\caption{Per-horizon MAE for \texttt{task3_risk_adjust} — \texttt{funding\_raised\_usd}}
+\label{tab:task3_risk_adjust_horizons}
+\begin{tabular}{llc c c c}
+\toprule
+Category & Model & h=1 & h=7 & h=14 & h=30 \\
+\midrule
+  foundation & Moirai & 691982.79 & 691982.79 & 691982.79 & 691982.79 \\
+  irregular & SAITS & 1079209.19 & 1079209.00 & 1079208.99 & 1079208.33 \\
+  irregular & GRU-D & 1079209.80 & 1079208.33 & 1079209.55 & 1079209.40 \\
+  foundation & Chronos & 7730716.04 & 7734414.27 & 7734719.32 & 7737216.80 \\
+  statistical & SF\_SeasonalNaive & 12128995.80 & 12156277.02 & 12156277.02 & 12152835.67 \\
+  statistical & AutoETS & 12247777.86 & 12248074.72 & 12248396.00 & 12249063.99 \\
+  statistical & AutoARIMA & 12249530.39 & 12255132.93 & 12261699.39 & 12276719.60 \\
+  statistical & MSTL & 12560050.46 & 12737585.90 & 12398087.00 & 12398087.00 \\
+  statistical & AutoTheta & 12343670.48 & 12631224.10 & 12966741.08 & 13733851.03 \\
+\bottomrule
+\end{tabular}
+\end{table}

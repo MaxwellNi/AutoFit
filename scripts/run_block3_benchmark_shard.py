@@ -104,7 +104,7 @@ logger = logging.getLogger(__name__)
 
 GLOBAL_SEED = 42
 TASK_NAMES = ["task1_outcome", "task2_forecast", "task3_risk_adjust"]
-CATEGORY_NAMES = ["statistical", "ml_tabular", "deep_classical", "transformer_sota", "foundation", "irregular"]
+CATEGORY_NAMES = ["statistical", "ml_tabular", "deep_classical", "transformer_sota", "foundation", "irregular", "autofit"]
 ABLATION_NAMES = ["core_only", "core_text", "core_edgar", "full"]
 PRESET_NAMES = ["smoke", "quick", "standard", "full"]
 
@@ -517,7 +517,7 @@ class BenchmarkShard:
             train_start = time.time()
             fit_kwargs = {}
             if self.category in ("deep_classical", "transformer_sota", "foundation",
-                                 "statistical", "irregular"):
+                                 "statistical", "irregular", "autofit"):
                 fit_kwargs["train_raw"] = train
                 fit_kwargs["target"] = target
                 fit_kwargs["horizon"] = horizon
@@ -528,7 +528,7 @@ class BenchmarkShard:
             infer_start = time.time()
             predict_kwargs = {}
             if self.category in ("deep_classical", "transformer_sota", "foundation",
-                                 "statistical", "irregular"):
+                                 "statistical", "irregular", "autofit"):
                 predict_kwargs["test_raw"] = test
                 predict_kwargs["target"] = target
                 predict_kwargs["horizon"] = horizon
