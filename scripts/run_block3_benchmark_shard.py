@@ -513,6 +513,7 @@ class BenchmarkShard:
     # Classification-only models: skip for regression targets
     _CLASSIFICATION_ONLY_MODELS = {"LogisticRegression"}
     _CLASSIFICATION_TARGETS = {"is_funded"}
+    _MODEL_TIMEOUT_SECONDS = 30 * 60  # 30 minutes max per model
 
     def run_model(
         self,

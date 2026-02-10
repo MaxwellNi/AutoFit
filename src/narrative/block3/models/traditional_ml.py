@@ -18,6 +18,8 @@ from typing import Any, Dict, Optional
 import numpy as np
 import pandas as pd
 
+logger = logging.getLogger(__name__)
+
 from .base import (
     ModelBase, ModelConfig, SklearnModelWrapper,
     GradientBoostingWrapper, NaiveForecaster,
@@ -384,7 +386,12 @@ def create_catboost(**kwargs) -> ModelBase:
 # ============================================================================
 
 class QuantileRegressor(ModelBase):
-    """Quantile Regression using sklearn."""
+    """Quantile Regression using sklearn.
+
+    The HiGHS LP solver scales poorly (O(n²+) in practice).  We subsample
+    to 50 000 rows so each run finishes in < 1 minute.
+    """
+    _MAX_ROWS = 50_000
 
     def __init__(self, quantile: float = 0.5, **kwargs):
         config = ModelConfig(
@@ -399,6 +406,14 @@ class QuantileRegressor(ModelBase):
 
     def fit(self, X: pd.DataFrame, y: pd.Series, **kwargs) -> "QuantileRegressor":
         from sklearn.linear_model import QuantileRegressor as SKQuantileRegressor
+        # Subsample for LP scalability
+        if len(X) > self._MAX_ROWS:
+            rng = np.random.RandomState(42)
+            idx = rng.choice(len(X), self._MAX_ROWS, replace=False)
+            X, y = X.iloc[idx], y.iloc[idx]
+            logger.info(
+                f"  [QuantileRegressor] Subsampled to {self._MAX_ROWS:,} rows"
+            )
         self.model = SKQuantileRegressor(
             quantile=self.quantile, alpha=0.0, solver="highs",
         )
