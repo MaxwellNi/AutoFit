@@ -968,6 +968,312 @@ class FoundationModelWrapper(ModelBase):
 
 
 # ============================================================================
+# HuggingFace Foundation Models (Timer, TimeMoE, MOMENT, Lag-Llama, TimesFM)
+# ============================================================================
+
+class HFFoundationModelWrapper(ModelBase):
+    """Foundation models loaded via HuggingFace transformers or dedicated libs.
+
+    Supports models that use AutoModelForCausalLM.generate() API or
+    dedicated forecast APIs (MOMENT, Lag-Llama, TimesFM via Docker).
+    """
+
+    # Model registry: name → (hf_repo, loader_type)
+    _MODEL_REGISTRY = {
+        "Timer": ("thuml/timer-base-84m", "hf_generate"),
+        "TimeMoE": ("Maple728/TimeMoE-50M", "hf_generate"),
+        "MOMENT": ("AutonLab/MOMENT-1-large", "momentfm"),
+        "LagLlama": ("time-series-foundation-models/Lag-Llama", "lag_llama"),
+        "TimesFM": (None, "timesfm_docker"),
+    }
+
+    def __init__(self, config: ModelConfig, model_name: str, **kw):
+        super().__init__(config)
+        self.model_name = model_name
+        self.model_kwargs = kw
+        self._model = None
+        self._tokenizer = None
+        self._entity_contexts: List[np.ndarray] = []
+        self._entity_ids: List[str] = []
+        self._context = np.array([])
+        self._global_mean = 0.0
+        self._fallback_ridge = None
+        self._fallback_feature_cols = []
+
+    def _load_hf_generate(self, repo: str):
+        """Load HF models that use AutoModelForCausalLM.generate()."""
+        import torch
+        from transformers import AutoModelForCausalLM, AutoConfig
+        device = "cuda" if torch.cuda.is_available() else "cpu"
+        self._model = AutoModelForCausalLM.from_pretrained(
+            repo, trust_remote_code=True,
+            torch_dtype=torch.float32,
+            device_map=device if torch.cuda.is_available() else None,
+        )
+        if not torch.cuda.is_available():
+            self._model = self._model.to(device)
+        self._model.eval()
+        self._device = device
+
+    def _load_moment(self, repo: str):
+        """Load MOMENT via momentfm package."""
+        from momentfm import MOMENTPipeline
+        self._model = MOMENTPipeline.from_pretrained(
+            repo, model_kwargs={"task_name": "forecasting", "forecast_horizon": 7},
+        )
+        self._model.init()
+
+    def _load_lag_llama(self, repo: str):
+        """Load Lag-Llama via HuggingFace + GluonTS."""
+        import torch
+        from huggingface_hub import hf_hub_download
+        ckpt = hf_hub_download(repo_id=repo, filename="lag-llama.ckpt")
+        # Lag-Llama uses a custom LightningModule
+        try:
+            from lag_llama.gluon.estimator import LagLlamaEstimator
+            self._estimator = LagLlamaEstimator(
+                prediction_length=7, context_length=128,
+                input_size=1, n_layer=8, n_embd_per_head=32,
+                n_head=4, ckpt_path=ckpt,
+                device=torch.device("cuda" if torch.cuda.is_available() else "cpu"),
+            )
+            self._model = self._estimator.create_predictor(batch_size=32)
+        except ImportError:
+            # Fallback: load via torch directly
+            self._model = None
+            _logger.warning("lag_llama package not installed, using mean fallback")
+
+    def fit(self, X: pd.DataFrame, y: pd.Series, **kwargs) -> "HFFoundationModelWrapper":
+        train_raw = kwargs.get("train_raw")
+        target = kwargs.get("target")
+        MAX_E, MIN_O = 500, 10
+
+        # Build entity contexts (same as FoundationModelWrapper)
+        if (train_raw is not None and target is not None
+                and "entity_id" in train_raw.columns):
+            raw = train_raw[["entity_id", "crawled_date_day", target]].dropna(subset=[target])
+            raw["crawled_date_day"] = pd.to_datetime(raw["crawled_date_day"])
+            raw = raw.sort_values(["entity_id", "crawled_date_day"])
+            ec = raw.groupby("entity_id").size()
+            valid = ec[ec >= MIN_O].index
+            rng = np.random.RandomState(42)
+            sampled = rng.choice(valid, size=min(MAX_E, len(valid)), replace=False)
+            raw = raw[raw["entity_id"].isin(sampled)]
+            self._entity_contexts = []
+            self._entity_ids = []
+            for eid, grp in raw.groupby("entity_id"):
+                self._entity_contexts.append(grp[target].values.astype(np.float32))
+                self._entity_ids.append(eid)
+        else:
+            cs = max(MIN_O, len(y) // MAX_E)
+            self._entity_contexts = []
+            for i in range(0, len(y), cs):
+                c = y.values[i:i + cs]
+                if len(c) >= MIN_O:
+                    self._entity_contexts.append(c.astype(np.float32))
+                if len(self._entity_contexts) >= MAX_E:
+                    break
+
+        self._context = y.values
+        self._global_mean = float(np.mean(y.values))
+
+        # Load model
+        reg = self._MODEL_REGISTRY.get(self.model_name)
+        if reg is None:
+            raise ValueError(f"Unknown HF model: {self.model_name}")
+        repo, loader_type = reg
+
+        if loader_type == "hf_generate":
+            self._load_hf_generate(repo)
+        elif loader_type == "momentfm":
+            self._load_moment(repo)
+        elif loader_type == "lag_llama":
+            self._load_lag_llama(repo)
+        elif loader_type == "timesfm_docker":
+            self._docker_init()
+
+        # Ridge fallback for unseen entities
+        try:
+            from sklearn.linear_model import Ridge as _Ridge
+            X_fb = X.select_dtypes(include=[np.number]).fillna(0)
+            if len(X_fb.columns) > 0 and len(X_fb) > 10:
+                self._fallback_ridge = _Ridge(alpha=1.0)
+                self._fallback_ridge.fit(X_fb, y)
+                self._fallback_feature_cols = list(X_fb.columns)
+        except Exception:
+            pass
+
+        self._fitted = True
+        _logger.info(f"  [{self.model_name}] Fitted with {len(self._entity_contexts)} entities")
+        return self
+
+    def _docker_init(self):
+        """Initialize Docker-based TimesFM (Python 3.10 container)."""
+        self._model = "docker_timesfm"
+        # Docker inference happens in predict() via subprocess
+
+    def _predict_hf_generate(self, ctxs: List[np.ndarray], horizon: int = 7) -> List[float]:
+        """Predict using HF generate API (Timer, TimeMoE)."""
+        import torch
+        preds = []
+        for ctx in ctxs:
+            try:
+                seq = ctx[-128:].astype(np.float32)
+                # Normalize
+                mu, sigma = float(np.mean(seq)), float(np.std(seq)) + 1e-8
+                seq_norm = (seq - mu) / sigma
+                inp = torch.tensor(seq_norm).unsqueeze(0).float()
+                if hasattr(self, '_device'):
+                    inp = inp.to(self._device)
+                with torch.no_grad():
+                    out = self._model.generate(inp, max_new_tokens=horizon)
+                # De-normalize
+                forecast = out[0, -horizon:].cpu().numpy() * sigma + mu
+                preds.append(float(np.mean(forecast)))
+            except Exception as e:
+                _logger.debug(f"[{self.model_name}] generate failed: {e}")
+                preds.append(float(np.mean(ctx)))
+        return preds
+
+    def _predict_moment(self, ctxs: List[np.ndarray], horizon: int = 7) -> List[float]:
+        """Predict using MOMENT pipeline."""
+        import torch
+        preds = []
+        for ctx in ctxs:
+            try:
+                seq = ctx[-512:].astype(np.float32)
+                inp = torch.tensor(seq).unsqueeze(0).unsqueeze(-1).float()
+                with torch.no_grad():
+                    out = self._model(inp)
+                forecast = out.forecast.squeeze().cpu().numpy()
+                preds.append(float(np.mean(forecast[:horizon])))
+            except Exception as e:
+                _logger.debug(f"[{self.model_name}] MOMENT predict failed: {e}")
+                preds.append(float(np.mean(ctx)))
+        return preds
+
+    def _predict_docker_timesfm(self, ctxs: List[np.ndarray], horizon: int = 7) -> List[float]:
+        """Predict via Docker TimesFM container using subprocess."""
+        import json, subprocess, tempfile
+        # Save contexts to temp file
+        ctx_data = [c.tolist() for c in ctxs[:100]]
+        with tempfile.NamedTemporaryFile(mode='w', suffix='.json', delete=False) as f:
+            json.dump({"contexts": ctx_data, "horizon": horizon}, f)
+            tmp_in = f.name
+
+        tmp_out = tmp_in.replace('.json', '_out.json')
+
+        cmd = [
+            "docker", "run", "--rm", "--gpus", "all",
+            "-v", f"{tmp_in}:/data/input.json",
+            "-v", f"{os.path.dirname(tmp_out)}:/data/output",
+            "timesfm-inference:latest",
+            "python3", "/app/predict.py",
+            "--input", "/data/input.json",
+            "--output", f"/data/output/{os.path.basename(tmp_out)}",
+        ]
+        try:
+            result = subprocess.run(cmd, capture_output=True, text=True, timeout=300)
+            if result.returncode == 0 and os.path.exists(tmp_out):
+                with open(tmp_out) as f:
+                    output = json.load(f)
+                return [float(p) for p in output.get("predictions", [])]
+        except (subprocess.TimeoutExpired, FileNotFoundError) as e:
+            _logger.warning(f"[TimesFM Docker] Failed: {e}")
+        finally:
+            for p in [tmp_in, tmp_out]:
+                try:
+                    os.unlink(p)
+                except OSError:
+                    pass
+
+        # Fallback to context means
+        return [float(np.mean(c)) for c in ctxs[:100]]
+
+    def predict(self, X: pd.DataFrame, **kwargs) -> np.ndarray:
+        if not self._fitted:
+            raise ValueError("Not fitted")
+        h = len(X)
+        ctxs = self._entity_contexts or [self._context]
+        horizon = kwargs.get("horizon", 7)
+
+        # Generate entity-level forecasts
+        reg = self._MODEL_REGISTRY.get(self.model_name)
+        _, loader_type = reg
+
+        if loader_type == "hf_generate":
+            preds_all = self._predict_hf_generate(ctxs, horizon)
+        elif loader_type == "momentfm":
+            preds_all = self._predict_moment(ctxs, horizon)
+        elif loader_type == "lag_llama" and self._model is not None:
+            # Use GluonTS predictor
+            preds_all = []
+            for ctx in ctxs[:50]:
+                try:
+                    from gluonts.dataset.common import ListDataset
+                    ds = ListDataset(
+                        [{"target": ctx, "start": pd.Timestamp("2020-01-01")}],
+                        freq="D",
+                    )
+                    for entry in self._model.predict(ds):
+                        preds_all.append(float(np.mean(entry.mean)))
+                except Exception:
+                    preds_all.append(float(np.mean(ctx)))
+        elif loader_type == "timesfm_docker":
+            preds_all = self._predict_docker_timesfm(ctxs, horizon)
+        else:
+            preds_all = [float(np.mean(c)) for c in ctxs]
+
+        # Map entity_id -> forecast
+        entity_preds: Dict[str, float] = {}
+        if self._entity_ids and len(preds_all) == len(self._entity_ids):
+            entity_preds = dict(zip(self._entity_ids, preds_all))
+        elif preds_all:
+            entity_preds = {f"s_{i}": p for i, p in enumerate(preds_all)}
+
+        if not entity_preds:
+            return np.full(h, self._global_mean)
+
+        global_mean = float(np.mean(list(entity_preds.values())))
+
+        # Map to test rows via entity_id (same logic as FoundationModelWrapper)
+        test_raw = kwargs.get("test_raw")
+        target = kwargs.get("target")
+        if test_raw is not None and "entity_id" in test_raw.columns:
+            if target and target in test_raw.columns:
+                valid_mask = test_raw[target].notna()
+                test_entities = test_raw.loc[valid_mask, "entity_id"].values
+            else:
+                test_entities = test_raw["entity_id"].values
+
+            if len(test_entities) == h:
+                n_covered = sum(1 for eid in test_entities if eid in entity_preds)
+                coverage = n_covered / max(len(test_entities), 1)
+
+                if (coverage < 0.95
+                        and self._fallback_ridge is not None
+                        and self._fallback_feature_cols):
+                    try:
+                        X_fb = X[self._fallback_feature_cols].fillna(0)
+                        ridge_preds = self._fallback_ridge.predict(X_fb)
+                        y_pred = np.array([
+                            entity_preds.get(eid, ridge_preds[i])
+                            for i, eid in enumerate(test_entities)
+                        ])
+                    except Exception:
+                        y_pred = np.array([
+                            entity_preds.get(eid, global_mean) for eid in test_entities
+                        ])
+                else:
+                    y_pred = np.array([
+                        entity_preds.get(eid, global_mean) for eid in test_entities
+                    ])
+                return y_pred
+
+        return np.full(h, global_mean)
+
+
+# ============================================================================
 # Factory functions
 # ============================================================================
 
@@ -1027,6 +1333,22 @@ create_chronos2 = _fm_factory("Chronos2", "chronos")
 create_moirai = _fm_factory("Moirai", "uni2ts")
 create_moirai_large = _fm_factory("MoiraiLarge", "uni2ts")
 create_moirai2 = _fm_factory("Moirai2", "uni2ts")
+def _hf_fm_factory(name: str, dep: str):
+    def create(**kw):
+        cfg = ModelConfig(name=name, model_type="forecasting", params=kw,
+                          supports_probabilistic=True,
+                          optional_dependency=dep)
+        return HFFoundationModelWrapper(cfg, name, **kw)
+    create.__doc__ = f"{name} HF foundation model."
+    return create
+
+
+# foundation (HuggingFace-based Phase 5 additions)
+create_timer = _hf_fm_factory("Timer", "transformers")
+create_timemoe = _hf_fm_factory("TimeMoE", "transformers")
+create_moment = _hf_fm_factory("MOMENT", "momentfm")
+create_lagllama = _hf_fm_factory("LagLlama", "gluonts")
+create_timesfm = _hf_fm_factory("TimesFM", "docker")
 # TimesFM removed: requires Python <3.12 (lingvo dependency)
 
 
@@ -1061,6 +1383,12 @@ FOUNDATION_MODELS = {
     "Moirai": create_moirai,
     "MoiraiLarge": create_moirai_large,
     "Moirai2": create_moirai2,
+    # Phase 5: HuggingFace-based models
+    "Timer": create_timer,
+    "TimeMoE": create_timemoe,
+    "MOMENT": create_moment,
+    "LagLlama": create_lagllama,
+    "TimesFM": create_timesfm,
 }
 
 
