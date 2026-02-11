@@ -266,10 +266,78 @@ PRODUCTION_CONFIGS: Dict[str, Dict[str, Any]] = {
         "val_check_steps": 50,
         "scaler_type": "robust",
     },
+    # ================================================================
+    # Additional SOTA transformers (Phase 4)
+    # ================================================================
+    "DLinear": {
+        # Zeng et al., AAAI 2023 — simple decomposition + linear
+        "input_size": 60,
+        "max_steps": 1000,
+        "batch_size": 128,
+        "learning_rate": 1e-3,
+        "num_lr_decays": 3,
+        "early_stop_patience_steps": 10,
+        "val_check_steps": 50,
+        "scaler_type": "robust",
+        "moving_avg_window": 25,
+    },
+    "NLinear": {
+        # Zeng et al., AAAI 2023 — normalized linear baseline
+        "input_size": 60,
+        "max_steps": 1000,
+        "batch_size": 128,
+        "learning_rate": 1e-3,
+        "num_lr_decays": 3,
+        "early_stop_patience_steps": 10,
+        "val_check_steps": 50,
+        "scaler_type": "robust",
+    },
+    "TimeMixer": {
+        # Wang et al., ICLR 2024 — multi-scale mixing
+        "input_size": 60,
+        "max_steps": 1000,
+        "d_model": 128,
+        "d_ff": 256,
+        "e_layers": 2,
+        "down_sampling_layers": 2,
+        "batch_size": 32,
+        "learning_rate": 1e-3,
+        "early_stop_patience_steps": 10,
+        "val_check_steps": 50,
+        "scaler_type": "robust",
+    },
+    "TimeXer": {
+        # Wang et al., NeurIPS 2024 — exogenous-aware transformer
+        "input_size": 64,
+        "max_steps": 2000,
+        "hidden_size": 128,
+        "n_heads": 8,
+        "patch_len": 16,
+        "e_layers": 2,
+        "d_ff": 256,
+        "batch_size": 32,
+        "learning_rate": 1e-4,
+        "early_stop_patience_steps": 10,
+        "val_check_steps": 100,
+        "scaler_type": "robust",
+    },
+    "TSMixerx": {
+        # Chen et al., TMLR 2023 — TSMixer with exogenous features
+        "input_size": 60,
+        "max_steps": 1000,
+        "n_block": 4,
+        "ff_dim": 128,
+        "batch_size": 32,
+        "learning_rate": 1e-3,
+        "early_stop_patience_steps": 10,
+        "val_check_steps": 50,
+        "scaler_type": "robust",
+    },
 }
 
 # Models that require n_series parameter (multivariate / cross-series)
-_NEEDS_N_SERIES = {"iTransformer", "TSMixer", "RMoK", "SOFTS", "StemGNN"}
+_NEEDS_N_SERIES = {"iTransformer", "TSMixer", "TSMixerx", "RMoK", "SOFTS",
+                   "StemGNN", "TimeMixer", "TimeXer"}
 
 
 # ============================================================================
@@ -359,6 +427,7 @@ class DeepModelWrapper(ModelBase):
             PatchTST, iTransformer, TimesNet, TSMixer,
             Informer, Autoformer, FEDformer, VanillaTransformer,
             TiDE, NBEATSx, BiTCN, KAN, RMoK, SOFTS, StemGNN,
+            DLinear, NLinear, TimeMixer, TimeXer, TSMixerx,
         )
 
         _cls = {
@@ -369,6 +438,8 @@ class DeepModelWrapper(ModelBase):
             "FEDformer": FEDformer, "VanillaTransformer": VanillaTransformer,
             "TiDE": TiDE, "NBEATSx": NBEATSx, "BiTCN": BiTCN,
             "KAN": KAN, "RMoK": RMoK, "SOFTS": SOFTS, "StemGNN": StemGNN,
+            "DLinear": DLinear, "NLinear": NLinear,
+            "TimeMixer": TimeMixer, "TimeXer": TimeXer, "TSMixerx": TSMixerx,
         }
         if self.model_name not in _cls:
             raise ValueError(f"Unknown NF model: {self.model_name}")
@@ -416,6 +487,11 @@ class DeepModelWrapper(ModelBase):
         if self.model_name == "TSMixer":
             return cls(**common, n_series=n_series)
 
+        if self.model_name == "TSMixerx":
+            return cls(**common, n_series=n_series,
+                       n_block=cfg.get("n_block", 4),
+                       ff_dim=cfg.get("ff_dim", 128))
+
         if self.model_name == "RMoK":
             return cls(**common, n_series=n_series)
 
@@ -424,6 +500,27 @@ class DeepModelWrapper(ModelBase):
 
         if self.model_name == "StemGNN":
             return cls(**common, n_series=n_series)
+
+        if self.model_name == "DLinear":
+            return cls(**common, moving_avg_window=cfg.get("moving_avg_window", 25))
+
+        if self.model_name == "NLinear":
+            return cls(**common)
+
+        if self.model_name == "TimeMixer":
+            return cls(**common, n_series=n_series,
+                       d_model=cfg.get("d_model", 128),
+                       d_ff=cfg.get("d_ff", 256),
+                       e_layers=cfg.get("e_layers", 2),
+                       down_sampling_layers=cfg.get("down_sampling_layers", 2))
+
+        if self.model_name == "TimeXer":
+            return cls(**common, n_series=n_series,
+                       hidden_size=cfg["hidden_size"],
+                       n_heads=cfg["n_heads"],
+                       patch_len=cfg.get("patch_len", 16),
+                       e_layers=cfg.get("e_layers", 2),
+                       d_ff=cfg.get("d_ff", 256))
 
         # TimesNet, Informer, Autoformer, FEDformer, VanillaTransformer,
         # TiDE, BiTCN, KAN — all take hidden_size
@@ -626,10 +723,34 @@ class FoundationModelWrapper(ModelBase):
             "amazon/chronos-t5-small", device_map="auto",
         )
 
+    def _load_chronos_bolt(self):
+        from chronos import ChronosBoltPipeline
+        self._model = ChronosBoltPipeline.from_pretrained(
+            "amazon/chronos-bolt-small", device_map="auto",
+        )
+
+    def _load_chronos2(self):
+        from chronos import Chronos2Pipeline
+        self._model = Chronos2Pipeline.from_pretrained(
+            "amazon/chronos2-small", device_map="auto",
+        )
+
     def _load_moirai(self):
         from uni2ts.model.moirai import MoiraiModule
         self._moirai_module = MoiraiModule.from_pretrained(
             "Salesforce/moirai-1.1-R-small"
+        )
+
+    def _load_moirai_large(self):
+        from uni2ts.model.moirai import MoiraiModule
+        self._moirai_module = MoiraiModule.from_pretrained(
+            "Salesforce/moirai-1.1-R-large"
+        )
+
+    def _load_moirai2(self):
+        from uni2ts.model.moirai_moe import MoiraiMoEModule
+        self._moirai_module = MoiraiMoEModule.from_pretrained(
+            "Salesforce/moirai-moe-1.0-R-small"
         )
 
     def fit(self, X: pd.DataFrame, y: pd.Series, **kwargs) -> "FoundationModelWrapper":
@@ -669,8 +790,16 @@ class FoundationModelWrapper(ModelBase):
 
         if self.model_name == "Chronos":
             self._load_chronos()
+        elif self.model_name == "ChronosBolt":
+            self._load_chronos_bolt()
+        elif self.model_name == "Chronos2":
+            self._load_chronos2()
         elif self.model_name == "Moirai":
             self._load_moirai()
+        elif self.model_name == "MoiraiLarge":
+            self._load_moirai_large()
+        elif self.model_name == "Moirai2":
+            self._load_moirai2()
         else:
             raise ValueError(f"Unknown foundation model: {self.model_name}")
 
@@ -699,7 +828,7 @@ class FoundationModelWrapper(ModelBase):
         # Build per-entity predictions
         entity_preds: Dict[str, float] = {}
 
-        if self.model_name == "Chronos" and self._model is not None:
+        if self.model_name in ("Chronos", "ChronosBolt", "Chronos2") and self._model is not None:
             import torch
             preds_all = []
             for i in range(0, len(ctxs), 32):
@@ -717,7 +846,7 @@ class FoundationModelWrapper(ModelBase):
             elif preds_all:
                 entity_preds = {f"s_{i}": p for i, p in enumerate(preds_all)}
 
-        elif self.model_name == "Moirai" and hasattr(self, "_moirai_module"):
+        elif self.model_name in ("Moirai", "MoiraiLarge") and hasattr(self, "_moirai_module"):
             import torch
             from uni2ts.model.moirai import MoiraiForecast
             preds_all = []
@@ -742,6 +871,36 @@ class FoundationModelWrapper(ModelBase):
                 except Exception:
                     preds_all.append(float(np.mean(ctx)))
             # Map entity_id -> forecast
+            eid_list = self._entity_ids[:50] if self._entity_ids else []
+            if eid_list and len(preds_all) == len(eid_list):
+                entity_preds = dict(zip(eid_list, preds_all))
+            elif preds_all:
+                entity_preds = {f"s_{i}": p for i, p in enumerate(preds_all)}
+
+        elif self.model_name == "Moirai2" and hasattr(self, "_moirai_module"):
+            import torch
+            from uni2ts.model.moirai_moe import MoiraiMoEForecast
+            preds_all = []
+            for ctx in ctxs[:50]:
+                try:
+                    ts = pd.DataFrame(
+                        {"target": ctx},
+                        index=pd.date_range("2020-01-01", periods=len(ctx), freq="D"),
+                    )
+                    fm = MoiraiMoEForecast(
+                        module=self._moirai_module,
+                        prediction_length=7,
+                        context_length=min(128, len(ctx)),
+                        patch_size="auto",
+                        num_samples=20,
+                    )
+                    from gluonts.dataset.pandas import PandasDataset
+                    ds = PandasDataset({"target": ts}, target="target", freq="D")
+                    predictor = fm.create_predictor(batch_size=1)
+                    for entry in predictor.predict(ds):
+                        preds_all.append(float(np.median(entry.samples.mean(axis=1))))
+                except Exception:
+                    preds_all.append(float(np.mean(ctx)))
             eid_list = self._entity_ids[:50] if self._entity_ids else []
             if eid_list and len(preds_all) == len(eid_list):
                 entity_preds = dict(zip(eid_list, preds_all))
@@ -854,10 +1013,20 @@ create_kan = _nf_factory("KAN")
 create_rmok = _nf_factory("RMoK")
 create_softs = _nf_factory("SOFTS")
 create_stemgnn = _nf_factory("StemGNN")
+# Phase 4 additions
+create_dlinear = _nf_factory("DLinear")
+create_nlinear = _nf_factory("NLinear")
+create_timemixer = _nf_factory("TimeMixer")
+create_timexer = _nf_factory("TimeXer")
+create_tsmixerx = _nf_factory("TSMixerx")
 
 # foundation
 create_chronos = _fm_factory("Chronos", "chronos")
+create_chronos_bolt = _fm_factory("ChronosBolt", "chronos")
+create_chronos2 = _fm_factory("Chronos2", "chronos")
 create_moirai = _fm_factory("Moirai", "uni2ts")
+create_moirai_large = _fm_factory("MoiraiLarge", "uni2ts")
+create_moirai2 = _fm_factory("Moirai2", "uni2ts")
 # TimesFM removed: requires Python <3.12 (lingvo dependency)
 
 
@@ -879,10 +1048,19 @@ TRANSFORMER_MODELS = {
     "BiTCN": create_bitcn, "KAN": create_kan,
     "RMoK": create_rmok, "SOFTS": create_softs,
     "StemGNN": create_stemgnn,
+    # Phase 4 SOTA additions
+    "DLinear": create_dlinear, "NLinear": create_nlinear,
+    "TimeMixer": create_timemixer, "TimeXer": create_timexer,
+    "TSMixerx": create_tsmixerx,
 }
 
 FOUNDATION_MODELS = {
-    "Chronos": create_chronos, "Moirai": create_moirai,
+    "Chronos": create_chronos,
+    "ChronosBolt": create_chronos_bolt,
+    "Chronos2": create_chronos2,
+    "Moirai": create_moirai,
+    "MoiraiLarge": create_moirai_large,
+    "Moirai2": create_moirai2,
 }
 
 
