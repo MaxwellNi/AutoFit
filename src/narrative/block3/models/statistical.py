@@ -66,7 +66,7 @@ class StatsForecastWrapper(ModelBase):
         # Build entity panel if raw data available
         train_raw = kwargs.get("train_raw")
         target = kwargs.get("target")
-        MAX_ENTITIES = 50  # lighter for statistical models
+        MAX_ENTITIES = 500  # increased for better test coverage
 
         if (train_raw is not None and target is not None
                 and "entity_id" in train_raw.columns):

@@ -120,7 +120,7 @@ _PANEL_CATEGORIES = {"deep_classical", "transformer_sota", "foundation",
 _CANDIDATE_TIMEOUT = 600  # 10 minutes
 
 # Max candidates for exhaustive subset search
-_MAX_EXHAUSTIVE_K = 8
+_MAX_EXHAUSTIVE_K = 6
 
 # Number of temporal CV folds for robust candidate evaluation
 _N_TEMPORAL_FOLDS = 5
@@ -974,6 +974,7 @@ class AutoFitV3Wrapper(ModelBase):
 
         Capped at _MAX_EXHAUSTIVE_K candidates to keep 2^K manageable.
         Uses raw_mean_mae for inverse-MAE weighting within subsets.
+        Time-budgeted: exits early if > 1800s elapsed.
         """
         top_k = results[:min(len(results), _MAX_EXHAUSTIVE_K)]
         y_arr = y_oof.values
@@ -982,9 +983,21 @@ class AutoFitV3Wrapper(ModelBase):
         best_mae = float(np.mean(np.abs(y_arr - top_k[0][3])))
 
         total_combos = 0
+        t_start = time.monotonic()
+        _TIME_BUDGET = 1800  # 30 minutes max for exhaustive search
+        timed_out = False
         for size in range(2, len(top_k) + 1):
             for combo in combinations(range(len(top_k)), size):
                 total_combos += 1
+                # Time budget check every 100 combos
+                if total_combos % 100 == 0:
+                    if time.monotonic() - t_start > _TIME_BUDGET:
+                        logger.warning(
+                            f"[{self.name}] Exhaustive search timed out after "
+                            f"{total_combos} combos ({time.monotonic()-t_start:.0f}s)"
+                        )
+                        timed_out = True
+                        break
                 names = [top_k[i][0] for i in combo]
                 preds = [top_k[i][3] for i in combo]        # last-fold predictions
                 raw_maes = [top_k[i][2] for i in combo]     # raw mean MAE
@@ -997,10 +1010,13 @@ class AutoFitV3Wrapper(ModelBase):
                 if mae < best_mae:
                     best_mae = mae
                     best_subset = names
+            if timed_out:
+                break
 
         logger.info(
             f"[{self.name}] Exhaustive search: {total_combos} combos, "
             f"best={best_subset} (MAE={best_mae:,.2f})"
+            + (" [TIMED OUT]" if timed_out else "")
         )
         return best_subset
 
@@ -1196,8 +1212,8 @@ def get_autofit_v3e(**kwargs) -> AutoFitV3Wrapper:
 
 
 def get_autofit_v3max(**kwargs) -> AutoFitV3Wrapper:
-    """Exhaustive subset search (2^K combinations)."""
-    return AutoFitV3Wrapper(mode="exhaustive", top_k=8, **kwargs)
+    """Exhaustive subset search (2^K combinations, K<=6)."""
+    return AutoFitV3Wrapper(mode="exhaustive", top_k=6, **kwargs)
 
 
 AUTOFIT_MODELS = {

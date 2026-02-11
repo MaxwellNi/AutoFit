@@ -36,7 +36,7 @@ _DEVICE = "cuda" if torch.cuda.is_available() else "cpu"
 def _build_irregular_features(
     train_raw: pd.DataFrame,
     target: str,
-    max_entities: int = 200,
+    max_entities: int = 1000,
     max_seq_len: int = 120,
 ) -> tuple:
     """Build 3-D array (N, T, F) with masking for irregular panel.

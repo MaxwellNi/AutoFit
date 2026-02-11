@@ -369,18 +369,55 @@ class BenchmarkShard:
             except Exception as e:
                 logger.warning(f"Could not add text features: {e}")
         
-        # Add EDGAR features
+        # Add EDGAR features (as-of join for better coverage)
         if ablation_cfg.get("use_edgar", False):
             try:
                 edgar_df = self.dataset.get_edgar_store()
-                df = df.merge(
-                    edgar_df,
-                    on=["cik", "crawled_date_day"],
-                    how="left",
-                    suffixes=("", "_edgar"),
-                )
+                # Ensure datetime types for merge_asof
+                df["crawled_date_day"] = pd.to_datetime(df["crawled_date_day"])
+                edgar_df = edgar_df.copy()
+                edgar_df["crawled_date_day"] = pd.to_datetime(edgar_df["crawled_date_day"])
+
+                n_with_cik = int(df["cik"].notna().sum())
+                edgar_feature_cols = [c for c in edgar_df.columns
+                                     if c not in ("cik", "crawled_date_day")]
+
+                if n_with_cik > 0 and len(edgar_feature_cols) > 0:
+                    # Split into rows with/without CIK
+                    df_cik = df[df["cik"].notna()].sort_values("crawled_date_day").copy()
+                    df_no_cik = df[df["cik"].isna()].copy()
+                    edgar_sorted = edgar_df.sort_values("crawled_date_day")
+
+                    # As-of join: most recent EDGAR filing within 90 days
+                    # direction="backward" prevents future-information leakage
+                    df_merged = pd.merge_asof(
+                        df_cik,
+                        edgar_sorted,
+                        by="cik",
+                        on="crawled_date_day",
+                        direction="backward",
+                        tolerance=pd.Timedelta("90D"),
+                        suffixes=("", "_edgar"),
+                    )
+                    # Rejoin rows without CIK (EDGAR cols will be NaN)
+                    for ec in edgar_feature_cols:
+                        if ec not in df_no_cik.columns:
+                            df_no_cik[ec] = np.nan
+                    df = pd.concat([df_merged, df_no_cik], ignore_index=True)
+
+                    match_rate = df[edgar_feature_cols[0]].notna().mean()
+                    logger.info(
+                        f"  EDGAR as-of join: {n_with_cik:,}/{len(df):,} rows with CIK, "
+                        f"match_rate={match_rate:.1%} on {len(edgar_feature_cols)} features"
+                    )
+                else:
+                    logger.warning(
+                        f"  EDGAR join skipped: {n_with_cik} rows with CIK, "
+                        f"{len(edgar_feature_cols)} EDGAR features"
+                    )
             except Exception as e:
                 logger.warning(f"Could not add edgar features: {e}")
+                import traceback as _tb; logger.debug(_tb.format_exc())
         
         # Apply temporal split
         split_cfg = self.tasks_config.get("split", {})
@@ -692,7 +729,18 @@ class BenchmarkShard:
             
             # Run each combination
             for target in targets:  # ALL targets for KDD'26 full paper
-                for horizon in horizons:
+                # Cross-sectional models produce identical results for all
+                # horizons (features are horizon-independent).  Run only the
+                # first horizon to avoid wasted SLURM compute.
+                run_horizons = horizons
+                if self.category == "ml_tabular":
+                    run_horizons = [horizons[0]]
+                    logger.info(
+                        f"  Cross-sectional category {self.category}: "
+                        f"single horizon {run_horizons[0]} (feature-independent)"
+                    )
+
+                for horizon in run_horizons:
                     logger.info(f"\nTarget: {target}, Horizon: {horizon}")
                     
                     # Load data

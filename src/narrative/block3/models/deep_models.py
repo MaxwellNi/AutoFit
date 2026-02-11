@@ -279,8 +279,8 @@ _NEEDS_N_SERIES = {"iTransformer", "TSMixer", "RMoK", "SOFTS", "StemGNN"}
 def _build_panel_df(
     train_raw: pd.DataFrame,
     target: str,
-    max_entities: int = 200,
-    min_obs: int = 20,
+    max_entities: int = 2000,
+    min_obs: int = 10,
     seed: int = 42,
 ) -> Optional[pd.DataFrame]:
     """Build NeuralForecast-style panel DataFrame from raw entity data."""
@@ -449,9 +449,11 @@ class DeepModelWrapper(ModelBase):
         self._last_y = y.values
         self._use_fallback = False
 
+        # n_series models need limited entities (VRAM); others get full coverage
+        _max_e = 200 if self.model_name in _NEEDS_N_SERIES else 2000
         panel = _build_panel_df(
             kwargs.get("train_raw"), kwargs.get("target"),
-            max_entities=200, seed=42,
+            max_entities=_max_e, min_obs=10, seed=42,
         )
         if panel is None:
             panel = _synthetic_panel(y)
@@ -485,6 +487,24 @@ class DeepModelWrapper(ModelBase):
             )
             self._use_fallback = True
             self._fitted = True
+
+        # Feature-based Ridge fallback for unseen test entities
+        self._fallback_ridge = None
+        self._fallback_feature_cols = []
+        try:
+            from sklearn.linear_model import Ridge as _Ridge
+            X_fb = X.select_dtypes(include=[np.number]).fillna(0)
+            if len(X_fb.columns) > 0 and len(X_fb) > 10:
+                self._fallback_ridge = _Ridge(alpha=1.0)
+                self._fallback_ridge.fit(X_fb, y)
+                self._fallback_feature_cols = list(X_fb.columns)
+                _logger.info(
+                    f"  [{self.model_name}] Ridge fallback trained "
+                    f"({len(X_fb.columns)} features)"
+                )
+        except Exception as _exc:
+            _logger.debug(f"  [{self.model_name}] Ridge fallback failed: {_exc}")
+
         return self
 
     # ------------------------------------------------------------------
@@ -538,14 +558,38 @@ class DeepModelWrapper(ModelBase):
                     test_entities = test_raw["entity_id"].values
 
                 if len(test_entities) == h:
-                    y_pred = np.array([
-                        entity_fcs.get(eid, global_mean) for eid in test_entities
-                    ])
+                    # Use Ridge fallback for entities not seen during training
+                    n_covered = sum(1 for eid in test_entities if eid in entity_fcs)
+                    n_unique = len(set(test_entities))
+                    coverage = n_covered / max(len(test_entities), 1)
+
+                    if (coverage < 0.95
+                            and hasattr(self, '_fallback_ridge')
+                            and self._fallback_ridge is not None
+                            and self._fallback_feature_cols):
+                        try:
+                            X_fb = X[self._fallback_feature_cols].fillna(0)
+                            ridge_preds = self._fallback_ridge.predict(X_fb)
+                            y_pred = np.array([
+                                entity_fcs.get(eid, ridge_preds[i])
+                                for i, eid in enumerate(test_entities)
+                            ])
+                        except Exception:
+                            y_pred = np.array([
+                                entity_fcs.get(eid, global_mean)
+                                for eid in test_entities
+                            ])
+                    else:
+                        y_pred = np.array([
+                            entity_fcs.get(eid, global_mean)
+                            for eid in test_entities
+                        ])
                     _logger.info(
                         f"  [{self.model_name}] Per-entity predict: "
                         f"{len(entity_fcs)} entities forecasted, "
-                        f"{len(set(test_entities) & set(entity_fcs.keys()))}/{len(set(test_entities))} "
-                        f"test entities matched, unique_preds={len(np.unique(np.round(y_pred, 4)))}"
+                        f"{n_covered}/{n_unique} ({coverage:.1%}) "
+                        f"test entities covered, "
+                        f"unique_preds={len(np.unique(np.round(y_pred, 4)))}"
                     )
                     return y_pred
 
@@ -591,7 +635,7 @@ class FoundationModelWrapper(ModelBase):
     def fit(self, X: pd.DataFrame, y: pd.Series, **kwargs) -> "FoundationModelWrapper":
         train_raw = kwargs.get("train_raw")
         target = kwargs.get("target")
-        MAX_E, MIN_O = 200, 20
+        MAX_E, MIN_O = 500, 10
         self._entity_ids: List[str] = []  # track entity_id per context
 
         if (train_raw is not None and target is not None
@@ -629,6 +673,19 @@ class FoundationModelWrapper(ModelBase):
             self._load_moirai()
         else:
             raise ValueError(f"Unknown foundation model: {self.model_name}")
+
+        # Feature-based Ridge fallback for unseen test entities
+        self._fallback_ridge = None
+        self._fallback_feature_cols = []
+        try:
+            from sklearn.linear_model import Ridge as _Ridge
+            X_fb = X.select_dtypes(include=[np.number]).fillna(0)
+            if len(X_fb.columns) > 0 and len(X_fb) > 10:
+                self._fallback_ridge = _Ridge(alpha=1.0)
+                self._fallback_ridge.fit(X_fb, y)
+                self._fallback_feature_cols = list(X_fb.columns)
+        except Exception:
+            pass
 
         self._fitted = True
         return self
@@ -713,13 +770,33 @@ class FoundationModelWrapper(ModelBase):
                 test_entities = test_raw["entity_id"].values
 
             if len(test_entities) == h:
-                y_pred = np.array([
-                    entity_preds.get(eid, global_mean) for eid in test_entities
-                ])
+                # Use Ridge fallback for entities not seen during training
+                n_covered = sum(1 for eid in test_entities if eid in entity_preds)
+                coverage = n_covered / max(len(test_entities), 1)
+
+                if (coverage < 0.95
+                        and hasattr(self, '_fallback_ridge')
+                        and self._fallback_ridge is not None
+                        and self._fallback_feature_cols):
+                    try:
+                        X_fb = X[self._fallback_feature_cols].fillna(0)
+                        ridge_preds = self._fallback_ridge.predict(X_fb)
+                        y_pred = np.array([
+                            entity_preds.get(eid, ridge_preds[i])
+                            for i, eid in enumerate(test_entities)
+                        ])
+                    except Exception:
+                        y_pred = np.array([
+                            entity_preds.get(eid, global_mean) for eid in test_entities
+                        ])
+                else:
+                    y_pred = np.array([
+                        entity_preds.get(eid, global_mean) for eid in test_entities
+                    ])
                 _logger.info(
                     f"  [{self.model_name}] Per-entity predict: "
                     f"{len(entity_preds)} entities, "
-                    f"{len(set(test_entities) & set(entity_preds.keys()))}/{len(set(test_entities))} matched, "
+                    f"{n_covered}/{len(set(test_entities))} ({coverage:.1%}) covered, "
                     f"unique_preds={len(np.unique(np.round(y_pred, 4)))}"
                 )
                 return y_pred

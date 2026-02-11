@@ -86,6 +86,21 @@ class ProductionGBDTWrapper(ModelBase):
         self._feature_names: list[str] = []
 
     def fit(self, X: pd.DataFrame, y: pd.Series, **kwargs) -> "ProductionGBDTWrapper":
+        # Detect count-like target → use Tweedie/Poisson objective
+        y_arr = y.values.astype(float)
+        if (np.isfinite(y_arr).all()
+                and (y_arr >= 0).all()
+                and (y_arr == np.round(y_arr)).mean() > 0.9
+                and y_arr.max() > 2):
+            model_name = self.config.name
+            if model_name == "LightGBM" and 'objective' not in self.init_kwargs:
+                self.init_kwargs['objective'] = 'tweedie'
+                self.init_kwargs['tweedie_variance_power'] = 1.5
+                _logger.info(f"  [{model_name}] Count target detected → tweedie loss")
+            elif model_name == "XGBoost" and 'objective' not in self.init_kwargs:
+                self.init_kwargs['objective'] = 'count:poisson'
+                _logger.info(f"  [{model_name}] Count target detected → poisson loss")
+
         self.model = self.model_class(**self.init_kwargs)
         self._feature_names = list(X.columns)
 
