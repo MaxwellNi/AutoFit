@@ -358,8 +358,9 @@ class BenchmarkShard:
             unique_entities = df["entity_id"].unique()[:self.max_entities]
             df = df[df["entity_id"].isin(unique_entities)]
         
-        if self.max_rows and len(df) > self.max_rows:
-            df = df.head(self.max_rows)
+        # NOTE: max_rows truncation moved AFTER temporal split to avoid
+        # biasing toward early rows and potentially removing all test data.
+        # See _load_data post-split truncation below.
         
         # Add text features
         if ablation_cfg.get("use_text", False):
@@ -391,7 +392,14 @@ class BenchmarkShard:
         )
         
         train, val, test, stats = apply_temporal_split(df, temporal_config)
-        
+
+        # Apply max_rows limit AFTER temporal split — truncate training set
+        # only (never truncate test set, which would bias evaluation)
+        if self.max_rows:
+            if len(train) > self.max_rows:
+                train = train.tail(self.max_rows)  # keep most recent rows
+                logger.info(f"  max_rows: truncated train to {len(train):,}")
+
         logger.info(
             f"Data loaded: train={len(train):,}, val={len(val):,}, test={len(test):,}"
         )
@@ -625,12 +633,19 @@ class BenchmarkShard:
             return None
         finally:
             # Eagerly release model and intermediate arrays
-            for _v in ("model", "X_train", "y_train", "X_test", "y_test",
-                        "y_pred", "pred_df"):
-                try:
-                    del locals()[_v]
-                except KeyError:
-                    pass
+            try:
+                del model
+            except (NameError, UnboundLocalError):
+                pass
+            try:
+                del X_train, y_train, X_test, y_test
+            except (NameError, UnboundLocalError):
+                pass
+            try:
+                del y_pred, pred_df
+            except (NameError, UnboundLocalError):
+                pass
+            gc.collect()
     
     def run(self) -> bool:
         """Run the benchmark shard."""

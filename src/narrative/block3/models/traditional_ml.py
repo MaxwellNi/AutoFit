@@ -43,15 +43,17 @@ class SubsampledSklearnWrapper(SklearnModelWrapper):
         self._max_rows = max_rows
 
     def fit(self, X: pd.DataFrame, y: pd.Series, **kwargs) -> "SubsampledSklearnWrapper":
-        if len(X) > self._max_rows:
+        orig_len = len(X)
+        if orig_len > self._max_rows:
             rng = np.random.RandomState(42)
-            idx = rng.choice(len(X), self._max_rows, replace=False)
+            idx = rng.choice(orig_len, self._max_rows, replace=False)
             idx.sort()
             X = X.iloc[idx]
             y = y.iloc[idx]
             _logger.info(
-                f"  [{self.config.name}] Subsampled {len(X):,} → {self._max_rows:,} rows"
+                f"  [{self.config.name}] Subsampled {orig_len:,} → {self._max_rows:,} rows"
             )
+        self._feature_names = list(X.columns)
         self.model.fit(X, y)
         self._fitted = True
         return self

@@ -148,6 +148,7 @@ class SklearnModelWrapper(ModelBase):
         self.model = sklearn_model
     
     def fit(self, X: pd.DataFrame, y: pd.Series, **kwargs) -> "SklearnModelWrapper":
+        self._feature_names = list(X.columns)
         self.model.fit(X, y)
         self._fitted = True
         return self
@@ -233,7 +234,10 @@ class NaiveForecaster(ModelBase):
     def predict(self, X: pd.DataFrame, **kwargs) -> np.ndarray:
         n = len(X)
         if self._last_values is not None and len(self._last_values) > 0:
-            # Repeat seasonal pattern
+            # Repeat seasonal pattern with proper phase alignment.
+            # self._last_values contains the last `seasonality` training values,
+            # so test index 0 should map to phase offset 0 (i.e. the value that
+            # would follow the last training observation).
             preds = np.tile(self._last_values, (n // self.seasonality + 1))[:n]
         else:
             preds = np.full(n, self._mean)

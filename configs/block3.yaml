@@ -282,28 +282,56 @@ ablations:
 # AutoFit composer configuration
 autofit:
   enabled: true
-  
-  # Rule-based composer thresholds
+  version: 2  # v2: MoE gating; v1: rule_based_composer (legacy)
+
+  # ---- v2 settings ----
+  v2:
+    gating_mode: sparse      # hard | soft | sparse
+    top_k: 2                  # number of active experts in sparse mode
+    temperature: 1.0          # softmax temperature
+    max_entities_sample: 500  # subsample for meta-feature computation
+
+    # ASHA search (within each active expert)
+    asha:
+      enabled: false          # set true for full search
+      rungs: [0.10, 0.30, 1.0]
+      eta: 3                  # halving factor
+      budget_seconds: 1800
+      max_models_per_expert: 2
+
+    # Expert catalogue
+    experts:
+      tabular:
+        models: [LightGBM, CatBoost, XGBoost, HistGradientBoosting, RandomForest]
+      deep_ts:
+        models: [NHITS, NBEATS, TFT, DeepAR]
+      transformer:
+        models: [PatchTST, iTransformer, TimesNet, TSMixer]
+      foundation:
+        models: [Chronos, Moirai, TimesFM]
+      statistical:
+        models: [AutoARIMA, AutoETS, AutoTheta, MSTL]
+      irregular:
+        models: [GRU-D, SAITS]
+
+  # ---- v1 settings (legacy, retained for backward compat) ----
   rules:
     backbone_selection:
-      ssm_threshold: 0.2  # long_memory_score > this -> prefer SSM
-      transformer_threshold: 0.3  # periodicity_score > this -> prefer Transformer
-      decomp_threshold: 0.4  # nonstationarity_score > this -> prefer Decomp
-    
+      ssm_threshold: 0.2
+      transformer_threshold: 0.3
+      decomp_threshold: 0.4
     fusion_selection:
-      exog_threshold: 0.15  # exog_strength > this -> enable fusion
+      exog_threshold: 0.15
       film_threshold: 0.2
       cross_attn_threshold: 0.3
       bridge_token_threshold: 0.4
-    
     loss_selection:
-      heavy_tail_threshold: 0.5  # -> prefer Huber/StudentT
-      quantile_targets: true  # Always include quantile loss
-    
+      heavy_tail_threshold: 0.5
+      quantile_targets: true
     regularization:
-      high_missing_threshold: 0.5  # missing_rate > this -> stronger dropout
-      irregular_threshold: 0.3  # irregular_score > this -> time masking
-  
+      high_missing_threshold: 0.5
+      irregular_threshold: 0.3
+
   # Learnable strategy (future extension)
   learnable:
     method: null  # null | bandit | bayesian | rl

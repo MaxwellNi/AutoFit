@@ -8,44 +8,59 @@ Design philosophy:
   - Exhaustive combinatorial search: try ALL viable stacking combos
   - Performance-compute Pareto: prune slow/poor models early
   - Fair comparison: same temporal splits, same preprocessing for all
+  - Stability-penalized selection: high-variance models are penalized
+
+Evaluation methodology (shared across ALL variants):
+  5-fold expanding-window temporal CV via _temporal_kfold_evaluate_all().
+  Cut points at 50%, 60%, 70%, 80%, 90% of the data.
+  Fold k: train on [0..cut_k], validate on [cut_k..cut_{k+1}].
+  Per-model stability-adjusted score:
+      adj_MAE = mean_MAE * (1 + 0.25 * cv_of_MAE)
+  Models that succeed on fewer than 2 folds are rejected.
 
 Six variants:
 
   AutoFitV1     — Best single model via data-driven selection (not heuristic).
-                  All available base models evaluated on temporal val fold.
-                  Winner + LightGBM residual correction on tabular features.
+                  All 17 base models evaluated via 5-fold temporal CV.
+                  Winner (by adj_MAE) + LightGBM residual correction.
 
-  AutoFitV2     — Top-K weighted ensemble (inverse-MAE weights).
-                  All available models ranked by val MAE, top-K selected.
-                  Weights computed on temporal validation fold.
+  AutoFitV2     — Top-K weighted ensemble (inverse raw-MAE weights).
+                  All models ranked by stability-adjusted MAE.
+                  Top-K selected, weights from raw mean MAE.
 
   AutoFitV2E    — Full stacking with LightGBM meta-learner.
-                  Top-K models produce OOF predictions via temporal split.
+                  Top-K models produce OOF predictions on last fold (90%).
                   LightGBM trains on (OOF_preds + tabular_features) -> target.
 
   AutoFitV3     — Greedy forward ensemble selection + meta-learner.
-                  2-fold temporal CV for OOF generation (no data waste).
+                  5-fold temporal CV for candidate ranking.
                   Starting from best single model, greedily adds models
-                  that reduce CV-validated MAE.  Stops when no improvement.
+                  that reduce OOF MAE.  Stops when no improvement > 0.1%.
 
   AutoFitV3E    — Top-K stacking with temporal CV.
-                  Like V2E but with 2-fold temporal CV for OOF.
+                  Like V2E but with 5-fold stability-adjusted ranking.
 
   AutoFitV3Max  — Exhaustive subset search (2^K combinations, K capped at 8).
                   Evaluates every possible subset of base models.
-                  Selects subset that minimizes temporal-CV MAE.
+                  Selects subset that minimizes OOF MAE.
 
 Information flow guarantee (CRITICAL for fair comparison):
   ┌─────────────────────────────────────────────────┐
   │ Training data temporal ordering preserved:       │
-  │   t_1 < t_2 < ... < t_split < ... < t_n         │
+  │   t_1 < t_2 < ... < t_n                         │
   │                                                  │
-  │ Level-0: Base models trained on t_1..t_split     │
-  │          OOF predictions on t_split+1..t_n       │
+  │ 5-fold expanding window (NO shuffle):            │
+  │   Fold k: train [0..50%+k*10%], val [..+10%]    │
+  │                                                  │
+  │ Stability-adjusted ranking:                      │
+  │   adj_MAE = mean_MAE * (1 + 0.25 * CV(MAE))     │
+  │   Penalizes models with inconsistent performance │
+  │                                                  │
+  │ Level-0: Base models trained on 5 folds          │
+  │          OOF on last fold [90%..100%] for meta   │
   │                                                  │
   │ Level-1: Meta-learner trained on OOF + features  │
-  │          NEVER sees t_split+1..t_n targets until  │
-  │          after OOF predictions are made           │
+  │          NEVER sees test targets until eval       │
   │                                                  │
   │ Final: Base models REFIT on full t_1..t_n        │
   │        Meta-learner weights FROZEN from OOF      │
@@ -106,6 +121,13 @@ _CANDIDATE_TIMEOUT = 600  # 10 minutes
 
 # Max candidates for exhaustive subset search
 _MAX_EXHAUSTIVE_K = 8
+
+# Number of temporal CV folds for robust candidate evaluation
+_N_TEMPORAL_FOLDS = 5
+
+# Stability penalty weight: penalize high-variance models
+# final_score = mean_MAE * (1 + STABILITY_PENALTY * cv_of_MAE)
+_STABILITY_PENALTY = 0.25
 
 
 # ============================================================================
@@ -234,6 +256,96 @@ def _fit_single_candidate(
         return None
 
 
+def _temporal_kfold_evaluate_all(
+    X: pd.DataFrame,
+    y: pd.Series,
+    train_raw: Optional[pd.DataFrame],
+    target: str,
+    horizon: int,
+    n_folds: int = _N_TEMPORAL_FOLDS,
+) -> List[Tuple[str, float, float, np.ndarray]]:
+    """Evaluate all candidates using K-fold expanding-window temporal CV.
+
+    Temporal CV structure (anti-leak guaranteed):
+      Fold k trains on [0 .. cut_k] and validates on [cut_k .. cut_{k+1}]
+      where cuts are at equal temporal fractions: 50%, 60%, 70%, 80%, 90%.
+
+    Returns list of (model_name, stability_adjusted_mae, raw_mean_mae, last_fold_preds)
+    sorted by stability_adjusted_mae ascending (best first).
+
+    Stability-adjusted MAE = mean_MAE * (1 + STABILITY_PENALTY * cv_of_MAE)
+    This penalizes models with high variance across folds, preventing
+    selection of models that happen to score well on one split but poorly on others.
+    """
+    n = len(X)
+    # Generate expanding-window cut points
+    # Start at 50% so each fold has enough training data
+    fractions = np.linspace(0.5, 0.9, n_folds)
+    cuts = [int(f * n) for f in fractions]
+    cuts.append(n)  # final boundary
+
+    # Prepare raw data alignment
+    raw_aligned = train_raw is not None and len(train_raw) == n
+
+    # Collect per-fold MAE for each candidate
+    fold_maes: Dict[str, List[float]] = {}  # model_name -> [mae_fold1, ..., mae_foldK]
+    last_fold_preds: Dict[str, np.ndarray] = {}  # model_name -> predictions on last fold
+
+    for fold_idx in range(n_folds):
+        tr_end = cuts[fold_idx]
+        val_start = cuts[fold_idx]
+        val_end = cuts[fold_idx + 1]
+
+        if val_end - val_start < 10:
+            continue  # skip degenerate folds
+
+        X_tr = X.iloc[:tr_end]
+        y_tr = y.iloc[:tr_end]
+        X_v = X.iloc[val_start:val_end]
+        y_v = y.iloc[val_start:val_end]
+
+        tr_raw_fold = train_raw.iloc[:tr_end] if raw_aligned else None
+        val_raw_fold = train_raw.iloc[val_start:val_end] if raw_aligned else None
+
+        for model_name in _ALL_CANDIDATES:
+            r = _fit_single_candidate(
+                model_name, X_tr, y_tr, X_v, y_v,
+                tr_raw_fold, val_raw_fold, target, horizon,
+            )
+            if r is not None:
+                name, mae, preds, elapsed = r
+                if name not in fold_maes:
+                    fold_maes[name] = []
+                fold_maes[name].append(mae)
+                # Always store last fold predictions for OOF
+                if fold_idx == n_folds - 1:
+                    last_fold_preds[name] = preds
+
+    # Compute stability-adjusted scores
+    results: List[Tuple[str, float, float, np.ndarray]] = []
+    for name, maes in fold_maes.items():
+        if len(maes) < 2:
+            # Only succeeded on 1 fold — treat as unstable, skip
+            logger.warning(f"[AutoFit] {name} succeeded on only {len(maes)}/{n_folds} folds, skipping")
+            continue
+        mean_mae = float(np.mean(maes))
+        std_mae = float(np.std(maes))
+        cv_mae = std_mae / max(mean_mae, 1e-8)
+        adj_mae = mean_mae * (1.0 + _STABILITY_PENALTY * cv_mae)
+
+        # Use last fold preds if available, else generate dummy
+        preds = last_fold_preds.get(name, np.full(cuts[-1] - cuts[-2], mean_mae))
+
+        logger.info(
+            f"[AutoFit] {name}: mean_MAE={mean_mae:,.2f}, std={std_mae:,.2f}, "
+            f"CV={cv_mae:.3f}, adj_MAE={adj_mae:,.2f} ({len(maes)}/{n_folds} folds)"
+        )
+        results.append((name, adj_mae, mean_mae, preds))
+
+    results.sort(key=lambda x: x[1])  # sort by stability-adjusted MAE
+    return results
+
+
 def _build_meta_learner(
     X_val: pd.DataFrame,
     y_val: pd.Series,
@@ -336,29 +448,8 @@ class AutoFitV1Wrapper(ModelBase):
         meta = _compute_target_regime(y, X)
         logger.info(f"[AutoFitV1] Target meta-features: {meta}")
 
-        # -- Temporal split for stacking (80/20) --
-        n = len(X)
-        split_idx = int(n * 0.8)
-        X_inner, X_val = X.iloc[:split_idx], X.iloc[split_idx:]
-        y_inner, y_val = y.iloc[:split_idx], y.iloc[split_idx:]
-
-        train_raw_inner, val_raw = None, None
-        if train_raw is not None:
-            if len(train_raw) == n:
-                train_raw_inner = train_raw.iloc[:split_idx]
-                val_raw = train_raw.iloc[split_idx:]
-            else:
-                train_raw_inner, val_raw = train_raw, train_raw
-
-        # -- Evaluate ALL candidates --
-        results = []
-        for model_name in _ALL_CANDIDATES:
-            r = _fit_single_candidate(
-                model_name, X_inner, y_inner, X_val, y_val,
-                train_raw_inner, val_raw, target, horizon,
-            )
-            if r is not None:
-                results.append(r)
+        # -- K-fold temporal CV for robust candidate evaluation --
+        results = _temporal_kfold_evaluate_all(X, y, train_raw, target, horizon)
 
         if not results:
             logger.error("[AutoFitV1] No candidates succeeded! Fallback to LightGBM")
@@ -368,47 +459,55 @@ class AutoFitV1Wrapper(ModelBase):
             self._fitted = True
             return self
 
-        # Sort by val MAE — select the BEST
-        results.sort(key=lambda x: x[1])
+        # results are sorted by stability-adjusted MAE (best first)
         self._base_model_name = results[0][0]
-        best_val_mae = results[0][1]
-        best_val_preds = results[0][2]
+        best_adj_mae = results[0][1]
+        best_raw_mae = results[0][2]
+        best_val_preds = results[0][3]
 
         logger.info(
-            "[AutoFitV1] Rankings: "
-            + ", ".join(f"{n}={m:,.2f}" for n, m, _, _ in results[:5])
+            "[AutoFitV1] Rankings (stability-adjusted): "
+            + ", ".join(f"{n}={adj:,.2f}" for n, adj, _, _ in results[:5])
         )
-        logger.info(f"[AutoFitV1] Selected: {self._base_model_name} (MAE={best_val_mae:,.2f})")
+        logger.info(
+            f"[AutoFitV1] Selected: {self._base_model_name} "
+            f"(adj_MAE={best_adj_mae:,.2f}, raw_MAE={best_raw_mae:,.2f})"
+        )
 
         # -- Residual correction via LightGBM --
-        residuals = y_val.values - best_val_preds
+        # Use the last fold's validation region for meta-learner training
+        n = len(X)
+        split_idx = int(n * 0.9)  # last fold boundary
+        X_val = X.iloc[split_idx:]
+        y_val = y.iloc[split_idx:]
         try:
+            residuals = y_val.values - best_val_preds[:len(y_val)]
             self._meta_learner, self._meta_cols, _res_mae = _build_meta_learner(
                 X_val, pd.Series(residuals, index=y_val.index),
-                {"__base__": best_val_preds},
+                {"__base__": best_val_preds[:len(y_val)]},
                 regularize=True,
             )
             # Actual stacked MAE: base + correction
             X_corr = X_val.copy()
-            X_corr["__pred___base____"] = best_val_preds
+            X_corr["__pred___base____"] = best_val_preds[:len(y_val)]
             for c in self._meta_cols:
                 if c not in X_corr.columns:
                     X_corr[c] = 0.0
             corrections = self._meta_learner.predict(X_corr[self._meta_cols].fillna(0))
-            corrected = best_val_preds + corrections
+            corrected = best_val_preds[:len(y_val)] + corrections
             actual_stacked_mae = float(np.mean(np.abs(y_val.values - corrected)))
 
             # -- Anti-overfit guard: reject meta-learner if it does not help --
-            if actual_stacked_mae >= best_val_mae * 0.995:
+            if actual_stacked_mae >= best_raw_mae * 0.995:
                 logger.info(
                     f"[AutoFitV1] Meta-learner doesn't improve "
-                    f"({actual_stacked_mae:,.2f} vs {best_val_mae:,.2f}), discarding"
+                    f"({actual_stacked_mae:,.2f} vs {best_raw_mae:,.2f}), discarding"
                 )
                 self._meta_learner = None
             else:
-                improvement = 100 * (1 - actual_stacked_mae / best_val_mae)
+                improvement = 100 * (1 - actual_stacked_mae / best_raw_mae)
                 logger.info(
-                    f"[AutoFitV1] base_MAE={best_val_mae:,.2f} -> stacked_MAE="
+                    f"[AutoFitV1] base_MAE={best_raw_mae:,.2f} -> stacked_MAE="
                     f"{actual_stacked_mae:,.2f} ({improvement:.1f}% improvement)"
                 )
         except Exception as e:
@@ -426,9 +525,10 @@ class AutoFitV1Wrapper(ModelBase):
         self._routing_info = {
             "meta_features": meta,
             "base_model": self._base_model_name,
-            "base_val_mae": best_val_mae,
+            "base_adj_mae": best_adj_mae,
+            "base_raw_mae": best_raw_mae,
             "has_meta_learner": self._meta_learner is not None,
-            "candidate_rankings": [(n, m) for n, m, _, _ in results],
+            "candidate_rankings": [(n, adj) for n, adj, _, _ in results],
             "elapsed_seconds": elapsed,
         }
         self._fitted = True
@@ -503,29 +603,8 @@ class AutoFitV2Wrapper(ModelBase):
         meta = _compute_target_regime(y, X)
         logger.info(f"[AutoFitV2] Target meta-features: {meta}")
 
-        # -- Temporal split --
-        n = len(X)
-        split_idx = int(n * 0.8)
-        X_inner, X_val = X.iloc[:split_idx], X.iloc[split_idx:]
-        y_inner, y_val = y.iloc[:split_idx], y.iloc[split_idx:]
-
-        train_raw_inner, val_raw = None, None
-        if train_raw is not None:
-            if len(train_raw) == n:
-                train_raw_inner = train_raw.iloc[:split_idx]
-                val_raw = train_raw.iloc[split_idx:]
-            else:
-                train_raw_inner, val_raw = train_raw, train_raw
-
-        # -- Evaluate ALL candidates --
-        results = []
-        for model_name in _ALL_CANDIDATES:
-            r = _fit_single_candidate(
-                model_name, X_inner, y_inner, X_val, y_val,
-                train_raw_inner, val_raw, target, horizon,
-            )
-            if r is not None:
-                results.append(r)
+        # -- K-fold temporal CV for robust candidate evaluation --
+        results = _temporal_kfold_evaluate_all(X, y, train_raw, target, horizon)
 
         if not results:
             logger.error("[AutoFitV2] No candidates! Fallback to LightGBM")
@@ -535,22 +614,24 @@ class AutoFitV2Wrapper(ModelBase):
             self._fitted = True
             return self
 
-        # Sort by val MAE, take top K
-        results.sort(key=lambda x: x[1])
+        # Sort by stability-adjusted MAE, take top K
         top_k = results[:self._top_k]
 
-        # -- Inverse-MAE weights --
-        inv_maes = np.array([1.0 / max(m, 1e-8) for _, m, _, _ in top_k])
+        # -- Inverse-adjusted-MAE weights --
+        inv_maes = np.array([1.0 / max(adj, 1e-8) for _, adj, _, _ in top_k])
         weights = inv_maes / inv_maes.sum()
 
         logger.info(
             f"[AutoFitV2] Selected top-{len(top_k)}: "
-            + ", ".join(f"{n}={w:.3f}(MAE={m:,.2f})" for (n, m, _, _), w in zip(top_k, weights))
+            + ", ".join(
+                f"{n}={w:.3f}(adj={adj:,.2f},raw={raw:,.2f})"
+                for (n, adj, raw, _), w in zip(top_k, weights)
+            )
         )
 
         # -- Refit top-K on FULL data --
         self._models = []
-        for (model_name, val_mae, _, _), w in zip(top_k, weights):
+        for (model_name, _, _, _), w in zip(top_k, weights):
             try:
                 model = get_model(model_name)
                 fit_kw: Dict[str, Any] = {}
@@ -564,9 +645,9 @@ class AutoFitV2Wrapper(ModelBase):
         elapsed = time.monotonic() - t0
         self._routing_info = {
             "meta_features": meta,
-            "top_k": [(n, m) for n, m, _, _ in top_k],
+            "top_k": [(n, adj) for n, adj, _, _ in top_k],
             "weights": {n: float(w) for (n, _, _, _), w in zip(top_k, weights)},
-            "all_rankings": [(n, m) for n, m, _, _ in results],
+            "all_rankings": [(n, adj) for n, adj, _, _ in results],
             "elapsed_seconds": elapsed,
         }
         self._fitted = True
@@ -647,29 +728,8 @@ class AutoFitV2EWrapper(ModelBase):
         meta = _compute_target_regime(y, X)
         logger.info(f"[AutoFitV2E] Target meta-features: {meta}")
 
-        # -- Temporal split --
-        n = len(X)
-        split_idx = int(n * 0.8)
-        X_inner, X_val = X.iloc[:split_idx], X.iloc[split_idx:]
-        y_inner, y_val = y.iloc[:split_idx], y.iloc[split_idx:]
-
-        train_raw_inner, val_raw = None, None
-        if train_raw is not None:
-            if len(train_raw) == n:
-                train_raw_inner = train_raw.iloc[:split_idx]
-                val_raw = train_raw.iloc[split_idx:]
-            else:
-                train_raw_inner, val_raw = train_raw, train_raw
-
-        # -- Evaluate ALL candidates --
-        results = []
-        for model_name in _ALL_CANDIDATES:
-            r = _fit_single_candidate(
-                model_name, X_inner, y_inner, X_val, y_val,
-                train_raw_inner, val_raw, target, horizon,
-            )
-            if r is not None:
-                results.append(r)
+        # -- K-fold temporal CV for robust candidate evaluation --
+        results = _temporal_kfold_evaluate_all(X, y, train_raw, target, horizon)
 
         if not results:
             logger.error("[AutoFitV2E] No candidates! Fallback to LightGBM")
@@ -679,37 +739,41 @@ class AutoFitV2EWrapper(ModelBase):
             self._fitted = True
             return self
 
-        results.sort(key=lambda x: x[1])
         top_k = results[:self._top_k]
         self._pred_names = [n for n, _, _, _ in top_k]
 
-        # -- Build stacking meta-learner --
-        oof_preds = {n: p for n, _, p, _ in top_k}
+        # -- Build stacking meta-learner on last fold OOF predictions --
+        n = len(X)
+        split_idx = int(n * 0.9)  # last fold boundary
+        X_oof = X.iloc[split_idx:]
+        y_oof = y.iloc[split_idx:]
+        oof_preds = {n: p[:len(y_oof)] for n, _, _, p in top_k}
         try:
             self._meta_learner, self._meta_cols, meta_mae = _build_meta_learner(
-                X_val, y_val, oof_preds, regularize=True,
+                X_oof, y_oof, oof_preds, regularize=True,
             )
-            best_base_mae = top_k[0][1]
-            improvement = 100 * (1 - meta_mae / max(best_base_mae, 1e-8))
+            best_base_adj = top_k[0][1]
+            best_base_raw = top_k[0][2]
+            improvement = 100 * (1 - meta_mae / max(best_base_raw, 1e-8))
 
             # -- Anti-overfit guard --
-            if meta_mae >= best_base_mae * 0.995:
+            if meta_mae >= best_base_raw * 0.995:
                 logger.info(
                     f"[AutoFitV2E] Meta-learner doesn't improve "
-                    f"({meta_mae:,.2f} vs base {best_base_mae:,.2f}), using weights"
+                    f"({meta_mae:,.2f} vs base {best_base_raw:,.2f}), using weights"
                 )
                 self._meta_learner = None
             else:
                 logger.info(
                     f"[AutoFitV2E] Meta-learner MAE={meta_mae:,.2f} "
-                    f"vs best_base={best_base_mae:,.2f} ({improvement:.1f}% up)"
+                    f"vs best_base={best_base_raw:,.2f} ({improvement:.1f}% up)"
                 )
         except Exception as e:
             logger.warning(f"[AutoFitV2E] Meta-learner failed: {e}")
             self._meta_learner = None
 
-        # Fallback weights
-        inv_maes = np.array([1.0 / max(m, 1e-8) for _, m, _, _ in top_k])
+        # Fallback weights (inverse stability-adjusted MAE)
+        inv_maes = np.array([1.0 / max(adj, 1e-8) for _, adj, _, _ in top_k])
         wts = inv_maes / inv_maes.sum()
         self._weights = {n: float(w) for (n, _, _, _), w in zip(top_k, wts)}
 
@@ -729,10 +793,10 @@ class AutoFitV2EWrapper(ModelBase):
         elapsed = time.monotonic() - t0
         self._routing_info = {
             "meta_features": meta,
-            "top_k": [(n, m) for n, m, _, _ in top_k],
+            "top_k": [(n, adj) for n, adj, _, _ in top_k],
             "weights": self._weights,
             "has_meta_learner": self._meta_learner is not None,
-            "all_rankings": [(n, m) for n, m, _, _ in results],
+            "all_rankings": [(n, adj) for n, adj, _, _ in results],
             "elapsed_seconds": elapsed,
         }
         self._fitted = True
@@ -836,89 +900,18 @@ class AutoFitV3Wrapper(ModelBase):
         self._weights: Dict[str, float] = {}
         self._routing_info: Dict[str, Any] = {}
 
-    def _temporal_cv_evaluate(
-        self,
-        X: pd.DataFrame,
-        y: pd.Series,
-        train_raw: Optional[pd.DataFrame],
-        target: str,
-        horizon: int,
-    ) -> Tuple[List[Tuple[str, float, np.ndarray]], pd.DataFrame, pd.Series]:
-        """Evaluate all candidates with 2-fold temporal CV.
-
-        Returns:
-          - results: [(model_name, avg_mae, oof_preds_on_fold2)]
-          - X_oof: features for the OOF region
-          - y_oof: targets for the OOF region
-        """
-        n = len(X)
-        mid = int(n * 0.5)
-        split = int(n * 0.8)
-
-        # Prepare raw data splits
-        tr_raw_f1, val_raw_f1 = None, None
-        tr_raw_f2, val_raw_f2 = None, None
-        if train_raw is not None and len(train_raw) == n:
-            tr_raw_f1 = train_raw.iloc[:mid]
-            val_raw_f1 = train_raw.iloc[mid:split]
-            tr_raw_f2 = train_raw.iloc[:split]
-            val_raw_f2 = train_raw.iloc[split:]
-
-        # Fold 1: train [0..mid], val [mid..split]
-        # Fold 2: train [0..split], val [split..n]
-        all_results: Dict[str, List[Tuple[float, np.ndarray]]] = {}
-
-        for fold_idx, (tr_end, val_start, val_end) in enumerate([
-            (mid, mid, split),
-            (split, split, n),
-        ]):
-            X_tr = X.iloc[:tr_end]
-            y_tr = y.iloc[:tr_end]
-            X_v = X.iloc[val_start:val_end]
-            y_v = y.iloc[val_start:val_end]
-            tr_raw_fold = tr_raw_f1 if fold_idx == 0 else tr_raw_f2
-            val_raw_fold = val_raw_f1 if fold_idx == 0 else val_raw_f2
-
-            for model_name in _ALL_CANDIDATES:
-                r = _fit_single_candidate(
-                    model_name, X_tr, y_tr, X_v, y_v,
-                    tr_raw_fold, val_raw_fold, target, horizon,
-                )
-                if r is not None:
-                    name, mae, preds, elapsed = r
-                    if name not in all_results:
-                        all_results[name] = []
-                    all_results[name].append((mae, preds))
-
-        # Average MAE across folds, use fold 2 OOF predictions for meta-learner
-        results = []
-        for name, fold_data in all_results.items():
-            avg_mae = float(np.mean([m for m, _ in fold_data]))
-            # Use predictions from fold 2 (the [split..n] region)
-            if len(fold_data) >= 2:
-                oof_preds = fold_data[1][1]  # fold 2 predictions
-            else:
-                oof_preds = fold_data[0][1]
-            results.append((name, avg_mae, oof_preds))
-
-        results.sort(key=lambda x: x[1])
-
-        # OOF region is [split..n]
-        X_oof = X.iloc[split:]
-        y_oof = y.iloc[split:]
-
-        return results, X_oof, y_oof
-
     def _greedy_forward_select(
         self,
-        results: List[Tuple[str, float, np.ndarray]],
+        results: List[Tuple[str, float, float, np.ndarray]],
         X_oof: pd.DataFrame,
         y_oof: pd.Series,
     ) -> List[str]:
-        """Greedy forward ensemble selection.
+        """Greedy forward ensemble selection using stability-adjusted scores.
 
-        Starting from the best single model, greedily add models
-        that reduce the combined weighted ensemble MAE.
+        Starting from the best single model (by adj_MAE), greedily adds
+        models that reduce the combined weighted ensemble MAE on OOF.
+        Uses raw_mean_mae for inverse-MAE weighting (adj_MAE already
+        incorporates the stability penalty for ranking).
         """
         if not results:
             return []
@@ -926,25 +919,26 @@ class AutoFitV3Wrapper(ModelBase):
         top_k = results[:self._top_k]
         y_arr = y_oof.values
 
-        # Start with the best model
+        # Start with the best model (sorted by stability-adjusted MAE)
         selected = [top_k[0][0]]
-        best_mae = top_k[0][1]
+        # Evaluate actual OOF MAE of best single model's predictions
+        best_mae = float(np.mean(np.abs(y_arr - top_k[0][3])))
 
-        remaining = [(n, m, p) for n, m, p in top_k[1:]]
+        remaining = [(n, adj, raw, p) for n, adj, raw, p in top_k[1:]]
 
         for _ in range(min(len(remaining), self._top_k - 1)):
             best_addition = None
             best_new_mae = best_mae
 
-            for name, _, preds in remaining:
+            for name, _, _, preds in remaining:
                 trial = selected + [name]
                 trial_preds = []
                 trial_weights = []
                 for tn in trial:
-                    for rn, rm, rp in top_k:
+                    for rn, _, raw_m, rp in top_k:
                         if rn == tn:
                             trial_preds.append(rp)
-                            trial_weights.append(1.0 / max(rm, 1e-8))
+                            trial_weights.append(1.0 / max(raw_m, 1e-8))
                             break
 
                 tw = np.array(trial_weights)
@@ -958,7 +952,7 @@ class AutoFitV3Wrapper(ModelBase):
 
             if best_addition is not None:
                 selected.append(best_addition)
-                remaining = [(n, m, p) for n, m, p in remaining if n != best_addition]
+                remaining = [(n, a, r, p) for n, a, r, p in remaining if n != best_addition]
                 logger.info(
                     f"[{self.name}] +{best_addition} -> MAE={best_new_mae:,.2f} "
                     f"(ensemble size={len(selected)})"
@@ -972,29 +966,30 @@ class AutoFitV3Wrapper(ModelBase):
 
     def _exhaustive_subset_select(
         self,
-        results: List[Tuple[str, float, np.ndarray]],
+        results: List[Tuple[str, float, float, np.ndarray]],
         X_oof: pd.DataFrame,
         y_oof: pd.Series,
     ) -> List[str]:
         """Try ALL possible subsets and return the best.
 
         Capped at _MAX_EXHAUSTIVE_K candidates to keep 2^K manageable.
+        Uses raw_mean_mae for inverse-MAE weighting within subsets.
         """
         top_k = results[:min(len(results), _MAX_EXHAUSTIVE_K)]
         y_arr = y_oof.values
 
         best_subset: List[str] = [top_k[0][0]]
-        best_mae = top_k[0][1]
+        best_mae = float(np.mean(np.abs(y_arr - top_k[0][3])))
 
         total_combos = 0
         for size in range(2, len(top_k) + 1):
             for combo in combinations(range(len(top_k)), size):
                 total_combos += 1
                 names = [top_k[i][0] for i in combo]
-                preds = [top_k[i][2] for i in combo]
-                maes = [top_k[i][1] for i in combo]
+                preds = [top_k[i][3] for i in combo]        # last-fold predictions
+                raw_maes = [top_k[i][2] for i in combo]     # raw mean MAE
 
-                inv = np.array([1.0 / max(m, 1e-8) for m in maes])
+                inv = np.array([1.0 / max(m, 1e-8) for m in raw_maes])
                 w = inv / inv.sum()
                 combined = sum(wi * pi for wi, pi in zip(w, preds))
                 mae = float(np.mean(np.abs(y_arr - combined)))
@@ -1010,6 +1005,11 @@ class AutoFitV3Wrapper(ModelBase):
         return best_subset
 
     def fit(self, X: pd.DataFrame, y: pd.Series, **kwargs) -> "AutoFitV3Wrapper":
+        """Fit AutoFitV3 using 5-fold expanding-window temporal CV.
+
+        Uses _temporal_kfold_evaluate_all() for consistent, robust evaluation
+        with stability penalty across all AutoFit variants.
+        """
         from .registry import get_model
 
         train_raw = kwargs.get("train_raw")
@@ -1020,8 +1020,8 @@ class AutoFitV3Wrapper(ModelBase):
         meta = _compute_target_regime(y, X)
         logger.info(f"[{self.name}] Target meta-features: {meta}")
 
-        # -- Temporal CV evaluation --
-        results, X_oof, y_oof = self._temporal_cv_evaluate(
+        # -- 5-fold expanding-window temporal CV --
+        results = _temporal_kfold_evaluate_all(
             X, y, train_raw, target, horizon,
         )
 
@@ -1036,9 +1036,15 @@ class AutoFitV3Wrapper(ModelBase):
             return self
 
         logger.info(
-            f"[{self.name}] Candidate rankings: "
-            + ", ".join(f"{n}={m:,.2f}" for n, m, _ in results[:8])
+            f"[{self.name}] Candidate rankings (adj_MAE): "
+            + ", ".join(f"{n}={adj:,.2f}" for n, adj, _, _ in results[:8])
         )
+
+        # OOF region = last fold boundary at 90%
+        n = len(X)
+        oof_start = int(n * 0.9)
+        X_oof = X.iloc[oof_start:]
+        y_oof = y.iloc[oof_start:]
 
         # -- Model selection --
         if self._mode == "greedy":
@@ -1046,14 +1052,14 @@ class AutoFitV3Wrapper(ModelBase):
         elif self._mode == "exhaustive":
             selected = self._exhaustive_subset_select(results, X_oof, y_oof)
         else:  # topk
-            selected = [n for n, _, _ in results[:self._top_k]]
+            selected = [n for n, _, _, _ in results[:self._top_k]]
 
         self._pred_names = selected
 
         # -- Build meta-learner on OOF predictions --
         oof_preds = {}
         for name in selected:
-            for rn, _, rp in results:
+            for rn, _, _, rp in results:
                 if rn == name:
                     oof_preds[name] = rp
                     break
@@ -1062,30 +1068,30 @@ class AutoFitV3Wrapper(ModelBase):
             self._meta_learner, self._meta_cols, meta_mae = _build_meta_learner(
                 X_oof, y_oof, oof_preds, regularize=True,
             )
-            best_single = results[0][1]
-            improvement = 100 * (1 - meta_mae / max(best_single, 1e-8))
+            best_single_adj = results[0][1]
+            improvement = 100 * (1 - meta_mae / max(best_single_adj, 1e-8))
 
-            if meta_mae >= best_single * 0.995:
+            if meta_mae >= best_single_adj * 0.995:
                 logger.info(f"[{self.name}] Meta-learner doesn't improve, using weights")
                 self._meta_learner = None
             else:
                 logger.info(
                     f"[{self.name}] Meta-learner MAE={meta_mae:,.2f} "
-                    f"vs best_single={best_single:,.2f} ({improvement:.1f}% up)"
+                    f"vs best_adj={best_single_adj:,.2f} ({improvement:.1f}% up)"
                 )
         except Exception as e:
             logger.warning(f"[{self.name}] Meta-learner failed: {e}")
             self._meta_learner = None
 
-        # Fallback weights
+        # Fallback weights — use raw_mean_mae for inverse weighting
         inv_m = {}
-        for n in selected:
-            for rn, rm, _ in results:
-                if rn == n:
-                    inv_m[n] = 1.0 / max(rm, 1e-8)
+        for sn in selected:
+            for rn, _, raw_m, _ in results:
+                if rn == sn:
+                    inv_m[sn] = 1.0 / max(raw_m, 1e-8)
                     break
         total = sum(inv_m.values()) or 1.0
-        self._weights = {n: v / total for n, v in inv_m.items()}
+        self._weights = {sn: v / total for sn, v in inv_m.items()}
 
         # -- Refit selected models on FULL data --
         self._models = []
@@ -1107,7 +1113,7 @@ class AutoFitV3Wrapper(ModelBase):
             "selected": selected,
             "weights": self._weights,
             "has_meta_learner": self._meta_learner is not None,
-            "all_rankings": [(n, m) for n, m, _ in results],
+            "all_rankings": [(n, adj) for n, adj, _, _ in results],
             "elapsed_seconds": elapsed,
         }
         self._fitted = True
