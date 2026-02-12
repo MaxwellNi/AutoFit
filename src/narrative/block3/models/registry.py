@@ -2,7 +2,7 @@
 """
 Model Registry for Block 3 KDD'26 Benchmark.
 
-Unified interface for all 66 models across 7 categories:
+Unified interface for all 67 models across 7 categories:
   - ml_tabular      (15): LogisticRegression … MeanPredictor
   - statistical      (5): AutoARIMA, AutoETS, AutoTheta, MSTL, SF_SeasonalNaive
   - deep_classical   (4): NBEATS, NHITS, TFT, DeepAR
@@ -13,7 +13,7 @@ Unified interface for all 66 models across 7 categories:
   - foundation      (11): Chronos, ChronosBolt, Chronos2, Moirai, MoiraiLarge,
                            Moirai2, Timer, TimeMoE, MOMENT, LagLlama, TimesFM
   - irregular        (2): GRU-D, SAITS
-  - autofit          (9): V1, V2, V2E, V3, V3E, V3Max, V4, V5, V6
+  - autofit         (10): V1, V2, V2E, V3, V3E, V3Max, V4, V5, V6, V7
 """
 from __future__ import annotations
 
