@@ -373,10 +373,15 @@ class BenchmarkShard:
         if ablation_cfg.get("use_edgar", False):
             try:
                 edgar_df = self.dataset.get_edgar_store()
-                # Ensure datetime types for merge_asof
-                df["crawled_date_day"] = pd.to_datetime(df["crawled_date_day"])
+                # Ensure datetime types for merge_asof — strip timezone to
+                # avoid "incompatible merge keys" between tz-naive and tz-aware
+                df["crawled_date_day"] = pd.to_datetime(
+                    df["crawled_date_day"], utc=True
+                ).dt.tz_convert(None)
                 edgar_df = edgar_df.copy()
-                edgar_df["crawled_date_day"] = pd.to_datetime(edgar_df["crawled_date_day"])
+                edgar_df["crawled_date_day"] = pd.to_datetime(
+                    edgar_df["crawled_date_day"], utc=True
+                ).dt.tz_convert(None)
 
                 n_with_cik = int(df["cik"].notna().sum())
                 edgar_feature_cols = [c for c in edgar_df.columns
