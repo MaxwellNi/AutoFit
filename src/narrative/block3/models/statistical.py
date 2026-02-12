@@ -66,7 +66,8 @@ class StatsForecastWrapper(ModelBase):
         # Build entity panel if raw data available
         train_raw = kwargs.get("train_raw")
         target = kwargs.get("target")
-        MAX_ENTITIES = 500  # increased for better test coverage
+        # No entity cap: use ALL entities with enough history for maximum
+        # test-time coverage (StatsForecast CPU models handle large panels).
 
         if (train_raw is not None and target is not None
                 and "entity_id" in train_raw.columns):
@@ -78,10 +79,8 @@ class StatsForecastWrapper(ModelBase):
                 self._use_fallback = True
                 self._fitted = True
                 return self
-            rng = np.random.RandomState(42)
-            sampled = rng.choice(valid, size=min(MAX_ENTITIES, len(valid)), replace=False)
-            self._train_entity_set = set(sampled)
-            raw = raw[raw["entity_id"].isin(sampled)].sort_values(
+            self._train_entity_set = set(valid)
+            raw = raw[raw["entity_id"].isin(valid)].sort_values(
                 ["entity_id", "crawled_date_day"])
             df = pd.DataFrame({
                 "unique_id": raw["entity_id"].values,

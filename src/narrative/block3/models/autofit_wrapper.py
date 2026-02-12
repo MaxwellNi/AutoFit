@@ -307,26 +307,51 @@ def _fit_single_candidate(
     target: str,
     horizon: int,
     timeout: float = _CANDIDATE_TIMEOUT,
+    target_transform: Optional[TargetTransform] = None,
 ) -> Optional[Tuple[str, float, np.ndarray, float]]:
     """Fit a single candidate model and return (name, val_mae, val_preds, elapsed).
 
     Returns None if the model fails or times out.
     Handles all exceptions gracefully.
+
+    When target_transform is provided, trains on transformed target and
+    evaluates MAE in original scale — ensures fair comparison between
+    models regardless of internal target handling.
     """
     from .registry import get_model, check_model_available
 
     if not check_model_available(model_name):
         return None
 
+    # GPU-awareness: skip deep/foundation candidates on CPU-only nodes
+    import torch
+    _GPU_CATEGORIES = {"deep_classical", "transformer_sota", "foundation"}
+    cat = _get_model_category(model_name)
+    if cat in _GPU_CATEGORIES and not torch.cuda.is_available():
+        logger.info(f"[AutoFit] Skipping {model_name} (requires GPU, none available)")
+        return None
+
     t0 = time.monotonic()
     try:
         model = get_model(model_name)
+
+        # Apply target transform if provided (train on transformed target)
+        y_train_fit = y_train
+        if (target_transform is not None
+                and target_transform.kind != "identity"
+                and cat not in _PANEL_CATEGORIES):
+            # Only transform for tabular candidates — panel models have
+            # their own internal scaling (NF robust scaler, etc.)
+            y_train_fit = pd.Series(
+                target_transform.transform(y_train.values),
+                index=y_train.index,
+            )
 
         fit_kw: Dict[str, Any] = {}
         if _needs_panel_kwargs(model_name):
             fit_kw = {"train_raw": train_raw_inner, "target": target, "horizon": horizon}
 
-        model.fit(X_train, y_train, **fit_kw)
+        model.fit(X_train, y_train_fit, **fit_kw)
 
         pred_kw: Dict[str, Any] = {}
         if _needs_panel_kwargs(model_name):
@@ -342,9 +367,15 @@ def _fit_single_candidate(
             gc.collect()
             return None
 
+        # Inverse-transform predictions for fair MAE comparison
+        if (target_transform is not None
+                and target_transform.kind != "identity"
+                and cat not in _PANEL_CATEGORIES):
+            val_preds = target_transform.inverse(val_preds)
+
         val_mae = float(np.mean(np.abs(y_val.values - val_preds)))
 
-        # Reject degenerate predictions
+        # --- Enhanced degenerate prediction detection ---
         if np.isnan(val_mae) or np.isinf(val_mae):
             logger.warning(f"[AutoFit] {model_name} produced NaN/Inf MAE, skipping")
             del model; gc.collect()
@@ -353,6 +384,27 @@ def _fit_single_candidate(
         # Reject constant predictions (broken model)
         if len(val_preds) > 10 and np.std(val_preds) == 0.0:
             logger.warning(f"[AutoFit] {model_name} produced constant predictions, skipping")
+            del model; gc.collect()
+            return None
+
+        # Reject predictions worse than naive mean (likely broken fallback)
+        naive_mae = float(np.mean(np.abs(y_val.values - np.mean(y_train.values))))
+        if val_mae > naive_mae * 3.0:
+            logger.warning(
+                f"[AutoFit] {model_name} MAE={val_mae:,.2f} > 3× naive mean "
+                f"({naive_mae:,.2f}), likely degenerate — skipping"
+            )
+            del model; gc.collect()
+            return None
+
+        # Reject predictions with very low variance relative to target
+        pred_std = float(np.std(val_preds))
+        target_std = float(np.std(y_val.values))
+        if target_std > 0 and pred_std / target_std < 0.01:
+            logger.warning(
+                f"[AutoFit] {model_name} prediction std={pred_std:.4f} << "
+                f"target std={target_std:.4f}, near-constant — skipping"
+            )
             del model; gc.collect()
             return None
 
@@ -374,6 +426,7 @@ def _temporal_kfold_evaluate_all(
     target: str,
     horizon: int,
     n_folds: int = _N_TEMPORAL_FOLDS,
+    target_transform: Optional[TargetTransform] = None,
 ) -> Tuple[List[Tuple[str, float, float, np.ndarray]], Dict[str, np.ndarray]]:
     """Evaluate all candidates using K-fold expanding-window temporal CV.
 
@@ -423,6 +476,7 @@ def _temporal_kfold_evaluate_all(
             r = _fit_single_candidate(
                 model_name, X_tr, y_tr, X_v, y_v,
                 tr_raw_fold, val_raw_fold, target, horizon,
+                target_transform=target_transform,
             )
             if r is not None:
                 name, mae, preds, elapsed = r
@@ -589,7 +643,9 @@ class AutoFitV1Wrapper(ModelBase):
         logger.info(f"[AutoFitV1] Target meta-features: {meta}")
 
         # -- K-fold temporal CV for robust candidate evaluation --
-        results, _full_oof = _temporal_kfold_evaluate_all(X, y, train_raw, target, horizon)
+        _tt = TargetTransform()
+        _tt.fit(y)
+        results, _full_oof = _temporal_kfold_evaluate_all(X, y, train_raw, target, horizon, target_transform=_tt)
 
         if not results:
             logger.error("[AutoFitV1] No candidates succeeded! Fallback to LightGBM")
@@ -744,7 +800,9 @@ class AutoFitV2Wrapper(ModelBase):
         logger.info(f"[AutoFitV2] Target meta-features: {meta}")
 
         # -- K-fold temporal CV for robust candidate evaluation --
-        results, _full_oof = _temporal_kfold_evaluate_all(X, y, train_raw, target, horizon)
+        _tt = TargetTransform()
+        _tt.fit(y)
+        results, _full_oof = _temporal_kfold_evaluate_all(X, y, train_raw, target, horizon, target_transform=_tt)
 
         if not results:
             logger.error("[AutoFitV2] No candidates! Fallback to LightGBM")
@@ -869,7 +927,9 @@ class AutoFitV2EWrapper(ModelBase):
         logger.info(f"[AutoFitV2E] Target meta-features: {meta}")
 
         # -- K-fold temporal CV for robust candidate evaluation --
-        results, _full_oof = _temporal_kfold_evaluate_all(X, y, train_raw, target, horizon)
+        _tt = TargetTransform()
+        _tt.fit(y)
+        results, _full_oof = _temporal_kfold_evaluate_all(X, y, train_raw, target, horizon, target_transform=_tt)
 
         if not results:
             logger.error("[AutoFitV2E] No candidates! Fallback to LightGBM")
@@ -1177,8 +1237,11 @@ class AutoFitV3Wrapper(ModelBase):
         logger.info(f"[{self.name}] Target meta-features: {meta}")
 
         # -- 5-fold expanding-window temporal CV --
+        _tt = TargetTransform()
+        _tt.fit(y)
         results, _full_oof = _temporal_kfold_evaluate_all(
             X, y, train_raw, target, horizon,
+            target_transform=_tt,
         )
 
         if not results:
@@ -1395,6 +1458,7 @@ class AutoFitV4Wrapper(ModelBase):
         # -- 2. K-fold temporal CV with full OOF collection --
         results, full_oof = _temporal_kfold_evaluate_all(
             X, y, train_raw, target, horizon,
+            target_transform=self._target_transform,
         )
 
         if not results:
@@ -1799,6 +1863,7 @@ class AutoFitV5Wrapper(ModelBase):
                 model_name, X_qs_t, y_qs_t, X_qs_v, y_qs_v,
                 tr_raw_qs, val_raw_qs, target, horizon,
                 timeout=120,  # 2 min limit for quick screen
+                target_transform=self._target_transform,
             )
             if r is not None:
                 name, mae, _, elapsed = r
@@ -1836,6 +1901,7 @@ class AutoFitV5Wrapper(ModelBase):
                     model_name, X_qs_t, y_qs_t, X_qs_v, y_qs_v,
                     tr_raw_qs, val_raw_qs, target, horizon,
                     timeout=300,  # 5 min for foundation models
+                    target_transform=self._target_transform,
                 )
                 if r is not None:
                     name, mae, _, elapsed = r
@@ -1863,6 +1929,7 @@ class AutoFitV5Wrapper(ModelBase):
                     model_name, X_qs_t, y_qs_t, X_qs_v, y_qs_v,
                     tr_raw_qs, val_raw_qs, target, horizon,
                     timeout=300,
+                    target_transform=self._target_transform,
                 )
                 if r is not None:
                     name, mae, _, elapsed = r
@@ -1890,6 +1957,7 @@ class AutoFitV5Wrapper(ModelBase):
         try:
             results, full_oof = _temporal_kfold_evaluate_all(
                 X, y, train_raw, target, horizon,
+                target_transform=self._target_transform,
             )
         finally:
             _ALL_CANDIDATES.clear()
@@ -2446,6 +2514,7 @@ class AutoFitV6Wrapper(ModelBase):
                 model_name, X_qs_t, y_qs_t, X_qs_v, y_qs_v,
                 tr_raw_qs, val_raw_qs, target, horizon,
                 timeout=300,
+                target_transform=self._target_xform,
             )
             if r is not None:
                 name, mae, _, elapsed = r
@@ -2484,6 +2553,7 @@ class AutoFitV6Wrapper(ModelBase):
         try:
             results, full_oof = _temporal_kfold_evaluate_all(
                 X, y, train_raw, target, horizon,
+                target_transform=self._target_xform,
             )
         finally:
             _ALL_CANDIDATES.clear()
@@ -3175,6 +3245,7 @@ def _repeated_temporal_kfold_evaluate_all(
     target: str,
     horizon: int,
     n_reps: int = 2,
+    target_transform: Optional[TargetTransform] = None,
 ) -> Tuple[List[Tuple[str, float, float, np.ndarray]], Dict[str, np.ndarray]]:
     """Repeated temporal CV: average over multiple offset fold sets.
 
@@ -3236,6 +3307,7 @@ def _repeated_temporal_kfold_evaluate_all(
                 r = _fit_single_candidate(
                     model_name, X_tr, y_tr, X_v, y_v,
                     tr_raw_fold, val_raw_fold, target, horizon,
+                    target_transform=target_transform,
                 )
                 if r is not None:
                     name, mae, preds, elapsed = r
@@ -3588,6 +3660,7 @@ class AutoFitV7Wrapper(ModelBase):
                 model_name, X_qs_t, y_qs_t, X_qs_v, y_qs_v,
                 tr_raw_qs, val_raw_qs, target, horizon,
                 timeout=300,
+                target_transform=self._target_xform,
             )
             if r is not None:
                 name, mae, _, elapsed = r
@@ -3621,6 +3694,7 @@ class AutoFitV7Wrapper(ModelBase):
             results, full_oof = _repeated_temporal_kfold_evaluate_all(
                 X_aug, y, train_raw, target, horizon,
                 n_reps=2,
+                target_transform=self._target_xform,
             )
         finally:
             _ALL_CANDIDATES.clear()

@@ -36,7 +36,7 @@ _DEVICE = "cuda" if torch.cuda.is_available() else "cpu"
 def _build_irregular_features(
     train_raw: pd.DataFrame,
     target: str,
-    max_entities: int = 1000,
+    max_entities: int = 5000,
     max_seq_len: int = 120,
 ) -> tuple:
     """Build 3-D array (N, T, F) with masking for irregular panel.
@@ -119,12 +119,21 @@ class GRUDWrapper(ModelBase):
             return self
 
         X_arr, mask, y_arr, entity_ids = _build_irregular_features(
-            train_raw, target, max_entities=200, max_seq_len=120,
+            train_raw, target, max_entities=5000, max_seq_len=120,
         )
         if X_arr is None:
             self._use_fallback = True
             self._fitted = True
             return self
+
+        # Robust fallback for unseen entities (same pattern as deep_models)
+        self._robust_fallback = None
+        try:
+            from .deep_models import _RobustFallback
+            self._robust_fallback = _RobustFallback()
+            self._robust_fallback.fit(X, y)
+        except Exception:
+            pass
 
         try:
             from pypots.imputation import SAITS as _check_pypots  # noqa: F401
@@ -209,14 +218,27 @@ class GRUDWrapper(ModelBase):
                 test_entities = test_raw["entity_id"].values
 
             if len(test_entities) == h:
-                y_pred = np.array([
-                    self._entity_pred_map.get(eid, self._fallback_val)
-                    for eid in test_entities
-                ])
+                # Per-entity hybrid: use imputation forecast or RobustFallback
+                rb = getattr(self, '_robust_fallback', None)
+                rb_preds = None
+                if rb is not None and rb._fitted:
+                    rb_preds = rb.predict(X)
+
+                y_pred = np.empty(h, dtype=np.float64)
+                for i, eid in enumerate(test_entities):
+                    if eid in self._entity_pred_map:
+                        y_pred[i] = self._entity_pred_map[eid]
+                    elif rb_preds is not None:
+                        y_pred[i] = rb_preds[i]
+                    else:
+                        y_pred[i] = self._fallback_val
+
+                n_covered = sum(1 for eid in test_entities if eid in self._entity_pred_map)
                 _logger.info(
-                    f"  [GRU-D] Per-entity predict: "
+                    f"  [GRU-D] Per-entity HYBRID predict: "
                     f"{len(self._entity_pred_map)} entities, "
-                    f"{len(set(test_entities) & set(self._entity_pred_map.keys()))}/{len(set(test_entities))} matched, "
+                    f"{n_covered}/{len(set(test_entities))} matched, "
+                    f"fallback={'RobustFallback' if rb_preds is not None else 'global_mean'}, "
                     f"unique_preds={len(np.unique(np.round(y_pred, 4)))}"
                 )
                 return y_pred
@@ -260,12 +282,21 @@ class SAITSWrapper(ModelBase):
             return self
 
         X_arr, mask, y_arr, entity_ids = _build_irregular_features(
-            train_raw, target, max_entities=200, max_seq_len=120,
+            train_raw, target, max_entities=5000, max_seq_len=120,
         )
         if X_arr is None:
             self._use_fallback = True
             self._fitted = True
             return self
+
+        # Robust fallback for unseen entities
+        self._robust_fallback = None
+        try:
+            from .deep_models import _RobustFallback
+            self._robust_fallback = _RobustFallback()
+            self._robust_fallback.fit(X, y)
+        except Exception:
+            pass
 
         try:
             from pypots.imputation import SAITS
@@ -351,14 +382,27 @@ class SAITSWrapper(ModelBase):
                 test_entities = test_raw["entity_id"].values
 
             if len(test_entities) == h:
-                y_pred = np.array([
-                    self._entity_pred_map.get(eid, self._fallback_val)
-                    for eid in test_entities
-                ])
+                # Per-entity hybrid: use imputation forecast or RobustFallback
+                rb = getattr(self, '_robust_fallback', None)
+                rb_preds = None
+                if rb is not None and rb._fitted:
+                    rb_preds = rb.predict(X)
+
+                y_pred = np.empty(h, dtype=np.float64)
+                for i, eid in enumerate(test_entities):
+                    if eid in self._entity_pred_map:
+                        y_pred[i] = self._entity_pred_map[eid]
+                    elif rb_preds is not None:
+                        y_pred[i] = rb_preds[i]
+                    else:
+                        y_pred[i] = self._fallback_val
+
+                n_covered = sum(1 for eid in test_entities if eid in self._entity_pred_map)
                 _logger.info(
-                    f"  [SAITS] Per-entity predict: "
+                    f"  [SAITS] Per-entity HYBRID predict: "
                     f"{len(self._entity_pred_map)} entities, "
-                    f"{len(set(test_entities) & set(self._entity_pred_map.keys()))}/{len(set(test_entities))} matched, "
+                    f"{n_covered}/{len(set(test_entities))} matched, "
+                    f"fallback={'RobustFallback' if rb_preds is not None else 'global_mean'}, "
                     f"unique_preds={len(np.unique(np.round(y_pred, 4)))}"
                 )
                 return y_pred

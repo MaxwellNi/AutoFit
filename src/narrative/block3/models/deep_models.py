@@ -347,11 +347,18 @@ _NEEDS_N_SERIES = {"iTransformer", "TSMixer", "TSMixerx", "RMoK", "SOFTS",
 def _build_panel_df(
     train_raw: pd.DataFrame,
     target: str,
-    max_entities: int = 2000,
+    max_entities: Optional[int] = None,
     min_obs: int = 10,
     seed: int = 42,
 ) -> Optional[pd.DataFrame]:
-    """Build NeuralForecast-style panel DataFrame from raw entity data."""
+    """Build NeuralForecast-style panel DataFrame from raw entity data.
+
+    Args:
+        max_entities: Maximum entities to sample.  ``None`` → use ALL
+            valid entities (channel-independent models benefit from full
+            coverage).  Set a finite value only for cross-series models
+            that embed the entity dimension (iTransformer, TSMixer, etc.).
+    """
     if train_raw is None or target is None:
         return None
     if "entity_id" not in train_raw.columns:
@@ -366,8 +373,12 @@ def _build_panel_df(
     if len(valid) == 0:
         return None
 
-    rng = np.random.RandomState(seed)
-    sampled = rng.choice(valid, size=min(max_entities, len(valid)), replace=False)
+    # When max_entities is None, use ALL valid entities; otherwise sample.
+    if max_entities is not None and len(valid) > max_entities:
+        rng = np.random.RandomState(seed)
+        sampled = rng.choice(valid, size=max_entities, replace=False)
+    else:
+        sampled = valid
     raw = raw[raw["entity_id"].isin(sampled)].sort_values(
         ["entity_id", "crawled_date_day"]
     )
@@ -397,6 +408,194 @@ def _synthetic_panel(y: pd.Series, max_entities: int = 200, min_obs: int = 20):
     return pd.DataFrame(
         {"unique_id": uids, "ds": ds_list, "y": np.array(ys, dtype=np.float32)}
     )
+
+
+# ============================================================================
+# Robust Fallback for Unseen Entities  (replaces raw Ridge)
+# ============================================================================
+# References:
+#   - Burbidge et al. (1988), "Alternative Transformations to Handle Extreme
+#     Values of the Dependent Variable", JASA.
+#   - Bellemare & Wichman (2020), "Elasticities and the Inverse Hyperbolic
+#     Sine Transformation", Oxford Bulletin of Economics and Statistics.
+#   - Grinsztajn et al. (2022), "Why do tree-based models still outperform
+#     deep learning on typical tabular data?", NeurIPS.
+# ============================================================================
+
+class _RobustFallback:
+    """LightGBM fallback with adaptive target transform for uncovered entities.
+
+    Why this replaces raw Ridge:
+      - Ridge on funding_raised_usd (kurtosis=125, skew=10.35) → MAE ~5.78B
+      - The Inverse Hyperbolic Sine (asinh) transform handles zero-inflated
+        heavy-tailed non-negative data without log(0) issues.
+      - LightGBM natively handles NaN, categorical-like features, and
+        non-linear interactions — far superior to Ridge for tabular data.
+      - The transform is fitted ONLY on training data (no leakage).
+    """
+
+    def __init__(self):
+        self._model = None
+        self._transform_kind: str = "identity"
+        self._feature_cols: List[str] = []
+        self._fitted = False
+
+    def fit(self, X: pd.DataFrame, y: pd.Series) -> "_RobustFallback":
+        """Fit fallback on cross-sectional features with adaptive transform."""
+        y_arr = np.asarray(y, dtype=float)
+        y_finite = y_arr[np.isfinite(y_arr)]
+        if len(y_finite) < 10:
+            self._fitted = True
+            return self
+
+        # --- Determine transform ---
+        is_non_neg = (y_finite >= 0).all()
+        n_unique = len(np.unique(y_finite))
+        kurtosis = float(pd.Series(y_finite).kurtosis()) if len(y_finite) > 4 else 0
+
+        if n_unique <= 3:
+            self._transform_kind = "identity"   # binary / ternary
+        elif is_non_neg and kurtosis > 5:
+            self._transform_kind = "asinh"       # heavy-tailed non-negative
+        elif (is_non_neg
+              and (y_finite == np.round(y_finite)).mean() > 0.9
+              and y_finite.max() > 2):
+            self._transform_kind = "sqrt"        # count-like
+        else:
+            self._transform_kind = "identity"
+
+        y_transformed = self._forward(y_arr)
+
+        # --- Feature matrix ---
+        X_fb = X.select_dtypes(include=[np.number]).fillna(0)
+        self._feature_cols = list(X_fb.columns)
+        if len(self._feature_cols) == 0 or len(X_fb) < 10:
+            self._fitted = True
+            return self
+
+        # --- Try LightGBM (preferred), then Ridge ---
+        try:
+            import lightgbm as lgb
+            n = len(X_fb)
+            split_idx = int(n * 0.8)
+            self._model = lgb.LGBMRegressor(
+                n_estimators=300, learning_rate=0.05, max_depth=6,
+                num_leaves=31, min_child_samples=20, subsample=0.8,
+                colsample_bytree=0.8, reg_alpha=0.1, reg_lambda=1.0,
+                n_jobs=-1, verbose=-1, random_state=42,
+            )
+            self._model.fit(
+                X_fb.iloc[:split_idx], y_transformed[:split_idx],
+                eval_set=[(X_fb.iloc[split_idx:], y_transformed[split_idx:])],
+                callbacks=[lgb.early_stopping(30, verbose=False)],
+            )
+        except Exception:
+            try:
+                from sklearn.linear_model import Ridge as _Ridge
+                self._model = _Ridge(alpha=1.0)
+                self._model.fit(X_fb, y_transformed)
+            except Exception:
+                pass
+
+        self._fitted = True
+        _logger.info(
+            f"  [RobustFallback] transform={self._transform_kind}, "
+            f"features={len(self._feature_cols)}, "
+            f"model={type(self._model).__name__ if self._model else 'None'}"
+        )
+        return self
+
+    def predict(self, X: pd.DataFrame) -> Optional[np.ndarray]:
+        """Predict on original scale (inverse-transformed)."""
+        if self._model is None or not self._feature_cols:
+            return None
+        try:
+            X_fb = X[self._feature_cols].fillna(0)
+            preds_transformed = self._model.predict(X_fb)
+            return self._inverse(preds_transformed)
+        except Exception:
+            return None
+
+    def _forward(self, y: np.ndarray) -> np.ndarray:
+        if self._transform_kind == "asinh":
+            return np.arcsinh(y)
+        elif self._transform_kind == "sqrt":
+            return np.sqrt(np.maximum(y, 0))
+        return y.copy()
+
+    def _inverse(self, y: np.ndarray) -> np.ndarray:
+        if self._transform_kind == "asinh":
+            return np.sinh(y)
+        elif self._transform_kind == "sqrt":
+            return np.square(y)
+        return y
+
+
+# ============================================================================
+# Static Exogenous Feature Builder (for NF covariate support)
+# ============================================================================
+# NeuralForecast supports stat_exog_list for models with static covariate
+# inputs (TFT, TiDE, TimeXer, TSMixerx).  EDGAR features are entity-level
+# and roughly quarterly → ideal as static covariates.
+# ============================================================================
+
+_NF_SUPPORTS_STATIC_EXOG = {"TFT", "TiDE", "TimeXer", "TSMixerx"}
+
+# Columns to NEVER include as exogenous features
+_EXOG_EXCLUDE = {
+    "entity_id", "crawled_date_day", "cik", "date",
+    "offer_id", "snapshot_ts", "crawled_date", "processed_datetime",
+    "funding_raised_usd", "funding_raised", "investors_count",
+    "non_national_investors", "is_funded",
+    "funding_goal_usd", "funding_goal",
+    "funding_goal_maximum", "funding_goal_maximum_usd",
+}
+
+
+def _build_static_df(
+    train_raw: pd.DataFrame,
+    panel_entity_ids: np.ndarray,
+    target: str,
+    max_features: int = 50,
+) -> Optional[tuple]:
+    """Build static (entity-level) feature DataFrame for NeuralForecast.
+
+    Returns (static_df, stat_exog_list) or None if not enough features.
+    static_df has columns ['unique_id', feat1, feat2, ...].
+    """
+    if train_raw is None or "entity_id" not in train_raw.columns:
+        return None
+
+    exclude = _EXOG_EXCLUDE | {target}
+    num_cols = [
+        c for c in train_raw.select_dtypes(include=[np.number]).columns
+        if c not in exclude
+    ]
+    if not num_cols:
+        return None
+
+    # Filter to panel entities, take last observation per entity
+    mask = train_raw["entity_id"].isin(panel_entity_ids)
+    entity_data = train_raw.loc[mask].sort_values("crawled_date_day")
+    static = entity_data.groupby("entity_id")[num_cols].last().reset_index()
+    static = static.rename(columns={"entity_id": "unique_id"})
+    static[num_cols] = static[num_cols].fillna(0).astype(np.float32)
+
+    # Keep only features with variance (constant features add nothing)
+    variances = static[num_cols].var()
+    valid_cols = variances[variances > 1e-12].index.tolist()
+    if not valid_cols:
+        return None
+
+    # Limit to top-k by variance for VRAM / compute efficiency
+    if len(valid_cols) > max_features:
+        valid_cols = variances[valid_cols].nlargest(max_features).index.tolist()
+
+    _logger.info(
+        f"  [StaticExog] {len(valid_cols)} features for "
+        f"{static['unique_id'].nunique()} entities"
+    )
+    return static[["unique_id"] + valid_cols], valid_cols
 
 
 # ============================================================================
@@ -546,8 +745,10 @@ class DeepModelWrapper(ModelBase):
         self._last_y = y.values
         self._use_fallback = False
 
-        # n_series models need limited entities (VRAM); others get full coverage
-        _max_e = 200 if self.model_name in _NEEDS_N_SERIES else 2000
+        # Cross-series models (iTransformer, TSMixer, etc.) embed entity
+        # dimension → limited by VRAM.  Channel-independent models share
+        # weights across all entities → train on ALL for maximum coverage.
+        _max_e = 5000 if self.model_name in _NEEDS_N_SERIES else None
         panel = _build_panel_df(
             kwargs.get("train_raw"), kwargs.get("target"),
             max_entities=_max_e, min_obs=10, seed=42,
@@ -585,22 +786,31 @@ class DeepModelWrapper(ModelBase):
             self._use_fallback = True
             self._fitted = True
 
-        # Feature-based Ridge fallback for unseen test entities
-        self._fallback_ridge = None
-        self._fallback_feature_cols = []
+        # Feature-based ROBUST fallback for unseen test entities
+        # (replaces raw Ridge which catastrophically fails on heavy-tailed
+        # targets like funding_raised_usd with kurtosis=125)
+        self._fallback = _RobustFallback()
         try:
-            from sklearn.linear_model import Ridge as _Ridge
-            X_fb = X.select_dtypes(include=[np.number]).fillna(0)
-            if len(X_fb.columns) > 0 and len(X_fb) > 10:
-                self._fallback_ridge = _Ridge(alpha=1.0)
-                self._fallback_ridge.fit(X_fb, y)
-                self._fallback_feature_cols = list(X_fb.columns)
-                _logger.info(
-                    f"  [{self.model_name}] Ridge fallback trained "
-                    f"({len(X_fb.columns)} features)"
-                )
+            self._fallback.fit(X, y)
         except Exception as _exc:
-            _logger.debug(f"  [{self.model_name}] Ridge fallback failed: {_exc}")
+            _logger.debug(f"  [{self.model_name}] Robust fallback failed: {_exc}")
+
+        # --- Static exogenous features for NF models with covariate support ---
+        # Enables EDGAR features to actually affect model predictions.
+        self._static_df = None
+        self._stat_exog_list: List[str] = []
+        if (self.model_name in _NF_SUPPORTS_STATIC_EXOG
+                and kwargs.get("train_raw") is not None):
+            try:
+                result = _build_static_df(
+                    kwargs["train_raw"],
+                    panel["unique_id"].unique(),
+                    kwargs.get("target", ""),
+                )
+                if result is not None:
+                    self._static_df, self._stat_exog_list = result
+            except Exception as _exc:
+                _logger.debug(f"  [{self.model_name}] Static exog failed: {_exc}")
 
         return self
 
@@ -655,37 +865,36 @@ class DeepModelWrapper(ModelBase):
                     test_entities = test_raw["entity_id"].values
 
                 if len(test_entities) == h:
-                    # Use Ridge fallback for entities not seen during training
+                    # --- Per-entity hybrid prediction (NO all-or-nothing) ---
+                    # For each test entity: use NF forecast if available,
+                    # otherwise use RobustFallback (LightGBM + asinh transform).
+                    # This replaces the old coverage < 0.95 → Ridge all-or-nothing
+                    # that produced catastrophic results on heavy-tailed targets.
                     n_covered = sum(1 for eid in test_entities if eid in entity_fcs)
                     n_unique = len(set(test_entities))
                     coverage = n_covered / max(len(test_entities), 1)
 
-                    if (coverage < 0.95
-                            and hasattr(self, '_fallback_ridge')
-                            and self._fallback_ridge is not None
-                            and self._fallback_feature_cols):
-                        try:
-                            X_fb = X[self._fallback_feature_cols].fillna(0)
-                            ridge_preds = self._fallback_ridge.predict(X_fb)
-                            y_pred = np.array([
-                                entity_fcs.get(eid, ridge_preds[i])
-                                for i, eid in enumerate(test_entities)
-                            ])
-                        except Exception:
-                            y_pred = np.array([
-                                entity_fcs.get(eid, global_mean)
-                                for eid in test_entities
-                            ])
-                    else:
-                        y_pred = np.array([
-                            entity_fcs.get(eid, global_mean)
-                            for eid in test_entities
-                        ])
+                    # Get fallback predictions (transformed LightGBM)
+                    fallback = getattr(self, '_fallback', None)
+                    fallback_preds = None
+                    if fallback is not None and fallback._fitted:
+                        fallback_preds = fallback.predict(X)
+
+                    y_pred = np.empty(h, dtype=np.float64)
+                    for i, eid in enumerate(test_entities):
+                        if eid in entity_fcs:
+                            y_pred[i] = entity_fcs[eid]
+                        elif fallback_preds is not None:
+                            y_pred[i] = fallback_preds[i]
+                        else:
+                            y_pred[i] = global_mean
+
                     _logger.info(
-                        f"  [{self.model_name}] Per-entity predict: "
+                        f"  [{self.model_name}] Per-entity HYBRID predict: "
                         f"{len(entity_fcs)} entities forecasted, "
                         f"{n_covered}/{n_unique} ({coverage:.1%}) "
-                        f"test entities covered, "
+                        f"test entities covered by NF, "
+                        f"fallback={'RobustFallback' if fallback_preds is not None else 'global_mean'}, "
                         f"unique_preds={len(np.unique(np.round(y_pred, 4)))}"
                     )
                     return y_pred
@@ -756,7 +965,10 @@ class FoundationModelWrapper(ModelBase):
     def fit(self, X: pd.DataFrame, y: pd.Series, **kwargs) -> "FoundationModelWrapper":
         train_raw = kwargs.get("train_raw")
         target = kwargs.get("target")
-        MAX_E, MIN_O = 500, 10
+        # No entity cap: foundation models are zero-shot pretrained and can
+        # process any entity's time series.  Use ALL entities with enough
+        # history to maximise test-time coverage.
+        MIN_O = 10
         self._entity_ids: List[str] = []  # track entity_id per context
 
         if (train_raw is not None and target is not None
@@ -767,23 +979,22 @@ class FoundationModelWrapper(ModelBase):
             raw = raw.sort_values(["entity_id", "crawled_date_day"])
             ec = raw.groupby("entity_id").size()
             valid = ec[ec >= MIN_O].index
-            rng = np.random.RandomState(42)
-            sampled = rng.choice(valid, size=min(MAX_E, len(valid)), replace=False)
-            raw = raw[raw["entity_id"].isin(sampled)]
+            raw = raw[raw["entity_id"].isin(valid)]
             self._entity_contexts = []
             self._entity_ids = []
             for eid, grp in raw.groupby("entity_id"):
                 self._entity_contexts.append(grp[target].values.astype(np.float32))
                 self._entity_ids.append(eid)
-            _logger.info(f"  [{self.model_name}] {len(self._entity_contexts)} entity contexts")
+            _logger.info(f"  [{self.model_name}] {len(self._entity_contexts)} entity contexts (ALL valid)")
         else:
-            cs = max(MIN_O, len(y) // MAX_E)
+            MIN_E_FALLBACK = 500
+            cs = max(MIN_O, len(y) // MIN_E_FALLBACK)
             self._entity_contexts = []
             for i in range(0, len(y), cs):
                 c = y.values[i : i + cs]
                 if len(c) >= MIN_O:
                     self._entity_contexts.append(c.astype(np.float32))
-                if len(self._entity_contexts) >= MAX_E:
+                if len(self._entity_contexts) >= MIN_E_FALLBACK:
                     break
 
         self._context = y.values
@@ -803,16 +1014,10 @@ class FoundationModelWrapper(ModelBase):
         else:
             raise ValueError(f"Unknown foundation model: {self.model_name}")
 
-        # Feature-based Ridge fallback for unseen test entities
-        self._fallback_ridge = None
-        self._fallback_feature_cols = []
+        # Robust fallback for unseen entities (replaces raw Ridge)
+        self._fallback = _RobustFallback()
         try:
-            from sklearn.linear_model import Ridge as _Ridge
-            X_fb = X.select_dtypes(include=[np.number]).fillna(0)
-            if len(X_fb.columns) > 0 and len(X_fb) > 10:
-                self._fallback_ridge = _Ridge(alpha=1.0)
-                self._fallback_ridge.fit(X_fb, y)
-                self._fallback_feature_cols = list(X_fb.columns)
+            self._fallback.fit(X, y)
         except Exception:
             pass
 
@@ -918,7 +1123,7 @@ class FoundationModelWrapper(ModelBase):
 
         global_mean = float(np.mean(list(entity_preds.values())))
 
-        # Map to test rows via entity_id
+        # Map to test rows via entity_id — per-entity hybrid (no threshold)
         test_raw = kwargs.get("test_raw")
         target = kwargs.get("target")
         if test_raw is not None and "entity_id" in test_raw.columns:
@@ -929,33 +1134,29 @@ class FoundationModelWrapper(ModelBase):
                 test_entities = test_raw["entity_id"].values
 
             if len(test_entities) == h:
-                # Use Ridge fallback for entities not seen during training
                 n_covered = sum(1 for eid in test_entities if eid in entity_preds)
                 coverage = n_covered / max(len(test_entities), 1)
 
-                if (coverage < 0.95
-                        and hasattr(self, '_fallback_ridge')
-                        and self._fallback_ridge is not None
-                        and self._fallback_feature_cols):
-                    try:
-                        X_fb = X[self._fallback_feature_cols].fillna(0)
-                        ridge_preds = self._fallback_ridge.predict(X_fb)
-                        y_pred = np.array([
-                            entity_preds.get(eid, ridge_preds[i])
-                            for i, eid in enumerate(test_entities)
-                        ])
-                    except Exception:
-                        y_pred = np.array([
-                            entity_preds.get(eid, global_mean) for eid in test_entities
-                        ])
-                else:
-                    y_pred = np.array([
-                        entity_preds.get(eid, global_mean) for eid in test_entities
-                    ])
+                # Per-entity hybrid: NF forecast or RobustFallback
+                fallback = getattr(self, '_fallback', None)
+                fallback_preds = None
+                if fallback is not None and fallback._fitted:
+                    fallback_preds = fallback.predict(X)
+
+                y_pred = np.empty(h, dtype=np.float64)
+                for i, eid in enumerate(test_entities):
+                    if eid in entity_preds:
+                        y_pred[i] = entity_preds[eid]
+                    elif fallback_preds is not None:
+                        y_pred[i] = fallback_preds[i]
+                    else:
+                        y_pred[i] = global_mean
+
                 _logger.info(
-                    f"  [{self.model_name}] Per-entity predict: "
+                    f"  [{self.model_name}] Per-entity HYBRID predict: "
                     f"{len(entity_preds)} entities, "
                     f"{n_covered}/{len(set(test_entities))} ({coverage:.1%}) covered, "
+                    f"fallback={'RobustFallback' if fallback_preds is not None else 'global_mean'}, "
                     f"unique_preds={len(np.unique(np.round(y_pred, 4)))}"
                 )
                 return y_pred
@@ -997,8 +1198,6 @@ class HFFoundationModelWrapper(ModelBase):
         self._entity_ids: List[str] = []
         self._context = np.array([])
         self._global_mean = 0.0
-        self._fallback_ridge = None
-        self._fallback_feature_cols = []
 
     def _load_hf_generate(self, repo: str):
         """Load HF models that use AutoModelForCausalLM.generate()."""
@@ -1046,9 +1245,9 @@ class HFFoundationModelWrapper(ModelBase):
     def fit(self, X: pd.DataFrame, y: pd.Series, **kwargs) -> "HFFoundationModelWrapper":
         train_raw = kwargs.get("train_raw")
         target = kwargs.get("target")
-        MAX_E, MIN_O = 500, 10
+        MIN_O = 10
 
-        # Build entity contexts (same as FoundationModelWrapper)
+        # Build entity contexts — ALL valid entities (no arbitrary cap)
         if (train_raw is not None and target is not None
                 and "entity_id" in train_raw.columns):
             raw = train_raw[["entity_id", "crawled_date_day", target]].dropna(subset=[target])
@@ -1056,22 +1255,21 @@ class HFFoundationModelWrapper(ModelBase):
             raw = raw.sort_values(["entity_id", "crawled_date_day"])
             ec = raw.groupby("entity_id").size()
             valid = ec[ec >= MIN_O].index
-            rng = np.random.RandomState(42)
-            sampled = rng.choice(valid, size=min(MAX_E, len(valid)), replace=False)
-            raw = raw[raw["entity_id"].isin(sampled)]
+            raw = raw[raw["entity_id"].isin(valid)]
             self._entity_contexts = []
             self._entity_ids = []
             for eid, grp in raw.groupby("entity_id"):
                 self._entity_contexts.append(grp[target].values.astype(np.float32))
                 self._entity_ids.append(eid)
         else:
-            cs = max(MIN_O, len(y) // MAX_E)
+            MAX_E_FALLBACK = 500
+            cs = max(MIN_O, len(y) // MAX_E_FALLBACK)
             self._entity_contexts = []
             for i in range(0, len(y), cs):
                 c = y.values[i:i + cs]
                 if len(c) >= MIN_O:
                     self._entity_contexts.append(c.astype(np.float32))
-                if len(self._entity_contexts) >= MAX_E:
+                if len(self._entity_contexts) >= MAX_E_FALLBACK:
                     break
 
         self._context = y.values
@@ -1092,19 +1290,15 @@ class HFFoundationModelWrapper(ModelBase):
         elif loader_type == "timesfm_docker":
             self._docker_init()
 
-        # Ridge fallback for unseen entities
+        # Robust fallback for unseen entities (replaces raw Ridge)
+        self._fallback = _RobustFallback()
         try:
-            from sklearn.linear_model import Ridge as _Ridge
-            X_fb = X.select_dtypes(include=[np.number]).fillna(0)
-            if len(X_fb.columns) > 0 and len(X_fb) > 10:
-                self._fallback_ridge = _Ridge(alpha=1.0)
-                self._fallback_ridge.fit(X_fb, y)
-                self._fallback_feature_cols = list(X_fb.columns)
+            self._fallback.fit(X, y)
         except Exception:
             pass
 
         self._fitted = True
-        _logger.info(f"  [{self.model_name}] Fitted with {len(self._entity_contexts)} entities")
+        _logger.info(f"  [{self.model_name}] Fitted with {len(self._entity_contexts)} entities (ALL valid)")
         return self
 
     def _docker_init(self):
@@ -1250,24 +1444,20 @@ class HFFoundationModelWrapper(ModelBase):
                 n_covered = sum(1 for eid in test_entities if eid in entity_preds)
                 coverage = n_covered / max(len(test_entities), 1)
 
-                if (coverage < 0.95
-                        and self._fallback_ridge is not None
-                        and self._fallback_feature_cols):
-                    try:
-                        X_fb = X[self._fallback_feature_cols].fillna(0)
-                        ridge_preds = self._fallback_ridge.predict(X_fb)
-                        y_pred = np.array([
-                            entity_preds.get(eid, ridge_preds[i])
-                            for i, eid in enumerate(test_entities)
-                        ])
-                    except Exception:
-                        y_pred = np.array([
-                            entity_preds.get(eid, global_mean) for eid in test_entities
-                        ])
-                else:
-                    y_pred = np.array([
-                        entity_preds.get(eid, global_mean) for eid in test_entities
-                    ])
+                # Per-entity hybrid: NF forecast or RobustFallback
+                fallback = getattr(self, '_fallback', None)
+                fallback_preds = None
+                if fallback is not None and fallback._fitted:
+                    fallback_preds = fallback.predict(X)
+
+                y_pred = np.empty(h, dtype=np.float64)
+                for i, eid in enumerate(test_entities):
+                    if eid in entity_preds:
+                        y_pred[i] = entity_preds[eid]
+                    elif fallback_preds is not None:
+                        y_pred[i] = fallback_preds[i]
+                    else:
+                        y_pred[i] = global_mean
                 return y_pred
 
         return np.full(h, global_mean)
