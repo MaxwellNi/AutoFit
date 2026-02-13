@@ -1,0 +1,202 @@
+[
+  {
+    "severity": "INFO",
+    "step": "1",
+    "desc": "Split configs match between block3_tasks.yaml and block3.yaml"
+  },
+  {
+    "severity": "PASS",
+    "step": "2",
+    "desc": "Core daily duplicate key rate: 0.000000%"
+  },
+  {
+    "severity": "WARNING",
+    "step": "2",
+    "desc": "EDGAR store load failed: You are trying to merge on object and datetime64[ns, UTC] columns for key 'crawled_date_day'. If you wish to proceed you should use pd.concat"
+  },
+  {
+    "severity": "PASS",
+    "step": "3",
+    "desc": "Train-Val gap = 8 days (>= 7 embargo)"
+  },
+  {
+    "severity": "PASS",
+    "step": "3",
+    "desc": "Val-Test gap = 8 days (>= 7 embargo)"
+  },
+  {
+    "severity": "CRITICAL",
+    "step": "4",
+    "desc": "Near-constant predictions: task3_risk_adjust/statistical/core_edgar/AutoARIMA (std=6475185.473953, unique=2)"
+  },
+  {
+    "severity": "CRITICAL",
+    "step": "4",
+    "desc": "Near-constant predictions: task3_risk_adjust/statistical/core_edgar/AutoETS (std=6461236.301254, unique=2)"
+  },
+  {
+    "severity": "CRITICAL",
+    "step": "4",
+    "desc": "Near-constant predictions: task3_risk_adjust/statistical/core_edgar/AutoTheta (std=7214594.352829, unique=2)"
+  },
+  {
+    "severity": "CRITICAL",
+    "step": "4",
+    "desc": "Near-constant predictions: task3_risk_adjust/statistical/core_edgar/MSTL (std=114927.464702, unique=2)"
+  },
+  {
+    "severity": "CRITICAL",
+    "step": "4",
+    "desc": "Near-constant predictions: task3_risk_adjust/statistical/core_edgar/SF_SeasonalNaive (std=6412408.773666, unique=2)"
+  },
+  {
+    "severity": "CRITICAL",
+    "step": "4",
+    "desc": "Near-constant predictions: task3_risk_adjust/statistical/core_only/AutoARIMA (std=6475185.473953, unique=2)"
+  },
+  {
+    "severity": "CRITICAL",
+    "step": "4",
+    "desc": "Near-constant predictions: task3_risk_adjust/statistical/core_only/AutoETS (std=6461236.301254, unique=2)"
+  },
+  {
+    "severity": "CRITICAL",
+    "step": "4",
+    "desc": "Near-constant predictions: task3_risk_adjust/statistical/core_only/AutoTheta (std=7214594.352829, unique=2)"
+  },
+  {
+    "severity": "CRITICAL",
+    "step": "4",
+    "desc": "Near-constant predictions: task3_risk_adjust/statistical/core_only/MSTL (std=114927.464702, unique=2)"
+  },
+  {
+    "severity": "CRITICAL",
+    "step": "4",
+    "desc": "Near-constant predictions: task3_risk_adjust/statistical/core_only/SF_SeasonalNaive (std=6412408.773666, unique=2)"
+  },
+  {
+    "severity": "CRITICAL",
+    "step": "4",
+    "desc": "Near-constant predictions: task3_risk_adjust/foundation/core_edgar/Moirai (std=176843.347742, unique=2)"
+  },
+  {
+    "severity": "CRITICAL",
+    "step": "4",
+    "desc": "Near-constant predictions: task3_risk_adjust/foundation/core_only/Moirai (std=176843.347742, unique=2)"
+  },
+  {
+    "severity": "CRITICAL",
+    "step": "4",
+    "desc": "Near-constant predictions: task2_forecast/statistical/core_edgar/AutoARIMA (std=6475186.334793, unique=2)"
+  },
+  {
+    "severity": "CRITICAL",
+    "step": "4",
+    "desc": "Near-constant predictions: task2_forecast/statistical/core_edgar/AutoETS (std=6461236.301254, unique=2)"
+  },
+  {
+    "severity": "CRITICAL",
+    "step": "4",
+    "desc": "Near-constant predictions: task2_forecast/statistical/core_edgar/AutoTheta (std=7214594.352829, unique=2)"
+  },
+  {
+    "severity": "CRITICAL",
+    "step": "4",
+    "desc": "Near-constant predictions: task2_forecast/statistical/core_edgar/MSTL (std=114927.464702, unique=2)"
+  },
+  {
+    "severity": "CRITICAL",
+    "step": "4",
+    "desc": "Near-constant predictions: task2_forecast/statistical/core_edgar/SF_SeasonalNaive (std=6412408.773666, unique=2)"
+  },
+  {
+    "severity": "CRITICAL",
+    "step": "4",
+    "desc": "Near-constant predictions: task2_forecast/statistical/core_only/AutoARIMA (std=6475186.334793, unique=2)"
+  },
+  {
+    "severity": "CRITICAL",
+    "step": "4",
+    "desc": "Near-constant predictions: task2_forecast/statistical/core_only/AutoETS (std=6461236.301254, unique=2)"
+  },
+  {
+    "severity": "CRITICAL",
+    "step": "4",
+    "desc": "Near-constant predictions: task2_forecast/statistical/core_only/AutoTheta (std=7214594.352829, unique=2)"
+  },
+  {
+    "severity": "CRITICAL",
+    "step": "4",
+    "desc": "Near-constant predictions: task2_forecast/statistical/core_only/MSTL (std=114927.464702, unique=2)"
+  },
+  {
+    "severity": "CRITICAL",
+    "step": "4",
+    "desc": "Near-constant predictions: task2_forecast/statistical/core_only/SF_SeasonalNaive (std=6412408.773666, unique=2)"
+  },
+  {
+    "severity": "CRITICAL",
+    "step": "4",
+    "desc": "Near-constant predictions: task2_forecast/foundation/core_edgar/Moirai (std=176843.347742, unique=2)"
+  },
+  {
+    "severity": "CRITICAL",
+    "step": "4",
+    "desc": "Near-constant predictions: task2_forecast/foundation/core_only/Moirai (std=173270.386549, unique=2)"
+  },
+  {
+    "severity": "CRITICAL",
+    "step": "4",
+    "desc": "IDENTICAL MAE across all models in task1_outcome/irregular/core_edgar: MAE=0.5 \u2014 likely silent fallback"
+  },
+  {
+    "severity": "CRITICAL",
+    "step": "4",
+    "desc": "IDENTICAL MAE across all models in task1_outcome/irregular/core_only: MAE=0.5 \u2014 likely silent fallback"
+  },
+  {
+    "severity": "CRITICAL",
+    "step": "4",
+    "desc": "IDENTICAL MAE across all models in task1_outcome/deep_classical/core_edgar: MAE=0.53 \u2014 likely silent fallback"
+  },
+  {
+    "severity": "CRITICAL",
+    "step": "4",
+    "desc": "IDENTICAL MAE across all models in task1_outcome/deep_classical/core_only: MAE=0.53 \u2014 likely silent fallback"
+  },
+  {
+    "severity": "PASS",
+    "step": "5",
+    "desc": "Target=funding_raised_usd: No features with |corr| > 0.95 after leak guard"
+  },
+  {
+    "severity": "PASS",
+    "step": "5",
+    "desc": "Target=investors_count: No features with |corr| > 0.95 after leak guard"
+  },
+  {
+    "severity": "PASS",
+    "step": "5",
+    "desc": "Target=is_funded: No features with |corr| > 0.95 after leak guard"
+  },
+  {
+    "severity": "PASS",
+    "step": "5",
+    "desc": "funding_raised is correctly in drop group for funding_raised_usd"
+  },
+  {
+    "severity": "PASS",
+    "step": "6",
+    "desc": "Training budget within 3x range across deep families"
+  },
+  {
+    "severity": "PASS",
+    "step": "6",
+    "desc": "All categories share identical split/feature pipeline"
+  },
+  {
+    "severity": "INFO",
+    "step": "8",
+    "desc": "11 required shards still missing (need full rerun)"
+  }
+]

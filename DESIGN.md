@@ -75,21 +75,23 @@ core_edgar = ds.join_core_with_edgar(core_df, edgar_df)
 Block3Dataset
         │
         ▼
-BenchmarkHarness (scripts/run_block3_benchmark.py)
+BenchmarkHarness (scripts/run_block3_benchmark_shard.py)
         │
-        ├─> Ablation: core_only, core+text, core+edgar, full
+        ├─> Ablation: core_only, core_text, core_edgar, full
         │
         ├─> Train/Val/Test split by time (walk-forward or temporal)
         │
-        └─> Model Categories (44 models total):
+        └─> Model Categories (67 models total):
                 ├─> Statistical (5):       AutoARIMA, AutoETS, AutoTheta, MSTL, SF_SeasonalNaive
                 ├─> ML Tabular (15):       LightGBM, XGBoost, CatBoost, RandomForest, Ridge, ...
                 ├─> Deep Classical (4):    NBEATS, NHITS, TFT, DeepAR
-                ├─> Transformer SOTA (15): PatchTST, iTransformer, TimesNet, TSMixer, Informer,
+                ├─> Transformer SOTA (20): PatchTST, iTransformer, TimesNet, TSMixer, Informer,
                 │                          Autoformer, FEDformer, VanillaTransformer, TiDE,
                 │                          NBEATSx, BiTCN, KAN, RMoK, SOFTS, StemGNN
-                ├─> Foundation (3):        Chronos, Moirai, TimesFM
-                └─> Irregular (2):         GRU-D, SAITS
+                ├─> Foundation (11):       Chronos, ChronosBolt, Chronos2, Moirai, MoiraiLarge,
+                │                          Moirai2, Timer, TimeMoE, MOMENT, LagLlama, TimesFM
+                ├─> Irregular (2):         GRU-D, SAITS
+                └─> AutoFit (10):          V1, V2, V2E, V3, V3E, V3Max, V4, V5, V6, V7
 ```
 
 ### AutoFit Meta-Features
@@ -140,18 +142,26 @@ Location: `src/narrative/explainability/concept_bottleneck.py`
 
 ### Panel Data Design (NeuralForecast Models)
 All 19 NeuralForecast models receive entity-sampled panel data:
-- `_build_panel_df()`: samples up to 200 entities, requires min 20 obs each
+- `_build_panel_df()`: samples up to 2000 entities (non-n_series) / 200 (n_series), requires min 10 obs each
 - Panel format: `unique_id` (entity), `ds` (date), `y` (target)
 - 5 models require `n_series` parameter: iTransformer, TSMixer, RMoK, SOFTS, StemGNN
 - `n_series` is computed dynamically as `panel["unique_id"].nunique()`
+- RobustFallback: Ridge regression fallback for unseen test entities
 
-### Benchmark Execution Design
-Dual-GPU parallel execution via `scripts/run_block3_full_4090.sh`:
-- GPU0: `deep_classical` + `transformer_sota` + `foundation`
-- GPU1: `ml_tabular` + `statistical` + `irregular`
-- 3 tasks × 2 ablations (core_only, full) = 6 shards per category
+### Benchmark Execution Design (Phase 7 — ULHPC Iris HPC)
+Master SLURM submission via `scripts/submit_phase7_full_benchmark.sh`:
+- 121 total SLURM jobs across 11 shards × 3 tasks × ~4 ablations
+- GPU partition: deep_classical, transformer_sota, foundation (V100 32GB)
+- Batch partition: ml_tabular, statistical, autofit (28c, 112GB)
+- 4 ablations: `core_only`, `core_text`, `core_edgar`, `full`
+- QOS: `iris-*-long` (14-day wall times)
 - Results aggregated via `scripts/aggregate_block3_results.py`
-- n_series-affected models re-run via `scripts/rerun_nseries_models.sh`
+- Paper tables via `scripts/make_paper_tables_v2.py`
+
+### EDGAR Integration
+- As-of join: `pd.merge_asof(direction="backward", tolerance="90D")`
+- Join key: `cik` + `crawled_date_day` (timezone-stripped)
+- Timezone fix: `pd.to_datetime(..., utc=True).dt.tz_convert(None)` for merge_asof compatibility
 
 Concept Categories:
 - **Risk**: financial_risk, market_risk, operational_risk

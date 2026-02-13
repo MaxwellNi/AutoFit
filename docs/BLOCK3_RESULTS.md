@@ -1,11 +1,67 @@
-# Block 3 Benchmark Results — Phase 1 Complete / Phase 3 Submitted
+# Block 3 Benchmark Results — Phase 7 IN PROGRESS
 
-**Generated**: 2026-02-11 (Phase 1) / 2026-02-12 (Phase 3 update)
-**Benchmark Dir**: `runs/benchmarks/block3_20260203_225620_iris_full` (Phase 1)
-**Phase 3 Dir**: `runs/benchmarks/block3_20260203_225620_iris_phase3/` (42 shards)
-**Platform**: ULHPC Iris, GPU partition (4x V100 32GB, 756GB RAM)
+**Last Updated**: 2026-02-13
+**Phase 7 Dir**: `runs/benchmarks/block3_20260203_225620_phase7/`
+**Platform**: ULHPC Iris HPC — GPU (4×V100 32GB, 756GB) + Batch (28c, 112GB)
 **Freeze Stamp**: `20260203_225620`
-**Total Records (Phase 1)**: 2,646 metric records across 49 models, 3 targets, 3 tasks
+**Model Registry**: 67 models across 7 categories
+**Ablations**: core_only, core_text, core_edgar, full
+**Progress**: 23/121 shards complete, 781 metric records
+
+---
+
+## Phase 7 Overview (2026-02-12 → 2026-02-13)
+
+Phase 7 is the definitive full-scale benchmark with 67 models × 3 tasks × 4 ablations on ULHPC Iris.
+Previous phases (1-6) served as development runs; Phase 7 incorporates ALL fixes.
+
+### Key Code Changes (Phase 7)
+1. **Entity coverage**: Increased from 200 to 2000 entities (non-n_series models)
+2. **RobustFallback**: Catches all exceptions, auto-fallback to Ridge regression
+3. **Hybrid predict**: Ridge regression on features for unseen test entities
+4. **EDGAR covariates**: Now properly passed to deep/transformer models as exogenous features
+5. **AutoFit target_transform**: Auto log1p/expm1 for skewed regression targets
+6. **EDGAR timezone fix**: Strip UTC timezone from datetime64 for merge_asof compatibility
+7. **Statistical OOM fix**: Memory increased from 64G to 112G for text/EDGAR joins
+
+### Completed Shards (23/121)
+
+| Shard | Records |
+|-------|---------|
+| task1_outcome/autofit/core_only | 15 |
+| task1_outcome/autofit/core_text | 15 |
+| task1_outcome/deep_classical/core_only | 48 |
+| task1_outcome/deep_classical/core_text | 48 |
+| task1_outcome/irregular/core_only | 24 |
+| task1_outcome/ml_tabular/core_only | 38 |
+| task1_outcome/ml_tabular/core_text | 38 |
+| task1_outcome/statistical/core_only | 40 |
+| task1_outcome/transformer_sota/core_only | 60 |
+| task1_outcome/transformer_sota/core_text | 50 |
+| task2_forecast/autofit/core_only | 15 |
+| task2_forecast/autofit/core_text | 15 |
+| task2_forecast/deep_classical/core_only | 32 |
+| task2_forecast/deep_classical/core_text | 32 |
+| task2_forecast/ml_tabular/core_only | 28 |
+| task2_forecast/ml_tabular/core_text | 28 |
+| task2_forecast/statistical/core_only | 40 |
+| task2_forecast/transformer_sota/core_only | 50 |
+| task2_forecast/transformer_sota/core_text | 50 |
+| task3_risk_adjust/autofit/core_only | 15 |
+| task3_risk_adjust/deep_classical/core_only | 32 |
+| task3_risk_adjust/ml_tabular/core_only | 28 |
+| task3_risk_adjust/statistical/core_only | 40 |
+| **Total** | **781** |
+
+### SLURM Queue Status (2026-02-13 02:15 UTC)
+- **COMPLETED**: 23 shards (781 records)
+- **RUNNING**: 12 jobs (autofit×7, statistical_co×1, transformer_sota_A×4)
+- **PENDING**: 96 jobs
+- **FAILED (OOM, fixed)**: 4 statistical tasks → resubmitted with 112G
+
+---
+
+## Prior Results Reference (Phase 1 — 2,646 records)
 
 ---
 

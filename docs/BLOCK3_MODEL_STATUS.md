@@ -1,42 +1,50 @@
 # Block 3 Model Benchmark Status
 
-> Last Updated: 2026-02-08 11:00 UTC
+> Last Updated: 2026-02-13 02:15 UTC
 > Freeze Stamp: `20260203_225620`
-> Model Registry: **44 models across 6 categories**
-> 4090 Benchmark: **IN PROGRESS** (12/36 shards, 336 records, 21 models evaluated)
+> Model Registry: **67 models across 7 categories**
+> Phase 7 Benchmark: **IN PROGRESS** (23/121 shards, 781 records, 67 models registered)
+> Platform: ULHPC Iris HPC (GPU V100 + Batch 112GB)
 
 ## Executive Summary
 
-| Category | Models | Count | Panel-Aware | 4090 Status |
-|----------|--------|-------|-------------|-------------|
-| **statistical** | AutoARIMA, AutoETS, AutoTheta, MSTL, SF_SeasonalNaive | 5 | ✅ Entity-sampled (50 entities) | ⏳ Pending (GPU1 queue) |
-| **ml_tabular** | LogisticRegression, Ridge, … MeanPredictor | 15 | N/A (tabular) | 🔄 In progress (SVR running) |
-| **deep_classical** | NBEATS, NHITS, TFT, DeepAR | 4 | ✅ Entity-sampled (200 entities) | ✅ Tasks 1-2 done |
-| **transformer_sota** | PatchTST, iTransformer, … StemGNN | 15 | ✅ Entity-sampled (200 entities) | ⚠️ 5 models fallback (n_series bug, re-run ready) |
-| **foundation** | Chronos, Moirai, TimesFM | 3 | ✅ Entity contexts (200 entities) | ✅ Tasks 1-2 done (TimesFM not installed) |
-| **irregular** | GRU-D, SAITS | 2 | ✅ 3-D masked panel (100 entities) | ⏳ Pending (GPU1 queue) |
-| **TOTAL** | | **44** | | 12/36 shards |
+| Category | Models | Count | Panel-Aware | Phase 7 Status |
+|----------|--------|-------|-------------|----------------|
+| **ml_tabular** | LogisticRegression, Ridge, … MeanPredictor | 15 | N/A (tabular) | 7/11 done, 4 pending |
+| **statistical** | AutoARIMA, AutoETS, AutoTheta, MSTL, SF_SeasonalNaive | 5 | ✅ Entity-sampled | 2/11 done, 1 running, 8 pending (OOM fixed) |
+| **deep_classical** | NBEATS, NHITS, TFT, DeepAR | 4 | ✅ 2000 entities + Ridge fallback | 6/11 done, 5 pending |
+| **transformer_sota A** | PatchTST, iTransformer, TimesNet, TSMixer, Informer, Autoformer, FEDformer, VanillaTransformer, TiDE, NBEATSx | 10 | ✅ 2000 entities + Ridge fallback | 4/11 done, 4 running, 3 pending |
+| **transformer_sota B** | BiTCN, KAN, RMoK, SOFTS, StemGNN | 5+(shard) | ✅ 200 entities (n_series) | 0/11 done, 11 pending |
+| **foundation Chronos** | Chronos, ChronosBolt, Chronos2 | 3 | ✅ Entity contexts | 0/11 done, 11 pending |
+| **foundation Moirai** | Moirai, MoiraiLarge, Moirai2 | 3 | ✅ Entity contexts | 0/11 done, 11 pending |
+| **foundation HF** | Timer, TimeMoE, MOMENT, LagLlama, TimesFM | 5 | ✅ Entity contexts | 0/11 done, 11 pending |
+| **irregular** | GRU-D, SAITS | 2 | ✅ 3-D masked panel (1000 entities) | 1/11 done, 10 pending |
+| **autofit shard1** | V1, V2, V2E, V3, V3E | 5 | Meta-learner | 3/11 done, 5 running, 3 pending |
+| **autofit shard2** | V3Max, V4, V5, V6, V7 | 5 | Meta-learner | 0/11 done, 2 running, 9 pending |
+| **TOTAL** | | **67** | | **23/121 shards (19%)** |
 
 ---
 
-## Architecture (Post-Rewrite 2026-02-08)
+## Architecture (Post-Phase 7 Rewrite 2026-02-12)
 
 ### Model Source Files
 | File | Category | Models | Backend |
 |------|----------|--------|---------|
-| `src/narrative/block3/models/deep_models.py` | deep_classical + transformer_sota + foundation | 22 | NeuralForecast 3.1.4 / Chronos / Moirai / TimesFM |
+| `src/narrative/block3/models/deep_models.py` | deep_classical + transformer_sota + foundation | 35 | NeuralForecast 3.1.4 / Chronos / Moirai / Timer / etc |
 | `src/narrative/block3/models/statistical.py` | statistical | 5 | StatsForecast (Nixtla) |
 | `src/narrative/block3/models/irregular_models.py` | irregular | 2 | PyPOTS |
 | `src/narrative/block3/models/traditional_ml.py` | ml_tabular | 15 | sklearn / LightGBM / XGBoost / CatBoost |
-| `src/narrative/block3/models/registry.py` | ALL | 44 | Unified registry |
+| `src/narrative/block3/models/autofit_wrapper.py` | autofit | 10 | Meta-learner ensemble |
+| `src/narrative/block3/models/registry.py` | ALL | 67 | Unified registry |
 | `src/narrative/block3/models/base.py` | — | — | ModelBase, ModelConfig |
 
-### Panel Data Strategy
-All panel-aware categories use entity-sampled panel construction:
-- Filter entities with ≥ 20 observations
-- Random sample up to MAX_ENTITIES (200 for deep/transformer, 50 for statistical, 100 for irregular)
-- Build NeuralForecast-style panel: `unique_id / ds / y`
-- Falls back to synthetic panel from flat y if `train_raw` unavailable
+### Panel Data Strategy (Phase 7 — updated from Phase 3)
+- **Deep/Transformer (non-n_series)**: 2000 entities, min 10 obs, Ridge fallback for unseen
+- **Transformer (n_series models)**: 200 entities, min 10 obs
+- **Statistical**: Entity-sampled panel via StatsForecast
+- **Irregular**: 1000 entities, 3-D masked panel
+- **RobustFallback**: Catches all NeuralForecast exceptions, auto-falls back to Ridge regression
+- **Hybrid predict**: Ridge regression on features for test entities not seen during training
 
 ### Benchmark Harness
 `scripts/run_block3_benchmark_shard.py` passes `train_raw`, `target`, `horizon` kwargs to **all** panel-aware categories:
@@ -103,40 +111,89 @@ All panel-aware categories use entity-sampled panel construction:
 | TFT | Lim et al., 2021 | ✅ 200 entities |
 | DeepAR | Salinas et al., 2020 | ✅ 200 entities |
 
-### 4. Transformer SOTA Models (15) — NeuralForecast
+### 4. Transformer SOTA Models (20) — NeuralForecast (2 shards)
+
+**Shard A (10 models)**:
 
 | Model | Paper | Panel Support |
 |-------|-------|---------------|
-| PatchTST | Nie et al., ICLR 2023 | ✅ 200 entities |
-| iTransformer | Liu et al., ICLR 2024 | ✅ 200 entities |
-| TimesNet | Wu et al., ICLR 2023 | ✅ 200 entities |
-| TSMixer | Chen et al., TMLR 2023 | ✅ 200 entities |
-| Informer | Zhou et al., AAAI 2021 | ✅ 200 entities |
-| Autoformer | Wu et al., NeurIPS 2021 | ✅ 200 entities |
-| FEDformer | Zhou et al., ICML 2022 | ✅ 200 entities |
-| VanillaTransformer | Vaswani et al., 2017 | ✅ 200 entities |
-| TiDE | Das et al., TMLR 2023 | ✅ 200 entities |
-| NBEATSx | Olivares et al., 2022 | ✅ 200 entities |
-| BiTCN | — | ✅ 200 entities |
-| KAN | Liu et al., 2024 | ✅ 200 entities |
-| RMoK | — | ✅ 200 entities |
-| SOFTS | — | ✅ 200 entities |
-| StemGNN | Cao et al., NeurIPS 2020 | ✅ 200 entities |
+| PatchTST | Nie et al., ICLR 2023 | ✅ 2000 entities |
+| iTransformer | Liu et al., ICLR 2024 | ✅ 200 entities (n_series) |
+| TimesNet | Wu et al., ICLR 2023 | ✅ 2000 entities |
+| TSMixer | Chen et al., TMLR 2023 | ✅ 200 entities (n_series) |
+| Informer | Zhou et al., AAAI 2021 | ✅ 2000 entities |
+| Autoformer | Wu et al., NeurIPS 2021 | ✅ 2000 entities |
+| FEDformer | Zhou et al., ICML 2022 | ✅ 2000 entities |
+| VanillaTransformer | Vaswani et al., 2017 | ✅ 2000 entities |
+| TiDE | Das et al., TMLR 2023 | ✅ 2000 entities |
+| NBEATSx | Olivares et al., 2022 | ✅ 2000 entities |
 
-### 5. Foundation Models (3)
+**Shard B (10 models)**:
+
+| Model | Paper | Panel Support |
+|-------|-------|---------------|
+| BiTCN | — | ✅ 2000 entities |
+| KAN | Liu et al., 2024 | ✅ 2000 entities |
+| RMoK | — | ✅ 200 entities (n_series) |
+| SOFTS | — | ✅ 200 entities (n_series) |
+| StemGNN | Cao et al., NeurIPS 2020 | ✅ 200 entities (n_series) |
+
+### 5. Foundation Models (11) — 3 shards
+
+**Chronos Shard (3 models)**:
 
 | Model | Provider | Status |
 |-------|----------|--------|
 | Chronos | Amazon | ✅ chronos-t5-small |
+| ChronosBolt | Amazon | ✅ chronos-bolt-small |
+| Chronos2 | Amazon | ✅ |
+
+**Moirai Shard (3 models)**:
+
+| Model | Provider | Status |
+|-------|----------|--------|
 | Moirai | Salesforce | ✅ moirai-1.1-R-small |
-| TimesFM | Google | ❌ Not installed |
+| MoiraiLarge | Salesforce | ✅ moirai-1.1-R-large |
+| Moirai2 | Salesforce | ✅ moirai-2-R-small |
+
+**HF Shard (5 models)**:
+
+| Model | Provider | Status |
+|-------|----------|--------|
+| Timer | — | ✅ |
+| TimeMoE | — | ✅ |
+| MOMENT | CMU | ✅ |
+| LagLlama | — | ✅ |
+| TimesFM | Google | ✅ |
 
 ### 6. Irregular Models (2) — PyPOTS
 
 | Model | Paper | Panel Support |
 |-------|-------|---------------|
-| GRU-D | Che et al., 2018 | ✅ 100 entities, masked |
-| SAITS | Du et al., 2023 | ✅ 100 entities, masked |
+| GRU-D | Che et al., 2018 | ✅ 1000 entities, masked |
+| SAITS | Du et al., 2023 | ✅ 1000 entities, masked |
+
+### 7. AutoFit Models (10) — 2 shards
+
+**Shard 1 (V1-V5)**:
+
+| Model | Strategy |
+|-------|----------|
+| V1 | Simple best-of-K selection |
+| V2 | 5-fold temporal CV + stability penalty |
+| V2E | V2 with ElasticNet candidates |
+| V3 | Top-K exhaustive search |
+| V3E | V3 with ElasticNet candidates |
+
+**Shard 2 (V3Max-V7)**:
+
+| Model | Strategy |
+|-------|----------|
+| V3Max | Exhaustive search with time budget |
+| V4 | Target-transform + NCL + full-OOF |
+| V5 | Empirical regime-aware ensemble |
+| V6 | Conference-grade stacked generalization |
+| V7 | Data-adapted robust ensemble with 6 SOTA innovations |
 
 ---
 
@@ -163,25 +220,29 @@ All panel-aware categories use entity-sampled panel construction:
 | Horizons | [7, 14, 30, 60] |
 | Ablations | core_only, core_text, core_edgar, full |
 | Metrics | MAE, RMSE, MAPE, SMAPE, CRPS |
+| Platform | ULHPC Iris HPC (GPU V100 + Batch 112GB) |
+| QOS | `iris-*-long` (14-day wall times) |
+| Total shards | 121 |
 
 ---
 
 ## Pending
 
-1. 🔄 Full benchmark on 4090 — 12/36 shards done, GPU0 on task3, GPU1 on ml_tabular task1
-2. ⏳ n_series re-run for iTransformer/TSMixer/RMoK/SOFTS/StemGNN (`scripts/rerun_nseries_models.sh`)
-3. ⏳ Full benchmark on 3090 (SSH unreachable)
-4. ⏳ Iris SLURM resubmit (mem fixed to 128GB)
-5. ⏳ Results leaderboard + paper LaTeX tables
-6. ⏳ AutoFit model selection based on data profile
-7. ⏳ TCAV-style concept importance analysis
+1. ⏳ Phase 7 full benchmark run — 23/121 shards done (19%), 781 records
+2. ⏳ transformer_sota B, foundation×3 — all pending (GPU queue)
+3. ⏳ Results consolidation + leaderboard
+4. ⏳ Paper LaTeX tables
+5. ⏳ AutoFit model selection based on data profile
+6. ⏳ TCAV-style concept importance analysis
 
-## Known Issues
+## Issues Fixed (Phase 7)
 
-| Issue | Models Affected | Fix | Status |
-|-------|----------------|-----|--------|
-| n_series=1 hardcoded | iTransformer, TSMixer, RMoK, SOFTS, StemGNN | `014ac92`: dynamic `panel.nunique()` | ✅ Fixed, re-run pending |
-| TimesFM not installed | TimesFM | No pip package available | ❌ Blocked |
-| LogisticRegression on regression target | LogisticRegression | Expected — classifier on continuous target | ℹ️ By design |
-| Iris OOM at 100GB | All models on Iris | `128GB` mem in sbatch | ✅ Fixed, not resubmitted |
-| 3090 unreachable | — | SSH timeout to ift-severn | ⏳ Retry later |
+| # | Issue | Root Cause | Fix | Status |
+|---|-------|-----------|-----|--------|
+| 1 | Entity coverage <5% | max_entities=200, min_obs=20 | 2000 entities, min_obs=10, Ridge fallback | ✅ `444f376` |
+| 2 | RobustFallback silent failure | Only caught specific exceptions | Catch all, auto-fallback | ✅ `444f376` |
+| 3 | Unseen entities → global_mean | No fallback for new entities | Ridge on features | ✅ `444f376` |
+| 4 | EDGAR features ignored | Not passed to panel builder | Added `futr_exog_list` | ✅ `444f376` |
+| 5 | AutoFit no target transform | Regression targets skewed | Auto log1p/expm1 | ✅ `444f376` |
+| 6 | EDGAR timezone dtype | `datetime64[ns,UTC]` mismatch | `tz_convert(None)` | ✅ `ae9626b` |
+| 7 | Statistical OOM (64G) | Text/EDGAR joins expand memory | 112G + 28 CPUs | ✅ Session fix |
