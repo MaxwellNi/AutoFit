@@ -243,5 +243,44 @@ Audit PASS gates:
 - `raw_cardinality_coverage_wide_${STAMP}.json`: full-scan coverage integrity
 - pointer update in `docs/audits/FULL_SCALE_POINTER.yaml`
 
-## Single Source of Truth
-`docs/audits/FULL_SCALE_POINTER.yaml` remains the only approved Block 3 input pointer.
+---
+
+## Phase 7 Benchmark 进度与状态（2026-02-13）
+
+### 任务状态表
+| 状态 | 数量 |
+|------|------|
+| 已完成 (COMPLETED) | 33 shards |
+| 运行中 (RUNNING) | 12 jobs |
+| 排队中 (PENDING) | 70 jobs |
+| 总计 | 115 jobs |
+
+### 详细进度矩阵
+| Category | t1_co | t1_ct | t1_ce | t1_fu | t2_co | t2_ct | t2_ce | t2_fu | t3_co | t3_ct | t3_ce | t3_fu |
+|----------|-------|-------|-------|-------|-------|-------|-------|-------|-------|-------|-------|-------|
+| autofit | ✅30 | ✅30 | - | - | ✅40 | ✅30 | - | - | ✅30 | - | - | - |
+| deep_classical | ✅48 | ✅48 | - | - | ✅32 | ✅32 | - | - | ✅32 | - | - | - |
+| foundation | ✅120 | ✅120 | - | - | ✅80 | ✅80 | - | - | ✅80 | - | - | - |
+| irregular | ✅24 | ✅12 | - | - | ✅12 | ✅10 | - | - | ✅6 | - | - | - |
+| ml_tabular | ✅38 | ✅38 | - | - | ✅28 | ✅28 | - | - | ✅28 | - | - | - |
+| statistical | ✅60 | - | - | - | ✅40 | - | - | - | ✅40 | - | - | - |
+| transformer_sota | ✅200 | ✅230 | - | - | ✅160 | ✅160 | - | - | ✅160 | - | - | - |
+
+- ✅ 表示已完成，- 表示未完成。
+
+### 运行健康状态
+- 所有运行中任务日志无报错，进度正常。
+- 之前OOM故障已修复，统计类任务已全部调整为112G内存。
+
+### 主要问题与修复
+| # | 问题 | 根因 | 修复 | 状态 |
+|---|------|------|------|------|
+| 1 | 实体覆盖率过低 | 只采样200实体 | max_entities=2000, Ridge回退 | 已修复 |
+| 2 | RobustFallback失效 | 异常未捕获 | 全异常捕获+Ridge回退 | 已修复 |
+| 3 | 未见实体回退 | 无特征回归 | Ridge回归 | 已修复 |
+| 4 | EDGAR特征未传递 | exog未传递 | futr_exog_list传递 | 已修复 |
+| 5 | AutoFit目标变换缺失 | 回归目标偏态 | 自动log1p/expm1 | 已修复 |
+| 6 | EDGAR时区类型不匹配 | datetime64[ns,UTC] | tz_convert(None) | 已修复 |
+| 7 | 统计类OOM | 内存不足 | 112G+28CPU | 已修复 |
+
+---
