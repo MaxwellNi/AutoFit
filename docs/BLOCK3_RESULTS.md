@@ -1,16 +1,16 @@
 # Block 3 Benchmark Results — Phase 7 IN PROGRESS
 
-**Last Updated**: 2026-02-14 01:42 UTC
+**Last Updated**: 2026-02-14 02:25 UTC
 **Phase 7 Dir**: `runs/benchmarks/block3_20260203_225620_phase7/`
 **Platform**: ULHPC Iris HPC — GPU (4×V100 32GB, 756GB) + Batch (28c, 112GB)
 **Freeze Stamp**: `20260203_225620`
 **Model Registry (code)**: 72 models across 7 categories (submitted Phase 7 roster: 67)
 **Ablations**: core_only, core_text, core_edgar, full
-**Progress (canonical 121 shards)**: 68 completed, 12 running, 41 pending
+**Progress (canonical 121 shards)**: 70 completed, 12 running, 39 pending
 
 ---
 
-## Live Status Snapshot (2026-02-14 01:42 UTC)
+## Live Status Snapshot (2026-02-14 02:25 UTC)
 
 Data sources:
 - `squeue -u $USER`
@@ -20,16 +20,16 @@ Data sources:
 
 Queue status:
 - RUNNING: 12 (batch=8, gpu=4)
-- PENDING: 41 (batch=25, gpu=16)
-- Pending reason: 41/41 are `QOSMaxJobsPerUserLimit`
+- PENDING: 39 (batch=25, gpu=14)
+- Pending reason: 39/39 are `QOSMaxJobsPerUserLimit`
 - QOS hard caps confirmed:
   - `iris-batch-long MaxJobsPerUser=8`
   - `iris-gpu-long MaxJobsPerUser=4`
 
 Canonical shard progress (121 names from submitted Phase 7 scripts):
-- COMPLETED: 68
+- COMPLETED: 70
 - RUNNING: 12
-- PENDING: 41
+- PENDING: 39
 
 Per-shard-group status:
 

@@ -1,9 +1,9 @@
 # Block 3 Model Benchmark Status
 
-> Last Updated: 2026-02-14 01:42 UTC
+> Last Updated: 2026-02-14 02:25 UTC
 > Freeze Stamp: `20260203_225620`
 > Model Registry (code): **72 models across 7 categories** (Phase 7 submitted roster remains 67)
-> Phase 7 Benchmark: **IN PROGRESS** (68/121 completed, 12 running, 41 pending)
+> Phase 7 Benchmark: **IN PROGRESS** (70/121 completed, 12 running, 39 pending)
 > Platform: ULHPC Iris HPC (GPU V100 + Batch 112GB)
 
 ## Executive Summary
@@ -21,7 +21,7 @@
 | **irregular** | GRU-D, SAITS | 2 | ✅ 3-D masked panel (1000 entities) | 11/11 done |
 | **autofit shard1** | V1, V2, V2E, V3, V3E | 5 | Meta-learner | 3/11 done, 3 running, 5 pending |
 | **autofit shard2** | V3Max, V4, V5, V6, V7, V71 | 6 | Meta-learner | 0/11 done, 5 running, 6 pending |
-| **TOTAL** | | **72 (code)** | | **68/121 completed (56.2%), 12 running, 41 pending** |
+| **TOTAL** | | **72 (code)** | | **70/121 completed (57.9%), 12 running, 39 pending** |
 
 ---
 
@@ -38,7 +38,7 @@
 | `src/narrative/block3/models/registry.py` | ALL | 72 | Unified registry |
 | `src/narrative/block3/models/base.py` | — | — | ModelBase, ModelConfig |
 
-## Live Slurm Snapshot (2026-02-14 01:42 UTC)
+## Live Slurm Snapshot (2026-02-14 02:25 UTC)
 
 Command basis:
 - `squeue -u $USER`
@@ -48,8 +48,8 @@ Command basis:
 
 Current queue:
 - RUNNING: 12 (batch=8, gpu=4)
-- PENDING: 41 (batch=25, gpu=16)
-- Pending reason: 41/41 are `QOSMaxJobsPerUserLimit`
+- PENDING: 39 (batch=25, gpu=14)
+- Pending reason: 39/39 are `QOSMaxJobsPerUserLimit`
 - QOS limits match observed saturation:
   - `iris-batch-long MaxJobsPerUser=8`
   - `iris-gpu-long MaxJobsPerUser=4`
@@ -62,7 +62,7 @@ Running log health check:
   - leakage guard column-drop logs are active as expected
 
 V7.1 extreme pilot submission:
-- Submitted at: 2026-02-14 02:32 CET
+- Submitted at: 2026-02-14 03:22 CET
 - Script: `scripts/submit_phase7_v71_extreme.sh --pilot`
 - Run tag: `20260214_032205`
 - New jobs submitted: 110
@@ -267,7 +267,7 @@ V7.1 extreme pilot submission:
 
 ## Pending
 
-1. ⏳ Phase 7 full benchmark run — 68/121 completed, 12 running, 41 pending
+1. ⏳ Phase 7 full benchmark run — 70/121 completed, 12 running, 39 pending
 2. ⏳ QOS-gated tail remains (`QOSMaxJobsPerUserLimit` on both batch/gpu queues)
 3. ⏳ Results consolidation + leaderboard
 4. ⏳ AutoFit V7.1 pilot gate (fairness + comparability + win-rate checks)
