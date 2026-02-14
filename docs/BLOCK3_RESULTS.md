@@ -1,16 +1,16 @@
 # Block 3 Benchmark Results — Phase 7 IN PROGRESS
 
-**Last Updated**: 2026-02-14 02:25 UTC
+**Last Updated**: 2026-02-14 12:05 UTC
 **Phase 7 Dir**: `runs/benchmarks/block3_20260203_225620_phase7/`
 **Platform**: ULHPC Iris HPC — GPU (4×V100 32GB, 756GB) + Batch (28c, 112GB)
 **Freeze Stamp**: `20260203_225620`
 **Model Registry (code)**: 72 models across 7 categories (submitted Phase 7 roster: 67)
 **Ablations**: core_only, core_text, core_edgar, full
-**Progress (canonical 121 shards)**: 70 completed, 12 running, 39 pending
+**Progress (canonical 121 shards)**: 86 completed, 9 running, 26 pending
 
 ---
 
-## Live Status Snapshot (2026-02-14 02:25 UTC)
+## Live Status Snapshot (2026-02-14 12:05 UTC)
 
 Data sources:
 - `squeue -u $USER`
@@ -19,17 +19,21 @@ Data sources:
 - `scontrol show job <jobid>` + log tails in `/work/projects/eint/logs/phase7/`
 
 Queue status:
-- RUNNING: 12 (batch=8, gpu=4)
-- PENDING: 39 (batch=25, gpu=14)
-- Pending reason: 39/39 are `QOSMaxJobsPerUserLimit`
+- RUNNING: 11 (batch=8, gpu=3)
+- PENDING: 191
+- Pending reasons:
+  - `QOSMaxJobsPerUserLimit`: 101
+  - `QOSGrpNodeLimit`: 21
+  - `Priority`: 35
+  - `None`: 1
 - QOS hard caps confirmed:
   - `iris-batch-long MaxJobsPerUser=8`
   - `iris-gpu-long MaxJobsPerUser=4`
 
 Canonical shard progress (121 names from submitted Phase 7 scripts):
-- COMPLETED: 70
-- RUNNING: 12
-- PENDING: 39
+- COMPLETED: 86
+- RUNNING: 9
+- PENDING: 26
 
 Per-shard-group status:
 
@@ -37,15 +41,15 @@ Per-shard-group status:
 |-------|-----------|---------|---------|-------|
 | ml_tabular | 5 | 0 | 6 | 11 |
 | statistical | 3 | 0 | 8 | 11 |
-| deep_classical | 8 | 2 | 1 | 11 |
-| transformer_sota_A | 7 | 1 | 3 | 11 |
-| transformer_sota_B | 7 | 1 | 3 | 11 |
+| deep_classical | 11 | 0 | 0 | 11 |
+| transformer_sota_A | 8 | 1 | 2 | 11 |
+| transformer_sota_B | 11 | 0 | 0 | 11 |
 | foundation_chronos | 8 | 0 | 3 | 11 |
 | foundation_moirai | 8 | 0 | 3 | 11 |
 | foundation_hf | 8 | 0 | 3 | 11 |
 | irregular | 11 | 0 | 0 | 11 |
-| autofit_shard1 | 3 | 3 | 5 | 11 |
-| autofit_shard2 | 0 | 5 | 6 | 11 |
+| autofit_shard1 | 3 | 4 | 4 | 11 |
+| autofit_shard2 | 1 | 4 | 6 | 11 |
 
 Running-job log health:
 - No new fatal exceptions in sampled running jobs.
@@ -55,8 +59,8 @@ Running-job log health:
   - leakage-guard column-drop messages are active
 
 Materialized output snapshot under current Phase 7 dir:
-- `metrics.json` files: 49
-- metric records currently on disk: 3049
+- `metrics.json` files: 59
+- metric records currently on disk: 3884
 
 ## AutoFit V7.1 Implementation Status (Code Complete, Pilot Pending)
 
@@ -90,9 +94,30 @@ Pilot submission status (V7.1 extreme):
   - 11 `foundation` reference shards
   - 11 `autofit` baseline shards (`AutoFitV6,AutoFitV7`)
   - 55 `AutoFitV71` grid shards (5 variants × 11 task-ablation combos)
-- Immediate queue state:
-  - `p7x_*` RUNNING=0, PENDING=110
-  - pending reason: `QOSMaxJobsPerUserLimit`
+- Live queue state:
+  - `p7x_*`: COMPLETED=9, RUNNING=3, PENDING=98, FAILED=0
+
+Full submission status (V7.1 extreme):
+- Command: `bash scripts/submit_phase7_v71_extreme.sh --full --v71-variant=g02`
+- Submitted jobs: 66 (`p7xF_*`, JobID `5179902-5179967`)
+- Run tag: `20260214_130737`
+- Output root: `runs/benchmarks/block3_20260203_225620_phase7_v71extreme_20260214_130737`
+- Queue state: COMPLETED=0, RUNNING=0, PENDING=66
+
+Current cross-model snapshot (materialized outputs only):
+- Phase 7 (`runs/benchmarks/block3_20260203_225620_phase7`):
+  - rows=3884, models=66
+  - best category-level models by target:
+    - `funding_raised_usd`: deep_classical (`NHITS`, MAE=374,432)
+    - `investors_count`: deep_classical / transformer_sota tie (`NBEATS`/`NBEATSx`, MAE=44.73)
+    - `is_funded`: deep_classical (`NHITS`, MAE=0.03232)
+  - AutoFit family best observed MAE:
+    - `funding_raised_usd`: `AutoFitV3` (395,552)
+    - `investors_count`: `AutoFitV1`/`AutoFitV3` (113.91)
+    - `is_funded`: `AutoFitV4` (0.08891)
+- V7.1 pilot run (`..._phase7_v71extreme_20260214_032205`):
+  - rows=396, models=4 (deep refs completed so far)
+  - `AutoFitV71` materialized rows so far: 0 (jobs still pending/running)
 
 ## Phase 7 Overview (2026-02-12 -> 2026-02-14)
 

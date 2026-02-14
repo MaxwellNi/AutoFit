@@ -1,9 +1,9 @@
 # Block 3 Model Benchmark Status
 
-> Last Updated: 2026-02-14 02:25 UTC
+> Last Updated: 2026-02-14 12:05 UTC
 > Freeze Stamp: `20260203_225620`
 > Model Registry (code): **72 models across 7 categories** (Phase 7 submitted roster remains 67)
-> Phase 7 Benchmark: **IN PROGRESS** (70/121 completed, 12 running, 39 pending)
+> Phase 7 Benchmark: **IN PROGRESS** (86/121 completed, 9 running, 26 pending, 0 failed)
 > Platform: ULHPC Iris HPC (GPU V100 + Batch 112GB)
 
 ## Executive Summary
@@ -12,16 +12,16 @@
 |----------|--------|-------|-------------|----------------|
 | **ml_tabular** | LogisticRegression, Ridge, ... MeanPredictor | 19 | N/A (tabular) | 5/11 done, 6 pending |
 | **statistical** | AutoARIMA, AutoETS, AutoTheta, MSTL, SF_SeasonalNaive | 5 | ✅ Entity-sampled | 3/11 done, 8 pending |
-| **deep_classical** | NBEATS, NHITS, TFT, DeepAR | 4 | ✅ 2000 entities + Ridge fallback | 8/11 done, 2 running, 1 pending |
-| **transformer_sota A** | PatchTST, iTransformer, TimesNet, TSMixer, Informer, Autoformer, FEDformer, VanillaTransformer, TiDE, NBEATSx | 10 | ✅ 2000 entities + Ridge fallback | 7/11 done, 1 running, 3 pending |
-| **transformer_sota B** | BiTCN, KAN, RMoK, SOFTS, StemGNN | 10 (split) | ✅ 200 entities (n_series) | 7/11 done, 1 running, 3 pending |
+| **deep_classical** | NBEATS, NHITS, TFT, DeepAR | 4 | ✅ 2000 entities + Ridge fallback | 11/11 done |
+| **transformer_sota A** | PatchTST, iTransformer, TimesNet, TSMixer, Informer, Autoformer, FEDformer, VanillaTransformer, TiDE, NBEATSx | 10 | ✅ 2000 entities + Ridge fallback | 8/11 done, 1 running, 2 pending |
+| **transformer_sota B** | BiTCN, KAN, RMoK, SOFTS, StemGNN | 10 (split) | ✅ 200 entities (n_series) | 11/11 done |
 | **foundation Chronos** | Chronos, ChronosBolt, Chronos2 | 3 | ✅ Entity contexts | 8/11 done, 3 pending |
 | **foundation Moirai** | Moirai, MoiraiLarge, Moirai2 | 3 | ✅ Entity contexts | 8/11 done, 3 pending |
 | **foundation HF** | Timer, TimeMoE, MOMENT, LagLlama, TimesFM | 5 | ✅ Entity contexts | 8/11 done, 3 pending |
 | **irregular** | GRU-D, SAITS | 2 | ✅ 3-D masked panel (1000 entities) | 11/11 done |
-| **autofit shard1** | V1, V2, V2E, V3, V3E | 5 | Meta-learner | 3/11 done, 3 running, 5 pending |
-| **autofit shard2** | V3Max, V4, V5, V6, V7, V71 | 6 | Meta-learner | 0/11 done, 5 running, 6 pending |
-| **TOTAL** | | **72 (code)** | | **70/121 completed (57.9%), 12 running, 39 pending** |
+| **autofit shard1** | V1, V2, V2E, V3, V3E | 5 | Meta-learner | 3/11 done, 4 running, 4 pending |
+| **autofit shard2** | V3Max, V4, V5, V6, V7, V71 | 6 | Meta-learner | 1/11 done, 4 running, 6 pending |
+| **TOTAL** | | **72 (code)** | | **86/121 completed (71.1%), 9 running, 26 pending** |
 
 ---
 
@@ -38,7 +38,7 @@
 | `src/narrative/block3/models/registry.py` | ALL | 72 | Unified registry |
 | `src/narrative/block3/models/base.py` | — | — | ModelBase, ModelConfig |
 
-## Live Slurm Snapshot (2026-02-14 02:25 UTC)
+## Live Slurm Snapshot (2026-02-14 12:05 UTC)
 
 Command basis:
 - `squeue -u $USER`
@@ -47,9 +47,13 @@ Command basis:
 - `scontrol show job <jobid>` + log tails under `/work/projects/eint/logs/phase7/`
 
 Current queue:
-- RUNNING: 12 (batch=8, gpu=4)
-- PENDING: 39 (batch=25, gpu=14)
-- Pending reason: 39/39 are `QOSMaxJobsPerUserLimit`
+- RUNNING: 11 (batch=8, gpu=3)
+- PENDING: 191 (old p7 + V7.1 pilot + V7.1 full)
+- Pending reasons:
+  - `QOSMaxJobsPerUserLimit`: 101
+  - `QOSGrpNodeLimit`: 21
+  - `Priority`: 35
+  - `None`: 1 (eligible-to-run)
 - QOS limits match observed saturation:
   - `iris-batch-long MaxJobsPerUser=8`
   - `iris-gpu-long MaxJobsPerUser=4`
@@ -68,9 +72,23 @@ V7.1 extreme pilot submission:
 - New jobs submitted: 110
   - batch: 77 (ml refs + autofit baseline + V71 grid)
   - gpu: 33 (deep/transformer/foundation refs, `volta32` constraint)
-- Initial queue state right after submit:
-  - `p7x_*` RUNNING=0, PENDING=110
-  - pending reason: `QOSMaxJobsPerUserLimit`
+- Current pilot state:
+  - `p7x_*`: COMPLETED=9, RUNNING=3, PENDING=98, FAILED=0
+  - materialized outputs currently from `deep_refs` shards
+
+V7.1 extreme full submission:
+- Submitted at: 2026-02-14 13:07 CET
+- Script: `scripts/submit_phase7_v71_extreme.sh --full --v71-variant=g02`
+- Run tag: `20260214_130737`
+- New jobs submitted: 66 (`p7xF_*`)
+- Current full state: COMPLETED=0, RUNNING=0, PENDING=66
+
+Canonical p7 recovery action:
+- Re-submitted 3 failed shards:
+  - `p7_tsA_t1_fu` -> JobID `5179899`
+  - `p7_tsA_t2_fu` -> JobID `5179900`
+  - `p7_tsA_t3_fu` -> JobID `5179901`
+- After recovery: canonical p7 FAILED count = 0
 
 ### Panel Data Strategy (Phase 7 — updated from Phase 3)
 - **Deep/Transformer (non-n_series)**: 2000 entities, min 10 obs, Ridge fallback for unseen
@@ -267,8 +285,8 @@ V7.1 extreme pilot submission:
 
 ## Pending
 
-1. ⏳ Phase 7 full benchmark run — 70/121 completed, 12 running, 39 pending
-2. ⏳ QOS-gated tail remains (`QOSMaxJobsPerUserLimit` on both batch/gpu queues)
+1. ⏳ Phase 7 full benchmark run — 86/121 completed, 9 running, 26 pending
+2. ⏳ QOS-gated tail remains (`QOSMaxJobsPerUserLimit` / `QOSGrpNodeLimit` / `Priority`)
 3. ⏳ Results consolidation + leaderboard
 4. ⏳ AutoFit V7.1 pilot gate (fairness + comparability + win-rate checks)
 5. ⏳ Paper LaTeX tables
