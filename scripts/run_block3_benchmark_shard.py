@@ -9,6 +9,7 @@ CLI Options:
     --task {task1_outcome,task2_forecast,task3_risk_adjust}
     --category {statistical,ml_tabular,deep_classical,transformer_sota,foundation,irregular}
     --models comma-separated allowlist (default: all in category)
+    --model-kwargs-json / --model-kwargs-file for per-model hyperparameter overrides
     --ablation {core_only,core_text,core_edgar,full}
     --preset {smoke,quick,standard,full}
     --output-dir (required for non-smoke)
@@ -203,6 +204,7 @@ class ShardManifest:
     n_models_failed: int = 0
     slurm_job_id: Optional[str] = None
     hostname: Optional[str] = None
+    model_kwargs_overrides: Dict[str, Dict[str, Any]] = field(default_factory=dict)
     
     def to_dict(self) -> Dict[str, Any]:
         return asdict(self)
@@ -236,6 +238,11 @@ class ModelMetrics:
     
     # Metadata
     n_samples: int = 0
+    effective_eval_rows: int = 0
+    prediction_coverage_ratio: float = 1.0
+    n_missing_predictions: int = 0
+    fallback_fraction: float = 0.0
+    fairness_pass: bool = True
     train_time_seconds: Optional[float] = None
     inference_time_seconds: Optional[float] = None
     seed: int = GLOBAL_SEED
@@ -268,6 +275,7 @@ class BenchmarkShard:
         max_entities: Optional[int] = None,
         max_rows: Optional[int] = None,
         num_workers: int = 4,
+        model_kwargs_overrides: Optional[Dict[str, Dict[str, Any]]] = None,
     ):
         self.task = task
         self.category = category
@@ -281,6 +289,7 @@ class BenchmarkShard:
         self.preset_config = PresetConfig.get_preset(preset)
         self.max_entities = max_entities or self.preset_config.max_entities
         self.max_rows = max_rows or self.preset_config.max_rows
+        self.model_kwargs_overrides = model_kwargs_overrides or {}
         
         # Determine models to run
         if models:
@@ -320,6 +329,7 @@ class BenchmarkShard:
             started_at=datetime.now(timezone.utc).isoformat(),
             slurm_job_id=os.environ.get("SLURM_JOB_ID"),
             hostname=os.environ.get("HOSTNAME", os.uname().nodename),
+            model_kwargs_overrides=self.model_kwargs_overrides,
         )
         
         set_global_seed(seed)
@@ -565,6 +575,28 @@ class BenchmarkShard:
     _CLASSIFICATION_TARGETS = {"is_funded"}
     _MODEL_TIMEOUT_SECONDS = 30 * 60  # 30 minutes max per model
 
+    @staticmethod
+    def _extract_fallback_fraction(model: Any) -> float:
+        """Best-effort fallback usage extraction for fairness metadata."""
+        try:
+            if hasattr(model, "get_routing_info"):
+                info = model.get_routing_info()
+                if isinstance(info, dict):
+                    for key in ("fallback_fraction", "fallback_rate", "fallback_ratio"):
+                        if key in info:
+                            val = float(info[key])
+                            return min(max(val, 0.0), 1.0)
+        except Exception:
+            pass
+
+        # Common wrappers expose a boolean fallback mode.
+        if hasattr(model, "_use_fallback"):
+            try:
+                return 1.0 if bool(getattr(model, "_use_fallback")) else 0.0
+            except Exception:
+                pass
+        return 0.0
+
     def run_model(
         self,
         model_name: str,
@@ -602,7 +634,11 @@ class BenchmarkShard:
                 return None
 
             # Get model
-            model = get_model(model_name)
+            model_kwargs_overrides = getattr(self, "model_kwargs_overrides", {})
+            model_kwargs = model_kwargs_overrides.get(model_name, {})
+            if model_kwargs:
+                logger.info(f"  Applying model kwargs for {model_name}: {model_kwargs}")
+            model = get_model(model_name, **model_kwargs)
 
             # Train - pass raw DataFrames to ALL panel-aware model categories
             train_start = time.time()
@@ -623,8 +659,26 @@ class BenchmarkShard:
                 predict_kwargs["test_raw"] = test
                 predict_kwargs["target"] = target
                 predict_kwargs["horizon"] = horizon
-            y_pred = model.predict(X_test, **predict_kwargs)
+            y_pred = np.asarray(model.predict(X_test, **predict_kwargs), dtype=float)
             infer_time = time.time() - infer_start
+
+            # Fairness guard 1: strict length match
+            if len(y_pred) != len(y_test):
+                raise RuntimeError(
+                    f"[FAIRNESS GUARD] len(y_pred)={len(y_pred)} "
+                    f"!= len(y_test)={len(y_test)} for {model_name}"
+                )
+
+            # Fairness guard 2: prediction coverage threshold
+            pred_finite = np.isfinite(y_pred)
+            prediction_coverage_ratio = float(pred_finite.mean()) if len(y_pred) else 0.0
+            n_missing_predictions = int((~pred_finite).sum())
+            if prediction_coverage_ratio < 0.98:
+                raise RuntimeError(
+                    f"[FAIRNESS GUARD] prediction_coverage_ratio="
+                    f"{prediction_coverage_ratio:.4f} < 0.98 for {model_name}"
+                )
+            fallback_fraction = self._extract_fallback_fraction(model)
 
             # ---- CONSTANT-PREDICTION GUARD ----
             if len(y_pred) > 1 and np.std(y_pred) == 0.0:
@@ -637,6 +691,7 @@ class BenchmarkShard:
             # Compute metrics
             n_bootstrap = self.preset_config.n_bootstrap
             metrics_dict = self._compute_metrics(y_test.values, y_pred, n_bootstrap)
+            effective_eval_rows = int(np.sum(np.isfinite(y_test.values) & np.isfinite(y_pred)))
 
             result = ModelMetrics(
                 model_name=model_name,
@@ -647,6 +702,11 @@ class BenchmarkShard:
                 target=target,
                 split="test",
                 n_samples=len(X_test),
+                effective_eval_rows=effective_eval_rows,
+                prediction_coverage_ratio=prediction_coverage_ratio,
+                n_missing_predictions=n_missing_predictions,
+                fallback_fraction=fallback_fraction,
+                fairness_pass=True,
                 train_time_seconds=train_time,
                 inference_time_seconds=infer_time,
                 seed=self.seed,
@@ -666,10 +726,20 @@ class BenchmarkShard:
             })
             self.predictions.append(pred_df)
 
-            logger.info(f"  {model_name}: MAE={metrics_dict.get('mae', 'N/A'):.4f}, RMSE={metrics_dict.get('rmse', 'N/A'):.4f}")
+            mae_val = metrics_dict.get("mae")
+            rmse_val = metrics_dict.get("rmse")
+            mae_txt = f"{mae_val:.4f}" if isinstance(mae_val, (int, float, np.floating)) else "N/A"
+            rmse_txt = f"{rmse_val:.4f}" if isinstance(rmse_val, (int, float, np.floating)) else "N/A"
+            logger.info(
+                f"  {model_name}: MAE={mae_txt}, RMSE={rmse_txt}, "
+                f"coverage={prediction_coverage_ratio:.3f}, fallback={fallback_fraction:.3f}"
+            )
             return result
 
         except Exception as e:
+            if isinstance(e, RuntimeError) and str(e).startswith("[FAIRNESS GUARD]"):
+                # Hard fail to keep benchmark comparisons fair.
+                raise
             logger.error(f"Error running {model_name}: {e}")
             logger.debug(traceback.format_exc())
             return None
@@ -860,6 +930,36 @@ def list_available_tasks():
             print(f"  Error loading config: {e}")
 
 
+def _load_model_kwargs_overrides(
+    json_str: Optional[str],
+    json_file: Optional[Path],
+) -> Dict[str, Dict[str, Any]]:
+    """Load per-model kwargs overrides from JSON string/file."""
+    if json_str and json_file:
+        raise ValueError("Use either --model-kwargs-json or --model-kwargs-file, not both.")
+
+    raw: Dict[str, Any] = {}
+    if json_file:
+        with open(json_file, "r", encoding="utf-8") as f:
+            raw = json.load(f)
+    elif json_str:
+        raw = json.loads(json_str)
+
+    if not raw:
+        return {}
+    if not isinstance(raw, dict):
+        raise ValueError("Model kwargs overrides must be a JSON object (dict).")
+
+    out: Dict[str, Dict[str, Any]] = {}
+    for model_name, kwargs in raw.items():
+        if not isinstance(model_name, str):
+            raise ValueError("Model name keys in overrides must be strings.")
+        if not isinstance(kwargs, dict):
+            raise ValueError(f"Override for model '{model_name}' must be a JSON object.")
+        out[model_name] = kwargs
+    return out
+
+
 def main():
     parser = argparse.ArgumentParser(
         description="Block 3 Benchmark Harness (SLURM-Sharded)",
@@ -875,6 +975,16 @@ def main():
     parser.add_argument("--task", choices=TASK_NAMES, help="Task to run")
     parser.add_argument("--category", choices=CATEGORY_NAMES, help="Model category")
     parser.add_argument("--models", type=str, help="Comma-separated model names (default: all in category)")
+    parser.add_argument(
+        "--model-kwargs-json",
+        type=str,
+        help="JSON string mapping model_name -> kwargs, e.g. '{\"LightGBM\":{\"n_estimators\":3000}}'",
+    )
+    parser.add_argument(
+        "--model-kwargs-file",
+        type=Path,
+        help="Path to JSON file mapping model_name -> kwargs",
+    )
     parser.add_argument("--ablation", choices=ABLATION_NAMES, default="core_only", help="Ablation config")
     
     # Run configuration
@@ -916,6 +1026,20 @@ def main():
     models = None
     if args.models:
         models = [m.strip() for m in args.models.split(",")]
+
+    model_kwargs_overrides: Dict[str, Dict[str, Any]] = {}
+    if args.model_kwargs_json or args.model_kwargs_file:
+        try:
+            model_kwargs_overrides = _load_model_kwargs_overrides(
+                args.model_kwargs_json,
+                args.model_kwargs_file,
+            )
+            logger.info(
+                f"Loaded model kwargs overrides for {len(model_kwargs_overrides)} model(s): "
+                f"{list(model_kwargs_overrides.keys())}"
+            )
+        except Exception as e:
+            parser.error(f"Invalid model kwargs overrides: {e}")
     
     # Verify freeze gates first
     if args.verify_first:
@@ -944,6 +1068,7 @@ def main():
         max_entities=args.max_entities,
         max_rows=args.max_rows,
         num_workers=args.num_workers,
+        model_kwargs_overrides=model_kwargs_overrides,
     )
     
     success = shard.run()

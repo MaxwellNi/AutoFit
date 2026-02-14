@@ -1,16 +1,100 @@
 # Block 3 Benchmark Results — Phase 7 IN PROGRESS
 
-**Last Updated**: 2026-02-13
+**Last Updated**: 2026-02-14 01:42 UTC
 **Phase 7 Dir**: `runs/benchmarks/block3_20260203_225620_phase7/`
 **Platform**: ULHPC Iris HPC — GPU (4×V100 32GB, 756GB) + Batch (28c, 112GB)
 **Freeze Stamp**: `20260203_225620`
-**Model Registry**: 67 models across 7 categories
+**Model Registry (code)**: 72 models across 7 categories (submitted Phase 7 roster: 67)
 **Ablations**: core_only, core_text, core_edgar, full
-**Progress**: 23/121 shards complete, 781 metric records
+**Progress (canonical 121 shards)**: 68 completed, 12 running, 41 pending
 
 ---
 
-## Phase 7 Overview (2026-02-12 → 2026-02-13)
+## Live Status Snapshot (2026-02-14 01:42 UTC)
+
+Data sources:
+- `squeue -u $USER`
+- `sacct -u $USER -S 2026-02-12`
+- `sacctmgr show qos iris-batch-long,iris-gpu-long`
+- `scontrol show job <jobid>` + log tails in `/work/projects/eint/logs/phase7/`
+
+Queue status:
+- RUNNING: 12 (batch=8, gpu=4)
+- PENDING: 41 (batch=25, gpu=16)
+- Pending reason: 41/41 are `QOSMaxJobsPerUserLimit`
+- QOS hard caps confirmed:
+  - `iris-batch-long MaxJobsPerUser=8`
+  - `iris-gpu-long MaxJobsPerUser=4`
+
+Canonical shard progress (121 names from submitted Phase 7 scripts):
+- COMPLETED: 68
+- RUNNING: 12
+- PENDING: 41
+
+Per-shard-group status:
+
+| Group | Completed | Running | Pending | Total |
+|-------|-----------|---------|---------|-------|
+| ml_tabular | 5 | 0 | 6 | 11 |
+| statistical | 3 | 0 | 8 | 11 |
+| deep_classical | 8 | 2 | 1 | 11 |
+| transformer_sota_A | 7 | 1 | 3 | 11 |
+| transformer_sota_B | 7 | 1 | 3 | 11 |
+| foundation_chronos | 8 | 0 | 3 | 11 |
+| foundation_moirai | 8 | 0 | 3 | 11 |
+| foundation_hf | 8 | 0 | 3 | 11 |
+| irregular | 11 | 0 | 0 | 11 |
+| autofit_shard1 | 3 | 3 | 5 | 11 |
+| autofit_shard2 | 0 | 5 | 6 | 11 |
+
+Running-job log health:
+- No new fatal exceptions in sampled running jobs.
+- Non-blocking warnings observed:
+  - deterministic CUDA warnings from NeuralForecast scaler
+  - expected constant-candidate skips in AutoFit quick screen
+  - leakage-guard column-drop messages are active
+
+Materialized output snapshot under current Phase 7 dir:
+- `metrics.json` files: 49
+- metric records currently on disk: 3049
+
+## AutoFit V7.1 Implementation Status (Code Complete, Pilot Pending)
+
+Implemented components:
+- fairness hard guards and coverage schema fields in `scripts/run_block3_benchmark_shard.py`
+- comparability filter in `scripts/aggregate_block3_results.py`
+- V7.1 wrapper with lane routing, dynamic thresholds, objective switching, and dynamic blending in `src/narrative/block3/models/autofit_wrapper.py`
+- candidate expansion wrappers in `src/narrative/block3/models/traditional_ml.py`
+- registry exposure updates in `src/narrative/block3/models/registry.py`
+- V7.1 config flags in `configs/block3_tasks.yaml`
+- Pilot submission mode and V7.1 inclusion in `scripts/submit_phase7_full_benchmark.sh`
+
+Validation status:
+- `test/test_model_registry.py`: PASS
+- `test/test_autofit_v71_no_leakage.py`: PASS
+- `test/test_autofit_v71_coverage_guard.py`: PASS
+- `test/test_autofit_v71_objective_switch.py`: PASS
+- `test/test_autofit_v71_reproducibility.py`: PASS
+- Total: 35 passed
+
+Pilot submission status (V7.1 extreme):
+- Command: `bash scripts/submit_phase7_v71_extreme.sh --pilot`
+- Submitted jobs: 110 (`p7x_*`, JobID `5179607-5179716`)
+- Run tag: `20260214_032205`
+- Output root: `runs/benchmarks/block3_20260203_225620_phase7_v71extreme_20260214_032205`
+- Log root: `/work/projects/eint/logs/phase7_v71extreme_20260214_032205`
+- Stage-A composition:
+  - 11 `ml_tabular` tuned reference shards
+  - 11 `deep_classical` reference shards
+  - 11 `transformer_sota` reference shards
+  - 11 `foundation` reference shards
+  - 11 `autofit` baseline shards (`AutoFitV6,AutoFitV7`)
+  - 55 `AutoFitV71` grid shards (5 variants × 11 task-ablation combos)
+- Immediate queue state:
+  - `p7x_*` RUNNING=0, PENDING=110
+  - pending reason: `QOSMaxJobsPerUserLimit`
+
+## Phase 7 Overview (2026-02-12 -> 2026-02-14)
 
 Phase 7 is the definitive full-scale benchmark with 67 models × 3 tasks × 4 ablations on ULHPC Iris.
 Previous phases (1-6) served as development runs; Phase 7 incorporates ALL fixes.

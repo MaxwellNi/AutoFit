@@ -43,6 +43,26 @@ def collect_metrics(bench_dir: Path) -> pd.DataFrame:
     return df
 
 
+def apply_comparability_filter(
+    df: pd.DataFrame,
+    min_coverage: float = 0.98,
+    fairness_only: bool = True,
+) -> pd.DataFrame:
+    """Filter records to keep only fair and comparable evaluations."""
+    if df.empty:
+        return df
+
+    out = df.copy()
+    if fairness_only and "fairness_pass" in out.columns:
+        out = out[out["fairness_pass"] == True]  # noqa: E712
+
+    if "prediction_coverage_ratio" in out.columns:
+        cov = pd.to_numeric(out["prediction_coverage_ratio"], errors="coerce")
+        out = out[cov >= float(min_coverage)]
+
+    return out
+
+
 def is_fallback(row) -> bool:
     """Detect fallback results (mean-predictor) by checking for the
     characteristic MAE value of ~601864 (the global mean)."""
@@ -54,14 +74,20 @@ def is_fallback(row) -> bool:
     return False
 
 
-def generate_markdown(df: pd.DataFrame, bench_dir: Path) -> str:
+def generate_markdown(
+    df: pd.DataFrame,
+    bench_dir: Path,
+    raw_total: int,
+    min_coverage: float,
+    fairness_only: bool,
+) -> str:
     """Generate comprehensive Markdown report."""
     lines = []
     lines.append("# Block 3 Benchmark Results")
     lines.append("")
     lines.append(f"**Generated**: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
     lines.append(f"**Benchmark Dir**: `{bench_dir.name}`")
-    lines.append(f"**Total Records**: {len(df)}")
+    lines.append(f"**Total Records (post-filter)**: {len(df)}")
     lines.append("")
 
     if df.empty:
@@ -84,6 +110,9 @@ def generate_markdown(df: pd.DataFrame, bench_dir: Path) -> str:
     lines.append("")
     lines.append(f"| Metric | Value |")
     lines.append(f"|--------|-------|")
+    lines.append(f"| Raw records | {raw_total} |")
+    lines.append(f"| Filtered records | {len(df)} |")
+    lines.append(f"| Comparability filter | fairness_only={fairness_only}, min_coverage={min_coverage:.2f} |")
     lines.append(f"| Models evaluated | {n_models} |")
     lines.append(f"| Categories | {', '.join(categories)} |")
     lines.append(f"| Tasks | {', '.join(tasks)} |")
@@ -178,6 +207,12 @@ def main():
     parser.add_argument("--bench-dir", type=str, default=str(DEFAULT_BENCH))
     parser.add_argument("--md-output", type=str, default=str(DEFAULT_MD))
     parser.add_argument("--csv-output", type=str, default=None)
+    parser.add_argument("--min-coverage", type=float, default=0.98)
+    parser.add_argument(
+        "--disable-fairness-filter",
+        action="store_true",
+        help="Disable fairness_pass filter (not recommended for final leaderboard).",
+    )
     args = parser.parse_args()
 
     bench_dir = Path(args.bench_dir)
@@ -186,8 +221,18 @@ def main():
         sys.exit(1)
 
     print(f"Scanning: {bench_dir}")
-    df = collect_metrics(bench_dir)
-    print(f"Found {len(df)} metric records from {df['model_name'].nunique() if len(df) else 0} models")
+    df_raw = collect_metrics(bench_dir)
+    fairness_only = not args.disable_fairness_filter
+    df = apply_comparability_filter(
+        df_raw,
+        min_coverage=args.min_coverage,
+        fairness_only=fairness_only,
+    )
+    print(
+        f"Found {len(df_raw)} raw metric records, "
+        f"{len(df)} post-filter records "
+        f"(fairness_only={fairness_only}, min_coverage={args.min_coverage:.2f})"
+    )
 
     if df.empty:
         print("No results yet.")
@@ -199,7 +244,13 @@ def main():
     print(f"CSV saved: {csv_path}")
 
     # Generate and save Markdown
-    md_content = generate_markdown(df, bench_dir)
+    md_content = generate_markdown(
+        df,
+        bench_dir,
+        raw_total=len(df_raw),
+        min_coverage=args.min_coverage,
+        fairness_only=fairness_only,
+    )
     md_path = Path(args.md_output)
     md_path.parent.mkdir(parents=True, exist_ok=True)
     md_path.write_text(md_content, encoding="utf-8")

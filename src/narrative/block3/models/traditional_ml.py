@@ -399,6 +399,126 @@ def create_catboost(**kwargs) -> ModelBase:
 
 
 # ============================================================================
+# Additional Tabular SOTA Variants (AutoFitV7.1 Candidate Pool)
+# ============================================================================
+
+class TabPFNRegressorWrapper(ModelBase):
+    """TabPFN regressor wrapper with optional dependency guard."""
+
+    _MAX_ROWS = 20_000
+
+    def __init__(self, **kwargs):
+        config = ModelConfig(
+            name="TabPFNRegressor",
+            model_type="regression",
+            params=kwargs,
+            optional_dependency="tabpfn",
+        )
+        super().__init__(config)
+        self._init_kwargs = kwargs
+        self._feature_names: list[str] = []
+
+    def fit(self, X: pd.DataFrame, y: pd.Series, **kwargs) -> "TabPFNRegressorWrapper":
+        try:
+            from tabpfn import TabPFNRegressor
+        except ImportError:
+            raise ImportError("tabpfn not installed. Run: pip install tabpfn")
+
+        if len(X) > self._MAX_ROWS:
+            rng = np.random.RandomState(42)
+            idx = rng.choice(len(X), self._MAX_ROWS, replace=False)
+            idx.sort()
+            X = X.iloc[idx]
+            y = y.iloc[idx]
+            _logger.info(
+                f"  [TabPFNRegressor] Subsampled to {self._MAX_ROWS:,} rows"
+            )
+
+        Xf = X.fillna(0)
+        self._feature_names = list(Xf.columns)
+        self.model = TabPFNRegressor(**self._init_kwargs)
+        self.model.fit(Xf.values, y.values)
+        self._fitted = True
+        return self
+
+    def predict(self, X: pd.DataFrame, **kwargs) -> np.ndarray:
+        Xf = X[self._feature_names].fillna(0) if self._feature_names else X.fillna(0)
+        return np.asarray(self.model.predict(Xf.values), dtype=float)
+
+
+class TabPFNClassifierWrapper(ModelBase):
+    """TabPFN classifier wrapper returning positive-class probabilities."""
+
+    _MAX_ROWS = 20_000
+
+    def __init__(self, **kwargs):
+        config = ModelConfig(
+            name="TabPFNClassifier",
+            model_type="classification",
+            params=kwargs,
+            optional_dependency="tabpfn",
+        )
+        super().__init__(config)
+        self._init_kwargs = kwargs
+        self._feature_names: list[str] = []
+
+    def fit(self, X: pd.DataFrame, y: pd.Series, **kwargs) -> "TabPFNClassifierWrapper":
+        try:
+            from tabpfn import TabPFNClassifier
+        except ImportError:
+            raise ImportError("tabpfn not installed. Run: pip install tabpfn")
+
+        if len(X) > self._MAX_ROWS:
+            rng = np.random.RandomState(42)
+            idx = rng.choice(len(X), self._MAX_ROWS, replace=False)
+            idx.sort()
+            X = X.iloc[idx]
+            y = y.iloc[idx]
+            _logger.info(
+                f"  [TabPFNClassifier] Subsampled to {self._MAX_ROWS:,} rows"
+            )
+
+        Xf = X.fillna(0)
+        yb = (y.values > 0.5).astype(int)
+        self._feature_names = list(Xf.columns)
+        self.model = TabPFNClassifier(**self._init_kwargs)
+        self.model.fit(Xf.values, yb)
+        self._fitted = True
+        return self
+
+    def predict(self, X: pd.DataFrame, **kwargs) -> np.ndarray:
+        Xf = X[self._feature_names].fillna(0) if self._feature_names else X.fillna(0)
+        if hasattr(self.model, "predict_proba"):
+            proba = self.model.predict_proba(Xf.values)
+            if proba.ndim == 2 and proba.shape[1] >= 2:
+                return np.asarray(proba[:, 1], dtype=float)
+        return np.asarray(self.model.predict(Xf.values), dtype=float)
+
+    def predict_proba(self, X: pd.DataFrame) -> np.ndarray:
+        Xf = X[self._feature_names].fillna(0) if self._feature_names else X.fillna(0)
+        if hasattr(self.model, "predict_proba"):
+            return self.model.predict_proba(Xf.values)
+        preds = self.predict(X)
+        probs = np.clip(preds, 0.0, 1.0)
+        return np.column_stack([1.0 - probs, probs])
+
+
+def create_xgboost_poisson(**kwargs) -> ModelBase:
+    """XGBoost Poisson objective for count-like targets."""
+    kwargs = dict(kwargs)
+    kwargs["objective"] = kwargs.get("objective", "count:poisson")
+    return create_xgboost(**kwargs)
+
+
+def create_lightgbm_tweedie(**kwargs) -> ModelBase:
+    """LightGBM Tweedie objective for count-like targets."""
+    kwargs = dict(kwargs)
+    kwargs["objective"] = kwargs.get("objective", "tweedie")
+    kwargs["tweedie_variance_power"] = kwargs.get("tweedie_variance_power", 1.5)
+    return create_lightgbm(**kwargs)
+
+
+# ============================================================================
 # Quantile Regression
 # ============================================================================
 
@@ -497,6 +617,12 @@ TRADITIONAL_ML_MODELS = {
     "LightGBM": create_lightgbm,
     "XGBoost": create_xgboost,
     "CatBoost": create_catboost,
+    # Objective-specialized variants
+    "XGBoostPoisson": create_xgboost_poisson,
+    "LightGBMTweedie": create_lightgbm_tweedie,
+    # TabPFN variants (optional dependency)
+    "TabPFNRegressor": lambda **kwargs: TabPFNRegressorWrapper(**kwargs),
+    "TabPFNClassifier": lambda **kwargs: TabPFNClassifierWrapper(**kwargs),
     # Quantile
     "QuantileRegressor": create_quantile_regressor,
     # Baselines

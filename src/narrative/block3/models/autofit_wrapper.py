@@ -3245,6 +3245,8 @@ def _repeated_temporal_kfold_evaluate_all(
     target: str,
     horizon: int,
     n_reps: int = 2,
+    n_folds: int = _N_TEMPORAL_FOLDS,
+    offsets: Optional[List[float]] = None,
     target_transform: Optional[TargetTransform] = None,
 ) -> Tuple[List[Tuple[str, float, float, np.ndarray]], Dict[str, np.ndarray]]:
     """Repeated temporal CV: average over multiple offset fold sets.
@@ -3267,12 +3269,15 @@ def _repeated_temporal_kfold_evaluate_all(
     rep0_full_oof: Dict[str, np.ndarray] = {}
     rep0_last_preds: Dict[str, np.ndarray] = {}
 
-    offsets = [0.0, -0.05][:n_reps]  # jitter offsets
+    if offsets is None:
+        offsets = [0.0, -0.05][:n_reps]  # V7 default jitter
+    else:
+        offsets = offsets[:n_reps]
 
     raw_aligned = train_raw is not None and len(train_raw) == n
 
     for rep_idx, offset in enumerate(offsets):
-        base_fracs = np.linspace(0.5, 0.9, _N_TEMPORAL_FOLDS)
+        base_fracs = np.linspace(0.5, 0.9, n_folds)
         fracs = np.clip(base_fracs + offset, 0.10, 0.95)
         cuts = [int(f * n) for f in fracs]
         cuts.append(n if rep_idx == 0 else int(0.95 * n))
@@ -3423,6 +3428,8 @@ def _build_multi_seed_meta_learner(
     n_seeds: int = 5,
     use_huber: bool = True,
     huber_delta: Optional[float] = None,
+    objective_mode: Optional[str] = None,
+    seed_list: Optional[List[int]] = None,
 ) -> Tuple[List[Any], List[str], float]:
     """Multi-seed bagged LightGBM meta-learner with Huber loss.
 
@@ -3467,9 +3474,16 @@ def _build_multi_seed_meta_learner(
     X_mt, X_mv = X_meta_num.iloc[:meta_split], X_meta_num.iloc[meta_split:]
     y_mt, y_mv = y_meta.iloc[:meta_split], y_meta.iloc[meta_split:]
 
-    seeds = [42, 137, 314, 666, 999][:n_seeds]
+    if objective_mode is None:
+        objective_mode = "huber" if use_huber else "l2"
+
+    seeds = seed_list or [42, 137, 314, 666, 999]
+    seeds = seeds[:n_seeds]
     meta_learners = []
     all_preds_val = []
+
+    y_mt_binary = (y_mt.values > 0.5).astype(int)
+    y_mv_binary = (y_mv.values > 0.5).astype(int)
 
     for seed in seeds:
         params = dict(
@@ -3486,19 +3500,39 @@ def _build_multi_seed_meta_learner(
             random_state=seed,
             verbose=-1,
         )
-        if use_huber:
+        if objective_mode == "huber":
             params["objective"] = "huber"
             params["huber_delta"] = huber_delta
+        elif objective_mode == "count":
+            params["objective"] = "poisson"
+        elif objective_mode == "l2":
+            pass
+        elif objective_mode == "binary":
+            pass
+        else:
+            params["objective"] = "regression_l1"
 
         try:
-            learner = lgb.LGBMRegressor(**params)
-            learner.fit(
-                X_mt, y_mt,
-                eval_set=[(X_mv, y_mv)],
-                callbacks=[lgb.early_stopping(50, verbose=False)],
-            )
+            if objective_mode == "binary":
+                clf_params = dict(params)
+                clf_params.pop("huber_delta", None)
+                learner = lgb.LGBMClassifier(**clf_params)
+                learner.fit(
+                    X_mt, y_mt_binary,
+                    eval_set=[(X_mv, y_mv_binary)],
+                    callbacks=[lgb.early_stopping(50, verbose=False)],
+                )
+                pred_full = learner.predict_proba(X_meta_num)[:, 1]
+            else:
+                learner = lgb.LGBMRegressor(**params)
+                learner.fit(
+                    X_mt, y_mt,
+                    eval_set=[(X_mv, y_mv)],
+                    callbacks=[lgb.early_stopping(50, verbose=False)],
+                )
+                pred_full = learner.predict(X_meta_num)
             meta_learners.append(learner)
-            all_preds_val.append(learner.predict(X_meta_num))
+            all_preds_val.append(pred_full)
         except Exception as e:
             logger.warning(f"[AutoFitV7] Meta-learner seed={seed} failed: {e}")
 
@@ -3515,12 +3549,145 @@ def _build_multi_seed_meta_learner(
 
     logger.info(
         f"[AutoFitV7] Multi-seed meta-learner: {len(meta_learners)} learners, "
-        f"{'huber' if use_huber else 'l2'} loss"
-        f"{f' (delta={huber_delta:.2f})' if use_huber and huber_delta else ''}, "
+        f"objective={objective_mode}"
+        f"{f' (delta={huber_delta:.2f})' if objective_mode == 'huber' and huber_delta else ''}, "
         f"MAE={meta_mae:,.4f}"
     )
 
     return meta_learners, numeric_cols, meta_mae
+
+
+def _meta_predict(learner: Any, X: pd.DataFrame) -> np.ndarray:
+    """Unified prediction helper for regressor/classifier meta learners."""
+    if hasattr(learner, "predict_proba"):
+        proba = learner.predict_proba(X)
+        if isinstance(proba, np.ndarray) and proba.ndim == 2 and proba.shape[1] >= 2:
+            return np.asarray(proba[:, 1], dtype=float)
+    return np.asarray(learner.predict(X), dtype=float)
+
+
+def _infer_target_lane(meta: Dict[str, float], y: pd.Series) -> str:
+    """Infer target lane for AutoFitV7.1 objective/routing."""
+    y_arr = np.asarray(y.values, dtype=float)
+    y_fin = y_arr[np.isfinite(y_arr)]
+    if len(y_fin) < 10:
+        return "general"
+
+    n_unique = len(np.unique(y_fin))
+    is_binary = n_unique <= 3 and set(np.unique(y_fin)).issubset({0.0, 1.0})
+    is_nonneg = bool((y_fin >= 0).all())
+    is_count_like = bool(
+        is_nonneg
+        and (y_fin == np.round(y_fin)).mean() > 0.9
+        and n_unique > 3
+        and y_fin.max() > 2
+    )
+    is_heavy_tail = bool(is_nonneg and float(pd.Series(y_fin).kurtosis()) > 5.0)
+
+    if is_binary:
+        return "binary"
+    if is_count_like:
+        return "count"
+    if is_heavy_tail:
+        return "heavy_tail"
+    return "general"
+
+
+def _quick_screen_threshold_for_lane(lane: str) -> float:
+    """Dynamic quick-screen ratio threshold by target lane."""
+    if lane == "heavy_tail":
+        return 0.95
+    if lane == "count":
+        return 0.85
+    return 0.90
+
+
+def _blend_weights_for_lane(lane: str) -> Tuple[float, float]:
+    """(Caruana, Conformal) blending weights by lane."""
+    if lane == "heavy_tail":
+        return 0.75, 0.25
+    if lane == "count":
+        return 0.55, 0.45
+    if lane == "binary":
+        return 0.50, 0.50
+    return 0.65, 0.35
+
+
+def _build_regime_retrieval_features(
+    X: pd.DataFrame,
+    fit: bool = True,
+    state: Optional[Dict[str, Any]] = None,
+) -> Tuple[pd.DataFrame, Dict[str, Any]]:
+    """Lightweight retrieval-style regime descriptors using train-only prototypes."""
+    X_aug = X.copy()
+    if state is None:
+        state = {}
+
+    if fit:
+        numeric_cols = X.select_dtypes(include=[np.number]).columns.tolist()
+        if len(numeric_cols) < 2:
+            return X_aug, {"enabled": False}
+
+        scores = {}
+        for c in numeric_cols:
+            vals = X[c].dropna().values
+            if len(vals) > 100:
+                scores[c] = float(np.var(vals)) * (len(vals) / max(len(X), 1))
+        cols = sorted(scores, key=lambda k: scores[k], reverse=True)[:8]
+        if len(cols) < 2:
+            return X_aug, {"enabled": False}
+
+        X_num = X[cols].copy()
+        medians = X_num.median().to_dict()
+        X_num = X_num.fillna(medians)
+
+        n_buckets = min(8, max(3, len(X_num) // 2000))
+        bucket_edges = np.linspace(0, len(X_num), n_buckets + 1, dtype=int)
+        centers = []
+        for i in range(n_buckets):
+            s, e = bucket_edges[i], bucket_edges[i + 1]
+            if e <= s:
+                continue
+            centers.append(X_num.iloc[s:e].mean().values.astype(float))
+
+        if len(centers) < 2:
+            return X_aug, {"enabled": False}
+
+        state = {
+            "enabled": True,
+            "cols": cols,
+            "centers": np.vstack(centers),
+            "medians": medians,
+        }
+    else:
+        if not state.get("enabled", False):
+            return X_aug, state
+
+    if not state.get("enabled", False):
+        return X_aug, state
+
+    cols = state["cols"]
+    centers = np.asarray(state["centers"], dtype=float)
+    medians = state["medians"]
+    X_num = X[cols].copy().fillna(medians)
+    mat = X_num.values.astype(float)
+
+    dmat = np.linalg.norm(mat[:, None, :] - centers[None, :, :], axis=2)
+    min_dist = dmat.min(axis=1)
+    mean_dist = dmat.mean(axis=1)
+    best_bucket = dmat.argmin(axis=1).astype(float)
+    if dmat.shape[1] >= 2:
+        part = np.partition(dmat, 1, axis=1)
+        gap = part[:, 1] - part[:, 0]
+    else:
+        gap = np.zeros(len(X_num), dtype=float)
+
+    X_aug["__regime_min_dist__"] = min_dist
+    X_aug["__regime_mean_dist__"] = mean_dist
+    X_aug["__regime_best_bucket__"] = best_bucket
+    X_aug["__regime_margin__"] = gap
+
+    return X_aug, state
 
 
 class AutoFitV7Wrapper(ModelBase):
@@ -4028,6 +4195,559 @@ def get_autofit_v7(**kwargs) -> AutoFitV7Wrapper:
     return AutoFitV7Wrapper(top_k=8, **kwargs)
 
 
+class AutoFitV71Wrapper(ModelBase):
+    """AutoFitV7.1: lane-adaptive robust ensemble with fairness-first defaults."""
+
+    def __init__(
+        self,
+        top_k: int = 8,
+        min_ensemble_size_heavy_tail: int = 2,
+        dynamic_weighting: bool = True,
+        enable_regime_retrieval: bool = True,
+        **kwargs,
+    ):
+        config = ModelConfig(
+            name="AutoFitV71",
+            model_type="regression",
+            params={
+                "strategy": "lane_adaptive_robust_ensemble",
+                "top_k": top_k,
+                "min_ensemble_size_heavy_tail": min_ensemble_size_heavy_tail,
+                "dynamic_weighting": dynamic_weighting,
+                "enable_regime_retrieval": enable_regime_retrieval,
+            },
+        )
+        super().__init__(config)
+        self._top_k = top_k
+        self._min_ensemble_size_heavy_tail = min_ensemble_size_heavy_tail
+        self._dynamic_weighting = dynamic_weighting
+        self._enable_regime_retrieval = enable_regime_retrieval
+
+        self._models: List[Tuple[ModelBase, str]] = []
+        self._ensemble_weights: Dict[str, float] = {}
+        self._meta_learners_l1: List[Any] = []
+        self._meta_learner_l2 = None
+        self._meta_learner_l2_name: Optional[str] = None
+        self._meta_cols_l1: List[str] = []
+        self._meta_cols_l2: List[str] = []
+        self._pred_names: List[str] = []
+        self._target_xform: Optional[RobustTargetTransform] = None
+        self._lane: str = "general"
+        self._meta_objective: str = "l2"
+        self._dynamic_thresholds: Dict[str, float] = {}
+
+        # Feature augmentation state
+        self._miss_cluster_model = None
+        self._miss_dense_cols: Optional[List[str]] = None
+        self._kept_ratios: List[Tuple[str, str]] = []
+        self._kept_log_cols: List[str] = []
+        self._regime_state: Dict[str, Any] = {"enabled": False}
+        self._routing_info: Dict[str, Any] = {}
+
+    def _augment_features(
+        self, X: pd.DataFrame, y: Optional[pd.Series] = None, fit: bool = True
+    ) -> pd.DataFrame:
+        X_aug, self._miss_cluster_model, self._miss_dense_cols = _build_missingness_features(
+            X,
+            fit=fit,
+            cluster_model=self._miss_cluster_model,
+            dense_cols=self._miss_dense_cols,
+        )
+        X_aug, self._kept_ratios, self._kept_log_cols = _build_ratio_features(
+            X_aug,
+            y=y,
+            fit=fit,
+            kept_ratios=self._kept_ratios if not fit else None,
+            kept_log_cols=self._kept_log_cols if not fit else None,
+        )
+        if self._enable_regime_retrieval:
+            X_aug, self._regime_state = _build_regime_retrieval_features(
+                X_aug,
+                fit=fit,
+                state=self._regime_state,
+            )
+        return X_aug
+
+    @staticmethod
+    def _candidate_pool_for_lane(lane: str) -> List[str]:
+        pool = list(_ALL_CANDIDATES)
+        if lane == "count":
+            pool.extend(["XGBoostPoisson", "LightGBMTweedie"])
+        elif lane == "binary":
+            pool.extend(["TabPFNClassifier"])
+        elif lane == "heavy_tail":
+            pool.extend(["TabPFNRegressor"])
+        # Stable de-duplication preserving order
+        seen = set()
+        deduped = []
+        for name in pool:
+            if name not in seen:
+                deduped.append(name)
+                seen.add(name)
+        return deduped
+
+    def fit(self, X: pd.DataFrame, y: pd.Series, **kwargs) -> "AutoFitV71Wrapper":
+        from .registry import check_model_available, get_model
+
+        train_raw = kwargs.get("train_raw")
+        target = kwargs.get("target", y.name or "funding_raised_usd")
+        horizon = kwargs.get("horizon", 7)
+        t0 = time.monotonic()
+
+        meta = _compute_target_regime(y, X)
+        self._lane = _infer_target_lane(meta, y)
+        self._meta_objective = {
+            "binary": "binary",
+            "count": "count",
+            "heavy_tail": "huber",
+            "general": "l2",
+        }[self._lane]
+        qs_threshold = _quick_screen_threshold_for_lane(self._lane)
+        self._dynamic_thresholds = {"quick_screen_ratio": qs_threshold}
+
+        logger.info(
+            f"[AutoFitV71] Meta-features: {meta} | lane={self._lane} "
+            f"| objective={self._meta_objective}"
+        )
+
+        n = len(X)
+        self._target_xform = RobustTargetTransform()
+        self._target_xform.fit(y)
+        logger.info(f"[AutoFitV71] Target transform: {self._target_xform.kind}")
+
+        X_aug = self._augment_features(X, y=y, fit=True)
+        n_new_features = len(X_aug.columns) - len(X.columns)
+        logger.info(
+            f"[AutoFitV71] Feature augmentation: {len(X.columns)} → "
+            f"{len(X_aug.columns)} (+{n_new_features} engineered)"
+        )
+
+        candidate_pool = self._candidate_pool_for_lane(self._lane)
+
+        # -- Quick screen with lane-adaptive threshold --
+        qs_train_end = int(n * 0.70)
+        qs_val_end = int(n * 0.85)
+        X_qs_t, y_qs_t = X_aug.iloc[:qs_train_end], y.iloc[:qs_train_end]
+        X_qs_v, y_qs_v = X_aug.iloc[qs_train_end:qs_val_end], y.iloc[qs_train_end:qs_val_end]
+        raw_aligned = train_raw is not None and len(train_raw) == n
+        tr_raw_qs = train_raw.iloc[:qs_train_end] if raw_aligned else None
+        val_raw_qs = train_raw.iloc[qs_train_end:qs_val_end] if raw_aligned else None
+
+        mean_pred_mae = float(np.mean(np.abs(y_qs_v.values - np.mean(y_qs_t.values))))
+        survived: List[str] = []
+        for model_name in candidate_pool:
+            r = _fit_single_candidate(
+                model_name,
+                X_qs_t,
+                y_qs_t,
+                X_qs_v,
+                y_qs_v,
+                tr_raw_qs,
+                val_raw_qs,
+                target,
+                horizon,
+                timeout=300,
+                target_transform=self._target_xform,
+            )
+            if r is None:
+                continue
+            name, mae, _, _elapsed = r
+            ratio = mae / max(mean_pred_mae, 1e-8)
+            if ratio < qs_threshold:
+                survived.append(name)
+                logger.info(
+                    f"[AutoFitV71 QS] {name}: MAE={mae:,.2f} "
+                    f"({ratio:.1%} of MeanPred) → SURVIVED"
+                )
+
+        if not survived:
+            logger.error("[AutoFitV71] All candidates pruned! Fallback model")
+            fallback_order = (
+                ["LightGBMTweedie", "XGBoostPoisson", "LightGBM"]
+                if self._lane == "count"
+                else ["LightGBM", "RandomForest"]
+            )
+            chosen = None
+            for nm in fallback_order:
+                if check_model_available(nm):
+                    chosen = nm
+                    break
+            chosen = chosen or "LightGBM"
+            model = get_model(chosen)
+            model.fit(X_aug, y)
+            self._models = [(model, chosen)]
+            self._pred_names = [chosen]
+            self._ensemble_weights = {chosen: 1.0}
+            self._routing_info = {
+                "lane_selected": self._lane,
+                "meta_objective": self._meta_objective,
+                "regime_retrieval_enabled": self._enable_regime_retrieval,
+                "fallback_model": chosen,
+            }
+            self._fitted = True
+            return self
+
+        logger.info(
+            f"[AutoFitV71] Quick screen: {len(survived)}/{len(candidate_pool)} survived "
+            f"(threshold={qs_threshold:.2f})"
+        )
+
+        # -- Repeated temporal CV: 3x4 scheme --
+        original_candidates = list(_ALL_CANDIDATES)
+        _ALL_CANDIDATES.clear()
+        _ALL_CANDIDATES.extend(survived)
+        try:
+            results, full_oof = _repeated_temporal_kfold_evaluate_all(
+                X_aug,
+                y,
+                train_raw,
+                target,
+                horizon,
+                n_reps=3,
+                n_folds=4,
+                offsets=[0.0, -0.04, -0.08],
+                target_transform=self._target_xform,
+            )
+        finally:
+            _ALL_CANDIDATES.clear()
+            _ALL_CANDIDATES.extend(original_candidates)
+
+        if not results:
+            logger.error("[AutoFitV71] No candidates survived repeated CV! Fallback LightGBM")
+            model = get_model("LightGBM")
+            model.fit(X_aug, y)
+            self._models = [(model, "LightGBM")]
+            self._pred_names = ["LightGBM"]
+            self._ensemble_weights = {"LightGBM": 1.0}
+            self._fitted = True
+            return self
+
+        best_single_name = results[0][0]
+        best_single_raw = results[0][2]
+
+        # -- Monotone forward selection --
+        oof_start = int(n * 0.5)
+        y_oof = y.iloc[oof_start:].values
+        oof_clean: Dict[str, np.ndarray] = {}
+        for name, _, _, _ in results[:self._top_k]:
+            if name in full_oof:
+                oof = full_oof[name][:len(y_oof)]
+                oof = np.where(np.isfinite(oof), oof, np.nanmean(oof))
+                oof_clean[name] = oof
+        if not oof_clean:
+            oof_clean = {best_single_name: np.full(len(y_oof), np.mean(y_oof))}
+
+        div_scores = _ncl_diversity_score(oof_clean, y_oof) if len(oof_clean) >= 2 else {}
+        sorted_by_adj = [(nm, adj) for nm, adj, _, _ in results if nm in oof_clean]
+
+        ensemble_list: List[str] = []
+        current_mae = float("inf")
+        for name, _ in sorted_by_adj:
+            trial = ensemble_list + [name]
+            trial_preds = np.mean([oof_clean[nm] for nm in trial], axis=0)
+            trial_mae = float(np.mean(np.abs(y_oof - trial_preds)))
+            if trial_mae < current_mae - 1e-6:
+                ensemble_list.append(name)
+                current_mae = trial_mae
+                logger.info(
+                    f"[AutoFitV71] +{name} → ensemble MAE={current_mae:,.4f} "
+                    f"(size={len(ensemble_list)}, div={div_scores.get(name, 0):.3f})"
+                )
+
+        if not ensemble_list:
+            ensemble_list = [best_single_name]
+
+        # Heavy-tail anti-collapse: retain a 2nd model if <=1% MAE degradation.
+        if (
+            self._lane == "heavy_tail"
+            and len(ensemble_list) < self._min_ensemble_size_heavy_tail
+            and len(sorted_by_adj) >= 2
+        ):
+            primary = ensemble_list[0]
+            best_second = None
+            best_trial_mae = float("inf")
+            for cand, _ in sorted_by_adj:
+                if cand == primary:
+                    continue
+                trial_preds = np.mean([oof_clean[primary], oof_clean[cand]], axis=0)
+                trial_mae = float(np.mean(np.abs(y_oof - trial_preds)))
+                if trial_mae < best_trial_mae:
+                    best_trial_mae = trial_mae
+                    best_second = cand
+            if best_second is not None and best_trial_mae <= current_mae * 1.01:
+                ensemble_list.append(best_second)
+                current_mae = best_trial_mae
+                logger.info(
+                    f"[AutoFitV71] Force-keep 2nd model {best_second} under heavy-tail "
+                    f"anti-collapse rule (MAE={best_trial_mae:,.4f})"
+                )
+
+        selected_names = ensemble_list[:self._top_k]
+        self._pred_names = selected_names
+        selected_oof = {nm: oof_clean[nm] for nm in selected_names if nm in oof_clean}
+
+        # -- Caruana + conformal blend with lane-adaptive weighting --
+        caruana_weights = _caruana_greedy_ensemble_transformed(
+            selected_oof,
+            y_oof,
+            transform=self._target_xform,
+            max_models=25,
+        )
+        conformal_weights = _conformal_residual_weights(selected_oof, y_oof)
+        caruana_alpha, conformal_alpha = (
+            _blend_weights_for_lane(self._lane) if self._dynamic_weighting else (0.65, 0.35)
+        )
+        blended_weights: Dict[str, float] = {}
+        c_dict = dict(caruana_weights)
+        for name in selected_names:
+            blended_weights[name] = (
+                caruana_alpha * c_dict.get(name, 0.0)
+                + conformal_alpha * conformal_weights.get(name, 0.0)
+            )
+        total_bw = sum(blended_weights.values()) or 1.0
+        blended_weights = {nm: w / total_bw for nm, w in blended_weights.items()}
+        self._ensemble_weights = blended_weights
+
+        # -- Meta learners: 7-seed L1 + (Ridge vs ElasticNet) L2 --
+        X_oof_full = X_aug.iloc[oof_start:]
+        y_oof_s = y.iloc[oof_start:]
+        l1_pred_oof = None
+        if len(selected_oof) >= 2:
+            try:
+                self._meta_learners_l1, self._meta_cols_l1, l1_mae = _build_multi_seed_meta_learner(
+                    X_oof_full,
+                    y_oof_s,
+                    selected_oof,
+                    target_transform=self._target_xform,
+                    n_seeds=7,
+                    use_huber=self._meta_objective == "huber",
+                    objective_mode=self._meta_objective,
+                    seed_list=[42, 137, 314, 666, 999, 2026, 7777],
+                )
+
+                X_l1 = X_oof_full.copy()
+                for name in selected_names:
+                    if name in selected_oof:
+                        X_l1[f"__pred_{name}__"] = selected_oof[name]
+                for c in self._meta_cols_l1:
+                    if c not in X_l1.columns:
+                        X_l1[c] = 0.0
+                X_l1_num = X_l1[self._meta_cols_l1].fillna(0)
+
+                l1_preds_all = [_meta_predict(learner, X_l1_num) for learner in self._meta_learners_l1]
+                l1_pred_oof = np.mean(l1_preds_all, axis=0)
+                logger.info(
+                    f"[AutoFitV71] L1 multi-seed meta-learner: "
+                    f"{len(self._meta_learners_l1)} seeds, MAE={l1_mae:,.4f}"
+                )
+            except Exception as e:
+                logger.warning(f"[AutoFitV71] L1 meta-learner failed: {e}")
+                self._meta_learners_l1 = []
+
+        if self._meta_learners_l1 and l1_pred_oof is not None:
+            try:
+                from sklearn.linear_model import ElasticNet as ElasticNetRegressor
+                from sklearn.linear_model import Ridge as RidgeRegressor
+
+                l2_features = {}
+                for name in selected_names:
+                    if name in selected_oof:
+                        l2_features[f"L0_{name}"] = selected_oof[name]
+                l2_features["L1_meta"] = l1_pred_oof
+                X_l2 = pd.DataFrame(l2_features, index=X_oof_full.index[:len(y_oof)])
+
+                y_l2 = y_oof_s.values[:len(y_oof)]
+                y_l2_t = (
+                    self._target_xform.transform(y_l2)
+                    if self._target_xform is not None and self._target_xform.kind != "identity"
+                    else y_l2
+                )
+
+                l2_split = int(len(X_l2) * 0.75)
+                X_l2_t, X_l2_v = X_l2.iloc[:l2_split].fillna(0), X_l2.iloc[l2_split:].fillna(0)
+                y_l2_t_t, y_l2_v = y_l2_t[:l2_split], y_l2[l2_split:]
+
+                candidates = [
+                    ("Ridge", RidgeRegressor(alpha=10.0)),
+                    ("ElasticNet", ElasticNetRegressor(alpha=0.01, l1_ratio=0.25, max_iter=5000, random_state=42)),
+                ]
+                best_name = None
+                best_model = None
+                best_mae = float("inf")
+                for nm, mdl in candidates:
+                    mdl.fit(X_l2_t, y_l2_t_t)
+                    pred_v = mdl.predict(X_l2_v)
+                    if self._target_xform is not None and self._target_xform.kind != "identity":
+                        pred_v = self._target_xform.inverse(pred_v)
+                    mae_v = float(np.mean(np.abs(y_l2_v - pred_v)))
+                    if mae_v < best_mae:
+                        best_mae = mae_v
+                        best_name = nm
+                        best_model = mdl
+
+                if best_model is None or best_mae >= best_single_raw * 0.995:
+                    logger.info(
+                        f"[AutoFitV71] L2 blender REJECTED (best={best_name}, "
+                        f"MAE={best_mae:,.4f}, guard={best_single_raw * 0.995:,.4f})"
+                    )
+                    self._meta_learner_l2 = None
+                    self._meta_learner_l2_name = None
+                else:
+                    self._meta_learner_l2 = best_model
+                    self._meta_learner_l2_name = best_name
+                    self._meta_cols_l2 = list(X_l2.columns)
+                    logger.info(
+                        f"[AutoFitV71] L2 blender ACCEPTED: {best_name}, MAE={best_mae:,.4f}"
+                    )
+            except Exception as e:
+                logger.warning(f"[AutoFitV71] L2 blender failed: {e}")
+                self._meta_learner_l2 = None
+                self._meta_learner_l2_name = None
+        else:
+            self._meta_learner_l2 = None
+            self._meta_learner_l2_name = None
+
+        # -- Refit selected models on full data --
+        self._models = []
+        for model_name in selected_names:
+            try:
+                model = get_model(model_name)
+                fit_kw: Dict[str, Any] = {}
+                if _needs_panel_kwargs(model_name):
+                    fit_kw = {"train_raw": train_raw, "target": target, "horizon": horizon}
+                model.fit(X_aug, y, **fit_kw)
+                self._models.append((model, model_name))
+            except Exception as e:
+                logger.warning(f"[AutoFitV71] Refit {model_name} failed: {e}")
+
+        elapsed = time.monotonic() - t0
+        self._routing_info = {
+            "meta_features": meta,
+            "lane_selected": self._lane,
+            "meta_objective": self._meta_objective,
+            "dynamic_thresholds": self._dynamic_thresholds,
+            "target_transform": self._target_xform.kind if self._target_xform else "identity",
+            "n_engineered_features": n_new_features,
+            "missingness_clusters": (
+                self._miss_cluster_model.n_clusters
+                if self._miss_cluster_model is not None else 0
+            ),
+            "n_ratio_features": len(self._kept_ratios),
+            "n_log_features": len(self._kept_log_cols),
+            "regime_retrieval_enabled": self._enable_regime_retrieval,
+            "quick_screen_survived": len(survived),
+            "quick_screen_total": len(candidate_pool),
+            "monotone_selected": ensemble_list,
+            "final_selected": selected_names,
+            "caruana_weights": dict(caruana_weights),
+            "conformal_weights": conformal_weights,
+            "blended_weights": blended_weights,
+            "ensemble_diversity_stats": div_scores,
+            "n_meta_seeds": len(self._meta_learners_l1),
+            "has_l2_blender": self._meta_learner_l2 is not None,
+            "l2_blender_name": self._meta_learner_l2_name,
+            "best_single": {"name": best_single_name, "mae": best_single_raw},
+            "elapsed_seconds": elapsed,
+        }
+        self._fitted = True
+        logger.info(
+            f"[AutoFitV71] Fitted in {elapsed:.1f}s: "
+            f"{len(self._models)} models, "
+            f"L1={len(self._meta_learners_l1)} seeds, "
+            f"L2={'YES' if self._meta_learner_l2 else 'NO'}, "
+            f"lane={self._lane}, +{n_new_features} features"
+        )
+        return self
+
+    def predict(self, X: pd.DataFrame, **kwargs) -> np.ndarray:
+        if not self._fitted or not self._models:
+            raise RuntimeError("AutoFitV71 not fitted")
+
+        X_aug = self._augment_features(X, fit=False)
+        pred_dict: Dict[str, np.ndarray] = {}
+        for model, name in self._models:
+            try:
+                pred_kw: Dict[str, Any] = {}
+                if _needs_panel_kwargs(name):
+                    for k in ("test_raw", "target", "horizon"):
+                        if k in kwargs:
+                            pred_kw[k] = kwargs[k]
+                pred_dict[name] = model.predict(X_aug, **pred_kw)
+            except Exception as e:
+                logger.warning(f"[AutoFitV71] {name} predict failed: {e}")
+
+        if not pred_dict:
+            return np.full(len(X), 0.0)
+
+        # L0 → L1 → L2
+        if self._meta_learner_l2 is not None and self._meta_learners_l1:
+            try:
+                X_l1 = X_aug.copy()
+                default_pred = np.mean(list(pred_dict.values()), axis=0)
+                for name in self._pred_names:
+                    X_l1[f"__pred_{name}__"] = pred_dict.get(name, default_pred)
+                for c in self._meta_cols_l1:
+                    if c not in X_l1.columns:
+                        X_l1[c] = 0.0
+                X_l1_num = X_l1[self._meta_cols_l1].fillna(0)
+                l1_preds = np.mean(
+                    [_meta_predict(learner, X_l1_num) for learner in self._meta_learners_l1],
+                    axis=0,
+                )
+
+                l2_features = {f"L0_{name}": pred_dict.get(name, default_pred) for name in self._pred_names}
+                l2_features["L1_meta"] = l1_preds
+                X_l2 = pd.DataFrame(l2_features)
+                for c in self._meta_cols_l2:
+                    if c not in X_l2.columns:
+                        X_l2[c] = 0.0
+                l2_preds = self._meta_learner_l2.predict(X_l2[self._meta_cols_l2].fillna(0))
+                if self._target_xform is not None and self._target_xform.kind != "identity":
+                    l2_preds = self._target_xform.inverse(l2_preds)
+                return np.asarray(l2_preds, dtype=float)
+            except Exception as e:
+                logger.warning(f"[AutoFitV71] L2 predict failed: {e}")
+
+        # L1 only
+        if self._meta_learners_l1:
+            try:
+                X_l1 = X_aug.copy()
+                default_pred = np.mean(list(pred_dict.values()), axis=0)
+                for name in self._pred_names:
+                    X_l1[f"__pred_{name}__"] = pred_dict.get(name, default_pred)
+                for c in self._meta_cols_l1:
+                    if c not in X_l1.columns:
+                        X_l1[c] = 0.0
+                X_l1_num = X_l1[self._meta_cols_l1].fillna(0)
+                l1_preds = np.mean(
+                    [_meta_predict(learner, X_l1_num) for learner in self._meta_learners_l1],
+                    axis=0,
+                )
+                if self._target_xform is not None and self._target_xform.kind != "identity":
+                    l1_preds = self._target_xform.inverse(l1_preds)
+                return np.asarray(l1_preds, dtype=float)
+            except Exception as e:
+                logger.warning(f"[AutoFitV71] L1 predict failed: {e}")
+
+        # Weighted blend fallback
+        total_w = sum(self._ensemble_weights.get(nm, 0.0) for nm in pred_dict)
+        if total_w < 1e-8:
+            return np.mean(list(pred_dict.values()), axis=0)
+        out = np.zeros(len(X), dtype=float)
+        for name, preds in pred_dict.items():
+            w = self._ensemble_weights.get(name, 0.0) / total_w
+            out += w * preds
+        return out
+
+    def get_routing_info(self) -> Dict[str, Any]:
+        return self._routing_info
+
+
+def get_autofit_v71(**kwargs) -> AutoFitV71Wrapper:
+    """AutoFit V7.1 lane-adaptive robust ensemble."""
+    return AutoFitV71Wrapper(top_k=8, **kwargs)
+
+
 AUTOFIT_MODELS = {
     "AutoFitV1": get_autofit_v1,
     "AutoFitV2": get_autofit_v2,
@@ -4039,4 +4759,5 @@ AUTOFIT_MODELS = {
     "AutoFitV5": get_autofit_v5,
     "AutoFitV6": get_autofit_v6,
     "AutoFitV7": get_autofit_v7,
+    "AutoFitV71": get_autofit_v71,
 }

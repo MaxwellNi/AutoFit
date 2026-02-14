@@ -17,7 +17,7 @@
 #   transformer_sota (20): gpu — NeuralForecast, split into 2-3 shards for parallelism
 #   foundation (11):     gpu — Chronos/Moirai/HF models, split by family
 #   irregular (2):       gpu — PyPOTS GRU-D/SAITS, light GPU
-#   autofit (10):        batch — mostly tree-based CV, heavy CPU
+#   autofit (11):        batch — mostly tree-based CV, heavy CPU
 #
 # Tasks × ablations:
 #   task1_outcome:       [core_only, core_text, core_edgar, full]  = 4
@@ -28,6 +28,7 @@
 # Usage:
 #   bash scripts/submit_phase7_full_benchmark.sh
 #   bash scripts/submit_phase7_full_benchmark.sh --dry-run   # preview only
+#   bash scripts/submit_phase7_full_benchmark.sh --pilot     # stage-A pilot
 # ============================================================================
 
 set -euo pipefail
@@ -41,10 +42,24 @@ ACCOUNT="yves.letraon"
 PRESET="full"
 SEED=42
 DRY_RUN=false
+PILOT=false
 
-if [[ "${1:-}" == "--dry-run" ]]; then
-    DRY_RUN=true
+for arg in "$@"; do
+    case "$arg" in
+        --dry-run)
+            DRY_RUN=true
+            ;;
+        --pilot)
+            PILOT=true
+            ;;
+    esac
+done
+
+if $DRY_RUN; then
     echo "=== DRY RUN MODE — no jobs will be submitted ==="
+fi
+if $PILOT; then
+    echo "=== PILOT MODE — submitting Stage-A subset only ==="
 fi
 
 mkdir -p "$LOG_DIR" "$SLURM_DIR"
@@ -198,6 +213,66 @@ echo "  Preset: ${PRESET} | Seed: ${SEED}"
 echo "  Task-ablation combos: ${#ALL_TASKS_ABLATIONS[@]}"
 echo "================================================================"
 
+if $PILOT; then
+    ML_REF="RandomForest,ExtraTrees,LightGBM,XGBoost"
+    DC_REF="NBEATS,NHITS"
+    TS_REF="PatchTST,iTransformer,TimesNet"
+    AF_PILOT="AutoFitV6,AutoFitV7,AutoFitV71"
+
+    echo ""
+    echo "--- PILOT ml_tabular refs (batch 28c 112GB) ---"
+    for ta in "${ALL_TASKS_ABLATIONS[@]}"; do
+        IFS=':' read -r TASK ABL <<< "$ta"
+        submit_job \
+            "p7p_mlt_$(task_abbrev $TASK)_$(abl_abbrev $ABL)" \
+            "batch" "iris-batch-long" "2-00:00:00" "112G" "28" "" \
+            "$TASK" "ml_tabular" "$ABL" "$ML_REF" ""
+    done
+
+    echo ""
+    echo "--- PILOT deep_classical refs (gpu 1×V100 14c 256GB) ---"
+    for ta in "${ALL_TASKS_ABLATIONS[@]}"; do
+        IFS=':' read -r TASK ABL <<< "$ta"
+        submit_job \
+            "p7p_dc_$(task_abbrev $TASK)_$(abl_abbrev $ABL)" \
+            "gpu" "iris-gpu-long" "2-00:00:00" "256G" "14" "gpu:volta:1" \
+            "$TASK" "deep_classical" "$ABL" "$DC_REF" ""
+    done
+
+    echo ""
+    echo "--- PILOT transformer refs (gpu 1×V100 14c 320GB) ---"
+    for ta in "${ALL_TASKS_ABLATIONS[@]}"; do
+        IFS=':' read -r TASK ABL <<< "$ta"
+        submit_job \
+            "p7p_ts_$(task_abbrev $TASK)_$(abl_abbrev $ABL)" \
+            "gpu" "iris-gpu-long" "2-00:00:00" "320G" "14" "gpu:volta:1" \
+            "$TASK" "transformer_sota" "$ABL" "$TS_REF" ""
+    done
+
+    echo ""
+    echo "--- PILOT autofit (V6/V7/V71, batch 28c 112GB) ---"
+    for ta in "${ALL_TASKS_ABLATIONS[@]}"; do
+        IFS=':' read -r TASK ABL <<< "$ta"
+        submit_job \
+            "p7p_af_$(task_abbrev $TASK)_$(abl_abbrev $ABL)" \
+            "batch" "iris-batch-long" "2-00:00:00" "112G" "28" "" \
+            "$TASK" "autofit" "$ABL" "$AF_PILOT" ""
+    done
+
+    echo ""
+    echo "================================================================"
+    if $DRY_RUN; then
+        echo "PILOT DRY RUN COMPLETE — no jobs submitted"
+    else
+        echo "PILOT jobs submitted: ${TOTAL_SUBMITTED}"
+    fi
+    echo "Pilot categories: ml_tabular refs + deep refs + transformer refs + autofit V6/V7/V71"
+    echo "Output: ${OUTPUT_BASE}/"
+    echo "Logs:   ${LOG_DIR}/"
+    echo "================================================================"
+    exit 0
+fi
+
 # ============================================================================
 # 1. ML TABULAR (15 models) — batch nodes, CPU-only
 #    5.7M rows × 139 cols → needs RAM. 28 cores for parallel tree building.
@@ -337,17 +412,17 @@ for ta in "${ALL_TASKS_ABLATIONS[@]}"; do
 done
 
 # ============================================================================
-# 7. AUTOFIT (10 models: V1-V7 + V2E, V3E, V3Max)
+# 7. AUTOFIT (11 models: V1-V7 + V2E, V3E, V3Max, V71)
 #    AutoFit wraps tree models (CPU) but may invoke GPU candidates if CUDA
 #    available. Split into 2 shards for parallelism:
 #      Shard 1: AutoFitV1,AutoFitV2,AutoFitV2E,AutoFitV3,AutoFitV3E (simpler)
-#      Shard 2: AutoFitV3Max,AutoFitV4,AutoFitV5,AutoFitV6,AutoFitV7 (heavier CV)
+#      Shard 2: AutoFitV3Max,AutoFitV4,AutoFitV5,AutoFitV6,AutoFitV7,AutoFitV71
 #    Use batch nodes (28c 112GB). GPU not needed: _fit_single_candidate now
 #    skips GPU models when torch.cuda.is_available() is False.
 #    ~8-16h per shard due to temporal CV × multiple candidates.
 # ============================================================================
 AF_SIMPLE="AutoFitV1,AutoFitV2,AutoFitV2E,AutoFitV3,AutoFitV3E"
-AF_HEAVY="AutoFitV3Max,AutoFitV4,AutoFitV5,AutoFitV6,AutoFitV7"
+AF_HEAVY="AutoFitV3Max,AutoFitV4,AutoFitV5,AutoFitV6,AutoFitV7,AutoFitV71"
 
 echo ""
 echo "--- autofit shard 1 (V1-V3E, batch 28c 112GB) ---"

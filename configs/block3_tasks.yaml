@@ -183,6 +183,14 @@ presets:
     models_per_category: null
     n_bootstrap: 1000
 
+# AutoFit V7.1 controls
+autofit_v71:
+  enabled: true
+  cv_scheme: "3x4_temporal"
+  min_ensemble_size_heavy_tail: 2
+  dynamic_weighting: true
+  enable_regime_retrieval: true
+
 # Model categories for benchmarking
 model_categories:
   statistical:

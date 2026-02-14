@@ -1,27 +1,27 @@
 # Block 3 Model Benchmark Status
 
-> Last Updated: 2026-02-13 02:15 UTC
+> Last Updated: 2026-02-14 01:42 UTC
 > Freeze Stamp: `20260203_225620`
-> Model Registry: **67 models across 7 categories**
-> Phase 7 Benchmark: **IN PROGRESS** (23/121 shards, 781 records, 67 models registered)
+> Model Registry (code): **72 models across 7 categories** (Phase 7 submitted roster remains 67)
+> Phase 7 Benchmark: **IN PROGRESS** (68/121 completed, 12 running, 41 pending)
 > Platform: ULHPC Iris HPC (GPU V100 + Batch 112GB)
 
 ## Executive Summary
 
 | Category | Models | Count | Panel-Aware | Phase 7 Status |
 |----------|--------|-------|-------------|----------------|
-| **ml_tabular** | LogisticRegression, Ridge, … MeanPredictor | 15 | N/A (tabular) | 7/11 done, 4 pending |
-| **statistical** | AutoARIMA, AutoETS, AutoTheta, MSTL, SF_SeasonalNaive | 5 | ✅ Entity-sampled | 2/11 done, 1 running, 8 pending (OOM fixed) |
-| **deep_classical** | NBEATS, NHITS, TFT, DeepAR | 4 | ✅ 2000 entities + Ridge fallback | 6/11 done, 5 pending |
-| **transformer_sota A** | PatchTST, iTransformer, TimesNet, TSMixer, Informer, Autoformer, FEDformer, VanillaTransformer, TiDE, NBEATSx | 10 | ✅ 2000 entities + Ridge fallback | 4/11 done, 4 running, 3 pending |
-| **transformer_sota B** | BiTCN, KAN, RMoK, SOFTS, StemGNN | 5+(shard) | ✅ 200 entities (n_series) | 0/11 done, 11 pending |
-| **foundation Chronos** | Chronos, ChronosBolt, Chronos2 | 3 | ✅ Entity contexts | 0/11 done, 11 pending |
-| **foundation Moirai** | Moirai, MoiraiLarge, Moirai2 | 3 | ✅ Entity contexts | 0/11 done, 11 pending |
-| **foundation HF** | Timer, TimeMoE, MOMENT, LagLlama, TimesFM | 5 | ✅ Entity contexts | 0/11 done, 11 pending |
-| **irregular** | GRU-D, SAITS | 2 | ✅ 3-D masked panel (1000 entities) | 1/11 done, 10 pending |
-| **autofit shard1** | V1, V2, V2E, V3, V3E | 5 | Meta-learner | 3/11 done, 5 running, 3 pending |
-| **autofit shard2** | V3Max, V4, V5, V6, V7 | 5 | Meta-learner | 0/11 done, 2 running, 9 pending |
-| **TOTAL** | | **67** | | **23/121 shards (19%)** |
+| **ml_tabular** | LogisticRegression, Ridge, ... MeanPredictor | 19 | N/A (tabular) | 5/11 done, 6 pending |
+| **statistical** | AutoARIMA, AutoETS, AutoTheta, MSTL, SF_SeasonalNaive | 5 | ✅ Entity-sampled | 3/11 done, 8 pending |
+| **deep_classical** | NBEATS, NHITS, TFT, DeepAR | 4 | ✅ 2000 entities + Ridge fallback | 8/11 done, 2 running, 1 pending |
+| **transformer_sota A** | PatchTST, iTransformer, TimesNet, TSMixer, Informer, Autoformer, FEDformer, VanillaTransformer, TiDE, NBEATSx | 10 | ✅ 2000 entities + Ridge fallback | 7/11 done, 1 running, 3 pending |
+| **transformer_sota B** | BiTCN, KAN, RMoK, SOFTS, StemGNN | 10 (split) | ✅ 200 entities (n_series) | 7/11 done, 1 running, 3 pending |
+| **foundation Chronos** | Chronos, ChronosBolt, Chronos2 | 3 | ✅ Entity contexts | 8/11 done, 3 pending |
+| **foundation Moirai** | Moirai, MoiraiLarge, Moirai2 | 3 | ✅ Entity contexts | 8/11 done, 3 pending |
+| **foundation HF** | Timer, TimeMoE, MOMENT, LagLlama, TimesFM | 5 | ✅ Entity contexts | 8/11 done, 3 pending |
+| **irregular** | GRU-D, SAITS | 2 | ✅ 3-D masked panel (1000 entities) | 11/11 done |
+| **autofit shard1** | V1, V2, V2E, V3, V3E | 5 | Meta-learner | 3/11 done, 3 running, 5 pending |
+| **autofit shard2** | V3Max, V4, V5, V6, V7, V71 | 6 | Meta-learner | 0/11 done, 5 running, 6 pending |
+| **TOTAL** | | **72 (code)** | | **68/121 completed (56.2%), 12 running, 41 pending** |
 
 ---
 
@@ -33,10 +33,44 @@
 | `src/narrative/block3/models/deep_models.py` | deep_classical + transformer_sota + foundation | 35 | NeuralForecast 3.1.4 / Chronos / Moirai / Timer / etc |
 | `src/narrative/block3/models/statistical.py` | statistical | 5 | StatsForecast (Nixtla) |
 | `src/narrative/block3/models/irregular_models.py` | irregular | 2 | PyPOTS |
-| `src/narrative/block3/models/traditional_ml.py` | ml_tabular | 15 | sklearn / LightGBM / XGBoost / CatBoost |
-| `src/narrative/block3/models/autofit_wrapper.py` | autofit | 10 | Meta-learner ensemble |
-| `src/narrative/block3/models/registry.py` | ALL | 67 | Unified registry |
+| `src/narrative/block3/models/traditional_ml.py` | ml_tabular | 19 | sklearn / LightGBM / XGBoost / CatBoost / TabPFN |
+| `src/narrative/block3/models/autofit_wrapper.py` | autofit | 11 | Meta-learner ensemble (V1-V7 + V71) |
+| `src/narrative/block3/models/registry.py` | ALL | 72 | Unified registry |
 | `src/narrative/block3/models/base.py` | — | — | ModelBase, ModelConfig |
+
+## Live Slurm Snapshot (2026-02-14 01:42 UTC)
+
+Command basis:
+- `squeue -u $USER`
+- `sacct -u $USER -S 2026-02-12`
+- `sacctmgr show qos iris-batch-long,iris-gpu-long format=Name,MaxJobsPU,MaxWall,Priority`
+- `scontrol show job <jobid>` + log tails under `/work/projects/eint/logs/phase7/`
+
+Current queue:
+- RUNNING: 12 (batch=8, gpu=4)
+- PENDING: 41 (batch=25, gpu=16)
+- Pending reason: 41/41 are `QOSMaxJobsPerUserLimit`
+- QOS limits match observed saturation:
+  - `iris-batch-long MaxJobsPerUser=8`
+  - `iris-gpu-long MaxJobsPerUser=4`
+
+Running log health check:
+- No new fatal exceptions in sampled running jobs.
+- Warnings observed but non-blocking:
+  - expected deterministic CUDA warning from NeuralForecast scaler
+  - expected constant-candidate skip warnings in AutoFit quick screen
+  - leakage guard column-drop logs are active as expected
+
+V7.1 extreme pilot submission:
+- Submitted at: 2026-02-14 02:32 CET
+- Script: `scripts/submit_phase7_v71_extreme.sh --pilot`
+- Run tag: `20260214_032205`
+- New jobs submitted: 110
+  - batch: 77 (ml refs + autofit baseline + V71 grid)
+  - gpu: 33 (deep/transformer/foundation refs, `volta32` constraint)
+- Initial queue state right after submit:
+  - `p7x_*` RUNNING=0, PENDING=110
+  - pending reason: `QOSMaxJobsPerUserLimit`
 
 ### Panel Data Strategy (Phase 7 — updated from Phase 3)
 - **Deep/Transformer (non-n_series)**: 2000 entities, min 10 obs, Ridge fallback for unseen
@@ -82,7 +116,7 @@
 | MSTL | ✅ 50 entities | Multi-seasonal decomposition |
 | SF_SeasonalNaive | ✅ 50 entities | Seasonal baseline |
 
-### 2. ML Tabular Models (15) — sklearn / GBDT
+### 2. ML Tabular Models (19) — sklearn / GBDT / TabPFN
 
 | Model | Notes |
 |-------|-------|
@@ -98,6 +132,10 @@
 | LightGBM | Microsoft GBDT |
 | XGBoost | XGBoost GBDT |
 | CatBoost | Yandex GBDT |
+| XGBoostPoisson | Count objective (`count:poisson`) |
+| LightGBMTweedie | Count-heavy-tail objective (`tweedie`) |
+| TabPFNRegressor | Prior-data fitted tabular regressor |
+| TabPFNClassifier | Prior-data fitted tabular classifier |
 | QuantileRegressor | Probabilistic |
 | SeasonalNaive | Baseline |
 | MeanPredictor | Baseline |
@@ -173,7 +211,7 @@
 | GRU-D | Che et al., 2018 | ✅ 1000 entities, masked |
 | SAITS | Du et al., 2023 | ✅ 1000 entities, masked |
 
-### 7. AutoFit Models (10) — 2 shards
+### 7. AutoFit Models (11) — 2 shards
 
 **Shard 1 (V1-V5)**:
 
@@ -185,7 +223,7 @@
 | V3 | Top-K exhaustive search |
 | V3E | V3 with ElasticNet candidates |
 
-**Shard 2 (V3Max-V7)**:
+**Shard 2 (V3Max-V7.1)**:
 
 | Model | Strategy |
 |-------|----------|
@@ -194,6 +232,7 @@
 | V5 | Empirical regime-aware ensemble |
 | V6 | Conference-grade stacked generalization |
 | V7 | Data-adapted robust ensemble with 6 SOTA innovations |
+| V71 | Dual-lane adaptive ensemble with fairness guards and dynamic routing |
 
 ---
 
@@ -228,11 +267,11 @@
 
 ## Pending
 
-1. ⏳ Phase 7 full benchmark run — 23/121 shards done (19%), 781 records
-2. ⏳ transformer_sota B, foundation×3 — all pending (GPU queue)
+1. ⏳ Phase 7 full benchmark run — 68/121 completed, 12 running, 41 pending
+2. ⏳ QOS-gated tail remains (`QOSMaxJobsPerUserLimit` on both batch/gpu queues)
 3. ⏳ Results consolidation + leaderboard
-4. ⏳ Paper LaTeX tables
-5. ⏳ AutoFit model selection based on data profile
+4. ⏳ AutoFit V7.1 pilot gate (fairness + comparability + win-rate checks)
+5. ⏳ Paper LaTeX tables
 6. ⏳ TCAV-style concept importance analysis
 
 ## Issues Fixed (Phase 7)
