@@ -44,6 +44,14 @@ Known repo roots by host:
 - 4090 server: `/home/pni/projects/repo_root`
 - Iris: `/home/users/npin/repo_root`
 
+If freeze assets are stored outside `repo_root/runs`, set:
+
+```bash
+export BLOCK3_RUNS_ROOT=/path/to/shared/runs
+```
+
+Preflight will auto-link `repo_root/runs -> $BLOCK3_RUNS_ROOT` when needed.
+
 Dependency installer (optional, insider-only):
 
 ```bash

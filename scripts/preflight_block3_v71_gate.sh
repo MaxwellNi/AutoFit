@@ -41,6 +41,118 @@ if [[ ! -f "${REPO}/scripts/block3_verify_freeze.py" ]]; then
     echo "FATAL: cannot locate repo root. Set REPO_ROOT and retry."
     exit 2
 fi
+
+ensure_freeze_runs_mount() {
+    local pointer="${REPO}/docs/audits/FULL_SCALE_POINTER.yaml"
+    local repo_runs="${REPO}/runs"
+
+    if [[ ! -f "${pointer}" ]]; then
+        echo "FATAL: pointer file not found: ${pointer}"
+        return 1
+    fi
+
+    mapfile -t rel_paths < <(python3 - "${pointer}" <<'PY'
+import sys
+from pathlib import Path
+import yaml
+
+p = Path(sys.argv[1])
+d = yaml.safe_load(p.read_text(encoding="utf-8"))
+keys = [
+    ("offers_core_daily", "dir"),
+    ("offers_core_snapshot", "dir"),
+    ("offers_text", "dir"),
+    ("edgar_store_full_daily", "dir"),
+    ("multiscale_full", "dir"),
+    ("snapshots_index", "offer_day"),
+    ("snapshots_index", "cik_day"),
+    ("analysis", "dir"),
+]
+for a, b in keys:
+    val = d.get(a, {}).get(b, "")
+    if isinstance(val, str) and val.startswith("runs/"):
+        print(val)
+PY
+)
+
+    if [[ "${#rel_paths[@]}" -eq 0 ]]; then
+        return 0
+    fi
+
+    local all_present=true
+    local rel
+    for rel in "${rel_paths[@]}"; do
+        if [[ ! -e "${REPO}/${rel}" ]]; then
+            all_present=false
+            break
+        fi
+    done
+    if $all_present; then
+        return 0
+    fi
+
+    local candidates=()
+    if [[ -n "${BLOCK3_RUNS_ROOT:-}" ]]; then
+        candidates+=("${BLOCK3_RUNS_ROOT}")
+    fi
+    candidates+=(
+        "${REPO}/runs"
+        "$(dirname "${REPO}")/runs"
+        "$(dirname "$(dirname "${REPO}")")/runs"
+        "/work/projects/eint/runs"
+        "/mnt/aiongpfs/projects/eint/runs"
+        "/home/users/npin/eint/runs"
+        "/home/users/npin/repo_root/runs"
+    )
+
+    local best_root=""
+    local best_score=-1
+    local root score
+    for root in "${candidates[@]}"; do
+        [[ -n "${root}" ]] || continue
+        [[ -d "${root}" ]] || continue
+        score=0
+        for rel in "${rel_paths[@]}"; do
+            if [[ -e "${root}/${rel#runs/}" ]]; then
+                score=$((score + 1))
+            fi
+        done
+        if [[ "${score}" -gt "${best_score}" ]]; then
+            best_score="${score}"
+            best_root="${root}"
+        fi
+    done
+
+    if [[ "${best_score}" -lt "${#rel_paths[@]}" ]]; then
+        echo "FATAL: freeze runs assets missing under repo and no complete shared runs root found."
+        echo "Set BLOCK3_RUNS_ROOT explicitly, e.g.:"
+        echo "  export BLOCK3_RUNS_ROOT=/home/pni/project/runs"
+        echo "  bash scripts/preflight_block3_v71_gate.sh --v71-variant=${V71_VARIANT} --skip-smoke"
+        echo "Detected best candidate: ${best_root:-<none>} (${best_score}/${#rel_paths[@]} paths)"
+        return 1
+    fi
+
+    if [[ -L "${repo_runs}" ]]; then
+        local cur
+        cur="$(readlink -f "${repo_runs}" || true)"
+        if [[ "${cur}" == "$(readlink -f "${best_root}")" ]]; then
+            return 0
+        fi
+        rm -f "${repo_runs}"
+    elif [[ -e "${repo_runs}" && ! -d "${repo_runs}" ]]; then
+        echo "FATAL: ${repo_runs} exists but is not a directory/symlink."
+        return 1
+    elif [[ -d "${repo_runs}" ]]; then
+        # Keep existing directory untouched; require user to set BLOCK3_RUNS_ROOT.
+        echo "FATAL: ${repo_runs} is a directory but missing freeze assets."
+        echo "Please set BLOCK3_RUNS_ROOT to your shared runs path and retry."
+        return 1
+    fi
+
+    ln -s "${best_root}" "${repo_runs}"
+    echo "Linked runs mount: ${repo_runs} -> ${best_root}"
+    return 0
+}
 RUN_TAG="$(date +%Y%m%d_%H%M%S)"
 V71_VARIANT="g02"
 SKIP_PYTEST=false
@@ -91,6 +203,8 @@ echo "Skip pytest:${SKIP_PYTEST}"
 echo "Skip smoke: ${SKIP_SMOKE}"
 echo "Repo root:  ${REPO}"
 echo "================================================================"
+
+ensure_freeze_runs_mount
 
 activate_insider_env() {
     # 1) Reuse already activated insider env (local 3090/4090 friendly)
