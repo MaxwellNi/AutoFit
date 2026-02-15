@@ -18,7 +18,29 @@
 
 set -euo pipefail
 
-REPO="/home/users/npin/repo_root"
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+DEFAULT_REPO="$(cd "${SCRIPT_DIR}/.." && pwd)"
+REPO="${REPO_ROOT:-${DEFAULT_REPO}}"
+
+# Fallback path map across known hosts (3090 / 4090 / Iris)
+if [[ ! -f "${REPO}/scripts/block3_verify_freeze.py" ]]; then
+    for cand in \
+        "${DEFAULT_REPO}" \
+        "/home/pni/project/repo_root" \
+        "/home/pni/projects/repo_root" \
+        "/home/users/npin/repo_root"
+    do
+        if [[ -f "${cand}/scripts/block3_verify_freeze.py" ]]; then
+            REPO="${cand}"
+            break
+        fi
+    done
+fi
+
+if [[ ! -f "${REPO}/scripts/block3_verify_freeze.py" ]]; then
+    echo "FATAL: cannot locate repo root. Set REPO_ROOT and retry."
+    exit 2
+fi
 RUN_TAG="$(date +%Y%m%d_%H%M%S)"
 V71_VARIANT="g02"
 SKIP_PYTEST=false
@@ -67,12 +89,63 @@ echo "Variant:    ${V71_VARIANT}"
 echo "Smoke out:  ${SMOKE_OUT}"
 echo "Skip pytest:${SKIP_PYTEST}"
 echo "Skip smoke: ${SKIP_SMOKE}"
+echo "Repo root:  ${REPO}"
 echo "================================================================"
 
-export MAMBA_ROOT_PREFIX=/mnt/aiongpfs/projects/eint/envs/.micromamba
-eval "$(micromamba shell hook -s bash)"
-micromamba activate insider
-export LD_LIBRARY_PATH="${CONDA_PREFIX}/lib:${LD_LIBRARY_PATH:-}"
+activate_insider_env() {
+    # 1) Reuse already activated insider env (local 3090/4090 friendly)
+    if [[ "${CONDA_DEFAULT_ENV:-}" == "insider" ]]; then
+        return 0
+    fi
+
+    # 2) Try micromamba with known roots (Iris + local)
+    if command -v micromamba >/dev/null 2>&1; then
+        local roots=()
+        if [[ -n "${MAMBA_ROOT_PREFIX:-}" ]]; then
+            roots+=("${MAMBA_ROOT_PREFIX}")
+        fi
+        roots+=(
+            "/mnt/aiongpfs/projects/eint/envs/.micromamba"
+            "${HOME}/.local/share/micromamba"
+            "${HOME}/micromamba"
+        )
+        local r
+        for r in "${roots[@]}"; do
+            if [[ -d "${r}" ]]; then
+                export MAMBA_ROOT_PREFIX="${r}"
+                eval "$(micromamba shell hook -s bash)"
+                if micromamba activate insider; then
+                    return 0
+                fi
+            fi
+        done
+    fi
+
+    # 3) Try conda
+    if command -v conda >/dev/null 2>&1; then
+        local conda_base
+        conda_base="$(conda info --base 2>/dev/null || true)"
+        if [[ -n "${conda_base}" && -f "${conda_base}/etc/profile.d/conda.sh" ]]; then
+            # shellcheck disable=SC1090
+            source "${conda_base}/etc/profile.d/conda.sh"
+            if conda activate insider; then
+                return 0
+            fi
+        fi
+    fi
+
+    echo "FATAL: failed to activate insider environment."
+    return 1
+}
+
+activate_insider_env
+PY_BIN="$(command -v python3 || true)"
+if [[ -z "${PY_BIN}" || "${PY_BIN}" != *"insider"* ]]; then
+    echo "FATAL: python3 is not from insider env: ${PY_BIN:-<missing>}"
+    exit 2
+fi
+
+export LD_LIBRARY_PATH="${CONDA_PREFIX:-}/lib:${LD_LIBRARY_PATH:-}"
 cd "${REPO}"
 export PYTHONPATH="${REPO}/src:${PYTHONPATH:-}"
 

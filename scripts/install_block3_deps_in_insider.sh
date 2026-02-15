@@ -15,7 +15,30 @@ if [[ -z "$PY_BIN" || "$PY_BIN" != *"insider"* ]]; then
     exit 2
 fi
 
-cd /home/users/npin/repo_root
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+DEFAULT_REPO="$(cd "${SCRIPT_DIR}/.." && pwd)"
+REPO="${REPO_ROOT:-${DEFAULT_REPO}}"
+
+if [[ ! -f "${REPO}/pyproject.toml" ]]; then
+    for cand in \
+        "${DEFAULT_REPO}" \
+        "/home/pni/project/repo_root" \
+        "/home/pni/projects/repo_root" \
+        "/home/users/npin/repo_root"
+    do
+        if [[ -f "${cand}/pyproject.toml" ]]; then
+            REPO="${cand}"
+            break
+        fi
+    done
+fi
+
+if [[ ! -f "${REPO}/pyproject.toml" ]]; then
+    echo "FATAL: cannot locate repo root. Set REPO_ROOT and retry."
+    exit 2
+fi
+
+cd "${REPO}"
 
 PACKAGES=(
   "xgboost>=3.2.0"

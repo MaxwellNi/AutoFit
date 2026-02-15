@@ -20,7 +20,31 @@
 
 set -euo pipefail
 
-REPO="/home/users/npin/repo_root"
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+DEFAULT_REPO="$(cd "${SCRIPT_DIR}/.." && pwd)"
+REPO="${REPO_ROOT:-${DEFAULT_REPO}}"
+
+# Known host paths:
+#   3090: /home/pni/project/repo_root
+#   4090: /home/pni/projects/repo_root
+if [[ ! -f "${REPO}/scripts/run_block3_benchmark_shard.py" ]]; then
+    for cand in \
+        "${DEFAULT_REPO}" \
+        "/home/pni/project/repo_root" \
+        "/home/pni/projects/repo_root" \
+        "/home/users/npin/repo_root"
+    do
+        if [[ -f "${cand}/scripts/run_block3_benchmark_shard.py" ]]; then
+            REPO="${cand}"
+            break
+        fi
+    done
+fi
+
+if [[ ! -f "${REPO}/scripts/run_block3_benchmark_shard.py" ]]; then
+    echo "FATAL: cannot locate repo root. Set REPO_ROOT and retry."
+    exit 2
+fi
 STAMP="20260203_225620"
 RUN_TAG="$(date +%Y%m%d_%H%M%S)"
 MODE="full"
@@ -113,7 +137,7 @@ fi
 
 if ! $DRY_RUN && ! $SKIP_PREFLIGHT; then
     echo "=== Mandatory preflight gate before dual-3090 run ==="
-    bash scripts/preflight_block3_v71_gate.sh --v71-variant="${V71_VARIANT}"
+    bash "${REPO}/scripts/preflight_block3_v71_gate.sh" --v71-variant="${V71_VARIANT}"
 fi
 
 TS_GPU0="PatchTST,iTransformer,TimesNet,TSMixer,Informer,Autoformer,FEDformer,VanillaTransformer,TiDE,NBEATSx"
@@ -293,6 +317,7 @@ run_worker() {
 echo "================================================================"
 echo "Dual-3090 Phase7 runner"
 echo "  mode=${MODE} run_tag=${RUN_TAG} v71_variant=${V71_VARIANT}"
+echo "  repo=${REPO}"
 echo "  output=${OUTPUT_BASE}"
 echo "  host_mem_floor=${HOST_MEM_FLOOR_GB}GB gpu_min_free=${GPU_MIN_FREE_MB}MB"
 echo "  queues: gpu0=${#GPU0_QUEUE[@]} gpu1=${#GPU1_QUEUE[@]} cpua=${#CPUA_QUEUE[@]} cpub=${#CPUB_QUEUE[@]}"

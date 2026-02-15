@@ -38,6 +38,12 @@ ALLOW_UNSAFE_SKIP_PREFLIGHT=1 ... --skip-preflight
 - Do not create new environments.
 - Do not install runtime dependencies into `base`.
 
+Known repo roots by host:
+
+- 3090 server: `/home/pni/project/repo_root`
+- 4090 server: `/home/pni/projects/repo_root`
+- Iris: `/home/users/npin/repo_root`
+
 Dependency installer (optional, insider-only):
 
 ```bash
