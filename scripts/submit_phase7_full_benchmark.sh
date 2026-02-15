@@ -29,6 +29,7 @@
 #   bash scripts/submit_phase7_full_benchmark.sh
 #   bash scripts/submit_phase7_full_benchmark.sh --dry-run   # preview only
 #   bash scripts/submit_phase7_full_benchmark.sh --pilot     # stage-A pilot
+#   bash scripts/submit_phase7_full_benchmark.sh --skip-preflight
 # ============================================================================
 
 set -euo pipefail
@@ -43,6 +44,7 @@ PRESET="full"
 SEED=42
 DRY_RUN=false
 PILOT=false
+SKIP_PREFLIGHT=false
 
 for arg in "$@"; do
     case "$arg" in
@@ -52,6 +54,9 @@ for arg in "$@"; do
         --pilot)
             PILOT=true
             ;;
+        --skip-preflight)
+            SKIP_PREFLIGHT=true
+            ;;
     esac
 done
 
@@ -60,6 +65,12 @@ if $DRY_RUN; then
 fi
 if $PILOT; then
     echo "=== PILOT MODE — submitting Stage-A subset only ==="
+fi
+
+if ! $DRY_RUN && ! $SKIP_PREFLIGHT; then
+    # Full benchmark includes AutoFitV71 in autofit shard 2; gate before submit.
+    echo "=== Running mandatory V7.1 preflight gate (g01 default) ==="
+    bash scripts/preflight_block3_v71_gate.sh --v71-variant=g01
 fi
 
 mkdir -p "$LOG_DIR" "$SLURM_DIR"

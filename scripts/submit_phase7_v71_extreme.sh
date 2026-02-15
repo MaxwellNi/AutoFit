@@ -9,6 +9,7 @@
 #   bash scripts/submit_phase7_v71_extreme.sh --pilot
 #   bash scripts/submit_phase7_v71_extreme.sh --full --v71-variant g03
 #   bash scripts/submit_phase7_v71_extreme.sh --pilot --dry-run
+#   bash scripts/submit_phase7_v71_extreme.sh --full --v71-variant g02 --skip-preflight
 # ============================================================================
 
 set -euo pipefail
@@ -19,6 +20,7 @@ RUN_TAG="$(date +%Y%m%d_%H%M%S)"
 MODE="pilot"
 DRY_RUN=false
 BEST_V71_VARIANT="g01"
+SKIP_PREFLIGHT=false
 
 for arg in "$@"; do
     case "$arg" in
@@ -36,6 +38,9 @@ for arg in "$@"; do
             ;;
         --run-tag=*)
             RUN_TAG="${arg#*=}"
+            ;;
+        --skip-preflight)
+            SKIP_PREFLIGHT=true
             ;;
         *)
             echo "Unknown argument: $arg"
@@ -58,6 +63,16 @@ if $DRY_RUN; then
     echo "=== DRY RUN MODE ==="
 fi
 echo "=== Mode: ${MODE} | Run tag: ${RUN_TAG} | Output: ${OUTPUT_BASE} ==="
+
+if ! $DRY_RUN && ! $SKIP_PREFLIGHT; then
+    PREFLIGHT_VARIANT="${BEST_V71_VARIANT}"
+    if [[ "$MODE" == "pilot" ]]; then
+        # Pilot submits all variants; keep smoke/audit anchored on g02.
+        PREFLIGHT_VARIANT="g02"
+    fi
+    echo "--- Preflight gate: variant=${PREFLIGHT_VARIANT} ---"
+    bash scripts/preflight_block3_v71_gate.sh --v71-variant="${PREFLIGHT_VARIANT}"
+fi
 
 read -r -d '' ENV_PREAMBLE << 'ENVBLOCK' || true
 export MAMBA_ROOT_PREFIX=/mnt/aiongpfs/projects/eint/envs/.micromamba
