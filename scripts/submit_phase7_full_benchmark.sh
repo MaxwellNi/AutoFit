@@ -29,7 +29,7 @@
 #   bash scripts/submit_phase7_full_benchmark.sh
 #   bash scripts/submit_phase7_full_benchmark.sh --dry-run   # preview only
 #   bash scripts/submit_phase7_full_benchmark.sh --pilot     # stage-A pilot
-#   bash scripts/submit_phase7_full_benchmark.sh --skip-preflight
+#   ALLOW_UNSAFE_SKIP_PREFLIGHT=1 bash scripts/submit_phase7_full_benchmark.sh --skip-preflight
 # ============================================================================
 
 set -euo pipefail
@@ -59,6 +59,13 @@ for arg in "$@"; do
             ;;
     esac
 done
+
+if $SKIP_PREFLIGHT && [[ "${ALLOW_UNSAFE_SKIP_PREFLIGHT:-0}" != "1" ]]; then
+    echo "Refusing --skip-preflight without explicit override."
+    echo "If you must bypass the gate, rerun with:"
+    echo "  ALLOW_UNSAFE_SKIP_PREFLIGHT=1 bash scripts/submit_phase7_full_benchmark.sh --skip-preflight"
+    exit 2
+fi
 
 if $DRY_RUN; then
     echo "=== DRY RUN MODE — no jobs will be submitted ==="

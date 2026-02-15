@@ -8,7 +8,7 @@
 #   2) Phase-7 code audit verification
 #   3) AutoFitV71 factory sanity for all known grid variants
 #   4) V7.1 leakage/fairness/reproducibility tests
-#   5) One smoke shard with AutoFitV71 and strict output audit
+#   5) Synthetic smoke fit/predict with strict coverage/routing audit
 #
 # Usage:
 #   bash scripts/preflight_block3_v71_gate.sh
@@ -114,55 +114,75 @@ else
 fi
 
 if ! $SKIP_SMOKE; then
-    echo "[5/5] Smoke shard execution with AutoFitV71..."
-    python3 scripts/run_block3_benchmark_shard.py \
-        --task task1_outcome \
-        --category autofit \
-        --ablation core_only \
-        --models AutoFitV71 \
-        --preset smoke \
-        --output-dir "${SMOKE_OUT}" \
-        --seed 42 \
-        --max-entities 500 \
-        --max-rows 120000 \
-        --model-kwargs-json "${SMOKE_KW}"
-
-    echo "[5/5] Smoke output audit..."
-    python3 - << PY
+    echo "[5/5] Synthetic smoke execution with AutoFitV71..."
+    CUDA_VISIBLE_DEVICES="" python3 - << PY
 import json
-import math
-from pathlib import Path
+import numpy as np
+import pandas as pd
 
-metrics = Path("${SMOKE_OUT}") / "metrics.json"
-if not metrics.exists():
-    raise RuntimeError(f"Missing metrics.json: {metrics}")
+from narrative.block3.models.registry import get_model
 
-rows = json.loads(metrics.read_text(encoding="utf-8"))
-if not rows:
-    raise RuntimeError("Smoke produced empty metrics.")
+smoke_kw = json.loads('''${SMOKE_KW}''')
+v71_kw = smoke_kw.get("AutoFitV71", {})
+rng = np.random.RandomState(42)
 
-v71_rows = [r for r in rows if r.get("model_name") == "AutoFitV71"]
-if not v71_rows:
-    raise RuntimeError("Smoke produced no AutoFitV71 rows.")
+n = 1400
+X = pd.DataFrame(
+    {
+        "f1": rng.normal(size=n),
+        "f2": rng.lognormal(mean=0.3, sigma=0.7, size=n),
+        "f3": rng.randint(0, 15, size=n).astype(float),
+        "f4": rng.normal(loc=2.0, scale=3.0, size=n),
+        "f5": rng.uniform(0.0, 1.0, size=n),
+    }
+)
+X.loc[X.index % 9 == 0, "f2"] = np.nan
+X.loc[X.index % 11 == 0, "f4"] = np.nan
 
-for i, row in enumerate(v71_rows):
-    mae = float(row.get("mae", "nan"))
-    if not math.isfinite(mae):
-        raise RuntimeError(f"AutoFitV71 row {i} has non-finite MAE.")
-    fair = row.get("fairness_pass", True)
-    if fair is False:
-        raise RuntimeError(f"AutoFitV71 row {i} fairness_pass=false.")
-    cov = row.get("prediction_coverage_ratio", 1.0)
-    try:
-        cov = float(cov)
-    except Exception:
-        cov = 0.0
-    if cov < 0.98:
-        raise RuntimeError(
-            f"AutoFitV71 row {i} coverage {cov:.4f} < 0.98 in smoke preflight."
-        )
+targets = {
+    "count": pd.Series(rng.poisson(lam=6.0 + 0.5 * np.abs(X["f1"].fillna(0)), size=n), name="investors_count"),
+    "heavy_tail": pd.Series(
+        rng.lognormal(mean=2.0 + 0.1 * X["f5"].fillna(0), sigma=1.1, size=n),
+        name="funding_raised_usd",
+    ),
+}
 
-print(f\"Smoke audit PASS: rows={len(rows)}, AutoFitV71_rows={len(v71_rows)}\")
+for lane_name, y in targets.items():
+    model = get_model("AutoFitV71", **v71_kw)
+    model.fit(X, y, target=y.name, horizon=7)
+    X_test = X.iloc[-280:].copy()
+    pred = np.asarray(model.predict(X_test, target=y.name, horizon=7), dtype=float)
+
+    if len(pred) != len(X_test):
+        raise RuntimeError(f"{lane_name}: prediction length mismatch {len(pred)} != {len(X_test)}")
+
+    coverage = float(np.isfinite(pred).mean())
+    if coverage < 0.98:
+        raise RuntimeError(f"{lane_name}: coverage {coverage:.4f} < 0.98")
+
+    if lane_name == "count":
+        if (pred < 0).any():
+            raise RuntimeError("count lane produced negative predictions")
+        if not np.allclose(pred, np.rint(pred), rtol=0.0, atol=1e-8):
+            raise RuntimeError("count lane predictions are not integer-rounded")
+
+    routing = model.get_routing_info()
+    for key in [
+        "lane_selected",
+        "dynamic_thresholds",
+        "meta_objective",
+        "ensemble_diversity_stats",
+        "regime_retrieval_enabled",
+        "prediction_postprocess",
+    ]:
+        if key not in routing:
+            raise RuntimeError(f"missing routing key: {key}")
+
+    print(
+        f"Synthetic smoke PASS [{lane_name}] "
+        f"coverage={coverage:.4f} lane={routing.get('lane_selected')} "
+        f"models={routing.get('final_selected')}"
+    )
 PY
 else
     echo "[5/5] Smoke shard execution... SKIPPED"

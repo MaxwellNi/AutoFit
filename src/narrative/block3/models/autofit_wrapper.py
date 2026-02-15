@@ -72,7 +72,7 @@ import gc
 import logging
 import time
 from itertools import combinations
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Callable, Dict, List, Optional, Tuple
 
 import numpy as np
 import pandas as pd
@@ -308,6 +308,7 @@ def _fit_single_candidate(
     horizon: int,
     timeout: float = _CANDIDATE_TIMEOUT,
     target_transform: Optional[TargetTransform] = None,
+    prediction_postprocess: Optional[Callable[[np.ndarray], np.ndarray]] = None,
 ) -> Optional[Tuple[str, float, np.ndarray, float]]:
     """Fit a single candidate model and return (name, val_mae, val_preds, elapsed).
 
@@ -372,6 +373,16 @@ def _fit_single_candidate(
                 and target_transform.kind != "identity"
                 and cat not in _PANEL_CATEGORIES):
             val_preds = target_transform.inverse(val_preds)
+        val_preds = np.asarray(val_preds, dtype=float).reshape(-1)
+        if prediction_postprocess is not None:
+            val_preds = prediction_postprocess(val_preds)
+        if len(val_preds) != len(y_val):
+            logger.warning(
+                f"[AutoFit] {model_name} prediction length mismatch "
+                f"{len(val_preds)} != {len(y_val)}, skipping"
+            )
+            del model; gc.collect()
+            return None
 
         val_mae = float(np.mean(np.abs(y_val.values - val_preds)))
 
@@ -427,6 +438,7 @@ def _temporal_kfold_evaluate_all(
     horizon: int,
     n_folds: int = _N_TEMPORAL_FOLDS,
     target_transform: Optional[TargetTransform] = None,
+    prediction_postprocess: Optional[Callable[[np.ndarray], np.ndarray]] = None,
 ) -> Tuple[List[Tuple[str, float, float, np.ndarray]], Dict[str, np.ndarray]]:
     """Evaluate all candidates using K-fold expanding-window temporal CV.
 
@@ -477,6 +489,7 @@ def _temporal_kfold_evaluate_all(
                 model_name, X_tr, y_tr, X_v, y_v,
                 tr_raw_fold, val_raw_fold, target, horizon,
                 target_transform=target_transform,
+                prediction_postprocess=prediction_postprocess,
             )
             if r is not None:
                 name, mae, preds, elapsed = r
@@ -3248,6 +3261,7 @@ def _repeated_temporal_kfold_evaluate_all(
     n_folds: int = _N_TEMPORAL_FOLDS,
     offsets: Optional[List[float]] = None,
     target_transform: Optional[TargetTransform] = None,
+    prediction_postprocess: Optional[Callable[[np.ndarray], np.ndarray]] = None,
 ) -> Tuple[List[Tuple[str, float, float, np.ndarray]], Dict[str, np.ndarray]]:
     """Repeated temporal CV: average over multiple offset fold sets.
 
@@ -3313,6 +3327,7 @@ def _repeated_temporal_kfold_evaluate_all(
                     model_name, X_tr, y_tr, X_v, y_v,
                     tr_raw_fold, val_raw_fold, target, horizon,
                     target_transform=target_transform,
+                    prediction_postprocess=prediction_postprocess,
                 )
                 if r is not None:
                     name, mae, preds, elapsed = r
@@ -3611,6 +3626,72 @@ def _blend_weights_for_lane(lane: str) -> Tuple[float, float]:
     if lane == "binary":
         return 0.50, 0.50
     return 0.65, 0.35
+
+
+def _build_lane_postprocess_state(lane: str, y_train: pd.Series) -> Dict[str, Any]:
+    """Build deterministic lane-specific prediction postprocess settings."""
+    y_arr = np.asarray(y_train.values, dtype=float)
+    y_fin = y_arr[np.isfinite(y_arr)]
+    if len(y_fin) == 0:
+        y_fin = np.array([0.0], dtype=float)
+
+    state: Dict[str, Any] = {
+        "lane": lane,
+        "lower": None,
+        "upper": None,
+        "round_to_int": False,
+    }
+
+    if lane == "binary":
+        state["lower"] = 0.0
+        state["upper"] = 1.0
+        return state
+
+    if lane == "count":
+        q999 = float(np.quantile(y_fin, 0.999))
+        ymax = float(np.max(y_fin))
+        upper = max(10.0, ymax * 1.20, q999 * 1.5)
+        state["lower"] = 0.0
+        state["upper"] = upper
+        state["round_to_int"] = True
+        return state
+
+    if lane == "heavy_tail":
+        q999 = float(np.quantile(y_fin, 0.999))
+        ymax = float(np.max(y_fin))
+        upper = max(1.0, ymax * 1.10, q999 * 2.5)
+        state["lower"] = 0.0
+        state["upper"] = upper
+        return state
+
+    return state
+
+
+def _apply_lane_postprocess(
+    preds: np.ndarray,
+    state: Optional[Dict[str, Any]],
+) -> np.ndarray:
+    """Apply lane-specific clipping/rounding consistently across train/eval/predict."""
+    out = np.asarray(preds, dtype=float).reshape(-1)
+    if state is None:
+        out = np.where(np.isfinite(out), out, 0.0)
+        return out
+
+    finite = out[np.isfinite(out)]
+    fill_value = float(np.median(finite)) if len(finite) > 0 else 0.0
+    out = np.where(np.isfinite(out), out, fill_value)
+
+    lower = state.get("lower")
+    upper = state.get("upper")
+    if lower is not None:
+        out = np.maximum(out, float(lower))
+    if upper is not None:
+        out = np.minimum(out, float(upper))
+
+    if bool(state.get("round_to_int", False)):
+        out = np.rint(out)
+
+    return np.asarray(out, dtype=float)
 
 
 def _build_regime_retrieval_features(
@@ -4235,6 +4316,12 @@ class AutoFitV71Wrapper(ModelBase):
         self._lane: str = "general"
         self._meta_objective: str = "l2"
         self._dynamic_thresholds: Dict[str, float] = {}
+        self._lane_postprocess_state: Dict[str, Any] = {
+            "lane": "general",
+            "lower": None,
+            "upper": None,
+            "round_to_int": False,
+        }
 
         # Feature augmentation state
         self._miss_cluster_model = None
@@ -4302,6 +4389,7 @@ class AutoFitV71Wrapper(ModelBase):
             "heavy_tail": "huber",
             "general": "l2",
         }[self._lane]
+        self._lane_postprocess_state = _build_lane_postprocess_state(self._lane, y)
         qs_threshold = _quick_screen_threshold_for_lane(self._lane)
         self._dynamic_thresholds = {"quick_screen_ratio": qs_threshold}
 
@@ -4323,6 +4411,7 @@ class AutoFitV71Wrapper(ModelBase):
         )
 
         candidate_pool = self._candidate_pool_for_lane(self._lane)
+        lane_postprocess = lambda arr: _apply_lane_postprocess(arr, self._lane_postprocess_state)
 
         # -- Quick screen with lane-adaptive threshold --
         qs_train_end = int(n * 0.70)
@@ -4348,6 +4437,7 @@ class AutoFitV71Wrapper(ModelBase):
                 horizon,
                 timeout=300,
                 target_transform=self._target_xform,
+                prediction_postprocess=lane_postprocess,
             )
             if r is None:
                 continue
@@ -4381,7 +4471,13 @@ class AutoFitV71Wrapper(ModelBase):
             self._routing_info = {
                 "lane_selected": self._lane,
                 "meta_objective": self._meta_objective,
+                "dynamic_thresholds": self._dynamic_thresholds,
                 "regime_retrieval_enabled": self._enable_regime_retrieval,
+                "prediction_postprocess": self._lane_postprocess_state,
+                "ensemble_diversity_stats": {},
+                "quick_screen_survived": 0,
+                "quick_screen_total": len(candidate_pool),
+                "final_selected": [chosen],
                 "fallback_model": chosen,
             }
             self._fitted = True
@@ -4407,6 +4503,7 @@ class AutoFitV71Wrapper(ModelBase):
                 n_folds=4,
                 offsets=[0.0, -0.04, -0.08],
                 target_transform=self._target_xform,
+                prediction_postprocess=lane_postprocess,
             )
         finally:
             _ALL_CANDIDATES.clear()
@@ -4419,6 +4516,18 @@ class AutoFitV71Wrapper(ModelBase):
             self._models = [(model, "LightGBM")]
             self._pred_names = ["LightGBM"]
             self._ensemble_weights = {"LightGBM": 1.0}
+            self._routing_info = {
+                "lane_selected": self._lane,
+                "meta_objective": self._meta_objective,
+                "dynamic_thresholds": self._dynamic_thresholds,
+                "regime_retrieval_enabled": self._enable_regime_retrieval,
+                "prediction_postprocess": self._lane_postprocess_state,
+                "ensemble_diversity_stats": {},
+                "quick_screen_survived": len(survived),
+                "quick_screen_total": len(candidate_pool),
+                "final_selected": ["LightGBM"],
+                "fallback_model": "LightGBM",
+            }
             self._fitted = True
             return self
 
@@ -4481,6 +4590,28 @@ class AutoFitV71Wrapper(ModelBase):
                     f"[AutoFitV71] Force-keep 2nd model {best_second} under heavy-tail "
                     f"anti-collapse rule (MAE={best_trial_mae:,.4f})"
                 )
+
+        # Count-lane anti-collapse: keep one count-specialist if almost tied.
+        if self._lane == "count":
+            count_specialists = {"XGBoostPoisson", "LightGBMTweedie"}
+            has_count_specialist = any(nm in count_specialists for nm in ensemble_list)
+            if not has_count_specialist:
+                for cand, _ in sorted_by_adj:
+                    if cand not in count_specialists or cand in ensemble_list:
+                        continue
+                    trial_preds = np.mean(
+                        [oof_clean[nm] for nm in (ensemble_list + [cand])],
+                        axis=0,
+                    )
+                    trial_mae = float(np.mean(np.abs(y_oof - trial_preds)))
+                    if trial_mae <= current_mae * 1.02:
+                        ensemble_list.append(cand)
+                        current_mae = trial_mae
+                        logger.info(
+                            f"[AutoFitV71] Force-keep count specialist {cand} "
+                            f"under count anti-collapse rule (MAE={trial_mae:,.4f})"
+                        )
+                    break
 
         selected_names = ensemble_list[:self._top_k]
         self._pred_names = selected_names
@@ -4579,6 +4710,7 @@ class AutoFitV71Wrapper(ModelBase):
                     pred_v = mdl.predict(X_l2_v)
                     if self._target_xform is not None and self._target_xform.kind != "identity":
                         pred_v = self._target_xform.inverse(pred_v)
+                    pred_v = _apply_lane_postprocess(pred_v, self._lane_postprocess_state)
                     mae_v = float(np.mean(np.abs(y_l2_v - pred_v)))
                     if mae_v < best_mae:
                         best_mae = mae_v
@@ -4635,6 +4767,7 @@ class AutoFitV71Wrapper(ModelBase):
             "n_ratio_features": len(self._kept_ratios),
             "n_log_features": len(self._kept_log_cols),
             "regime_retrieval_enabled": self._enable_regime_retrieval,
+            "prediction_postprocess": self._lane_postprocess_state,
             "quick_screen_survived": len(survived),
             "quick_screen_total": len(candidate_pool),
             "monotone_selected": ensemble_list,
@@ -4664,6 +4797,7 @@ class AutoFitV71Wrapper(ModelBase):
             raise RuntimeError("AutoFitV71 not fitted")
 
         X_aug = self._augment_features(X, fit=False)
+        lane_postprocess = lambda arr: _apply_lane_postprocess(arr, self._lane_postprocess_state)
         pred_dict: Dict[str, np.ndarray] = {}
         for model, name in self._models:
             try:
@@ -4672,12 +4806,13 @@ class AutoFitV71Wrapper(ModelBase):
                     for k in ("test_raw", "target", "horizon"):
                         if k in kwargs:
                             pred_kw[k] = kwargs[k]
-                pred_dict[name] = model.predict(X_aug, **pred_kw)
+                raw_preds = model.predict(X_aug, **pred_kw)
+                pred_dict[name] = lane_postprocess(raw_preds)
             except Exception as e:
                 logger.warning(f"[AutoFitV71] {name} predict failed: {e}")
 
         if not pred_dict:
-            return np.full(len(X), 0.0)
+            return lane_postprocess(np.full(len(X), 0.0))
 
         # L0 → L1 → L2
         if self._meta_learner_l2 is not None and self._meta_learners_l1:
@@ -4704,7 +4839,7 @@ class AutoFitV71Wrapper(ModelBase):
                 l2_preds = self._meta_learner_l2.predict(X_l2[self._meta_cols_l2].fillna(0))
                 if self._target_xform is not None and self._target_xform.kind != "identity":
                     l2_preds = self._target_xform.inverse(l2_preds)
-                return np.asarray(l2_preds, dtype=float)
+                return lane_postprocess(np.asarray(l2_preds, dtype=float))
             except Exception as e:
                 logger.warning(f"[AutoFitV71] L2 predict failed: {e}")
 
@@ -4725,19 +4860,19 @@ class AutoFitV71Wrapper(ModelBase):
                 )
                 if self._target_xform is not None and self._target_xform.kind != "identity":
                     l1_preds = self._target_xform.inverse(l1_preds)
-                return np.asarray(l1_preds, dtype=float)
+                return lane_postprocess(np.asarray(l1_preds, dtype=float))
             except Exception as e:
                 logger.warning(f"[AutoFitV71] L1 predict failed: {e}")
 
         # Weighted blend fallback
         total_w = sum(self._ensemble_weights.get(nm, 0.0) for nm in pred_dict)
         if total_w < 1e-8:
-            return np.mean(list(pred_dict.values()), axis=0)
+            return lane_postprocess(np.mean(list(pred_dict.values()), axis=0))
         out = np.zeros(len(X), dtype=float)
         for name, preds in pred_dict.items():
             w = self._ensemble_weights.get(name, 0.0) / total_w
             out += w * preds
-        return out
+        return lane_postprocess(out)
 
     def get_routing_info(self) -> Dict[str, Any]:
         return self._routing_info

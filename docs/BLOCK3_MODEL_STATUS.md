@@ -6,6 +6,17 @@
 > Phase 7 Benchmark: **IN PROGRESS** (86/121 completed, 9 running, 26 pending, 0 failed)
 > Platform: ULHPC Iris HPC (GPU V100 + Batch 112GB)
 
+## Mandatory Workflow (All Agents/Devices)
+
+This project now enforces a strict verify-then-run workflow for any benchmark-impacting code change.
+
+- Required SOP: `docs/BLOCK3_OPERATIONAL_SOP.md`
+- Mandatory gate command: `bash scripts/preflight_block3_v71_gate.sh --v71-variant=g02`
+- Submission scripts run preflight by default and reject unsafe skip unless explicitly acknowledged with:
+  `ALLOW_UNSAFE_SKIP_PREFLIGHT=1`
+- Dual 3090 safe-saturation launcher: `scripts/run_phase7_dual3090_safe.sh`
+- Latest SOTA scan and V7.1 empirical revision log: `docs/AUTOFIT_V71_SOTA_SCAN_20260215.md`
+
 ## Executive Summary
 
 | Category | Models | Count | Panel-Aware | Phase 7 Status |

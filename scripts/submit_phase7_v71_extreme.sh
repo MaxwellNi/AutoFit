@@ -9,7 +9,7 @@
 #   bash scripts/submit_phase7_v71_extreme.sh --pilot
 #   bash scripts/submit_phase7_v71_extreme.sh --full --v71-variant g03
 #   bash scripts/submit_phase7_v71_extreme.sh --pilot --dry-run
-#   bash scripts/submit_phase7_v71_extreme.sh --full --v71-variant g02 --skip-preflight
+#   ALLOW_UNSAFE_SKIP_PREFLIGHT=1 bash scripts/submit_phase7_v71_extreme.sh --full --v71-variant g02 --skip-preflight
 # ============================================================================
 
 set -euo pipefail
@@ -48,6 +48,13 @@ for arg in "$@"; do
             ;;
     esac
 done
+
+if $SKIP_PREFLIGHT && [[ "${ALLOW_UNSAFE_SKIP_PREFLIGHT:-0}" != "1" ]]; then
+    echo "Refusing --skip-preflight without explicit override."
+    echo "If you must bypass the gate, rerun with:"
+    echo "  ALLOW_UNSAFE_SKIP_PREFLIGHT=1 bash scripts/submit_phase7_v71_extreme.sh --${MODE} --skip-preflight"
+    exit 2
+fi
 
 OUTPUT_BASE="runs/benchmarks/block3_${STAMP}_phase7_v71extreme_${RUN_TAG}"
 LOG_DIR="/work/projects/eint/logs/phase7_v71extreme_${RUN_TAG}"
