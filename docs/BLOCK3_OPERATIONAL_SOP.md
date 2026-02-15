@@ -52,6 +52,14 @@ export BLOCK3_RUNS_ROOT=/path/to/shared/runs
 
 Preflight will auto-link `repo_root/runs -> $BLOCK3_RUNS_ROOT` when needed.
 
+To fetch required freeze assets directly from Iris on local servers:
+
+```bash
+bash scripts/pull_block3_freeze_from_iris.sh --iris-login npin@iris
+```
+
+If your SSH alias is simply `iris`, you can omit `npin@`.
+
 Dependency installer (optional, insider-only):
 
 ```bash
