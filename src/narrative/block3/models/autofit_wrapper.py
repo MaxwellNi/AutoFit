@@ -4745,7 +4745,8 @@ class AutoFitV71Wrapper(ModelBase):
 
 def get_autofit_v71(**kwargs) -> AutoFitV71Wrapper:
     """AutoFit V7.1 lane-adaptive robust ensemble."""
-    return AutoFitV71Wrapper(top_k=8, **kwargs)
+    top_k = kwargs.pop("top_k", 8)
+    return AutoFitV71Wrapper(top_k=top_k, **kwargs)
 
 
 AUTOFIT_MODELS = {
