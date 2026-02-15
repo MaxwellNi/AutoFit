@@ -98,11 +98,49 @@ if $SKIP_PREFLIGHT && [[ "${ALLOW_UNSAFE_SKIP_PREFLIGHT:-0}" != "1" ]]; then
     exit 2
 fi
 
-if [[ "${CONDA_DEFAULT_ENV:-}" != "insider" ]]; then
-    echo "FATAL: CONDA_DEFAULT_ENV is '${CONDA_DEFAULT_ENV:-<empty>}', expected 'insider'."
-    echo "Run: conda activate insider"
-    exit 2
-fi
+activate_insider_env() {
+    if [[ "${CONDA_DEFAULT_ENV:-}" == "insider" ]]; then
+        return 0
+    fi
+
+    if command -v micromamba >/dev/null 2>&1; then
+        local roots=()
+        if [[ -n "${MAMBA_ROOT_PREFIX:-}" ]]; then
+            roots+=("${MAMBA_ROOT_PREFIX}")
+        fi
+        roots+=(
+            "/mnt/aiongpfs/projects/eint/envs/.micromamba"
+            "${HOME}/.local/share/micromamba"
+            "${HOME}/micromamba"
+        )
+        local r
+        for r in "${roots[@]}"; do
+            [[ -d "${r}" ]] || continue
+            export MAMBA_ROOT_PREFIX="${r}"
+            eval "$(micromamba shell hook -s bash)"
+            if micromamba activate insider; then
+                return 0
+            fi
+        done
+    fi
+
+    if command -v conda >/dev/null 2>&1; then
+        local conda_base
+        conda_base="$(conda info --base 2>/dev/null || true)"
+        if [[ -n "${conda_base}" && -f "${conda_base}/etc/profile.d/conda.sh" ]]; then
+            # shellcheck disable=SC1090
+            source "${conda_base}/etc/profile.d/conda.sh"
+            if conda activate insider; then
+                return 0
+            fi
+        fi
+    fi
+
+    echo "FATAL: failed to activate insider environment."
+    return 1
+}
+
+activate_insider_env
 
 PY_BIN="$(command -v python3 || true)"
 if [[ -z "$PY_BIN" || "$PY_BIN" != *"insider"* ]]; then
@@ -118,6 +156,11 @@ fi
 
 cd "$REPO"
 export PYTHONPATH="$REPO/src:${PYTHONPATH:-}"
+
+if ! $DRY_RUN; then
+    echo "=== Auto-fix insider dependencies ==="
+    bash "${REPO}/scripts/install_block3_deps_in_insider.sh"
+fi
 
 OUTPUT_BASE="runs/benchmarks/block3_${STAMP}_dual3090_phase7_${RUN_TAG}"
 LOG_BASE="${OUTPUT_BASE}/logs"

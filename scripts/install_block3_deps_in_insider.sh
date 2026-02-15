@@ -1,19 +1,36 @@
 #!/usr/bin/env bash
 # =============================================================================
-# Install/upgrade Block 3 runtime deps in the existing insider environment only
+# Auto-repair runtime dependencies in insider environment (3090/4090/Iris)
+#
+# Behavior:
+#   1) Auto-activate insider (reuse current env if already active)
+#   2) Detect missing/outdated core runtime dependencies
+#   3) Auto-install only required fixes (unless --force)
+#   4) Verify critical imports and versions
+#
+# Usage:
+#   bash scripts/install_block3_deps_in_insider.sh
+#   bash scripts/install_block3_deps_in_insider.sh --dry-run
+#   bash scripts/install_block3_deps_in_insider.sh --force
 # =============================================================================
 set -euo pipefail
 
-if [[ "${CONDA_DEFAULT_ENV:-}" != "insider" ]]; then
-    echo "FATAL: activate insider first (current: ${CONDA_DEFAULT_ENV:-<empty>})."
-    exit 2
-fi
-
-PY_BIN="$(command -v python3 || true)"
-if [[ -z "$PY_BIN" || "$PY_BIN" != *"insider"* ]]; then
-    echo "FATAL: python3 is not from insider env: ${PY_BIN:-<missing>}"
-    exit 2
-fi
+FORCE=false
+DRY_RUN=false
+for arg in "$@"; do
+    case "$arg" in
+        --force)
+            FORCE=true
+            ;;
+        --dry-run)
+            DRY_RUN=true
+            ;;
+        *)
+            echo "Unknown argument: $arg"
+            exit 1
+            ;;
+    esac
+done
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 DEFAULT_REPO="$(cd "${SCRIPT_DIR}/.." && pwd)"
@@ -38,25 +55,186 @@ if [[ ! -f "${REPO}/pyproject.toml" ]]; then
     exit 2
 fi
 
+activate_insider_env() {
+    if [[ "${CONDA_DEFAULT_ENV:-}" == "insider" ]]; then
+        return 0
+    fi
+
+    if command -v micromamba >/dev/null 2>&1; then
+        local roots=()
+        if [[ -n "${MAMBA_ROOT_PREFIX:-}" ]]; then
+            roots+=("${MAMBA_ROOT_PREFIX}")
+        fi
+        roots+=(
+            "/mnt/aiongpfs/projects/eint/envs/.micromamba"
+            "${HOME}/.local/share/micromamba"
+            "${HOME}/micromamba"
+        )
+        local r
+        for r in "${roots[@]}"; do
+            [[ -d "${r}" ]] || continue
+            export MAMBA_ROOT_PREFIX="${r}"
+            eval "$(micromamba shell hook -s bash)"
+            if micromamba activate insider; then
+                return 0
+            fi
+        done
+    fi
+
+    if command -v conda >/dev/null 2>&1; then
+        local conda_base
+        conda_base="$(conda info --base 2>/dev/null || true)"
+        if [[ -n "${conda_base}" && -f "${conda_base}/etc/profile.d/conda.sh" ]]; then
+            # shellcheck disable=SC1090
+            source "${conda_base}/etc/profile.d/conda.sh"
+            if conda activate insider; then
+                return 0
+            fi
+        fi
+    fi
+
+    echo "FATAL: failed to activate insider environment."
+    return 1
+}
+
+activate_insider_env
+
+PY_BIN="$(command -v python3 || true)"
+if [[ -z "${PY_BIN}" || "${PY_BIN}" != *"insider"* ]]; then
+    echo "FATAL: python3 is not from insider env: ${PY_BIN:-<missing>}"
+    exit 2
+fi
+
 cd "${REPO}"
 
-PACKAGES=(
-  "xgboost>=3.2.0"
-  "lightgbm>=4.6.0"
-  "catboost>=1.2.8"
-  "tabpfn>=2.0.0"
+# Ensure packaging is available for robust version checks
+if ! python3 - << 'PY' >/dev/null 2>&1
+from packaging.version import Version
+print(Version("1.0"))
+PY
+then
+    if $DRY_RUN; then
+        echo "[DRY] Would install: packaging>=24.0"
+    else
+        python3 -m pip install --upgrade "packaging>=24.0"
+    fi
+fi
+
+mapfile -t NEED_SPECS < <(python3 - << 'PY'
+from __future__ import annotations
+import importlib
+import importlib.metadata as im
+from packaging.version import Version
+
+# dist_name, import_name, min_version, max_exclusive(optional), pip_spec, exact_version(optional)
+REQS = [
+    ("numpy", "numpy", "1.24.0", None, "numpy>=1.24.0", None),
+    ("pandas", "pandas", "2.0.0", None, "pandas>=2.0.0", None),
+    ("pyarrow", "pyarrow", "12.0.0", None, "pyarrow>=12.0.0", None),
+    ("PyYAML", "yaml", "6.0.0", None, "PyYAML>=6.0.0", None),
+    # Keep sklearn in [1.6, 1.8) to satisfy Chronos (>=1.6) and TabPFN (<1.8).
+    ("scikit-learn", "sklearn", "1.6.0", "1.8.0", "scikit-learn>=1.6.0,<1.8", None),
+    ("lightgbm", "lightgbm", "4.6.0", None, "lightgbm>=4.6.0", None),
+    ("xgboost", "xgboost", "3.2.0", None, "xgboost>=3.2.0", None),
+    ("catboost", "catboost", "1.2.8", None, "catboost>=1.2.8", None),
+    ("tabpfn", "tabpfn", "2.0.0", None, "tabpfn>=2.0.0", None),
+    ("pytest", "pytest", "8.0.0", None, "pytest>=8.0.0", None),
+]
+
+need = []
+for dist_name, import_name, min_ver, max_exclusive, pip_spec, exact_ver in REQS:
+    try:
+        cur = im.version(dist_name)
+    except Exception:
+        need.append(pip_spec)
+        continue
+
+    try:
+        if Version(cur) < Version(min_ver):
+            need.append(pip_spec)
+            continue
+    except Exception:
+        need.append(pip_spec)
+        continue
+
+    if max_exclusive is not None and Version(cur) >= Version(max_exclusive):
+        need.append(pip_spec)
+        continue
+
+    if exact_ver is not None and cur != exact_ver:
+        need.append(pip_spec)
+        continue
+
+    # Import smoke for ABI/runtime mismatch
+    try:
+        importlib.import_module(import_name)
+    except Exception:
+        need.append(pip_spec)
+
+# stable dedupe
+seen = set()
+for spec in need:
+    if spec not in seen:
+        seen.add(spec)
+        print(spec)
+PY
 )
 
-echo "Installing into insider env: ${CONDA_DEFAULT_ENV}"
-python3 -m pip install --upgrade "${PACKAGES[@]}"
+if $FORCE; then
+    NEED_SPECS=(
+        "numpy>=1.24.0"
+        "pandas>=2.0.0"
+        "pyarrow>=12.0.0"
+        "PyYAML>=6.0.0"
+        "scikit-learn>=1.6.0,<2"
+        "lightgbm>=4.6.0"
+        "xgboost>=3.2.0"
+        "catboost>=1.2.8"
+        "tabpfn>=2.0.0"
+        "pytest>=8.0.0"
+    )
+fi
 
-echo "Verifying imports and versions..."
+if [[ "${#NEED_SPECS[@]}" -eq 0 ]]; then
+    echo "Dependency check PASS: insider environment already compatible."
+else
+    echo "Dependencies to fix (${#NEED_SPECS[@]}):"
+    printf '  - %s\n' "${NEED_SPECS[@]}"
+    if $DRY_RUN; then
+        echo "[DRY] Skipping installation."
+        echo "Dry-run complete."
+        exit 0
+    else
+        python3 -m pip install --upgrade "${NEED_SPECS[@]}"
+    fi
+fi
+
+# Final verification
 python3 - << 'PY'
+from __future__ import annotations
 import importlib
-pkgs = ["xgboost", "lightgbm", "catboost", "tabpfn"]
-for p in pkgs:
-    m = importlib.import_module(p)
-    print(f"{p}={getattr(m, '__version__', 'unknown')}")
+import importlib.metadata as im
+
+checks = [
+    ("numpy", "numpy"),
+    ("pandas", "pandas"),
+    ("pyarrow", "pyarrow"),
+    ("PyYAML", "yaml"),
+    ("scikit-learn", "sklearn"),
+    ("lightgbm", "lightgbm"),
+    ("xgboost", "xgboost"),
+    ("catboost", "catboost"),
+    ("tabpfn", "tabpfn"),
+    ("pytest", "pytest"),
+]
+
+print("Final dependency versions:")
+for dist_name, import_name in checks:
+    mod = importlib.import_module(import_name)
+    ver = im.version(dist_name)
+    print(f"  {dist_name}={ver}")
+
+print("Dependency verification PASS")
 PY
 
 echo "Done."

@@ -74,6 +74,9 @@ Primary launcher:
 bash scripts/run_phase7_dual3090_safe.sh --full --v71-variant=g02
 ```
 
+The launcher auto-activates `insider` and auto-repairs missing/incompatible dependencies
+before preflight and benchmark execution.
+
 Scheduling design:
 
 - `GPU0`: `deep_classical`, `transformer_sota_A`, `foundation_A`
