@@ -31,6 +31,33 @@ from .base import ModelBase, ModelConfig
 _logger = logging.getLogger(__name__)
 
 
+def _sanitize_predictions(
+    preds: np.ndarray,
+    fill_value: float,
+    model_name: str,
+) -> np.ndarray:
+    """Replace non-finite predictions to keep evaluation coverage consistent."""
+    arr = np.asarray(preds, dtype=np.float64)
+    finite = np.isfinite(arr)
+    if finite.all():
+        return arr
+
+    if not np.isfinite(fill_value):
+        if finite.any():
+            fill_value = float(np.nanmedian(arr[finite]))
+        else:
+            fill_value = 0.0
+
+    n_bad = int((~finite).sum())
+    arr = arr.copy()
+    arr[~finite] = fill_value
+    _logger.warning(
+        f"  [{model_name}] Sanitized {n_bad} non-finite predictions "
+        f"(fill={fill_value:.6g})"
+    )
+    return arr
+
+
 # ============================================================================
 # KDD'26 Production Configurations
 # ============================================================================
@@ -438,6 +465,9 @@ class _RobustFallback:
         self._model = None
         self._transform_kind: str = "identity"
         self._feature_cols: List[str] = []
+        self._clip_low: Optional[float] = None
+        self._clip_high: Optional[float] = None
+        self._safe_fill: float = 0.0
         self._fitted = False
 
     def fit(self, X: pd.DataFrame, y: pd.Series) -> "_RobustFallback":
@@ -445,8 +475,11 @@ class _RobustFallback:
         y_arr = np.asarray(y, dtype=float)
         y_finite = y_arr[np.isfinite(y_arr)]
         if len(y_finite) < 10:
+            if len(y_finite):
+                self._safe_fill = float(np.nanmedian(y_finite))
             self._fitted = True
             return self
+        self._safe_fill = float(np.nanmedian(y_finite))
 
         # --- Determine transform ---
         is_non_neg = (y_finite >= 0).all()
@@ -465,6 +498,23 @@ class _RobustFallback:
             self._transform_kind = "identity"
 
         y_transformed = self._forward(y_arr)
+        y_trans_finite = y_transformed[np.isfinite(y_transformed)]
+        if len(y_trans_finite):
+            lo = float(np.quantile(y_trans_finite, 0.001))
+            hi = float(np.quantile(y_trans_finite, 0.999))
+            if hi < lo:
+                lo, hi = hi, lo
+            span = max(hi - lo, 1e-6)
+            pad = 0.10 * span
+            lo -= pad
+            hi += pad
+            if self._transform_kind == "asinh":
+                lo = max(lo, -30.0)
+                hi = min(hi, 30.0)
+            elif self._transform_kind == "sqrt":
+                lo = max(lo, 0.0)
+            self._clip_low = lo
+            self._clip_high = hi
 
         # --- Feature matrix ---
         X_fb = X.select_dtypes(include=[np.number]).fillna(0)
@@ -510,9 +560,19 @@ class _RobustFallback:
         if self._model is None or not self._feature_cols:
             return None
         try:
-            X_fb = X[self._feature_cols].fillna(0)
-            preds_transformed = self._model.predict(X_fb)
-            return self._inverse(preds_transformed)
+            X_fb = X.reindex(columns=self._feature_cols, fill_value=0).fillna(0)
+            preds_transformed = np.asarray(self._model.predict(X_fb), dtype=float)
+            if self._clip_low is not None and self._clip_high is not None:
+                preds_transformed = np.clip(
+                    preds_transformed, self._clip_low, self._clip_high
+                )
+            preds = np.asarray(self._inverse(preds_transformed), dtype=float)
+            finite = np.isfinite(preds)
+            if not finite.all():
+                fill = float(np.nanmedian(preds[finite])) if finite.any() else self._safe_fill
+                preds = preds.copy()
+                preds[~finite] = fill
+            return preds
         except Exception:
             return None
 
@@ -525,7 +585,7 @@ class _RobustFallback:
 
     def _inverse(self, y: np.ndarray) -> np.ndarray:
         if self._transform_kind == "asinh":
-            return np.sinh(y)
+            return np.sinh(np.clip(y, -30.0, 30.0))
         elif self._transform_kind == "sqrt":
             return np.square(y)
         return y
@@ -897,7 +957,9 @@ class DeepModelWrapper(ModelBase):
                         f"fallback={'RobustFallback' if fallback_preds is not None else 'global_mean'}, "
                         f"unique_preds={len(np.unique(np.round(y_pred, 4)))}"
                     )
-                    return y_pred
+                    return _sanitize_predictions(
+                        y_pred, global_mean, self.model_name
+                    )
 
             # Fallback: no entity mapping available
             _logger.warning(
@@ -1159,7 +1221,9 @@ class FoundationModelWrapper(ModelBase):
                     f"fallback={'RobustFallback' if fallback_preds is not None else 'global_mean'}, "
                     f"unique_preds={len(np.unique(np.round(y_pred, 4)))}"
                 )
-                return y_pred
+                return _sanitize_predictions(
+                    y_pred, global_mean, self.model_name
+                )
 
         # No entity mapping — global mean fallback
         _logger.warning(
@@ -1458,7 +1522,9 @@ class HFFoundationModelWrapper(ModelBase):
                         y_pred[i] = fallback_preds[i]
                     else:
                         y_pred[i] = global_mean
-                return y_pred
+                return _sanitize_predictions(
+                    y_pred, global_mean, self.model_name
+                )
 
         return np.full(h, global_mean)
 
