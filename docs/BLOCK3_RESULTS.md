@@ -1,16 +1,17 @@
 # Block 3 Benchmark Results — Phase 7 IN PROGRESS
 
-**Last Updated**: 2026-02-14 12:05 UTC
+**Last Updated**: 2026-02-17 10:29 CET
 **Phase 7 Dir**: `runs/benchmarks/block3_20260203_225620_phase7/`
 **Platform**: ULHPC Iris HPC — GPU (4×V100 32GB, 756GB) + Batch (28c, 112GB)
 **Freeze Stamp**: `20260203_225620`
 **Model Registry (code)**: 72 models across 7 categories (submitted Phase 7 roster: 67)
 **Ablations**: core_only, core_text, core_edgar, full
-**Progress (canonical 121 shards)**: 86 completed, 9 running, 26 pending
+**Progress (canonical 121 shards)**: 99 completed, 0 running, 20 pending, 2 failed
+**Detailed live tables**: `docs/BLOCK3_LIVE_SUMMARY.md`
 
 ---
 
-## Live Status Snapshot (2026-02-14 12:05 UTC)
+## Live Status Snapshot (2026-02-17 10:29 CET)
 
 Data sources:
 - `squeue -u $USER`
@@ -19,21 +20,26 @@ Data sources:
 - `scontrol show job <jobid>` + log tails in `/work/projects/eint/logs/phase7/`
 
 Queue status:
-- RUNNING: 11 (batch=8, gpu=3)
-- PENDING: 191
+- RUNNING: 8 (batch=8, gpu=0)
+- PENDING: 122 (batch=111, gpu=11)
 - Pending reasons:
-  - `QOSMaxJobsPerUserLimit`: 101
-  - `QOSGrpNodeLimit`: 21
-  - `Priority`: 35
-  - `None`: 1
+  - batch queue: mostly `QOSMaxJobsPerUserLimit`
+  - gpu queue: mostly `QOSGrpNodeLimit`
 - QOS hard caps confirmed:
   - `iris-batch-long MaxJobsPerUser=8`
   - `iris-gpu-long MaxJobsPerUser=4`
 
 Canonical shard progress (121 names from submitted Phase 7 scripts):
-- COMPLETED: 86
-- RUNNING: 9
-- PENDING: 26
+- COMPLETED: 99
+- RUNNING: 0
+- PENDING: 20
+- FAILED: 2 (`p7_af1_t1_ce`, `p7_af2_t1_ce`)
+
+Program-wide progress (canonical + V7.1 pilot + V7.1 full):
+- COMPLETED: 166 / 297
+- RUNNING: 8 / 297
+- PENDING: 121 / 297
+- FAILED: 2 / 297
 
 Per-shard-group status:
 

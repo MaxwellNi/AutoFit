@@ -1,10 +1,26 @@
 # Block 3 Model Benchmark Status
 
-> Last Updated: 2026-02-14 12:05 UTC
+> Last Updated: 2026-02-17 10:29 CET
 > Freeze Stamp: `20260203_225620`
 > Model Registry (code): **72 models across 7 categories** (Phase 7 submitted roster remains 67)
-> Phase 7 Benchmark: **IN PROGRESS** (86/121 completed, 9 running, 26 pending, 0 failed)
+> Phase 7 Benchmark: **IN PROGRESS** (99/121 completed, 0 running, 20 pending, 2 failed)
 > Platform: ULHPC Iris HPC (GPU V100 + Batch 112GB)
+> Live Detailed Report: `docs/BLOCK3_LIVE_SUMMARY.md`
+
+## Live Snapshot (2026-02-17 10:29 CET)
+
+| Scope | Completed | Running | Pending | Failed | Total |
+|---|---:|---:|---:|---:|---:|
+| `p7` (canonical) | 99 | 0 | 20 | 2 | 121 |
+| `p7x` (V7.1 pilot) | 43 | 1 | 66 | 0 | 110 |
+| `p7xF` (V7.1 full g02) | 24 | 7 | 35 | 0 | 66 |
+| **All tracked jobs** | **166** | **8** | **121** | **2** | **297** |
+
+Queue reality at snapshot:
+- Running jobs: 8 (`batch=8`, `gpu=0`)
+- Pending jobs: 122 (`batch=111`, `gpu=11`)
+- QOS capacity ceiling remains 12 concurrent (`batch=8` + `gpu=4`)
+- Current 8/12 happens because batch is saturated while GPU jobs wait on group/node limits.
 
 ## Mandatory Workflow (All Agents/Devices)
 
