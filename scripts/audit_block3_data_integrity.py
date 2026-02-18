@@ -232,6 +232,28 @@ def _leakage_policy_audit(cfg_path: Path) -> Dict[str, Any]:
     }
 
 
+def _verify_report_all_pass(payload: Dict[str, Any]) -> bool:
+    """Robustly resolve pass/fail from verify_report schema variants."""
+    all_pass_raw = payload.get("all_pass")
+    if all_pass_raw is None:
+        all_pass_raw = payload.get("all_gates_pass")
+    if all_pass_raw is not None:
+        return bool(all_pass_raw)
+
+    checks = payload.get("checks", [])
+    if not isinstance(checks, list):
+        return False
+    passed_flags: List[bool] = []
+    for c in checks:
+        if not isinstance(c, dict):
+            continue
+        if "passed" in c:
+            passed_flags.append(bool(c.get("passed")))
+        elif "status" in c:
+            passed_flags.append(str(c.get("status")).upper() == "PASS")
+    return all(passed_flags) if passed_flags else False
+
+
 def _freeze_gate_audit(pointer_path: Path) -> Dict[str, Any]:
     pointer = _safe_load_yaml(pointer_path)
     expected_stamp = str(pointer.get("stamp", "20260203_225620"))
@@ -282,7 +304,7 @@ def _freeze_gate_audit(pointer_path: Path) -> Dict[str, Any]:
         checks = payload.get("checks", [])
         return {
             "checks": checks,
-            "all_pass": bool(payload.get("all_pass", False)),
+            "all_pass": _verify_report_all_pass(payload),
             "exit_code": int(proc.returncode),
             "stdout_tail": "\n".join(proc.stdout.splitlines()[-20:]),
         }

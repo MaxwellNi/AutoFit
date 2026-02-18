@@ -193,11 +193,11 @@ autofit_v71:
 
 # AutoFit V7.2 controls (evidence-driven rollout)
 autofit_v72:
-  enabled: false
+  enabled: true
   count_safe_mode: true
   champion_anchor: true
   offline_rl_policy: "offline_rule_v72"
-  search_budget: 64
+  search_budget: 96
 
 # Model categories for benchmarking
 model_categories:

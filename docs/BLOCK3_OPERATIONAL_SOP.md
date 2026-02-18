@@ -1,6 +1,6 @@
 # Block 3 Operational SOP (Mandatory)
 
-Last updated: 2026-02-15
+Last updated: 2026-02-18
 Scope: Block 3 benchmark, AutoFit V7/V7.1/V7.2 preparation
 
 ## Non-Negotiable Gate
@@ -98,6 +98,37 @@ OOM guards:
 - Coverage guard must pass (`prediction_coverage_ratio >= 0.98`)
 - Failed fairness checks are invalid for leaderboard comparisons
 
+## V7.2 Failure-Pool Queue Soft Bump
+
+Use the soft-bump helper to accelerate the four fixed V7.2 failure-pool jobs
+without changing benchmark semantics.
+
+Stage t0 (priority bump):
+
+```bash
+bash scripts/soft_bump_v72_failure_pool_queue.sh --stage=t0 --apply
+```
+
+If `scontrol top` is denied on your cluster, use stage t2h fallback:
+
+```bash
+bash scripts/soft_bump_v72_failure_pool_queue.sh --stage=t2h --apply --hold-count=6
+```
+
+After at least one `p7r_v72_ic_ce_h*` job starts running, release held jobs:
+
+```bash
+bash scripts/soft_bump_v72_failure_pool_queue.sh --release-held --apply
+```
+
+Optional auto-release watcher (recommended during overnight queue wait):
+
+```bash
+nohup bash scripts/watch_v72_fasttrack_release.sh --interval=120 --max-wait-min=2880 \
+  >/tmp/v72_fasttrack_release.log 2>&1 &
+tail -f /tmp/v72_fasttrack_release.log
+```
+
 ## Release Checklist
 
 1. `preflight_block3_v71_gate.sh` PASS
@@ -106,3 +137,6 @@ OOM guards:
 4. Pilot PASS gates
 5. Full run submission
 6. Aggregate with comparability filter enabled
+7. Build truth pack and review V7.2 evidence master:
+   - `micromamba run -n insider python scripts/build_block3_truth_pack.py --output-dir docs/benchmarks/block3_truth_pack`
+   - `docs/AUTOFIT_V72_EVIDENCE_MASTER_20260217.md`

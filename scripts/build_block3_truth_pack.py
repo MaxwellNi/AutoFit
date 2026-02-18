@@ -89,6 +89,26 @@ SECTION_ORDER: List[Tuple[str, str]] = [
         "## Family Gap Matrix",
     ),
     (
+        "CHAMPION_TEMPLATE_LIBRARY",
+        "## Champion Template Library",
+    ),
+    (
+        "HYPERPARAMETER_SEARCH_LEDGER",
+        "## Hyperparameter Search Ledger",
+    ),
+    (
+        "BEST_CONFIG_BY_MODEL_TARGET",
+        "## Best Config By Model/Target",
+    ),
+    (
+        "COMPUTE_COST_REPORT",
+        "## Compute Cost Report",
+    ),
+    (
+        "V72_PILOT_GATE_REPORT",
+        "## V7.2 Pilot Gate Report",
+    ),
+    (
         "HISTORICAL_FULL_SCALE_EXPERIMENT_LEDGER",
         "## Historical Full-Scale Experiment Ledger",
     ),
@@ -322,6 +342,149 @@ def _write_csv(path: Path, rows: Sequence[Dict[str, Any]], fieldnames: Sequence[
 
 def _safe_json(value: Any) -> str:
     return json.dumps(value, ensure_ascii=True, sort_keys=True)
+
+
+def _load_optional_csv(path: Path) -> List[Dict[str, Any]]:
+    if not path.exists():
+        return []
+    try:
+        with path.open("r", encoding="utf-8", newline="") as f:
+            reader = csv.DictReader(f)
+            return [dict(row) for row in reader]
+    except Exception:
+        return []
+
+
+def _load_optional_json(path: Path) -> Optional[Any]:
+    if not path.exists():
+        return None
+    try:
+        return json.loads(path.read_text(encoding="utf-8"))
+    except Exception:
+        return None
+
+
+def _build_best_config_rows(best_cfg_payload: Optional[Any], evidence_path: str) -> List[Dict[str, Any]]:
+    if not isinstance(best_cfg_payload, dict):
+        return [
+            {
+                "target": "n/a",
+                "model_name": "n/a",
+                "target_family": "n/a",
+                "category": "n/a",
+                "status": "missing",
+                "search_budget": None,
+                "trials_executed": None,
+                "best_mae_observed_strict": None,
+                "best_config_json": "artifact_missing",
+                "search_space_json": "artifact_missing",
+                "evidence_path": evidence_path,
+            }
+        ]
+
+    rows: List[Dict[str, Any]] = []
+    targets = best_cfg_payload.get("targets", {})
+    if not isinstance(targets, dict):
+        return rows
+    for target, model_map in sorted(targets.items()):
+        if not isinstance(model_map, dict):
+            continue
+        for model_name, item in sorted(model_map.items()):
+            if not isinstance(item, dict):
+                continue
+            rows.append(
+                {
+                    "target": target,
+                    "model_name": model_name,
+                    "target_family": item.get("target_family"),
+                    "category": item.get("category"),
+                    "status": item.get("status"),
+                    "search_budget": item.get("search_budget"),
+                    "trials_executed": item.get("trials_executed"),
+                    "best_mae_observed_strict": item.get("best_mae_observed_strict"),
+                    "best_config_json": _safe_json(item.get("best_config", {})),
+                    "search_space_json": _safe_json(item.get("search_space", {})),
+                    "evidence_path": item.get("evidence_path", evidence_path),
+                }
+            )
+    if not rows:
+        rows.append(
+            {
+                "target": "n/a",
+                "model_name": "n/a",
+                "target_family": "n/a",
+                "category": "n/a",
+                "status": "empty",
+                "search_budget": None,
+                "trials_executed": None,
+                "best_mae_observed_strict": None,
+                "best_config_json": "empty_payload",
+                "search_space_json": "empty_payload",
+                "evidence_path": evidence_path,
+            }
+        )
+    return rows
+
+
+def _build_pilot_gate_rows(pilot_payload: Optional[Any], evidence_path: str) -> List[Dict[str, Any]]:
+    if not isinstance(pilot_payload, dict):
+        return [
+            {
+                "section": "summary",
+                "key": "status",
+                "value": "artifact_missing",
+                "evidence_path": evidence_path,
+            }
+        ]
+
+    rows: List[Dict[str, Any]] = [
+        {
+            "section": "summary",
+            "key": "generated_at_utc",
+            "value": pilot_payload.get("generated_at_utc"),
+            "evidence_path": evidence_path,
+        },
+        {
+            "section": "summary",
+            "key": "overall_pass",
+            "value": pilot_payload.get("overall_pass"),
+            "evidence_path": evidence_path,
+        },
+    ]
+    counts = pilot_payload.get("counts", {})
+    if isinstance(counts, dict):
+        for k, v in sorted(counts.items()):
+            rows.append(
+                {
+                    "section": "counts",
+                    "key": k,
+                    "value": v,
+                    "evidence_path": evidence_path,
+                }
+            )
+    metrics = pilot_payload.get("metrics", {})
+    if isinstance(metrics, dict):
+        for k, v in sorted(metrics.items()):
+            rows.append(
+                {
+                    "section": "metrics",
+                    "key": k,
+                    "value": v,
+                    "evidence_path": evidence_path,
+                }
+            )
+    checks = pilot_payload.get("checks", {})
+    if isinstance(checks, dict):
+        for k, v in sorted(checks.items()):
+            rows.append(
+                {
+                    "section": "checks",
+                    "key": k,
+                    "value": v,
+                    "evidence_path": evidence_path,
+                }
+            )
+    return rows
 
 
 def _condition_key(row: Dict[str, Any]) -> Optional[Tuple[str, str, str, int]]:
@@ -1691,6 +1854,17 @@ def _target_family(target: str) -> str:
     return "unknown"
 
 
+def _horizon_band_from_value(horizon: Optional[int]) -> str:
+    if horizon is None:
+        return "unknown"
+    h = int(horizon)
+    if h <= 7:
+        return "short"
+    if h <= 14:
+        return "mid"
+    return "long"
+
+
 def _build_subtasks_by_target_full(
     condition_inventory_rows: Sequence[Dict[str, Any]],
 ) -> List[Dict[str, Any]]:
@@ -1814,6 +1988,74 @@ def _build_family_gap_by_target(
             }
         )
 
+    return rows_out
+
+
+def _build_champion_template_library(
+    condition_rows: Sequence[Dict[str, Any]],
+    failure_rows: Sequence[Dict[str, Any]],
+) -> List[Dict[str, Any]]:
+    grouped_winners: Dict[Tuple[str, str, str], Counter] = defaultdict(Counter)
+    condition_counts: Counter = Counter()
+    for row in condition_rows:
+        if not bool(row.get("condition_completed")):
+            continue
+        target = str(row.get("target", ""))
+        ablation = str(row.get("ablation", ""))
+        horizon = _to_int(row.get("horizon"))
+        best_model = str(row.get("best_model", ""))
+        if not target or not ablation or horizon is None or not best_model:
+            continue
+        key = (_target_family(target), _horizon_band_from_value(horizon), ablation)
+        grouped_winners[key][best_model] += 1
+        condition_counts[key] += 1
+
+    failure_counter: Counter = Counter()
+    for row in failure_rows:
+        target = str(row.get("target", ""))
+        if not target:
+            continue
+        family = _target_family(target)
+        issue = str(row.get("issue_type", ""))
+        if issue:
+            failure_counter[(family, issue)] += 1
+
+    rows_out: List[Dict[str, Any]] = []
+    for key in sorted(grouped_winners.keys()):
+        family, horizon_band, ablation = key
+        winners = grouped_winners[key]
+        total = int(condition_counts.get(key, 0))
+        if total <= 0:
+            continue
+        ranked = winners.most_common(3)
+        primary_anchor = ranked[0][0] if ranked else None
+        backup = [m for m, _ in ranked[1:]]
+        dist = {
+            model: {
+                "wins": int(cnt),
+                "win_rate": float(cnt) / float(total),
+            }
+            for model, cnt in ranked
+        }
+        related_failures = {
+            issue: int(cnt)
+            for (fam, issue), cnt in failure_counter.items()
+            if fam == family
+        }
+        rows_out.append(
+            {
+                "template_id": f"{family}__{horizon_band}__{ablation}",
+                "target_family": family,
+                "horizon_band": horizon_band,
+                "ablation": ablation,
+                "primary_anchor": primary_anchor,
+                "backup_anchors": ",".join(backup),
+                "n_conditions": total,
+                "winner_distribution_json": _safe_json(dist),
+                "failure_signals_json": _safe_json(related_failures),
+                "evidence_path": "docs/benchmarks/block3_truth_pack/condition_leaderboard.csv",
+            }
+        )
     return rows_out
 
 
@@ -2199,6 +2441,11 @@ def _build_master_sections(
     target_subtask_rows: Sequence[Dict[str, Any]],
     top3_rows: Sequence[Dict[str, Any]],
     family_gap_rows: Sequence[Dict[str, Any]],
+    champion_template_rows: Sequence[Dict[str, Any]],
+    hyperparam_ledger_rows: Sequence[Dict[str, Any]],
+    best_config_rows: Sequence[Dict[str, Any]],
+    compute_cost_rows: Sequence[Dict[str, Any]],
+    pilot_gate_rows: Sequence[Dict[str, Any]],
     ledger_rows: Sequence[Dict[str, Any]],
     observation_rows: Sequence[Dict[str, Any]],
     ladder_rows: Sequence[Dict[str, Any]],
@@ -2253,6 +2500,16 @@ def _build_master_sections(
             "metric": "critical_failures",
             "value": summary.get("critical_failures"),
             "evidence_path": "docs/benchmarks/block3_truth_pack/failure_taxonomy.csv",
+        },
+        {
+            "metric": "v72_pilot_overall_pass",
+            "value": summary.get("v72_pilot_overall_pass"),
+            "evidence_path": "docs/benchmarks/block3_truth_pack/v72_pilot_gate_report.json",
+        },
+        {
+            "metric": "v72_pilot_overlap_keys",
+            "value": summary.get("v72_pilot_overlap_keys"),
+            "evidence_path": "docs/benchmarks/block3_truth_pack/v72_pilot_gate_report.json",
         },
     ]
 
@@ -2457,6 +2714,101 @@ def _build_master_sections(
                     "global_best_category",
                     "global_best_mae",
                     "gap_vs_global_best_pct",
+                    "evidence_path",
+                ],
+            )
+        ]
+    )
+
+    sections["CHAMPION_TEMPLATE_LIBRARY"] = "\n".join(
+        [
+            _render_markdown_table(
+                champion_template_rows,
+                [
+                    "template_id",
+                    "target_family",
+                    "horizon_band",
+                    "ablation",
+                    "primary_anchor",
+                    "backup_anchors",
+                    "n_conditions",
+                    "winner_distribution_json",
+                    "failure_signals_json",
+                    "evidence_path",
+                ],
+            )
+        ]
+    )
+
+    sections["HYPERPARAMETER_SEARCH_LEDGER"] = "\n".join(
+        [
+            _render_markdown_table(
+                hyperparam_ledger_rows,
+                [
+                    "target",
+                    "target_family",
+                    "priority_rank",
+                    "model_name",
+                    "category",
+                    "search_budget",
+                    "trials_executed",
+                    "status",
+                    "best_mae_observed_strict",
+                    "best_config_json",
+                    "search_space_json",
+                    "selection_scope",
+                    "evidence_path",
+                ],
+            )
+        ]
+    )
+
+    sections["BEST_CONFIG_BY_MODEL_TARGET"] = "\n".join(
+        [
+            _render_markdown_table(
+                best_config_rows,
+                [
+                    "target",
+                    "model_name",
+                    "target_family",
+                    "category",
+                    "status",
+                    "search_budget",
+                    "trials_executed",
+                    "best_mae_observed_strict",
+                    "best_config_json",
+                    "search_space_json",
+                    "evidence_path",
+                ],
+            )
+        ]
+    )
+
+    sections["COMPUTE_COST_REPORT"] = "\n".join(
+        [
+            _render_markdown_table(
+                compute_cost_rows,
+                [
+                    "model_name",
+                    "category",
+                    "target",
+                    "strict_records",
+                    "train_time_median_seconds",
+                    "inference_time_median_seconds",
+                    "evidence_path",
+                ],
+            )
+        ]
+    )
+
+    sections["V72_PILOT_GATE_REPORT"] = "\n".join(
+        [
+            _render_markdown_table(
+                pilot_gate_rows,
+                [
+                    "section",
+                    "key",
+                    "value",
                     "evidence_path",
                 ],
             )
@@ -2822,6 +3174,10 @@ def build_truth_pack(
     family_gap_rows = _build_family_gap_by_target(
         strict_records=strict_records,
     )
+    champion_template_rows = _build_champion_template_library(
+        condition_rows=condition_rows,
+        failure_rows=failure_rows,
+    )
     sota_rows = _build_sota_feature_value_map(
         condition_rows=condition_rows,
         failure_rows=failure_rows,
@@ -2939,10 +3295,15 @@ def build_truth_pack(
     target_subtasks_path = output_dir / "subtasks_by_target_full.csv"
     top3_path = output_dir / "top3_representative_models_by_target.csv"
     family_gap_path = output_dir / "family_gap_by_target.csv"
+    champion_template_path = output_dir / "champion_template_library.csv"
     sota_path = output_dir / "sota_feature_value_map.csv"
     primary_lit_path = output_dir / "primary_literature_matrix.csv"
     citation_correction_path = output_dir / "citation_correction_log.csv"
     audit_gate_path = output_dir / "audit_gate_snapshot.csv"
+    hyperparam_ledger_path = output_dir / "hyperparam_search_ledger.csv"
+    best_config_path = output_dir / "best_config_by_model_target.json"
+    compute_cost_path = output_dir / "compute_cost_report.csv"
+    pilot_gate_path = output_dir / "v72_pilot_gate_report.json"
     slurm_json_path = output_dir / "slurm_snapshot.json"
     slurm_md_path = output_dir / "slurm_snapshot.md"
 
@@ -3095,6 +3456,22 @@ def build_truth_pack(
         ],
     )
     _write_csv(
+        champion_template_path,
+        champion_template_rows,
+        [
+            "template_id",
+            "target_family",
+            "horizon_band",
+            "ablation",
+            "primary_anchor",
+            "backup_anchors",
+            "n_conditions",
+            "winner_distribution_json",
+            "failure_signals_json",
+            "evidence_path",
+        ],
+    )
+    _write_csv(
         sota_path,
         sota_rows,
         [
@@ -3149,6 +3526,51 @@ def build_truth_pack(
         ],
     )
 
+    hyperparam_ledger_rows = _load_optional_csv(hyperparam_ledger_path)
+    if not hyperparam_ledger_rows:
+        hyperparam_ledger_rows = [
+            {
+                "target": "n/a",
+                "target_family": "n/a",
+                "priority_rank": None,
+                "model_name": "n/a",
+                "category": "n/a",
+                "search_budget": None,
+                "trials_executed": None,
+                "status": "artifact_missing",
+                "best_mae_observed_strict": None,
+                "best_config_json": "artifact_missing",
+                "search_space_json": "artifact_missing",
+                "selection_scope": "train_val_oof_only",
+                "evidence_path": _display_path(hyperparam_ledger_path),
+            }
+        ]
+
+    best_config_rows = _build_best_config_rows(
+        _load_optional_json(best_config_path),
+        evidence_path=_display_path(best_config_path),
+    )
+
+    compute_cost_rows = _load_optional_csv(compute_cost_path)
+    if not compute_cost_rows:
+        compute_cost_rows = [
+            {
+                "model_name": "n/a",
+                "category": "n/a",
+                "target": "n/a",
+                "strict_records": 0,
+                "train_time_median_seconds": None,
+                "inference_time_median_seconds": None,
+                "evidence_path": _display_path(compute_cost_path),
+            }
+        ]
+
+    pilot_gate_payload = _load_optional_json(pilot_gate_path)
+    pilot_gate_rows = _build_pilot_gate_rows(
+        pilot_gate_payload,
+        evidence_path=_display_path(pilot_gate_path),
+    )
+
     slurm_json_path.write_text(json.dumps(slurm_snapshot, indent=2), encoding="utf-8")
     slurm_md_path.write_text(_render_slurm_snapshot_md(slurm_snapshot), encoding="utf-8")
     snapshot_stamp = datetime.now(timezone.utc).strftime("%Y%m%d_%H%M%S")
@@ -3198,6 +3620,16 @@ def build_truth_pack(
         "v71_median_relative_gain_vs_v7_pct": overlap_median,
         "critical_failures": sum(1 for r in failure_rows if r.get("severity") == "critical"),
         "high_failures": sum(1 for r in failure_rows if r.get("severity") == "high"),
+        "v72_pilot_overall_pass": (
+            pilot_gate_payload.get("overall_pass")
+            if isinstance(pilot_gate_payload, dict)
+            else None
+        ),
+        "v72_pilot_overlap_keys": (
+            pilot_gate_payload.get("counts", {}).get("overlap_keys_v7_v72_non_autofit")
+            if isinstance(pilot_gate_payload, dict)
+            else None
+        ),
         "slurm_snapshot_path": _display_path(slurm_json_path),
         "slurm_live_snapshot_path": _display_path(slurm_live_json_path),
         "outputs": {
@@ -3215,10 +3647,15 @@ def build_truth_pack(
             "subtasks_by_target_full": _display_path(target_subtasks_path),
             "top3_representative_models_by_target": _display_path(top3_path),
             "family_gap_by_target": _display_path(family_gap_path),
+            "champion_template_library": _display_path(champion_template_path),
             "sota_feature_value_map": _display_path(sota_path),
             "primary_literature_matrix": _display_path(primary_lit_path),
             "citation_correction_log": _display_path(citation_correction_path),
             "audit_gate_snapshot": _display_path(audit_gate_path),
+            "hyperparam_search_ledger": _display_path(hyperparam_ledger_path),
+            "best_config_by_model_target": _display_path(best_config_path),
+            "compute_cost_report": _display_path(compute_cost_path),
+            "v72_pilot_gate_report": _display_path(pilot_gate_path),
             "slurm_snapshot_json": _display_path(slurm_json_path),
             "slurm_snapshot_md": _display_path(slurm_md_path),
             "slurm_live_snapshot_json": _display_path(slurm_live_json_path),
@@ -3276,6 +3713,11 @@ def build_truth_pack(
             target_subtask_rows=target_subtask_rows,
             top3_rows=top3_rows,
             family_gap_rows=family_gap_rows,
+            champion_template_rows=champion_template_rows,
+            hyperparam_ledger_rows=hyperparam_ledger_rows,
+            best_config_rows=best_config_rows,
+            compute_cost_rows=compute_cost_rows,
+            pilot_gate_rows=pilot_gate_rows,
             ledger_rows=run_history_ledger_rows,
             observation_rows=run_history_obs_rows,
             ladder_rows=ladder_rows,

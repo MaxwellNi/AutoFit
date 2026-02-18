@@ -1,5 +1,5 @@
 {
-  "generated_at_utc": "2026-02-18T15:20:54.540707+00:00",
+  "generated_at_utc": "2026-02-18T23:03:21.202374+00:00",
   "pointer_path": "/mnt/aiongpfs/projects/eint/repo_root/docs/audits/FULL_SCALE_POINTER.yaml",
   "config_path": "/mnt/aiongpfs/projects/eint/repo_root/configs/block3_tasks.yaml",
   "bench_dirs": [
@@ -62,11 +62,11 @@
       }
     ],
     "available": false,
-    "error": "pandas is required for panel distribution audit"
+    "error": "No module named 'src'"
   },
-  "strict_record_count": 1595,
+  "strict_record_count": 1675,
   "catastrophic_spikes": 4,
-  "repeatability_group_count": 1015,
+  "repeatability_group_count": 1095,
   "guard_telemetry": {
     "n_rows": 88,
     "lane_clip_rate_median": 0.0,

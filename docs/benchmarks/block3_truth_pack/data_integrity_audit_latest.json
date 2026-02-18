@@ -1,71 +1,43 @@
 {
-  "generated_at_utc": "2026-02-18T15:20:24.723890+00:00",
+  "generated_at_utc": "2026-02-18T23:03:03.433891+00:00",
   "pointer_path": "/mnt/aiongpfs/projects/eint/repo_root/docs/audits/FULL_SCALE_POINTER.yaml",
   "config_path": "/mnt/aiongpfs/projects/eint/repo_root/configs/block3_tasks.yaml",
   "overall_pass": true,
   "freeze_gate": {
     "checks": [
       {
-        "name": "asset_exists:offers_core_daily",
-        "status": "PASS",
-        "detail": "/mnt/aiongpfs/projects/eint/runs/offers_core_full_daily_wide_20260203_225620"
+        "check": "pointer",
+        "passed": true,
+        "fails": []
       },
       {
-        "name": "asset_exists:offers_core_snapshot",
-        "status": "PASS",
-        "detail": "/mnt/aiongpfs/projects/eint/runs/offers_core_full_snapshot_wide_20260203_225620"
+        "check": "column_manifest",
+        "path": "runs/orchestrator/20260129_073037/analysis/wide_20260203_225620/column_manifest.json",
+        "passed": true,
+        "fails": []
       },
       {
-        "name": "asset_exists:offers_text",
-        "status": "PASS",
-        "detail": "/mnt/aiongpfs/projects/eint/runs/offers_text_v1_20260129_073037_full"
+        "check": "raw_cardinality_coverage",
+        "path": "runs/orchestrator/20260129_073037/analysis/wide_20260203_225620/raw_cardinality_coverage_wide_20260203_225620.json",
+        "passed": true,
+        "fails": []
       },
       {
-        "name": "asset_exists:edgar_store_full_daily",
-        "status": "PASS",
-        "detail": "/mnt/aiongpfs/projects/eint/runs/edgar_feature_store_full_daily_wide_20260203_225620"
+        "check": "freeze_candidates",
+        "path": "runs/orchestrator/20260129_073037/analysis/wide_20260203_225620/freeze_candidates.json",
+        "passed": true,
+        "fails": []
       },
       {
-        "name": "asset_exists:multiscale_full",
-        "status": "PASS",
-        "detail": "/mnt/aiongpfs/projects/eint/runs/multiscale_full_wide_20260203_225620"
-      },
-      {
-        "name": "asset_exists:snapshots_offer_day",
-        "status": "PASS",
-        "detail": "/mnt/aiongpfs/projects/eint/runs/offers_core_full_daily_wide_20260203_225620/snapshots_index/snapshots_offer_day.parquet"
-      },
-      {
-        "name": "asset_exists:snapshots_cik_day",
-        "status": "PASS",
-        "detail": "/mnt/aiongpfs/projects/eint/runs/offers_core_full_daily_wide_20260203_225620/snapshots_index/snapshots_cik_day.parquet"
-      },
-      {
-        "name": "asset_exists:analysis_dir",
-        "status": "PASS",
-        "detail": "/mnt/aiongpfs/projects/eint/runs/orchestrator/20260129_073037/analysis/wide_20260203_225620"
-      },
-      {
-        "name": "analysis_exists:column_manifest",
-        "status": "PASS",
-        "detail": "/mnt/aiongpfs/projects/eint/runs/orchestrator/20260129_073037/analysis/wide_20260203_225620/column_manifest.json"
-      },
-      {
-        "name": "analysis_exists:raw_cardinality_coverage",
-        "status": "PASS",
-        "detail": "/mnt/aiongpfs/projects/eint/runs/orchestrator/20260129_073037/analysis/wide_20260203_225620/raw_cardinality_coverage_wide_20260203_225620.json"
-      },
-      {
-        "name": "analysis_exists:freeze_candidates",
-        "status": "PASS",
-        "detail": "/mnt/aiongpfs/projects/eint/runs/orchestrator/20260129_073037/analysis/wide_20260203_225620/freeze_candidates.json"
+        "check": "offer_day_coverage_exact",
+        "path": "runs/orchestrator/20260129_073037/analysis/wide_20260203_225620/offer_day_coverage_exact.json",
+        "passed": true,
+        "fails": []
       }
     ],
     "all_pass": true,
-    "exit_code": 1,
-    "stdout_tail": "",
-    "stderr_tail": "Traceback (most recent call last):\n  File \"/mnt/aiongpfs/projects/eint/repo_root/scripts/block3_verify_freeze.py\", line 25, in <module>\n    import yaml\nModuleNotFoundError: No module named 'yaml'",
-    "fallback_mode": "pointer_internal_checks"
+    "exit_code": 0,
+    "stdout_tail": "================================================================================\nBlock 3 Freeze Verification\n================================================================================\nPointer: /mnt/aiongpfs/projects/eint/repo_root/docs/audits/FULL_SCALE_POINTER.yaml\nExpected stamp: 20260203_225620\nExpected variant: TRAIN_WIDE_FINAL\n\n[PASS] Pointer verification\n[PASS] Column manifest\n[PASS] Raw cardinality coverage\n[PASS] Freeze candidates\n[PASS] Offer day coverage exact\n\n================================================================================\nWrote /mnt/aiongpfs/projects/eint/repo_root/docs/benchmarks/block3_truth_pack/verify_report.json\nWrote /mnt/aiongpfs/projects/eint/repo_root/docs/benchmarks/block3_truth_pack/verify_report.md\n\n>>> ALL GATES PASS - Safe to proceed with Block 3 <<<"
   },
   "split": {
     "train_end": "2025-06-30",
@@ -120,8 +92,8 @@
       "file_count": 6,
       "total_size_bytes": 314487001,
       "fingerprint_sha256": "197d2cf831ede861e1631edd908e5fd95315907e4e5ef7df482840450531e51b",
-      "schema_columns": null,
-      "schema_hash_sha256": null,
+      "schema_columns": 0,
+      "schema_hash_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
       "sample_columns": [],
       "error": null,
       "asset": "offers_core_daily"
@@ -133,8 +105,8 @@
       "file_count": 4,
       "total_size_bytes": 17582552006,
       "fingerprint_sha256": "0024425b35967825b3f9645ac4c77d8d910d5daa13bf4ac6e78ebd6eedde61a2",
-      "schema_columns": null,
-      "schema_hash_sha256": null,
+      "schema_columns": 0,
+      "schema_hash_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
       "sample_columns": [],
       "error": null,
       "asset": "offers_core_snapshot"
@@ -146,8 +118,8 @@
       "file_count": 2,
       "total_size_bytes": 20514631758,
       "fingerprint_sha256": "7ff0bcf924f1cd31a259d153cf27df1d2bed5ecbbef9cfdfb357d8f4710d5ff2",
-      "schema_columns": null,
-      "schema_hash_sha256": null,
+      "schema_columns": 0,
+      "schema_hash_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
       "sample_columns": [],
       "error": null,
       "asset": "offers_text"
@@ -159,8 +131,8 @@
       "file_count": 42,
       "total_size_bytes": 10613645,
       "fingerprint_sha256": "dab4f48c64be49e18484df35d058056be9fd14094ece1f289bc893fe09cba014",
-      "schema_columns": null,
-      "schema_hash_sha256": null,
+      "schema_columns": 0,
+      "schema_hash_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
       "sample_columns": [],
       "error": null,
       "asset": "edgar_store_full_daily"
@@ -172,8 +144,8 @@
       "file_count": 7,
       "total_size_bytes": 20702137,
       "fingerprint_sha256": "1ee924c98a7385f6f93d01bd7f2d330265a73718e358ee4b1a2e347427d54950",
-      "schema_columns": null,
-      "schema_hash_sha256": null,
+      "schema_columns": 0,
+      "schema_hash_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
       "sample_columns": [],
       "error": null,
       "asset": "multiscale_full"
@@ -185,8 +157,8 @@
       "file_count": 1,
       "total_size_bytes": 6557155,
       "fingerprint_sha256": "0d9ff5257463866095e6f787ff70bca70f15e48f4909dbb96b12a78b902b2622",
-      "schema_columns": null,
-      "schema_hash_sha256": null,
+      "schema_columns": 0,
+      "schema_hash_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
       "sample_columns": [],
       "error": null,
       "asset": "snapshots_offer_day"
@@ -198,8 +170,8 @@
       "file_count": 1,
       "total_size_bytes": 4186639,
       "fingerprint_sha256": "f781830fd7e47c7beeb29ef9090216a7b2fb4550e3d4f537ba3c19835b7325ae",
-      "schema_columns": null,
-      "schema_hash_sha256": null,
+      "schema_columns": 0,
+      "schema_hash_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
       "sample_columns": [],
       "error": null,
       "asset": "snapshots_cik_day"
@@ -211,8 +183,8 @@
       "file_count": 28,
       "total_size_bytes": 6751159,
       "fingerprint_sha256": "03ba2bb93ace6e69929fc1143e083eff73713a73c7593b20c6572d8e29c73b7c",
-      "schema_columns": null,
-      "schema_hash_sha256": null,
+      "schema_columns": 0,
+      "schema_hash_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
       "sample_columns": [],
       "error": null,
       "asset": "analysis_dir"

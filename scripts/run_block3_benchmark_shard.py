@@ -205,6 +205,8 @@ class ShardManifest:
     slurm_job_id: Optional[str] = None
     hostname: Optional[str] = None
     model_kwargs_overrides: Dict[str, Dict[str, Any]] = field(default_factory=dict)
+    target_filter: List[str] = field(default_factory=list)
+    horizons_filter: List[int] = field(default_factory=list)
     
     def to_dict(self) -> Dict[str, Any]:
         return asdict(self)
@@ -281,6 +283,8 @@ class BenchmarkShard:
         max_rows: Optional[int] = None,
         num_workers: int = 4,
         model_kwargs_overrides: Optional[Dict[str, Dict[str, Any]]] = None,
+        target_filter: Optional[List[str]] = None,
+        horizons_filter: Optional[List[int]] = None,
     ):
         self.task = task
         self.category = category
@@ -295,6 +299,8 @@ class BenchmarkShard:
         self.max_entities = max_entities or self.preset_config.max_entities
         self.max_rows = max_rows or self.preset_config.max_rows
         self.model_kwargs_overrides = model_kwargs_overrides or {}
+        self.target_filter = [str(t) for t in (target_filter or [])]
+        self.horizons_filter = [int(h) for h in (horizons_filter or [])]
         
         # Determine models to run
         if models:
@@ -335,6 +341,8 @@ class BenchmarkShard:
             slurm_job_id=os.environ.get("SLURM_JOB_ID"),
             hostname=os.environ.get("HOSTNAME", os.uname().nodename),
             model_kwargs_overrides=self.model_kwargs_overrides,
+            target_filter=self.target_filter,
+            horizons_filter=self.horizons_filter,
         )
         
         set_global_seed(seed)
@@ -683,6 +691,7 @@ class BenchmarkShard:
                 fit_kwargs["train_raw"] = train
                 fit_kwargs["target"] = target
                 fit_kwargs["horizon"] = horizon
+                fit_kwargs["ablation"] = self.ablation
             model.fit(X_train, y_train, **fit_kwargs)
             train_time = time.time() - train_start
 
@@ -694,6 +703,7 @@ class BenchmarkShard:
                 predict_kwargs["test_raw"] = test
                 predict_kwargs["target"] = target
                 predict_kwargs["horizon"] = horizon
+                predict_kwargs["ablation"] = self.ablation
             y_pred = np.asarray(model.predict(X_test, **predict_kwargs), dtype=float)
             infer_time = time.time() - infer_start
 
@@ -841,7 +851,23 @@ class BenchmarkShard:
             targets = task_config.get("targets", [{"name": "funding_raised_usd"}])
             if isinstance(targets[0], dict):
                 targets = [t["name"] for t in targets]
+            if self.target_filter:
+                allowed_targets = set(self.target_filter)
+                targets = [t for t in targets if t in allowed_targets]
+                logger.info(f"  Target filter active: {sorted(allowed_targets)}")
+            if not targets:
+                raise RuntimeError(
+                    f"No targets left after applying target filter: {self.target_filter}"
+                )
             horizons = self.preset_config.horizons
+            if self.horizons_filter:
+                allowed_horizons = set(self.horizons_filter)
+                horizons = [h for h in horizons if h in allowed_horizons]
+                logger.info(f"  Horizon filter active: {sorted(allowed_horizons)}")
+            if not horizons:
+                raise RuntimeError(
+                    f"No horizons left after applying horizons filter: {self.horizons_filter}"
+                )
             
             # Run each combination
             for target in targets:  # ALL targets for KDD'26 full paper
@@ -1027,6 +1053,16 @@ def main():
         help="Path to JSON file mapping model_name -> kwargs",
     )
     parser.add_argument("--ablation", choices=ABLATION_NAMES, default="core_only", help="Ablation config")
+    parser.add_argument(
+        "--target-filter",
+        type=str,
+        help="Comma-separated target allowlist for this shard (optional).",
+    )
+    parser.add_argument(
+        "--horizons-filter",
+        type=str,
+        help="Comma-separated horizon allowlist (optional).",
+    )
     
     # Run configuration
     parser.add_argument("--preset", choices=PRESET_NAMES, default="standard", help="Preset configuration")
@@ -1067,6 +1103,17 @@ def main():
     models = None
     if args.models:
         models = [m.strip() for m in args.models.split(",")]
+
+    target_filter = None
+    if args.target_filter:
+        target_filter = [x.strip() for x in args.target_filter.split(",") if x.strip()]
+
+    horizons_filter = None
+    if args.horizons_filter:
+        try:
+            horizons_filter = [int(x.strip()) for x in args.horizons_filter.split(",") if x.strip()]
+        except ValueError as e:
+            parser.error(f"Invalid --horizons-filter value: {e}")
 
     model_kwargs_overrides: Dict[str, Dict[str, Any]] = {}
     if args.model_kwargs_json or args.model_kwargs_file:
@@ -1110,6 +1157,8 @@ def main():
         max_rows=args.max_rows,
         num_workers=args.num_workers,
         model_kwargs_overrides=model_kwargs_overrides,
+        target_filter=target_filter,
+        horizons_filter=horizons_filter,
     )
     
     success = shard.run()

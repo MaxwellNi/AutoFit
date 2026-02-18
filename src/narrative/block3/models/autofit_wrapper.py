@@ -3786,15 +3786,204 @@ def _safe_inverse_transform(
     return np.asarray(out, dtype=float), int(guard_hits)
 
 
-def _champion_anchor_candidates(lane: str) -> List[str]:
-    """Historical champion priors used as anchor candidates per lane."""
+def _champion_template_for_lane(lane: str, horizon: int) -> Dict[str, Any]:
+    """Lane+horizon champion templates used for anchor routing."""
+    hz = int(horizon)
     if lane == "count":
-        return ["NBEATS", "KAN", "NHITS", "XGBoostPoisson", "LightGBMTweedie"]
+        ordered = [
+            "NBEATS",
+            "NHITS",
+            "KAN",
+            "PatchTST",
+            "XGBoostPoisson",
+            "LightGBMTweedie",
+        ]
+        return {
+            "lane": lane,
+            "horizon": hz,
+            "min_anchors": 1,
+            "max_degrade_mult": 1.02,
+            "candidates": ordered,
+        }
     if lane == "binary":
-        return ["PatchTST", "NHITS", "NBEATSx", "ExtraTrees", "RandomForest", "TabPFNClassifier"]
+        ordered = [
+            "PatchTST",
+            "NHITS",
+            "NBEATSx",
+            "TabPFNClassifier",
+            "ExtraTrees",
+            "RandomForest",
+        ]
+        return {
+            "lane": lane,
+            "horizon": hz,
+            "min_anchors": 2,
+            "max_degrade_mult": 1.03,
+            "candidates": ordered,
+        }
     if lane == "heavy_tail":
-        return ["Chronos", "NHITS", "NBEATS", "PatchTST", "RandomForest"]
-    return ["LightGBM", "RandomForest", "Chronos"]
+        if hz <= 7:
+            base = ["NHITS", "PatchTST", "Chronos"]
+        elif hz <= 14:
+            base = ["PatchTST", "NHITS", "Chronos"]
+        else:
+            base = ["Chronos", "PatchTST", "NHITS"]
+        ordered = base + ["NBEATS", "NBEATSx", "RandomForest"]
+        return {
+            "lane": lane,
+            "horizon": hz,
+            "min_anchors": 1,
+            "max_degrade_mult": 1.03,
+            "candidates": ordered,
+        }
+    return {
+        "lane": lane,
+        "horizon": hz,
+        "min_anchors": 1,
+        "max_degrade_mult": 1.03,
+        "candidates": ["LightGBM", "RandomForest", "Chronos"],
+    }
+
+
+def _champion_anchor_candidates(lane: str, horizon: int = 7) -> List[str]:
+    """Historical champion priors used as anchor candidates per lane/horizon."""
+    tmpl = _champion_template_for_lane(lane, horizon)
+    seen = set()
+    ordered: List[str] = []
+    for name in tmpl.get("candidates", []):
+        if name not in seen:
+            ordered.append(str(name))
+            seen.add(name)
+    return ordered
+
+
+def _horizon_band(horizon: int) -> str:
+    """Map raw horizon to short/mid/long band used by routing templates."""
+    h = int(horizon)
+    if h <= 7:
+        return "short"
+    if h <= 14:
+        return "mid"
+    return "long"
+
+
+def _infer_missingness_bucket(
+    X_aug: pd.DataFrame,
+    n_base_features: int,
+) -> Tuple[str, Dict[str, float]]:
+    """Infer dataset-level missingness bucket from engineered __n_missing__ feature."""
+    if "__n_missing__" not in X_aug.columns or len(X_aug) == 0:
+        return "unknown", {"q33": float("nan"), "q66": float("nan"), "median_ratio": float("nan")}
+
+    nmiss = np.asarray(X_aug["__n_missing__"], dtype=float).reshape(-1)
+    nfeat = float(max(int(n_base_features), 1))
+    miss_ratio = np.clip(nmiss / nfeat, 0.0, 1.0)
+
+    q33 = float(np.quantile(miss_ratio, 0.33))
+    q66 = float(np.quantile(miss_ratio, 0.66))
+    med = float(np.median(miss_ratio))
+
+    if med <= q33:
+        bucket = "low"
+    elif med <= q66:
+        bucket = "medium"
+    else:
+        bucket = "high"
+    return bucket, {"q33": q33, "q66": q66, "median_ratio": med}
+
+
+def _binary_logloss(y_true: np.ndarray, y_prob: np.ndarray) -> float:
+    """Numerically stable binary logloss."""
+    y = np.asarray(y_true, dtype=float).reshape(-1)
+    p = np.asarray(y_prob, dtype=float).reshape(-1)
+    p = np.clip(p, 1e-7, 1.0 - 1e-7)
+    return float(-(y * np.log(p) + (1.0 - y) * np.log(1.0 - p)).mean())
+
+
+def _binary_brier(y_true: np.ndarray, y_prob: np.ndarray) -> float:
+    """Binary Brier score."""
+    y = np.asarray(y_true, dtype=float).reshape(-1)
+    p = np.asarray(y_prob, dtype=float).reshape(-1)
+    p = np.clip(p, 0.0, 1.0)
+    return float(np.mean((p - y) ** 2))
+
+
+def _fit_binary_calibrator(
+    raw_prob: np.ndarray,
+    y_true: np.ndarray,
+) -> Tuple[Optional[Any], Optional[str], Optional[float], Dict[str, float]]:
+    """Fit Platt/Isotonic calibrators on OOF probabilities and select by val score."""
+    p = np.asarray(raw_prob, dtype=float).reshape(-1)
+    y = np.asarray(y_true, dtype=float).reshape(-1)
+    y = (y > 0.5).astype(int)
+    n = len(y)
+    if n < 50 or len(np.unique(y)) < 2:
+        return None, None, None, {}
+
+    split = max(20, int(n * 0.75))
+    split = min(split, n - 20)
+    if split <= 0 or split >= n:
+        return None, None, None, {}
+
+    p_tr, p_va = p[:split], p[split:]
+    y_tr, y_va = y[:split], y[split:]
+    if len(np.unique(y_tr)) < 2 or len(np.unique(y_va)) < 2:
+        return None, None, None, {}
+
+    scores: Dict[str, float] = {}
+    best_name: Optional[str] = None
+    best_model: Optional[Any] = None
+    best_score: Optional[float] = None
+
+    try:
+        from sklearn.isotonic import IsotonicRegression
+        from sklearn.linear_model import LogisticRegression
+
+        # Platt scaling
+        platt = LogisticRegression(random_state=42, max_iter=1000, solver="lbfgs")
+        platt.fit(p_tr.reshape(-1, 1), y_tr)
+        p_platt = platt.predict_proba(p_va.reshape(-1, 1))[:, 1]
+        ll_platt = _binary_logloss(y_va, p_platt)
+        br_platt = _binary_brier(y_va, p_platt)
+        s_platt = 0.5 * ll_platt + 0.5 * br_platt
+        scores["platt"] = float(s_platt)
+        best_name, best_model, best_score = "platt", platt, float(s_platt)
+
+        # Isotonic calibration
+        iso = IsotonicRegression(out_of_bounds="clip")
+        iso.fit(p_tr, y_tr)
+        p_iso = np.asarray(iso.predict(p_va), dtype=float)
+        ll_iso = _binary_logloss(y_va, p_iso)
+        br_iso = _binary_brier(y_va, p_iso)
+        s_iso = 0.5 * ll_iso + 0.5 * br_iso
+        scores["isotonic"] = float(s_iso)
+        if best_score is None or s_iso < best_score:
+            best_name, best_model, best_score = "isotonic", iso, float(s_iso)
+    except Exception:
+        return None, None, None, scores
+
+    return best_model, best_name, best_score, scores
+
+
+def _apply_binary_calibrator(
+    prob: np.ndarray,
+    calibrator: Optional[Any],
+    calibrator_name: Optional[str],
+) -> np.ndarray:
+    """Apply selected binary calibrator if available."""
+    p = np.asarray(prob, dtype=float).reshape(-1)
+    if calibrator is None or calibrator_name is None:
+        return np.clip(p, 0.0, 1.0)
+    try:
+        if calibrator_name == "platt" and hasattr(calibrator, "predict_proba"):
+            out = calibrator.predict_proba(p.reshape(-1, 1))[:, 1]
+            return np.clip(np.asarray(out, dtype=float), 0.0, 1.0)
+        if calibrator_name == "isotonic":
+            out = calibrator.predict(p)
+            return np.clip(np.asarray(out, dtype=float), 0.0, 1.0)
+    except Exception:
+        pass
+    return np.clip(p, 0.0, 1.0)
 
 
 def _build_regime_retrieval_features(
@@ -4391,7 +4580,7 @@ class AutoFitV71Wrapper(ModelBase):
         count_safe_mode: bool = True,
         champion_anchor: bool = True,
         offline_rl_policy: str = "rule_based_v0",
-        search_budget: int = 64,
+        search_budget: int = 96,
         **kwargs,
     ):
         config = ModelConfig(
@@ -4452,6 +4641,15 @@ class AutoFitV71Wrapper(ModelBase):
         self._oof_guard_triggered: bool = False
         self._lane_clip_rate: float = 0.0
         self._inverse_transform_guard_hits: int = 0
+        self._route_key: str = ""
+        self._missingness_bucket: str = "unknown"
+        self._missingness_bucket_stats: Dict[str, float] = {}
+        self._horizon_band: str = "unknown"
+        self._ablation: str = "unknown"
+        self._binary_calibrator: Optional[Any] = None
+        self._binary_calibrator_name: Optional[str] = None
+        self._binary_calibration_score: Optional[float] = None
+        self._binary_calibration_scores: Dict[str, float] = {}
 
     def _augment_features(
         self, X: pd.DataFrame, y: Optional[pd.Series] = None, fit: bool = True
@@ -4501,10 +4699,13 @@ class AutoFitV71Wrapper(ModelBase):
         train_raw = kwargs.get("train_raw")
         target = kwargs.get("target", y.name or "funding_raised_usd")
         horizon = kwargs.get("horizon", 7)
+        ablation = str(kwargs.get("ablation", "unknown"))
         t0 = time.monotonic()
 
         meta = _compute_target_regime(y, X)
         self._lane = _infer_target_lane(meta, y)
+        self._horizon_band = _horizon_band(int(horizon))
+        self._ablation = ablation
         self._meta_objective = {
             "binary": "binary",
             "count": "count",
@@ -4517,16 +4718,22 @@ class AutoFitV71Wrapper(ModelBase):
             count_safe_mode=self._count_safe_mode,
         )
         qs_threshold = _quick_screen_threshold_for_lane(self._lane)
-        self._dynamic_thresholds = {"quick_screen_ratio": qs_threshold}
+        champion_template = _champion_template_for_lane(self._lane, int(horizon))
+        self._dynamic_thresholds = {
+            "quick_screen_ratio": qs_threshold,
+            "anchor_max_degrade_mult": float(champion_template.get("max_degrade_mult", 1.03)),
+            "anchor_min_required": int(champion_template.get("min_anchors", 1)),
+        }
         self._anchor_set = []
         self._guard_decisions = []
         self._oof_guard_triggered = False
         self._lane_clip_rate = 0.0
         self._inverse_transform_guard_hits = 0
-        self._policy_action_id = (
-            f"{self._offline_rl_policy}|lane={self._lane}|qs={qs_threshold:.2f}|budget={self._search_budget}"
-        )
-        self._policy_confidence = 0.0
+        self._binary_calibrator = None
+        self._binary_calibrator_name = None
+        self._binary_calibration_score = None
+        self._binary_calibration_scores = {}
+        self._policy_confidence = 0.35
 
         logger.info(
             f"[AutoFitV71] Meta-features: {meta} | lane={self._lane} "
@@ -4539,6 +4746,18 @@ class AutoFitV71Wrapper(ModelBase):
         logger.info(f"[AutoFitV71] Target transform: {self._target_xform.kind}")
 
         X_aug = self._augment_features(X, y=y, fit=True)
+        self._missingness_bucket, self._missingness_bucket_stats = _infer_missingness_bucket(
+            X_aug,
+            n_base_features=len(X.columns),
+        )
+        self._route_key = (
+            f"lane={self._lane}|h={int(horizon)}|hb={self._horizon_band}"
+            f"|ablation={self._ablation}|miss={self._missingness_bucket}"
+        )
+        self._policy_action_id = (
+            f"{self._offline_rl_policy}|{self._route_key}|qs={qs_threshold:.2f}|budget={self._search_budget}"
+        )
+        self._dynamic_thresholds["missingness_bucket"] = self._missingness_bucket
         n_new_features = len(X_aug.columns) - len(X.columns)
         logger.info(
             f"[AutoFitV71] Feature augmentation: {len(X.columns)} → "
@@ -4618,14 +4837,23 @@ class AutoFitV71Wrapper(ModelBase):
                 "ensemble_diversity_stats": {},
                 "quick_screen_survived": 0,
                 "quick_screen_total": len(candidate_pool),
+                "routing_key": self._route_key,
+                "horizon_band": self._horizon_band,
+                "ablation": self._ablation,
+                "missingness_bucket": self._missingness_bucket,
+                "missingness_bucket_stats": self._missingness_bucket_stats,
                 "final_selected": [chosen],
                 "fallback_model": chosen,
+                "champion_template": champion_template,
                 "anchor_set": [],
                 "anchor_models_used": [],
                 "policy_action_id": self._policy_action_id,
                 "policy_confidence": self._policy_confidence,
                 "guard_decisions": list(self._guard_decisions),
                 "oof_guard_triggered": self._oof_guard_triggered,
+                "binary_calibrator": None,
+                "binary_calibration_score": None,
+                "binary_calibration_scores": {},
                 "lane_clip_rate": self._lane_clip_rate,
                 "inverse_transform_guard_hits": self._inverse_transform_guard_hits,
                 "count_safe_mode": self._count_safe_mode,
@@ -4684,14 +4912,23 @@ class AutoFitV71Wrapper(ModelBase):
                 "ensemble_diversity_stats": {},
                 "quick_screen_survived": len(survived),
                 "quick_screen_total": len(candidate_pool),
+                "routing_key": self._route_key,
+                "horizon_band": self._horizon_band,
+                "ablation": self._ablation,
+                "missingness_bucket": self._missingness_bucket,
+                "missingness_bucket_stats": self._missingness_bucket_stats,
                 "final_selected": ["LightGBM"],
                 "fallback_model": "LightGBM",
+                "champion_template": champion_template,
                 "anchor_set": [],
                 "anchor_models_used": [],
                 "policy_action_id": self._policy_action_id,
                 "policy_confidence": self._policy_confidence,
                 "guard_decisions": list(self._guard_decisions),
                 "oof_guard_triggered": self._oof_guard_triggered,
+                "binary_calibrator": None,
+                "binary_calibration_score": None,
+                "binary_calibration_scores": {},
                 "lane_clip_rate": self._lane_clip_rate,
                 "inverse_transform_guard_hits": self._inverse_transform_guard_hits,
                 "count_safe_mode": self._count_safe_mode,
@@ -4793,38 +5030,75 @@ class AutoFitV71Wrapper(ModelBase):
                         )
                     break
 
-        # Champion-anchor: keep one historically strong lane specialist if safe.
-        self._anchor_set = []
-        if self._champion_anchor:
-            anchor_candidates = _champion_anchor_candidates(self._lane)
-            has_anchor = any(nm in anchor_candidates for nm in ensemble_list)
-            if not has_anchor:
-                for cand in anchor_candidates:
-                    if cand not in oof_clean:
-                        continue
-                    if len(ensemble_list) >= self._top_k:
-                        base_trial = ensemble_list[:-1] + [cand]
+        # Champion-template routing: enforce lane+horizon anchor coverage with bounded degradation.
+        template_candidates = _champion_anchor_candidates(self._lane, int(horizon))
+        template_set = set(template_candidates)
+        self._anchor_set = [nm for nm in ensemble_list if nm in template_set]
+        required_anchors = int(champion_template.get("min_anchors", 1))
+        max_degrade_mult = float(champion_template.get("max_degrade_mult", 1.03))
+        available_template = [nm for nm in template_candidates if nm in oof_clean]
+        required_anchors = min(required_anchors, len(available_template), self._top_k)
+
+        self._guard_decisions.append(
+            f"anchor_template:lane={self._lane}|h={int(horizon)}"
+            f"|required={required_anchors}|available={len(available_template)}"
+        )
+
+        if self._champion_anchor and required_anchors > 0:
+            for cand in available_template:
+                if len(self._anchor_set) >= required_anchors:
+                    break
+                if cand in self._anchor_set:
+                    continue
+                base_trial = list(ensemble_list)
+                if cand not in base_trial:
+                    if len(base_trial) < self._top_k:
+                        base_trial.append(cand)
                     else:
-                        base_trial = ensemble_list + [cand]
-                    # Stable de-duplication.
-                    trial: List[str] = []
-                    seen = set()
-                    for nm in base_trial:
-                        if nm not in seen:
-                            trial.append(nm)
-                            seen.add(nm)
-                    trial_preds = np.mean([oof_clean[nm] for nm in trial], axis=0)
-                    trial_mae = float(np.mean(np.abs(y_oof - trial_preds)))
-                    if trial_mae <= current_mae * 1.03:
-                        ensemble_list = trial
-                        current_mae = trial_mae
-                        self._anchor_set = [cand]
-                        self._guard_decisions.append(f"anchor_added:{cand}")
-                        logger.info(
-                            f"[AutoFitV71] Champion-anchor added {cand} "
-                            f"(OOF MAE={trial_mae:,.4f})"
-                        )
-                        break
+                        replace_idx = None
+                        for i in range(len(base_trial) - 1, -1, -1):
+                            if base_trial[i] not in template_set:
+                                replace_idx = i
+                                break
+                        if replace_idx is None:
+                            self._guard_decisions.append(
+                                f"anchor_rejected:{cand}:no_replace_slot"
+                            )
+                            continue
+                        base_trial[replace_idx] = cand
+
+                # Stable de-duplication.
+                trial: List[str] = []
+                seen = set()
+                for nm in base_trial:
+                    if nm not in seen:
+                        trial.append(nm)
+                        seen.add(nm)
+                trial = trial[:self._top_k]
+
+                trial_preds = np.mean([oof_clean[nm] for nm in trial], axis=0)
+                trial_mae = float(np.mean(np.abs(y_oof - trial_preds)))
+                limit = current_mae * max_degrade_mult
+                if trial_mae <= limit:
+                    ensemble_list = trial
+                    current_mae = trial_mae
+                    self._anchor_set = [nm for nm in ensemble_list if nm in template_set]
+                    self._guard_decisions.append(
+                        f"anchor_added:{cand}:mae={trial_mae:.4f}:limit={limit:.4f}"
+                    )
+                    logger.info(
+                        f"[AutoFitV71] Champion-template anchor added {cand} "
+                        f"(OOF MAE={trial_mae:,.4f}, required={required_anchors})"
+                    )
+                else:
+                    self._guard_decisions.append(
+                        f"anchor_rejected:{cand}:mae={trial_mae:.4f}:limit={limit:.4f}"
+                    )
+
+            if len(self._anchor_set) < required_anchors:
+                self._guard_decisions.append(
+                    f"anchor_shortfall:{len(self._anchor_set)}/{required_anchors}"
+                )
 
         selected_names = ensemble_list[:self._top_k]
         self._pred_names = selected_names
@@ -4880,6 +5154,45 @@ class AutoFitV71Wrapper(ModelBase):
                 conformal_weights = {best_single_name: 1.0}
                 self._anchor_set = []
         self._ensemble_weights = blended_weights
+        self._policy_confidence = float(
+            min(
+                0.99,
+                0.35
+                + 0.08 * float(len(selected_names))
+                + 0.12 * float(min(len(self._anchor_set), 2))
+                + (0.08 if not self._oof_guard_triggered else 0.0),
+            )
+        )
+
+        if self._lane == "binary" and selected_oof:
+            try:
+                oof_prob = np.zeros(len(y_oof), dtype=float)
+                for nm, w in blended_weights.items():
+                    if nm in selected_oof:
+                        oof_prob += float(w) * np.asarray(selected_oof[nm], dtype=float)
+                oof_prob = np.clip(oof_prob, 0.0, 1.0)
+                calibrator, cal_name, cal_score, cal_scores = _fit_binary_calibrator(
+                    oof_prob,
+                    y_oof,
+                )
+                self._binary_calibrator = calibrator
+                self._binary_calibrator_name = cal_name
+                self._binary_calibration_score = cal_score
+                self._binary_calibration_scores = cal_scores
+                if cal_name is not None:
+                    self._guard_decisions.append(
+                        f"binary_calibrator_selected:{cal_name}:{float(cal_score):.6f}"
+                    )
+                    logger.info(
+                        f"[AutoFitV71] Binary calibrator selected: {cal_name} "
+                        f"(score={float(cal_score):.6f})"
+                    )
+            except Exception as e:
+                logger.warning(f"[AutoFitV71] Binary calibration skipped: {e}")
+                self._binary_calibrator = None
+                self._binary_calibrator_name = None
+                self._binary_calibration_score = None
+                self._binary_calibration_scores = {}
 
         # -- Meta learners: 7-seed L1 + (Ridge vs ElasticNet) L2 --
         X_oof_full = X_aug.iloc[oof_start:]
@@ -5022,8 +5335,14 @@ class AutoFitV71Wrapper(ModelBase):
             },
             "quick_screen_survived": len(survived),
             "quick_screen_total": len(candidate_pool),
+            "routing_key": self._route_key,
+            "horizon_band": self._horizon_band,
+            "ablation": self._ablation,
+            "missingness_bucket": self._missingness_bucket,
+            "missingness_bucket_stats": self._missingness_bucket_stats,
             "monotone_selected": ensemble_list,
             "final_selected": selected_names,
+            "champion_template": champion_template,
             "anchor_set": list(self._anchor_set),
             "anchor_models_used": list(self._anchor_set),
             "caruana_weights": dict(caruana_weights),
@@ -5038,6 +5357,9 @@ class AutoFitV71Wrapper(ModelBase):
             "policy_confidence": self._policy_confidence,
             "guard_decisions": list(self._guard_decisions),
             "oof_guard_triggered": self._oof_guard_triggered,
+            "binary_calibrator": self._binary_calibrator_name,
+            "binary_calibration_score": self._binary_calibration_score,
+            "binary_calibration_scores": dict(self._binary_calibration_scores),
             "lane_clip_rate": self._lane_clip_rate,
             "inverse_transform_guard_hits": self._inverse_transform_guard_hits,
             "count_safe_mode": self._count_safe_mode,
@@ -5066,6 +5388,12 @@ class AutoFitV71Wrapper(ModelBase):
         def final_postprocess(arr: np.ndarray) -> np.ndarray:
             out, stats = _apply_lane_postprocess_with_stats(arr, self._lane_postprocess_state)
             self._lane_clip_rate = float(stats.get("clip_rate", 0.0))
+            if self._lane == "binary":
+                out = _apply_binary_calibrator(
+                    out,
+                    self._binary_calibrator,
+                    self._binary_calibrator_name,
+                )
             return out
 
         pred_dict: Dict[str, np.ndarray] = {}
@@ -5162,6 +5490,11 @@ class AutoFitV71Wrapper(ModelBase):
                 "policy_action_id": self._policy_action_id,
                 "oof_guard_triggered": bool(self._oof_guard_triggered),
                 "lane_family": self._lane,
+                "routing_key": self._route_key,
+                "horizon_band": self._horizon_band,
+                "ablation": self._ablation,
+                "missingness_bucket": self._missingness_bucket,
+                "missingness_bucket_stats": dict(self._missingness_bucket_stats),
                 "anchor_set": list(self._anchor_set),
                 "postprocess_bounds": {
                     "lower": self._lane_postprocess_state.get("lower"),
@@ -5170,6 +5503,9 @@ class AutoFitV71Wrapper(ModelBase):
                 },
                 "policy_confidence": float(self._policy_confidence),
                 "guard_decisions": list(self._guard_decisions),
+                "binary_calibrator": self._binary_calibrator_name,
+                "binary_calibration_score": self._binary_calibration_score,
+                "binary_calibration_scores": dict(self._binary_calibration_scores),
             }
         )
         return info
@@ -5192,7 +5528,7 @@ class AutoFitV72Wrapper(AutoFitV71Wrapper):
         kwargs.setdefault("count_safe_mode", True)
         kwargs.setdefault("champion_anchor", True)
         kwargs.setdefault("offline_rl_policy", "offline_rule_v72")
-        kwargs.setdefault("search_budget", 64)
+        kwargs.setdefault("search_budget", 96)
         super().__init__(top_k=top_k, **kwargs)
         self.config.name = "AutoFitV72"
         self.config.params["strategy"] = "v72_evidence_hardened"

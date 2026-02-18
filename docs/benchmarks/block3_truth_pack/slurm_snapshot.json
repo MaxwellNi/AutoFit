@@ -1,9 +1,9 @@
 {
-  "snapshot_ts": "2026-02-18T15:20:58.887178+00:00",
-  "running_total": 7,
+  "snapshot_ts": "2026-02-18T23:47:26.146249+00:00",
+  "running_total": 8,
   "pending_total": 103,
   "running_by_partition": {
-    "batch": 7
+    "batch": 8
   },
   "pending_by_partition": {
     "batch": 95,
@@ -11,12 +11,12 @@
   },
   "pending_reason_topk": [
     {
-      "reason": "(Priority)",
-      "count": 95
+      "reason": "(JobHeldUser)",
+      "count": 99
     },
     {
-      "reason": "(QOSGrpNodeLimit)",
-      "count": 8
+      "reason": "(QOSMaxJobsPerUserLimit)",
+      "count": 4
     }
   ],
   "qos_caps": {
@@ -33,11 +33,11 @@
   },
   "prefix_status_squeue": {
     "p7": {
-      "PENDING": 5,
-      "RUNNING": 7
+      "PENDING": 1,
+      "RUNNING": 8
     },
     "p7r": {
-      "PENDING": 2
+      "PENDING": 6
     },
     "p7x": {
       "PENDING": 66
@@ -48,22 +48,19 @@
   },
   "prefix_status_sacct": {
     "p7": {
-      "COMPLETED": 170,
+      "COMPLETED": 173,
       "CANCELLED": 66,
       "OUT_OF_ME": 4,
       "FAILED": 8,
-      "RUNNING": 7,
-      "PENDING": 5
+      "RUNNING": 8
     },
     "p7r": {
-      "PENDING": 2
+      "PENDING": 4
     },
     "p7x": {
-      "PENDING": 66,
       "COMPLETED": 55
     },
     "p7xF": {
-      "PENDING": 30,
       "COMPLETED": 47
     }
   },

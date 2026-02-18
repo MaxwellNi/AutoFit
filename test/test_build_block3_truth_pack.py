@@ -100,6 +100,11 @@ def test_new_master_sections_registered():
     assert "TARGET_SUBTASKS" in section_names
     assert "TOP3_REPRESENTATIVE_MODELS" in section_names
     assert "FAMILY_GAP_MATRIX" in section_names
+    assert "CHAMPION_TEMPLATE_LIBRARY" in section_names
+    assert "HYPERPARAMETER_SEARCH_LEDGER" in section_names
+    assert "BEST_CONFIG_BY_MODEL_TARGET" in section_names
+    assert "COMPUTE_COST_REPORT" in section_names
+    assert "V72_PILOT_GATE_REPORT" in section_names
     assert "PRIMARY_LITERATURE_MATRIX" in section_names
     assert "CITATION_CORRECTION_LOG" in section_names
 
@@ -156,6 +161,51 @@ def test_top3_and_family_gap_helpers():
     assert tr_row["gap_vs_global_best_pct"] > 0.0
 
 
+def test_champion_template_library_builder():
+    module = _load_module()
+    condition_rows = [
+        {
+            "condition_completed": True,
+            "task": "task1_outcome",
+            "ablation": "core_edgar",
+            "target": "investors_count",
+            "horizon": 1,
+            "best_model": "NBEATS",
+            "best_category": "deep_classical",
+        },
+        {
+            "condition_completed": True,
+            "task": "task1_outcome",
+            "ablation": "core_edgar",
+            "target": "investors_count",
+            "horizon": 7,
+            "best_model": "NHITS",
+            "best_category": "deep_classical",
+        },
+        {
+            "condition_completed": True,
+            "task": "task1_outcome",
+            "ablation": "core_edgar",
+            "target": "investors_count",
+            "horizon": 14,
+            "best_model": "NBEATS",
+            "best_category": "deep_classical",
+        },
+    ]
+    failure_rows = [
+        {
+            "issue_type": "v71_count_explosion",
+            "target": "investors_count",
+        }
+    ]
+    rows = module._build_champion_template_library(condition_rows, failure_rows)
+    assert rows
+    first = rows[0]
+    assert first["target_family"] == "count"
+    assert first["primary_anchor"] in {"NBEATS", "NHITS"}
+    assert "winner_distribution_json" in first
+
+
 def test_primary_literature_and_correction_rows():
     module = _load_module()
     lit_rows = module._build_primary_literature_matrix_rows()
@@ -167,3 +217,43 @@ def test_primary_literature_and_correction_rows():
 
     assert len(corr_rows) >= 3
     assert any(r.get("status") == "hypothesis" for r in corr_rows)
+
+
+def test_best_config_and_pilot_gate_row_builders():
+    module = _load_module()
+
+    payload = {
+        "targets": {
+            "investors_count": {
+                "AutoFitV72": {
+                    "target_family": "count",
+                    "category": "autofit",
+                    "status": "planned_with_evidence",
+                    "search_budget": 96,
+                    "trials_executed": 0,
+                    "best_mae_observed_strict": 44.8,
+                    "best_config": {"top_k": 8},
+                    "search_space": {"top_k": [6, 8, 10]},
+                    "evidence_path": "runs/benchmarks/x/metrics.json",
+                }
+            }
+        }
+    }
+    best_rows = module._build_best_config_rows(payload, "docs/benchmarks/block3_truth_pack/best_config_by_model_target.json")
+    assert len(best_rows) == 1
+    assert best_rows[0]["model_name"] == "AutoFitV72"
+    assert best_rows[0]["target"] == "investors_count"
+
+    pilot_payload = {
+        "generated_at_utc": "2026-02-18T00:00:00+00:00",
+        "overall_pass": False,
+        "counts": {"rows_total": 10},
+        "metrics": {"global_normalized_mae_improvement_pct": 5.0},
+        "checks": {"fairness_pass_100": True},
+    }
+    gate_rows = module._build_pilot_gate_rows(
+        pilot_payload,
+        "docs/benchmarks/block3_truth_pack/v72_pilot_gate_report.json",
+    )
+    assert len(gate_rows) >= 4
+    assert any(r["key"] == "overall_pass" for r in gate_rows)

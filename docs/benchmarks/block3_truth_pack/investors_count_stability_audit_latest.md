@@ -1,6 +1,6 @@
 # Investors Count Stability Audit
 
-- generated_at_utc: **2026-02-18T15:20:54.540707+00:00**
+- generated_at_utc: **2026-02-18T23:03:21.202374+00:00**
 - overall_pass: **False**
 
 ## Split Distribution
@@ -21,9 +21,9 @@
 
 ## Telemetry
 
-- strict_records: **1595**
+- strict_records: **1675**
 - catastrophic_spikes: **4**
-- repeatability_groups: **1015**
+- repeatability_groups: **1095**
 
 ## Gate Checks
 

@@ -29,3 +29,17 @@ def test_asset_fingerprint_missing_path():
     out = module._asset_fingerprint(Path("/tmp/path_that_does_not_exist_123456"))
     assert out["exists"] is False
     assert out["file_count"] == 0
+
+
+def test_verify_report_all_pass_schema_variants():
+    module = _load_module()
+
+    payload_v1 = {"all_pass": True, "checks": []}
+    payload_v2 = {"all_gates_pass": True, "checks": []}
+    payload_checks = {"checks": [{"check": "x", "passed": True}, {"check": "y", "passed": True}]}
+    payload_fail = {"checks": [{"check": "x", "passed": True}, {"check": "y", "passed": False}]}
+
+    assert module._verify_report_all_pass(payload_v1) is True
+    assert module._verify_report_all_pass(payload_v2) is True
+    assert module._verify_report_all_pass(payload_checks) is True
+    assert module._verify_report_all_pass(payload_fail) is False
