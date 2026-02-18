@@ -243,6 +243,11 @@ class ModelMetrics:
     n_missing_predictions: int = 0
     fallback_fraction: float = 0.0
     fairness_pass: bool = True
+    lane_clip_rate: float = 0.0
+    inverse_transform_guard_hits: int = 0
+    anchor_models_used: List[str] = field(default_factory=list)
+    policy_action_id: Optional[str] = None
+    oof_guard_triggered: bool = False
     train_time_seconds: Optional[float] = None
     inference_time_seconds: Optional[float] = None
     seed: int = GLOBAL_SEED
@@ -597,6 +602,36 @@ class BenchmarkShard:
                 pass
         return 0.0
 
+    @staticmethod
+    def _extract_routing_signals(model: Any) -> Dict[str, Any]:
+        """Best-effort extraction of model routing diagnostics for metrics schema."""
+        signals: Dict[str, Any] = {
+            "lane_clip_rate": 0.0,
+            "inverse_transform_guard_hits": 0,
+            "anchor_models_used": [],
+            "policy_action_id": None,
+            "oof_guard_triggered": False,
+        }
+        try:
+            if hasattr(model, "get_routing_info"):
+                info = model.get_routing_info()
+                if isinstance(info, dict):
+                    signals["lane_clip_rate"] = float(info.get("lane_clip_rate", 0.0) or 0.0)
+                    signals["inverse_transform_guard_hits"] = int(
+                        info.get("inverse_transform_guard_hits", 0) or 0
+                    )
+                    anchors = info.get("anchor_models_used", info.get("anchor_set", []))
+                    if isinstance(anchors, list):
+                        signals["anchor_models_used"] = [str(x) for x in anchors]
+                    signals["policy_action_id"] = (
+                        None if info.get("policy_action_id") is None
+                        else str(info.get("policy_action_id"))
+                    )
+                    signals["oof_guard_triggered"] = bool(info.get("oof_guard_triggered", False))
+        except Exception:
+            pass
+        return signals
+
     def run_model(
         self,
         model_name: str,
@@ -679,6 +714,7 @@ class BenchmarkShard:
                     f"{prediction_coverage_ratio:.4f} < 0.98 for {model_name}"
                 )
             fallback_fraction = self._extract_fallback_fraction(model)
+            routing_signals = self._extract_routing_signals(model)
 
             # ---- CONSTANT-PREDICTION GUARD ----
             if len(y_pred) > 1 and np.std(y_pred) == 0.0:
@@ -707,6 +743,11 @@ class BenchmarkShard:
                 n_missing_predictions=n_missing_predictions,
                 fallback_fraction=fallback_fraction,
                 fairness_pass=True,
+                lane_clip_rate=float(routing_signals["lane_clip_rate"]),
+                inverse_transform_guard_hits=int(routing_signals["inverse_transform_guard_hits"]),
+                anchor_models_used=list(routing_signals["anchor_models_used"]),
+                policy_action_id=routing_signals["policy_action_id"],
+                oof_guard_triggered=bool(routing_signals["oof_guard_triggered"]),
                 train_time_seconds=train_time,
                 inference_time_seconds=infer_time,
                 seed=self.seed,

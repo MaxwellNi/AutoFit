@@ -1,0 +1,75 @@
+{
+  "snapshot_ts": "2026-02-18T15:20:58.887178+00:00",
+  "running_total": 7,
+  "pending_total": 103,
+  "running_by_partition": {
+    "batch": 7
+  },
+  "pending_by_partition": {
+    "batch": 95,
+    "gpu": 8
+  },
+  "pending_reason_topk": [
+    {
+      "reason": "(Priority)",
+      "count": 95
+    },
+    {
+      "reason": "(QOSGrpNodeLimit)",
+      "count": 8
+    }
+  ],
+  "qos_caps": {
+    "iris-batch-long": {
+      "MaxJobsPU": "8",
+      "MaxWall": "14-00:00:00",
+      "Priority": "100"
+    },
+    "iris-gpu-long": {
+      "MaxJobsPU": "4",
+      "MaxWall": "14-00:00:00",
+      "Priority": "100"
+    }
+  },
+  "prefix_status_squeue": {
+    "p7": {
+      "PENDING": 5,
+      "RUNNING": 7
+    },
+    "p7r": {
+      "PENDING": 2
+    },
+    "p7x": {
+      "PENDING": 66
+    },
+    "p7xF": {
+      "PENDING": 30
+    }
+  },
+  "prefix_status_sacct": {
+    "p7": {
+      "COMPLETED": 170,
+      "CANCELLED": 66,
+      "OUT_OF_ME": 4,
+      "FAILED": 8,
+      "RUNNING": 7,
+      "PENDING": 5
+    },
+    "p7r": {
+      "PENDING": 2
+    },
+    "p7x": {
+      "PENDING": 66,
+      "COMPLETED": 55
+    },
+    "p7xF": {
+      "PENDING": 30,
+      "COMPLETED": 47
+    }
+  },
+  "commands": {
+    "squeue": "squeue -u $USER -h -o \"%T %j %P %R\"",
+    "sacct": "sacct -u $USER -S 2026-02-12 -n -X -o JobName,State",
+    "qos": "sacctmgr show qos iris-batch-long,iris-gpu-long format=Name,MaxJobsPU,MaxWall,Priority -P -n"
+  }
+}

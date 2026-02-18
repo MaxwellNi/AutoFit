@@ -3628,7 +3628,11 @@ def _blend_weights_for_lane(lane: str) -> Tuple[float, float]:
     return 0.65, 0.35
 
 
-def _build_lane_postprocess_state(lane: str, y_train: pd.Series) -> Dict[str, Any]:
+def _build_lane_postprocess_state(
+    lane: str,
+    y_train: pd.Series,
+    count_safe_mode: bool = True,
+) -> Dict[str, Any]:
     """Build deterministic lane-specific prediction postprocess settings."""
     y_arr = np.asarray(y_train.values, dtype=float)
     y_fin = y_arr[np.isfinite(y_arr)]
@@ -3640,6 +3644,7 @@ def _build_lane_postprocess_state(lane: str, y_train: pd.Series) -> Dict[str, An
         "lower": None,
         "upper": None,
         "round_to_int": False,
+        "count_safe_mode": bool(count_safe_mode),
     }
 
     if lane == "binary":
@@ -3648,12 +3653,36 @@ def _build_lane_postprocess_state(lane: str, y_train: pd.Series) -> Dict[str, An
         return state
 
     if lane == "count":
+        q95 = float(np.quantile(y_fin, 0.95))
+        q99 = float(np.quantile(y_fin, 0.99))
+        q995 = float(np.quantile(y_fin, 0.995))
         q999 = float(np.quantile(y_fin, 0.999))
-        ymax = float(np.max(y_fin))
-        upper = max(10.0, ymax * 1.20, q999 * 1.5)
+        if count_safe_mode:
+            y_med = float(np.median(y_fin))
+            y_mad = float(np.median(np.abs(y_fin - y_med)))
+            robust_upper = max(
+                10.0,
+                q99 * 3.0,
+                q995 * 2.0,
+                y_med + 25.0 * max(y_mad, 1.0),
+            )
+            # Keep headroom for valid extremes while preventing runaway caps.
+            upper = min(max(robust_upper, q999 * 1.1), max(robust_upper * 2.0, q99 * 6.0))
+            hard_cap = max(1000.0, q999 * 10.0)
+            upper = min(upper, hard_cap)
+        else:
+            ymax = float(np.max(y_fin))
+            upper = max(10.0, ymax * 1.20, q999 * 1.5)
         state["lower"] = 0.0
         state["upper"] = upper
         state["round_to_int"] = True
+        state["quantiles"] = {
+            "q95": q95,
+            "q99": q99,
+            "q995": q995,
+            "q999": q999,
+            "hard_cap": max(1000.0, q999 * 10.0),
+        }
         return state
 
     if lane == "heavy_tail":
@@ -3667,15 +3696,22 @@ def _build_lane_postprocess_state(lane: str, y_train: pd.Series) -> Dict[str, An
     return state
 
 
-def _apply_lane_postprocess(
+def _apply_lane_postprocess_with_stats(
     preds: np.ndarray,
     state: Optional[Dict[str, Any]],
-) -> np.ndarray:
-    """Apply lane-specific clipping/rounding consistently across train/eval/predict."""
-    out = np.asarray(preds, dtype=float).reshape(-1)
+) -> Tuple[np.ndarray, Dict[str, float]]:
+    """Apply lane-specific clipping/rounding and return postprocess statistics."""
+    raw = np.asarray(preds, dtype=float).reshape(-1)
+    out = raw.copy()
     if state is None:
         out = np.where(np.isfinite(out), out, 0.0)
-        return out
+        changed = ~np.isclose(out, raw, equal_nan=True)
+        clip_rate = float(changed.mean()) if len(out) else 0.0
+        return out, {
+            "n_total": float(len(out)),
+            "n_changed": float(int(changed.sum())),
+            "clip_rate": clip_rate,
+        }
 
     finite = out[np.isfinite(out)]
     fill_value = float(np.median(finite)) if len(finite) > 0 else 0.0
@@ -3691,7 +3727,74 @@ def _apply_lane_postprocess(
     if bool(state.get("round_to_int", False)):
         out = np.rint(out)
 
-    return np.asarray(out, dtype=float)
+    changed = ~np.isclose(out, raw, equal_nan=True)
+    clip_rate = float(changed.mean()) if len(out) else 0.0
+    return np.asarray(out, dtype=float), {
+        "n_total": float(len(out)),
+        "n_changed": float(int(changed.sum())),
+        "clip_rate": clip_rate,
+    }
+
+
+def _apply_lane_postprocess(
+    preds: np.ndarray,
+    state: Optional[Dict[str, Any]],
+) -> np.ndarray:
+    """Apply lane-specific clipping/rounding consistently across train/eval/predict."""
+    out, _stats = _apply_lane_postprocess_with_stats(preds, state)
+    return out
+
+
+def _safe_inverse_transform(
+    preds: np.ndarray,
+    target_transform: Optional["RobustTargetTransform"],
+    lane_state: Optional[Dict[str, Any]],
+) -> Tuple[np.ndarray, int]:
+    """Inverse target transform with defensive guards against numeric blow-ups."""
+    out = np.asarray(preds, dtype=float).reshape(-1)
+    if target_transform is not None and target_transform.kind != "identity":
+        try:
+            out = target_transform.inverse(out)
+        except Exception:
+            # Keep raw predictions if inverse fails unexpectedly.
+            out = np.asarray(preds, dtype=float).reshape(-1)
+
+    guard_hits = 0
+    finite_mask = np.isfinite(out)
+    guard_hits += int((~finite_mask).sum())
+    finite_vals = out[finite_mask]
+    fill_value = float(np.median(finite_vals)) if len(finite_vals) > 0 else 0.0
+    out = np.where(finite_mask, out, fill_value)
+
+    if lane_state is not None:
+        lower = lane_state.get("lower")
+        upper = lane_state.get("upper")
+        if upper is not None:
+            multiplier = 1.5 if str(lane_state.get("lane")) == "count" else 5.0
+            extreme_hi = out > float(upper) * multiplier
+            guard_hits += int(extreme_hi.sum())
+            if extreme_hi.any():
+                out = out.copy()
+                out[extreme_hi] = float(upper)
+        if lower is not None:
+            extreme_lo = out < float(lower) - 1.0
+            guard_hits += int(extreme_lo.sum())
+            if extreme_lo.any():
+                out = out.copy()
+                out[extreme_lo] = float(lower)
+
+    return np.asarray(out, dtype=float), int(guard_hits)
+
+
+def _champion_anchor_candidates(lane: str) -> List[str]:
+    """Historical champion priors used as anchor candidates per lane."""
+    if lane == "count":
+        return ["NBEATS", "KAN", "NHITS", "XGBoostPoisson", "LightGBMTweedie"]
+    if lane == "binary":
+        return ["PatchTST", "NHITS", "NBEATSx", "ExtraTrees", "RandomForest", "TabPFNClassifier"]
+    if lane == "heavy_tail":
+        return ["Chronos", "NHITS", "NBEATS", "PatchTST", "RandomForest"]
+    return ["LightGBM", "RandomForest", "Chronos"]
 
 
 def _build_regime_retrieval_features(
@@ -4285,6 +4388,10 @@ class AutoFitV71Wrapper(ModelBase):
         min_ensemble_size_heavy_tail: int = 2,
         dynamic_weighting: bool = True,
         enable_regime_retrieval: bool = True,
+        count_safe_mode: bool = True,
+        champion_anchor: bool = True,
+        offline_rl_policy: str = "rule_based_v0",
+        search_budget: int = 64,
         **kwargs,
     ):
         config = ModelConfig(
@@ -4296,6 +4403,10 @@ class AutoFitV71Wrapper(ModelBase):
                 "min_ensemble_size_heavy_tail": min_ensemble_size_heavy_tail,
                 "dynamic_weighting": dynamic_weighting,
                 "enable_regime_retrieval": enable_regime_retrieval,
+                "count_safe_mode": count_safe_mode,
+                "champion_anchor": champion_anchor,
+                "offline_rl_policy": offline_rl_policy,
+                "search_budget": search_budget,
             },
         )
         super().__init__(config)
@@ -4303,6 +4414,10 @@ class AutoFitV71Wrapper(ModelBase):
         self._min_ensemble_size_heavy_tail = min_ensemble_size_heavy_tail
         self._dynamic_weighting = dynamic_weighting
         self._enable_regime_retrieval = enable_regime_retrieval
+        self._count_safe_mode = bool(count_safe_mode)
+        self._champion_anchor = bool(champion_anchor)
+        self._offline_rl_policy = str(offline_rl_policy)
+        self._search_budget = int(search_budget)
 
         self._models: List[Tuple[ModelBase, str]] = []
         self._ensemble_weights: Dict[str, float] = {}
@@ -4330,6 +4445,13 @@ class AutoFitV71Wrapper(ModelBase):
         self._kept_log_cols: List[str] = []
         self._regime_state: Dict[str, Any] = {"enabled": False}
         self._routing_info: Dict[str, Any] = {}
+        self._anchor_set: List[str] = []
+        self._policy_action_id: str = ""
+        self._policy_confidence: float = 0.0
+        self._guard_decisions: List[str] = []
+        self._oof_guard_triggered: bool = False
+        self._lane_clip_rate: float = 0.0
+        self._inverse_transform_guard_hits: int = 0
 
     def _augment_features(
         self, X: pd.DataFrame, y: Optional[pd.Series] = None, fit: bool = True
@@ -4389,9 +4511,22 @@ class AutoFitV71Wrapper(ModelBase):
             "heavy_tail": "huber",
             "general": "l2",
         }[self._lane]
-        self._lane_postprocess_state = _build_lane_postprocess_state(self._lane, y)
+        self._lane_postprocess_state = _build_lane_postprocess_state(
+            self._lane,
+            y,
+            count_safe_mode=self._count_safe_mode,
+        )
         qs_threshold = _quick_screen_threshold_for_lane(self._lane)
         self._dynamic_thresholds = {"quick_screen_ratio": qs_threshold}
+        self._anchor_set = []
+        self._guard_decisions = []
+        self._oof_guard_triggered = False
+        self._lane_clip_rate = 0.0
+        self._inverse_transform_guard_hits = 0
+        self._policy_action_id = (
+            f"{self._offline_rl_policy}|lane={self._lane}|qs={qs_threshold:.2f}|budget={self._search_budget}"
+        )
+        self._policy_confidence = 0.0
 
         logger.info(
             f"[AutoFitV71] Meta-features: {meta} | lane={self._lane} "
@@ -4470,15 +4605,33 @@ class AutoFitV71Wrapper(ModelBase):
             self._ensemble_weights = {chosen: 1.0}
             self._routing_info = {
                 "lane_selected": self._lane,
+                "lane_family": self._lane,
                 "meta_objective": self._meta_objective,
                 "dynamic_thresholds": self._dynamic_thresholds,
                 "regime_retrieval_enabled": self._enable_regime_retrieval,
                 "prediction_postprocess": self._lane_postprocess_state,
+                "postprocess_bounds": {
+                    "lower": self._lane_postprocess_state.get("lower"),
+                    "upper": self._lane_postprocess_state.get("upper"),
+                    "round_to_int": self._lane_postprocess_state.get("round_to_int"),
+                },
                 "ensemble_diversity_stats": {},
                 "quick_screen_survived": 0,
                 "quick_screen_total": len(candidate_pool),
                 "final_selected": [chosen],
                 "fallback_model": chosen,
+                "anchor_set": [],
+                "anchor_models_used": [],
+                "policy_action_id": self._policy_action_id,
+                "policy_confidence": self._policy_confidence,
+                "guard_decisions": list(self._guard_decisions),
+                "oof_guard_triggered": self._oof_guard_triggered,
+                "lane_clip_rate": self._lane_clip_rate,
+                "inverse_transform_guard_hits": self._inverse_transform_guard_hits,
+                "count_safe_mode": self._count_safe_mode,
+                "champion_anchor": self._champion_anchor,
+                "offline_rl_policy": self._offline_rl_policy,
+                "search_budget": self._search_budget,
             }
             self._fitted = True
             return self
@@ -4518,15 +4671,33 @@ class AutoFitV71Wrapper(ModelBase):
             self._ensemble_weights = {"LightGBM": 1.0}
             self._routing_info = {
                 "lane_selected": self._lane,
+                "lane_family": self._lane,
                 "meta_objective": self._meta_objective,
                 "dynamic_thresholds": self._dynamic_thresholds,
                 "regime_retrieval_enabled": self._enable_regime_retrieval,
                 "prediction_postprocess": self._lane_postprocess_state,
+                "postprocess_bounds": {
+                    "lower": self._lane_postprocess_state.get("lower"),
+                    "upper": self._lane_postprocess_state.get("upper"),
+                    "round_to_int": self._lane_postprocess_state.get("round_to_int"),
+                },
                 "ensemble_diversity_stats": {},
                 "quick_screen_survived": len(survived),
                 "quick_screen_total": len(candidate_pool),
                 "final_selected": ["LightGBM"],
                 "fallback_model": "LightGBM",
+                "anchor_set": [],
+                "anchor_models_used": [],
+                "policy_action_id": self._policy_action_id,
+                "policy_confidence": self._policy_confidence,
+                "guard_decisions": list(self._guard_decisions),
+                "oof_guard_triggered": self._oof_guard_triggered,
+                "lane_clip_rate": self._lane_clip_rate,
+                "inverse_transform_guard_hits": self._inverse_transform_guard_hits,
+                "count_safe_mode": self._count_safe_mode,
+                "champion_anchor": self._champion_anchor,
+                "offline_rl_policy": self._offline_rl_policy,
+                "search_budget": self._search_budget,
             }
             self._fitted = True
             return self
@@ -4548,6 +4719,15 @@ class AutoFitV71Wrapper(ModelBase):
 
         div_scores = _ncl_diversity_score(oof_clean, y_oof) if len(oof_clean) >= 2 else {}
         sorted_by_adj = [(nm, adj) for nm, adj, _, _ in results if nm in oof_clean]
+        if len(sorted_by_adj) >= 2:
+            best_adj = float(sorted_by_adj[0][1])
+            second_adj = float(sorted_by_adj[1][1])
+            margin = max(0.0, second_adj - best_adj)
+            self._policy_confidence = float(min(1.0, margin / max(best_adj, 1e-8)))
+        elif sorted_by_adj:
+            self._policy_confidence = 1.0
+        else:
+            self._policy_confidence = 0.0
 
         ensemble_list: List[str] = []
         current_mae = float("inf")
@@ -4613,6 +4793,39 @@ class AutoFitV71Wrapper(ModelBase):
                         )
                     break
 
+        # Champion-anchor: keep one historically strong lane specialist if safe.
+        self._anchor_set = []
+        if self._champion_anchor:
+            anchor_candidates = _champion_anchor_candidates(self._lane)
+            has_anchor = any(nm in anchor_candidates for nm in ensemble_list)
+            if not has_anchor:
+                for cand in anchor_candidates:
+                    if cand not in oof_clean:
+                        continue
+                    if len(ensemble_list) >= self._top_k:
+                        base_trial = ensemble_list[:-1] + [cand]
+                    else:
+                        base_trial = ensemble_list + [cand]
+                    # Stable de-duplication.
+                    trial: List[str] = []
+                    seen = set()
+                    for nm in base_trial:
+                        if nm not in seen:
+                            trial.append(nm)
+                            seen.add(nm)
+                    trial_preds = np.mean([oof_clean[nm] for nm in trial], axis=0)
+                    trial_mae = float(np.mean(np.abs(y_oof - trial_preds)))
+                    if trial_mae <= current_mae * 1.03:
+                        ensemble_list = trial
+                        current_mae = trial_mae
+                        self._anchor_set = [cand]
+                        self._guard_decisions.append(f"anchor_added:{cand}")
+                        logger.info(
+                            f"[AutoFitV71] Champion-anchor added {cand} "
+                            f"(OOF MAE={trial_mae:,.4f})"
+                        )
+                        break
+
         selected_names = ensemble_list[:self._top_k]
         self._pred_names = selected_names
         selected_oof = {nm: oof_clean[nm] for nm in selected_names if nm in oof_clean}
@@ -4637,6 +4850,35 @@ class AutoFitV71Wrapper(ModelBase):
             )
         total_bw = sum(blended_weights.values()) or 1.0
         blended_weights = {nm: w / total_bw for nm, w in blended_weights.items()}
+
+        # OOF guard reject: if blended ensemble underperforms best single too much,
+        # force fallback to the best single candidate.
+        if selected_oof:
+            blend_oof = np.zeros(len(y_oof), dtype=float)
+            for nm, w in blended_weights.items():
+                if nm in selected_oof:
+                    blend_oof += float(w) * selected_oof[nm]
+            blend_oof = _apply_lane_postprocess(blend_oof, self._lane_postprocess_state)
+            blend_mae = float(np.mean(np.abs(y_oof - blend_oof)))
+            if blend_mae > best_single_raw * 1.03:
+                self._oof_guard_triggered = True
+                self._guard_decisions.append(
+                    f"oof_guard_fallback:{blend_mae:.4f}>{best_single_raw * 1.03:.4f}"
+                )
+                logger.warning(
+                    f"[AutoFitV71] OOF guard triggered: blended MAE={blend_mae:,.4f} "
+                    f"> 1.03× best_single={best_single_raw:,.4f}. Falling back to {best_single_name}"
+                )
+                selected_names = [best_single_name]
+                self._pred_names = selected_names
+                if best_single_name in oof_clean:
+                    selected_oof = {best_single_name: oof_clean[best_single_name]}
+                else:
+                    selected_oof = {best_single_name: np.full(len(y_oof), np.mean(y_oof))}
+                blended_weights = {best_single_name: 1.0}
+                caruana_weights = [(best_single_name, 1.0)]
+                conformal_weights = {best_single_name: 1.0}
+                self._anchor_set = []
         self._ensemble_weights = blended_weights
 
         # -- Meta learners: 7-seed L1 + (Ridge vs ElasticNet) L2 --
@@ -4708,8 +4950,12 @@ class AutoFitV71Wrapper(ModelBase):
                 for nm, mdl in candidates:
                     mdl.fit(X_l2_t, y_l2_t_t)
                     pred_v = mdl.predict(X_l2_v)
-                    if self._target_xform is not None and self._target_xform.kind != "identity":
-                        pred_v = self._target_xform.inverse(pred_v)
+                    pred_v, guard_hits = _safe_inverse_transform(
+                        pred_v,
+                        self._target_xform,
+                        self._lane_postprocess_state,
+                    )
+                    self._inverse_transform_guard_hits += int(guard_hits)
                     pred_v = _apply_lane_postprocess(pred_v, self._lane_postprocess_state)
                     mae_v = float(np.mean(np.abs(y_l2_v - pred_v)))
                     if mae_v < best_mae:
@@ -4756,6 +5002,7 @@ class AutoFitV71Wrapper(ModelBase):
         self._routing_info = {
             "meta_features": meta,
             "lane_selected": self._lane,
+            "lane_family": self._lane,
             "meta_objective": self._meta_objective,
             "dynamic_thresholds": self._dynamic_thresholds,
             "target_transform": self._target_xform.kind if self._target_xform else "identity",
@@ -4768,10 +5015,17 @@ class AutoFitV71Wrapper(ModelBase):
             "n_log_features": len(self._kept_log_cols),
             "regime_retrieval_enabled": self._enable_regime_retrieval,
             "prediction_postprocess": self._lane_postprocess_state,
+            "postprocess_bounds": {
+                "lower": self._lane_postprocess_state.get("lower"),
+                "upper": self._lane_postprocess_state.get("upper"),
+                "round_to_int": self._lane_postprocess_state.get("round_to_int"),
+            },
             "quick_screen_survived": len(survived),
             "quick_screen_total": len(candidate_pool),
             "monotone_selected": ensemble_list,
             "final_selected": selected_names,
+            "anchor_set": list(self._anchor_set),
+            "anchor_models_used": list(self._anchor_set),
             "caruana_weights": dict(caruana_weights),
             "conformal_weights": conformal_weights,
             "blended_weights": blended_weights,
@@ -4780,6 +5034,16 @@ class AutoFitV71Wrapper(ModelBase):
             "has_l2_blender": self._meta_learner_l2 is not None,
             "l2_blender_name": self._meta_learner_l2_name,
             "best_single": {"name": best_single_name, "mae": best_single_raw},
+            "policy_action_id": self._policy_action_id,
+            "policy_confidence": self._policy_confidence,
+            "guard_decisions": list(self._guard_decisions),
+            "oof_guard_triggered": self._oof_guard_triggered,
+            "lane_clip_rate": self._lane_clip_rate,
+            "inverse_transform_guard_hits": self._inverse_transform_guard_hits,
+            "count_safe_mode": self._count_safe_mode,
+            "champion_anchor": self._champion_anchor,
+            "offline_rl_policy": self._offline_rl_policy,
+            "search_budget": self._search_budget,
             "elapsed_seconds": elapsed,
         }
         self._fitted = True
@@ -4798,6 +5062,12 @@ class AutoFitV71Wrapper(ModelBase):
 
         X_aug = self._augment_features(X, fit=False)
         lane_postprocess = lambda arr: _apply_lane_postprocess(arr, self._lane_postprocess_state)
+
+        def final_postprocess(arr: np.ndarray) -> np.ndarray:
+            out, stats = _apply_lane_postprocess_with_stats(arr, self._lane_postprocess_state)
+            self._lane_clip_rate = float(stats.get("clip_rate", 0.0))
+            return out
+
         pred_dict: Dict[str, np.ndarray] = {}
         for model, name in self._models:
             try:
@@ -4812,7 +5082,7 @@ class AutoFitV71Wrapper(ModelBase):
                 logger.warning(f"[AutoFitV71] {name} predict failed: {e}")
 
         if not pred_dict:
-            return lane_postprocess(np.full(len(X), 0.0))
+            return final_postprocess(np.full(len(X), 0.0))
 
         # L0 → L1 → L2
         if self._meta_learner_l2 is not None and self._meta_learners_l1:
@@ -4837,9 +5107,13 @@ class AutoFitV71Wrapper(ModelBase):
                     if c not in X_l2.columns:
                         X_l2[c] = 0.0
                 l2_preds = self._meta_learner_l2.predict(X_l2[self._meta_cols_l2].fillna(0))
-                if self._target_xform is not None and self._target_xform.kind != "identity":
-                    l2_preds = self._target_xform.inverse(l2_preds)
-                return lane_postprocess(np.asarray(l2_preds, dtype=float))
+                l2_preds, guard_hits = _safe_inverse_transform(
+                    l2_preds,
+                    self._target_xform,
+                    self._lane_postprocess_state,
+                )
+                self._inverse_transform_guard_hits += int(guard_hits)
+                return final_postprocess(np.asarray(l2_preds, dtype=float))
             except Exception as e:
                 logger.warning(f"[AutoFitV71] L2 predict failed: {e}")
 
@@ -4858,30 +5132,77 @@ class AutoFitV71Wrapper(ModelBase):
                     [_meta_predict(learner, X_l1_num) for learner in self._meta_learners_l1],
                     axis=0,
                 )
-                if self._target_xform is not None and self._target_xform.kind != "identity":
-                    l1_preds = self._target_xform.inverse(l1_preds)
-                return lane_postprocess(np.asarray(l1_preds, dtype=float))
+                l1_preds, guard_hits = _safe_inverse_transform(
+                    l1_preds,
+                    self._target_xform,
+                    self._lane_postprocess_state,
+                )
+                self._inverse_transform_guard_hits += int(guard_hits)
+                return final_postprocess(np.asarray(l1_preds, dtype=float))
             except Exception as e:
                 logger.warning(f"[AutoFitV71] L1 predict failed: {e}")
 
         # Weighted blend fallback
         total_w = sum(self._ensemble_weights.get(nm, 0.0) for nm in pred_dict)
         if total_w < 1e-8:
-            return lane_postprocess(np.mean(list(pred_dict.values()), axis=0))
+            return final_postprocess(np.mean(list(pred_dict.values()), axis=0))
         out = np.zeros(len(X), dtype=float)
         for name, preds in pred_dict.items():
             w = self._ensemble_weights.get(name, 0.0) / total_w
             out += w * preds
-        return lane_postprocess(out)
+        return final_postprocess(out)
 
     def get_routing_info(self) -> Dict[str, Any]:
-        return self._routing_info
+        info = dict(self._routing_info)
+        info.update(
+            {
+                "lane_clip_rate": float(self._lane_clip_rate),
+                "inverse_transform_guard_hits": int(self._inverse_transform_guard_hits),
+                "anchor_models_used": list(self._anchor_set),
+                "policy_action_id": self._policy_action_id,
+                "oof_guard_triggered": bool(self._oof_guard_triggered),
+                "lane_family": self._lane,
+                "anchor_set": list(self._anchor_set),
+                "postprocess_bounds": {
+                    "lower": self._lane_postprocess_state.get("lower"),
+                    "upper": self._lane_postprocess_state.get("upper"),
+                    "round_to_int": self._lane_postprocess_state.get("round_to_int"),
+                },
+                "policy_confidence": float(self._policy_confidence),
+                "guard_decisions": list(self._guard_decisions),
+            }
+        )
+        return info
 
 
 def get_autofit_v71(**kwargs) -> AutoFitV71Wrapper:
     """AutoFit V7.1 lane-adaptive robust ensemble."""
     top_k = kwargs.pop("top_k", 8)
     return AutoFitV71Wrapper(top_k=top_k, **kwargs)
+
+
+class AutoFitV72Wrapper(AutoFitV71Wrapper):
+    """AutoFit V7.2: evidence-driven hardening with count-safe defaults."""
+
+    def __init__(self, top_k: int = 8, **kwargs):
+        kwargs = dict(kwargs)
+        kwargs.setdefault("min_ensemble_size_heavy_tail", 2)
+        kwargs.setdefault("dynamic_weighting", True)
+        kwargs.setdefault("enable_regime_retrieval", True)
+        kwargs.setdefault("count_safe_mode", True)
+        kwargs.setdefault("champion_anchor", True)
+        kwargs.setdefault("offline_rl_policy", "offline_rule_v72")
+        kwargs.setdefault("search_budget", 64)
+        super().__init__(top_k=top_k, **kwargs)
+        self.config.name = "AutoFitV72"
+        self.config.params["strategy"] = "v72_evidence_hardened"
+        self.config.params["version"] = "7.2"
+
+
+def get_autofit_v72(**kwargs) -> AutoFitV72Wrapper:
+    """AutoFit V7.2 evidence-driven hardened lane-adaptive ensemble."""
+    top_k = kwargs.pop("top_k", 8)
+    return AutoFitV72Wrapper(top_k=top_k, **kwargs)
 
 
 AUTOFIT_MODELS = {
@@ -4896,4 +5217,5 @@ AUTOFIT_MODELS = {
     "AutoFitV6": get_autofit_v6,
     "AutoFitV7": get_autofit_v7,
     "AutoFitV71": get_autofit_v71,
+    "AutoFitV72": get_autofit_v72,
 }

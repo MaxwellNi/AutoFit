@@ -70,7 +70,7 @@ tasks:
       - funding_raised_usd
       - investors_count
       - is_funded
-    horizons: [7, 14, 30]  # K = early snapshot count (NOT days)
+    horizons: [7, 14, 30]  # task semantic horizon set; execution horizon is controlled by preset.horizons
     ablations:
       - core_only
       - core_text
@@ -95,7 +95,7 @@ tasks:
     targets:
       - funding_raised_usd
       - investors_count
-    horizons: [1, 7, 14, 30]  # H = forecast horizon in days
+    horizons: [1, 7, 14, 30]  # semantic horizon set; runner uses preset.horizons for comparable execution grid
     context_lengths: [30, 60, 90]  # Lookback in snapshots
     ablations:
       - core_only
@@ -190,6 +190,14 @@ autofit_v71:
   min_ensemble_size_heavy_tail: 2
   dynamic_weighting: true
   enable_regime_retrieval: true
+
+# AutoFit V7.2 controls (evidence-driven rollout)
+autofit_v72:
+  enabled: false
+  count_safe_mode: true
+  champion_anchor: true
+  offline_rl_policy: "offline_rule_v72"
+  search_budget: 64
 
 # Model categories for benchmarking
 model_categories:
