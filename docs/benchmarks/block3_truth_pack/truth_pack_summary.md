@@ -1,13 +1,13 @@
 # Block3 Truth Pack Summary
 
-- Raw records: **13416**
-- Strict comparable records: **4034**
+- Raw records: **13871**
+- Strict comparable records: **4489**
 - Legacy unverified records: **9382**
 - Strict excluded records: **0**
 - Expected condition keys: **104**
 - Strict condition completion: **104/104**
 - Legacy condition completion: **104/104**
-- V7.1 vs V7 overlap: **23** (win_rate=0.609, median_gain=0.132%)
+- V7.1 vs V7 overlap: **97** (win_rate=0.454, median_gain=-0.334%)
 - Critical failures tagged: **4**
 - High-severity failures tagged: **60**
 - Slurm snapshot: `docs/benchmarks/block3_truth_pack/slurm_snapshot.json`
@@ -31,8 +31,8 @@
 - `primary_literature_matrix`: `docs/benchmarks/block3_truth_pack/primary_literature_matrix.csv`
 - `run_history_ledger`: `docs/benchmarks/block3_truth_pack/run_history_ledger.csv`
 - `run_history_observations`: `docs/benchmarks/block3_truth_pack/run_history_observations.csv`
-- `slurm_live_snapshot_json`: `docs/benchmarks/block3_truth_pack/slurm_live_snapshot_20260218_234726.json`
-- `slurm_live_snapshot_md`: `docs/benchmarks/block3_truth_pack/slurm_live_snapshot_20260218_234726.md`
+- `slurm_live_snapshot_json`: `docs/benchmarks/block3_truth_pack/slurm_live_snapshot_20260221_221900.json`
+- `slurm_live_snapshot_md`: `docs/benchmarks/block3_truth_pack/slurm_live_snapshot_20260221_221900.md`
 - `slurm_snapshot_json`: `docs/benchmarks/block3_truth_pack/slurm_snapshot.json`
 - `slurm_snapshot_md`: `docs/benchmarks/block3_truth_pack/slurm_snapshot.md`
 - `sota_feature_value_map`: `docs/benchmarks/block3_truth_pack/sota_feature_value_map.csv`

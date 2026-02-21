@@ -167,7 +167,7 @@ ${GRES_LINE}
 #SBATCH --output=${LOG_DIR}/${JOB_NAME}_%j.out
 #SBATCH --error=${LOG_DIR}/${JOB_NAME}_%j.err
 #SBATCH --export=ALL
-#SBATCH --signal=B:USR1@120
+#SBATCH --signal=USR1@120
 ${EXTRA}
 
 set -e

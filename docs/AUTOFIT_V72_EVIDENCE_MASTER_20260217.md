@@ -10,6 +10,10 @@ Refresh command:
 python scripts/build_block3_truth_pack.py --include-freeze-history --update-master-doc
 ```
 
+Agent handoff entrypoint:
+
+- `docs/PROJECT_HANDOFF_20260221.md`
+
 ## Evidence Snapshot
 
 <!-- BEGIN AUTO:EVIDENCE_SNAPSHOT -->
@@ -17,14 +21,14 @@ Generated from strict/legacy layered truth pack outputs under `docs/benchmarks/b
 
 | metric | value | evidence_path |
 |---|---|---|
-| bench_dirs | runs/benchmarks/block3_20260203_225620_iris;runs/benchmarks/block3_20260203_225620_iris_phase3;runs/benchmarks/block3_20260203_225620_iris_full;runs/benchmarks/block3_20260203_225620_iris_phase7;runs/benchmarks/block3_20260203_225620_phase7;runs/benchmarks/block3_20260203_225620_phase7_v71extreme_20260214_032205;runs/benchmarks/block3_20260203_225620_phase7_v71extreme_20260214_130737 | docs/benchmarks/block3_truth_pack/truth_pack_summary.json |
-| raw_records | 13416 | docs/benchmarks/block3_truth_pack/truth_pack_summary.json |
-| strict_records | 4034 | docs/benchmarks/block3_truth_pack/truth_pack_summary.json |
+| bench_dirs | runs/benchmarks/block3_20260203_225620_iris;runs/benchmarks/block3_20260203_225620_iris_phase3;runs/benchmarks/block3_20260203_225620_iris_full;runs/benchmarks/block3_20260203_225620_iris_phase7;runs/benchmarks/block3_20260203_225620_phase7;runs/benchmarks/block3_20260203_225620_phase7_v71extreme_20260214_032205;runs/benchmarks/block3_20260203_225620_phase7_v71extreme_20260214_130737;runs/benchmarks/block3_20260203_225620_phase7_v72_failure_pool_rerun_heavy_20260219_v72fix_sched | docs/benchmarks/block3_truth_pack/truth_pack_summary.json |
+| raw_records | 13871 | docs/benchmarks/block3_truth_pack/truth_pack_summary.json |
+| strict_records | 4489 | docs/benchmarks/block3_truth_pack/truth_pack_summary.json |
 | legacy_unverified_records | 9382 | docs/benchmarks/block3_truth_pack/truth_pack_summary.json |
 | strict_condition_completion | 104/104 | docs/benchmarks/block3_truth_pack/truth_pack_summary.json |
 | legacy_condition_completion | 104/104 | docs/benchmarks/block3_truth_pack/truth_pack_summary.json |
-| v71_win_rate_vs_v7 | 0.608696 | docs/benchmarks/block3_truth_pack/v71_vs_v7_overlap.csv |
-| v71_median_relative_gain_vs_v7_pct | 0.131639 | docs/benchmarks/block3_truth_pack/v71_vs_v7_overlap.csv |
+| v71_win_rate_vs_v7 | 0.453608 | docs/benchmarks/block3_truth_pack/v71_vs_v7_overlap.csv |
+| v71_median_relative_gain_vs_v7_pct | -0.333876 | docs/benchmarks/block3_truth_pack/v71_vs_v7_overlap.csv |
 | critical_failures | 4 | docs/benchmarks/block3_truth_pack/failure_taxonomy.csv |
 | v72_pilot_overall_pass | false | docs/benchmarks/block3_truth_pack/v72_pilot_gate_report.json |
 | v72_pilot_overlap_keys | 0 | docs/benchmarks/block3_truth_pack/v72_pilot_gate_report.json |
@@ -206,7 +210,7 @@ Derived subtasks are created from target lane semantics and target missingness/c
 <!-- BEGIN AUTO:MODEL_FAMILY_COVERAGE_AUDIT -->
 | category | n_models_registered | n_models_observed_strict | strict_model_coverage_ratio | models_observed_strict | missing_models_strict | condition_wins | condition_win_share | evidence_path |
 |---|---|---|---|---|---|---|---|---|
-| autofit | 12 | 11 | 0.916667 | AutoFitV1;AutoFitV2;AutoFitV2E;AutoFitV3;AutoFitV3E;AutoFitV3Max;AutoFitV4;AutoFitV5;AutoFitV6;AutoFitV7;AutoFitV71 | AutoFitV72 | 0 | 0.000000 | docs/benchmarks/block3_truth_pack/condition_leaderboard.csv |
+| autofit | 12 | 12 | 1.000000 | AutoFitV1;AutoFitV2;AutoFitV2E;AutoFitV3;AutoFitV3E;AutoFitV3Max;AutoFitV4;AutoFitV5;AutoFitV6;AutoFitV7;AutoFitV71;AutoFitV72 |  | 0 | 0.000000 | docs/benchmarks/block3_truth_pack/condition_leaderboard.csv |
 | deep_classical | 4 | 4 | 1.000000 | DeepAR;NBEATS;NHITS;TFT |  | 66 | 0.634615 | docs/benchmarks/block3_truth_pack/condition_leaderboard.csv |
 | foundation | 11 | 10 | 0.909091 | Chronos;ChronosBolt;LagLlama;MOMENT;Moirai;Moirai2;MoiraiLarge;TimeMoE;Timer;TimesFM | Chronos2 | 6 | 0.057692 | docs/benchmarks/block3_truth_pack/condition_leaderboard.csv |
 | irregular | 2 | 0 | 0.000000 |  | GRU-D;SAITS | 0 | 0.000000 | docs/benchmarks/block3_truth_pack/condition_leaderboard.csv |
@@ -352,16 +356,16 @@ Derived subtasks are created from target lane semantics and target missingness/c
 | funding_raised_usd | heavy_tail | ml_tabular | RandomForest | 396360.349 | NHITS | deep_classical | 374432.357 | 5.856329 | runs/benchmarks/block3_20260203_225620_phase7/task1_outcome/ml_tabular/core_edgar/metrics.json |
 | funding_raised_usd | heavy_tail | statistical | SF_SeasonalNaive | 4064930.583 | NHITS | deep_classical | 374432.357 | 985.624814 | runs/benchmarks/block3_20260203_225620_phase7/task1_outcome/statistical/core_edgar/metrics.json |
 | funding_raised_usd | heavy_tail | transformer_sota | NBEATSx | 374514.684 | NHITS | deep_classical | 374432.357 | 0.021987 | runs/benchmarks/block3_20260203_225620_phase7/task1_outcome/transformer_sota/full/metrics.json |
-| investors_count | count | autofit | AutoFitV1 | 125.468632 | NBEATS | deep_classical | 44.726689 | 180.522958 | runs/benchmarks/block3_20260203_225620_phase7/task1_outcome/autofit/full/metrics.json |
+| investors_count | count | autofit | AutoFitV6 | 114.116541 | NBEATS | deep_classical | 44.726689 | 155.141936 | runs/benchmarks/block3_20260203_225620_phase7_v71extreme_20260214_032205/pilot/autofit_baseline/task2_forecast/autofit/core_text/metrics.json |
 | investors_count | count | deep_classical | NBEATS | 44.726689 | NBEATS | deep_classical | 44.726689 | 0.000000 | runs/benchmarks/block3_20260203_225620_phase7_v71extreme_20260214_032205/pilot/deep_refs/task1_outcome/deep_classical/core_only/metrics.json |
 | investors_count | count | foundation | ChronosBolt | 44.992359 | NBEATS | deep_classical | 44.726689 | 0.593984 | runs/benchmarks/block3_20260203_225620_phase7/task1_outcome/foundation/full/metrics.json |
-| investors_count | count | ml_tabular | RandomForest | 97.901537 | NBEATS | deep_classical | 44.726689 | 118.888406 | runs/benchmarks/block3_20260203_225620_phase7/task1_outcome/ml_tabular/core_edgar/metrics.json |
+| investors_count | count | ml_tabular | RandomForest | 95.599464 | NBEATS | deep_classical | 44.726689 | 113.741427 | runs/benchmarks/block3_20260203_225620_phase7_v71extreme_20260214_032205/pilot/ml_refs/task2_forecast/ml_tabular/core_only/metrics.json |
 | investors_count | count | statistical | MSTL | 48.222248 | NBEATS | deep_classical | 44.726689 | 7.815376 | runs/benchmarks/block3_20260203_225620_phase7/task1_outcome/statistical/core_edgar/metrics.json |
 | investors_count | count | transformer_sota | PatchTST | 44.771809 | NBEATS | deep_classical | 44.726689 | 0.100878 | runs/benchmarks/block3_20260203_225620_phase7_v71extreme_20260214_032205/pilot/ts_refs/task1_outcome/transformer_sota/core_only/metrics.json |
 | is_funded | binary | autofit | AutoFitV71 | 0.086412 | NHITS | deep_classical | 0.032248 | 167.958234 | runs/benchmarks/block3_20260203_225620_phase7_v71extreme_20260214_032205/pilot/v71_g02/task1_outcome/autofit/core_text/metrics.json |
 | is_funded | binary | deep_classical | NHITS | 0.032248 | NHITS | deep_classical | 0.032248 | 0.000000 | runs/benchmarks/block3_20260203_225620_phase7_v71extreme_20260214_130737/full/deep_refs/task1_outcome/deep_classical/core_edgar/metrics.json |
 | is_funded | binary | foundation | ChronosBolt | 0.033394 | NHITS | deep_classical | 0.032248 | 3.551434 | runs/benchmarks/block3_20260203_225620_phase7/task1_outcome/foundation/full/metrics.json |
-| is_funded | binary | ml_tabular | ExtraTrees | 0.065715 | NHITS | deep_classical | 0.032248 | 103.777737 | runs/benchmarks/block3_20260203_225620_phase7/task1_outcome/ml_tabular/core_edgar/metrics.json |
+| is_funded | binary | ml_tabular | ExtraTrees | 0.065454 | NHITS | deep_classical | 0.032248 | 102.966498 | runs/benchmarks/block3_20260203_225620_phase7_v71extreme_20260214_032205/pilot/ml_refs/task1_outcome/ml_tabular/core_edgar/metrics.json |
 | is_funded | binary | statistical | SF_SeasonalNaive | 0.046009 | NHITS | deep_classical | 0.032248 | 42.670935 | runs/benchmarks/block3_20260203_225620_phase7/task1_outcome/statistical/core_edgar/metrics.json |
 | is_funded | binary | transformer_sota | PatchTST | 0.032281 | NHITS | deep_classical | 0.032248 | 0.100360 | runs/benchmarks/block3_20260203_225620_phase7/task1_outcome/transformer_sota/full/metrics.json |
 <!-- END AUTO:FAMILY_GAP_MATRIX -->
@@ -710,9 +714,10 @@ Derived subtasks are created from target lane semantics and target missingness/c
 | block3_20260203_225620_iris_phase3 | iris_phase3 | 1750 | 0 | 1750 | 0.000000 | 49 | 7 | 0.000000 | 0.538462 | {} | {} | runs/benchmarks/block3_20260203_225620_iris_phase3 |
 | block3_20260203_225620_iris_full | iris_full_baseline | 2646 | 0 | 2646 | 0.000000 | 49 | 7 | 0.000000 | 0.538462 | {} | {} | runs/benchmarks/block3_20260203_225620_iris_full |
 | block3_20260203_225620_iris_phase7 | iris_phase7_partial | 1060 | 0 | 1060 | 0.000000 | 56 | 6 | 0.000000 | 0.230769 | {} | {} | runs/benchmarks/block3_20260203_225620_iris_phase7 |
-| block3_20260203_225620_phase7 | phase7_canonical | 4969 | 1674 | 3295 | 0.336889 | 68 | 7 | 0.615385 | 1.000000 | {"funding_raised_usd": {"category": "deep_classical", "mae": 374432.35741397936, "model": "NHITS"}, "investors_count": {"category": "transformer_sota", "mae": 44.79163160827051, "model": "NBEATSx"}, "is_funded": {"category": "transformer_sota", "mae": 0.032280800947848576, "model": "PatchTST"}} | {"autofit_gap_gt_100pct": 16} | runs/benchmarks/block3_20260203_225620_phase7 |
-| block3_20260203_225620_phase7_v71extreme_20260214_032205 | v71_pilot | 1248 | 1248 | 0 | 1.000000 | 12 | 4 | 1.000000 | 0.000000 | {"funding_raised_usd": {"category": "deep_classical", "mae": 374432.35741397936, "model": "NHITS"}, "investors_count": {"category": "deep_classical", "mae": 44.726689230844215, "model": "NBEATS"}, "is_funded": {"category": "deep_classical", "mae": 0.03232223233914305, "model": "NHITS"}} | {"autofit_gap_gt_100pct": 44, "v71_count_explosion": 8} | runs/benchmarks/block3_20260203_225620_phase7_v71extreme_20260214_032205 |
+| block3_20260203_225620_phase7 | phase7_canonical | 5134 | 1839 | 3295 | 0.358200 | 68 | 7 | 0.615385 | 1.000000 | {"funding_raised_usd": {"category": "deep_classical", "mae": 374432.35741397936, "model": "NHITS"}, "investors_count": {"category": "transformer_sota", "mae": 44.79163160827051, "model": "NBEATSx"}, "is_funded": {"category": "transformer_sota", "mae": 0.032280800947848576, "model": "PatchTST"}} | {"autofit_gap_gt_100pct": 16} | runs/benchmarks/block3_20260203_225620_phase7 |
+| block3_20260203_225620_phase7_v71extreme_20260214_032205 | v71_pilot | 1530 | 1530 | 0 | 1.000000 | 18 | 5 | 1.000000 | 0.000000 | {"funding_raised_usd": {"category": "deep_classical", "mae": 374432.35741397936, "model": "NHITS"}, "investors_count": {"category": "deep_classical", "mae": 44.726689230844215, "model": "NBEATS"}, "is_funded": {"category": "deep_classical", "mae": 0.03232223233914305, "model": "NHITS"}} | {"autofit_gap_gt_100pct": 44, "v71_count_explosion": 8} | runs/benchmarks/block3_20260203_225620_phase7_v71extreme_20260214_032205 |
 | block3_20260203_225620_phase7_v71extreme_20260214_130737 | v71_full | 1112 | 1112 | 0 | 1.000000 | 12 | 4 | 1.000000 | 0.000000 | {"funding_raised_usd": {"category": "deep_classical", "mae": 374432.3574093943, "model": "NHITS"}, "investors_count": {"category": "deep_classical", "mae": 44.726689230844215, "model": "NBEATS"}, "is_funded": {"category": "deep_classical", "mae": 0.03224843655460842, "model": "NHITS"}} | {} | runs/benchmarks/block3_20260203_225620_phase7_v71extreme_20260214_130737 |
+| block3_20260203_225620_phase7_v72_failure_pool_rerun_heavy_20260219_v72fix_sched | other | 8 | 8 | 0 | 1.000000 | 2 | 1 | 0.038462 | 0.000000 | {"investors_count": {"category": "autofit", "mae": 274.4063475010302, "model": "AutoFitV72"}} | {} | runs/benchmarks/block3_20260203_225620_phase7_v72_failure_pool_rerun_heavy_20260219_v72fix_sched |
 
 ### Observations
 
@@ -728,7 +733,7 @@ Derived subtasks are created from target lane semantics and target missingness/c
 | block3_20260203_225620_iris_phase7 | strict_ratio | Share of strict-comparable records among all valid records. | 0.0000 | runs/benchmarks/block3_20260203_225620_iris_phase7 |
 | block3_20260203_225620_phase7 | failure_tags | Failure taxonomy tags found in this run. | {"autofit_gap_gt_100pct": 16} | docs/benchmarks/block3_truth_pack/failure_taxonomy.csv |
 | block3_20260203_225620_phase7 | strict_condition_coverage | Coverage ratio of expected 104 keys under strict comparability. | 0.6154 | docs/benchmarks/block3_truth_pack/condition_inventory_full.csv |
-| block3_20260203_225620_phase7 | strict_ratio | Share of strict-comparable records among all valid records. | 0.3369 | runs/benchmarks/block3_20260203_225620_phase7 |
+| block3_20260203_225620_phase7 | strict_ratio | Share of strict-comparable records among all valid records. | 0.3582 | runs/benchmarks/block3_20260203_225620_phase7 |
 | block3_20260203_225620_phase7 | target_winners | Best strict model per target for this run. | {"funding_raised_usd": {"category": "deep_classical", "mae": 374432.35741397936, "model": "NHITS"}, "investors_count": {"category": "transformer_sota", "mae": 44.79163160827051, "model": "NBEATSx"}, "is_funded": {"category": "transformer_sota", "mae": 0.032280800947848576, "model": "PatchTST"}} | runs/benchmarks/block3_20260203_225620_phase7 |
 | block3_20260203_225620_phase7_v71extreme_20260214_032205 | failure_tags | Failure taxonomy tags found in this run. | {"autofit_gap_gt_100pct": 44, "v71_count_explosion": 8} | docs/benchmarks/block3_truth_pack/failure_taxonomy.csv |
 | block3_20260203_225620_phase7_v71extreme_20260214_032205 | strict_condition_coverage | Coverage ratio of expected 104 keys under strict comparability. | 1.0000 | docs/benchmarks/block3_truth_pack/condition_inventory_full.csv |
@@ -737,6 +742,9 @@ Derived subtasks are created from target lane semantics and target missingness/c
 | block3_20260203_225620_phase7_v71extreme_20260214_130737 | strict_condition_coverage | Coverage ratio of expected 104 keys under strict comparability. | 1.0000 | docs/benchmarks/block3_truth_pack/condition_inventory_full.csv |
 | block3_20260203_225620_phase7_v71extreme_20260214_130737 | strict_ratio | Share of strict-comparable records among all valid records. | 1.0000 | runs/benchmarks/block3_20260203_225620_phase7_v71extreme_20260214_130737 |
 | block3_20260203_225620_phase7_v71extreme_20260214_130737 | target_winners | Best strict model per target for this run. | {"funding_raised_usd": {"category": "deep_classical", "mae": 374432.3574093943, "model": "NHITS"}, "investors_count": {"category": "deep_classical", "mae": 44.726689230844215, "model": "NBEATS"}, "is_funded": {"category": "deep_classical", "mae": 0.03224843655460842, "model": "NHITS"}} | runs/benchmarks/block3_20260203_225620_phase7_v71extreme_20260214_130737 |
+| block3_20260203_225620_phase7_v72_failure_pool_rerun_heavy_20260219_v72fix_sched | strict_condition_coverage | Coverage ratio of expected 104 keys under strict comparability. | 0.0385 | docs/benchmarks/block3_truth_pack/condition_inventory_full.csv |
+| block3_20260203_225620_phase7_v72_failure_pool_rerun_heavy_20260219_v72fix_sched | strict_ratio | Share of strict-comparable records among all valid records. | 1.0000 | runs/benchmarks/block3_20260203_225620_phase7_v72_failure_pool_rerun_heavy_20260219_v72fix_sched |
+| block3_20260203_225620_phase7_v72_failure_pool_rerun_heavy_20260219_v72fix_sched | target_winners | Best strict model per target for this run. | {"investors_count": {"category": "autofit", "mae": 274.4063475010302, "model": "AutoFitV72"}} | runs/benchmarks/block3_20260203_225620_phase7_v72_failure_pool_rerun_heavy_20260219_v72fix_sched |
 <!-- END AUTO:HISTORICAL_FULL_SCALE_EXPERIMENT_LEDGER -->
 
 ## AutoFit Version Ladder (V1->V7.2)
@@ -746,55 +754,55 @@ Derived subtasks are created from target lane semantics and target missingness/c
 
 | version | commit_hint | core_changes | inspiration_source | measured_targets | median_mae_by_target_json | median_gap_vs_best_non_autofit_json | primary_failure_mode | evidence_path |
 |---|---|---|---|---|---|---|---|---|
-| AutoFitV1 | baseline_pre_phase2 | Data-driven best-single selection with residual correction. | Pragmatic stacked residual correction from tabular ensemble practice. | funding_raised_usd,investors_count | {"funding_raised_usd": 437133.256872579, "investors_count": 125.57232995289112} | {"funding_raised_usd": 16.434181455461236, "investors_count": 180.11623388875137} | high_gap_vs_best_non_autofit | docs/benchmarks/block3_truth_pack/autofit_lineage.csv |
-| AutoFitV2 | 87baa13 | Top-K weighted ensemble by inverse validation MAE. | Classical weighted model averaging. | funding_raised_usd,investors_count | {"funding_raised_usd": 428576.7451847964, "investors_count": 223.17549131231723} | {"funding_raised_usd": 14.458574938530667, "investors_count": 397.74962629363387} | no_critical_failure_observed | docs/benchmarks/block3_truth_pack/autofit_lineage.csv |
-| AutoFitV2E | 87baa13 | Top-K stacking with LightGBM meta-learner. | Stacked generalization. | funding_raised_usd,investors_count | {"funding_raised_usd": 428576.7451214365, "investors_count": 223.17549131231723} | {"funding_raised_usd": 14.457416417249014, "investors_count": 397.74962629363387} | no_critical_failure_observed | docs/benchmarks/block3_truth_pack/autofit_lineage.csv |
-| AutoFitV3 | 320c314 | Temporal CV + greedy/exhaustive subset selection with diversity preference. | Temporal OOF stacking with subset search. | funding_raised_usd,investors_count | {"funding_raised_usd": 395551.5360391488, "investors_count": 166.50003118685348} | {"funding_raised_usd": 5.6403187950616385, "investors_count": 271.3460103249283} | no_critical_failure_observed | docs/benchmarks/block3_truth_pack/autofit_lineage.csv |
-| AutoFitV3E | 320c314 | Top-K stacking variant under V3 temporal CV framework. | OOF-based stacking simplification. | funding_raised_usd,investors_count | {"funding_raised_usd": 429867.6131491412, "investors_count": 203.4130308883478} | {"funding_raised_usd": 14.799557423706112, "investors_count": 354.1317732457614} | no_critical_failure_observed | docs/benchmarks/block3_truth_pack/autofit_lineage.csv |
-| AutoFitV3Max | 320c314 | Exhaustive V3 search with bounded candidate budget. | Combinatorial ensemble search. | funding_raised_usd,investors_count,is_funded | {"funding_raised_usd": 395551.53603914875, "investors_count": 137.26189066319031, "is_funded": 0.10890193145407928} | {"funding_raised_usd": 5.6287077537729875, "investors_count": 206.30815753453794, "is_funded": 237.14540893207106} | high_gap_vs_best_non_autofit | docs/benchmarks/block3_truth_pack/autofit_lineage.csv |
-| AutoFitV4 | c53abf6 | Target transforms + full OOF stacking + diversity-aware selection. | NCL and transform-aware robust stacking. | funding_raised_usd,investors_count,is_funded | {"funding_raised_usd": 426982.25299549487, "investors_count": 196.73855119763763, "is_funded": 0.09019224705267709} | {"funding_raised_usd": 14.02026419206418, "investors_count": 339.1585670395339, "is_funded": 179.22279811298966} | no_critical_failure_observed | docs/benchmarks/block3_truth_pack/autofit_lineage.csv |
-| AutoFitV5 | dce0ff9 | Regime-aware tiered evaluation and collapse detection guard. | Cost-aware routing with monotonic fallback guard. | funding_raised_usd,investors_count,is_funded | {"funding_raised_usd": 395551.53603914875, "investors_count": 252.99398560055954, "is_funded": 0.09947219709664773} | {"funding_raised_usd": 5.6287077537729875, "investors_count": 464.57128211048683, "is_funded": 207.95224767581152} | no_critical_failure_observed | docs/benchmarks/block3_truth_pack/autofit_lineage.csv |
-| AutoFitV6 | ad07032 | Caruana-style greedy ensembling + two-layer stacking + conformal weighting. | AutoGluon-style weighted ensemble with robust transform. | funding_raised_usd,investors_count,is_funded | {"funding_raised_usd": 395551.53603914875, "investors_count": 300.71177668475053, "is_funded": 0.09818964911714113} | {"funding_raised_usd": 5.6287077537729875, "investors_count": 571.0819804651214, "is_funded": 203.98165544432214} | no_critical_failure_observed | docs/benchmarks/block3_truth_pack/autofit_lineage.csv |
-| AutoFitV7 | faafdcf | Data-adapted robust ensemble with missingness/ratio features and repeated temporal CV. | SOTA tabular feature engineering + robust ensemble selection. | funding_raised_usd,investors_count,is_funded | {"funding_raised_usd": 396903.773736582, "investors_count": 267.726448471727, "is_funded": 0.09068313538611147} | {"funding_raised_usd": 5.978160712129488, "investors_count": 497.47043246547696, "is_funded": 180.74252086047545} | no_critical_failure_observed | docs/benchmarks/block3_truth_pack/autofit_lineage.csv |
-| AutoFitV71 | phase7_v71_extreme_branch | Lane-adaptive routing, dynamic thresholds, count-safe mode, anchor and policy logging. | Target-family specialization with fairness-first guards. | funding_raised_usd,investors_count,is_funded | {"funding_raised_usd": 396399.79881869024, "investors_count": 274.4207316624478, "is_funded": 0.08716407382070858} | {"funding_raised_usd": 5.568690813313937, "investors_count": 512.658335534649, "is_funded": 169.91107236916724} | v71_count_explosion | docs/benchmarks/block3_truth_pack/autofit_lineage.csv |
-| AutoFitV72 | planned_not_materialized | Count-safe hardening + champion-anchor + offline policy layer (planned). | Evidence-driven v7.2 design gates. |  | {} | {} | planned_not_materialized | docs/benchmarks/block3_truth_pack/autofit_lineage.csv |
+| AutoFitV1 | baseline_pre_phase2 | Data-driven best-single selection with residual correction. | Pragmatic stacked residual correction from tabular ensemble practice. | funding_raised_usd,investors_count | {"funding_raised_usd": 416746.80273314926, "investors_count": 125.4686315584109} | {"funding_raised_usd": 11.13926909363364, "investors_count": 180.07029688985838} | high_gap_vs_best_non_autofit | docs/benchmarks/block3_truth_pack/autofit_lineage.csv |
+| AutoFitV2 | 87baa13 | Top-K weighted ensemble by inverse validation MAE. | Classical weighted model averaging. | funding_raised_usd,investors_count | {"funding_raised_usd": 429035.75390673813, "investors_count": 223.18594436160748} | {"funding_raised_usd": 14.544737825059162, "investors_count": 398.07183212243416} | no_critical_failure_observed | docs/benchmarks/block3_truth_pack/autofit_lineage.csv |
+| AutoFitV2E | 87baa13 | Top-K stacking with LightGBM meta-learner. | Stacked generalization. | funding_raised_usd,investors_count | {"funding_raised_usd": 429035.56678631355, "investors_count": 223.17549131231723} | {"funding_raised_usd": 14.54296227693379, "investors_count": 398.0295202146263} | no_critical_failure_observed | docs/benchmarks/block3_truth_pack/autofit_lineage.csv |
+| AutoFitV3 | 320c314 | Temporal CV + greedy/exhaustive subset selection with diversity preference. | Temporal OOF stacking with subset search. | funding_raised_usd,investors_count | {"funding_raised_usd": 395955.94231643423, "investors_count": 166.5901593917879} | {"funding_raised_usd": 5.7122780068785906, "investors_count": 271.8469491563099} | no_critical_failure_observed | docs/benchmarks/block3_truth_pack/autofit_lineage.csv |
+| AutoFitV3E | 320c314 | Top-K stacking variant under V3 temporal CV framework. | OOF-based stacking simplification. | funding_raised_usd,investors_count | {"funding_raised_usd": 430407.32656598045, "investors_count": 204.14996378872286} | {"funding_raised_usd": 14.908285029875124, "investors_count": 355.71599809717395} | no_critical_failure_observed | docs/benchmarks/block3_truth_pack/autofit_lineage.csv |
+| AutoFitV3Max | 320c314 | Exhaustive V3 search with bounded candidate budget. | Combinatorial ensemble search. | funding_raised_usd,investors_count,is_funded | {"funding_raised_usd": 396360.34859371965, "investors_count": 137.25314473071458, "is_funded": 0.10890193145407928} | {"funding_raised_usd": 5.784237218695543, "investors_count": 206.3042367132195, "is_funded": 237.22422339168654} | high_gap_vs_best_non_autofit | docs/benchmarks/block3_truth_pack/autofit_lineage.csv |
+| AutoFitV4 | c53abf6 | Target transforms + full OOF stacking + diversity-aware selection. | NCL and transform-aware robust stacking. | funding_raised_usd,investors_count,is_funded | {"funding_raised_usd": 428265.8942024873, "investors_count": 196.73858138376124, "is_funded": 0.09019217803206035} | {"funding_raised_usd": 14.30077913562794, "investors_count": 339.1945823307518, "is_funded": 179.157310539888} | no_critical_failure_observed | docs/benchmarks/block3_truth_pack/autofit_lineage.csv |
+| AutoFitV5 | dce0ff9 | Regime-aware tiered evaluation and collapse detection guard. | Cost-aware routing with monotonic fallback guard. | funding_raised_usd,investors_count,is_funded | {"funding_raised_usd": 396360.34859371965, "investors_count": 252.99398560055954, "is_funded": 0.09947219709664773} | {"funding_raised_usd": 5.784237218695543, "investors_count": 464.57128211048683, "is_funded": 208.02423765207965} | no_critical_failure_observed | docs/benchmarks/block3_truth_pack/autofit_lineage.csv |
+| AutoFitV6 | ad07032 | Caruana-style greedy ensembling + two-layer stacking + conformal weighting. | AutoGluon-style weighted ensemble with robust transform. | funding_raised_usd,investors_count,is_funded | {"funding_raised_usd": 396360.34859371965, "investors_count": 300.71177668475053, "is_funded": 0.09818964911714113} | {"funding_raised_usd": 5.6403187950616385, "investors_count": 571.0564004342739, "is_funded": 203.91059367313343} | high_gap_vs_best_non_autofit | docs/benchmarks/block3_truth_pack/autofit_lineage.csv |
+| AutoFitV7 | faafdcf | Data-adapted robust ensemble with missingness/ratio features and repeated temporal CV. | SOTA tabular feature engineering + robust ensemble selection. | funding_raised_usd,investors_count,is_funded | {"funding_raised_usd": 397006.3727232514, "investors_count": 267.726448471727, "is_funded": 0.09068313538611147} | {"funding_raised_usd": 5.90463673324555, "investors_count": 497.61730862455914, "is_funded": 181.20164905530132} | high_gap_vs_best_non_autofit | docs/benchmarks/block3_truth_pack/autofit_lineage.csv |
+| AutoFitV71 | phase7_v71_extreme_branch | Lane-adaptive routing, dynamic thresholds, count-safe mode, anchor and policy logging. | Target-family specialization with fairness-first guards. | funding_raised_usd,investors_count,is_funded | {"funding_raised_usd": 396399.79881869024, "investors_count": 274.42056977394475, "is_funded": 0.08716407382070858} | {"funding_raised_usd": 5.568690813313937, "investors_count": 512.6576866110931, "is_funded": 169.91107236916724} | v71_count_explosion | docs/benchmarks/block3_truth_pack/autofit_lineage.csv |
+| AutoFitV72 | planned_not_materialized | Count-safe hardening + champion-anchor + offline policy layer (planned). | Evidence-driven v7.2 design gates. | investors_count | {"investors_count": 274.40715326426096} | {"investors_count": 512.4429864117574} | planned_not_materialized | docs/benchmarks/block3_truth_pack/autofit_lineage.csv |
 
 ### Step Deltas
 
 | from_version | to_version | target | overlap_keys | median_mae_delta_pct | median_gap_delta_pct | evidence_path |
 |---|---|---|---|---|---|---|
-| AutoFitV1 | AutoFitV2 | funding_raised_usd | 22 | -1.957415 | -2.280131 | docs/benchmarks/block3_truth_pack/autofit_step_deltas.csv |
-| AutoFitV1 | AutoFitV2 | investors_count | 9 | 77.726647 | 217.684912 | docs/benchmarks/block3_truth_pack/autofit_step_deltas.csv |
+| AutoFitV1 | AutoFitV2 | funding_raised_usd | 24 | 3.201127 | 3.283085 | docs/benchmarks/block3_truth_pack/autofit_step_deltas.csv |
+| AutoFitV1 | AutoFitV2 | investors_count | 15 | 77.881867 | 218.062056 | docs/benchmarks/block3_truth_pack/autofit_step_deltas.csv |
 | AutoFitV1 | AutoFitV2 | is_funded | 0 |  |  | docs/benchmarks/block3_truth_pack/autofit_step_deltas.csv |
-| AutoFitV2 | AutoFitV2E | funding_raised_usd | 22 | -0.000000 | -0.000000 | docs/benchmarks/block3_truth_pack/autofit_step_deltas.csv |
-| AutoFitV2 | AutoFitV2E | investors_count | 9 | 0.000000 | 0.000000 | docs/benchmarks/block3_truth_pack/autofit_step_deltas.csv |
+| AutoFitV2 | AutoFitV2E | funding_raised_usd | 24 | -0.000000 | -0.000000 | docs/benchmarks/block3_truth_pack/autofit_step_deltas.csv |
+| AutoFitV2 | AutoFitV2E | investors_count | 15 | 0.000000 | 0.000000 | docs/benchmarks/block3_truth_pack/autofit_step_deltas.csv |
 | AutoFitV2 | AutoFitV2E | is_funded | 0 |  |  | docs/benchmarks/block3_truth_pack/autofit_step_deltas.csv |
-| AutoFitV2E | AutoFitV3 | funding_raised_usd | 22 | -7.705787 | -8.818195 | docs/benchmarks/block3_truth_pack/autofit_step_deltas.csv |
-| AutoFitV2E | AutoFitV3 | investors_count | 9 | -25.357559 | -126.301710 | docs/benchmarks/block3_truth_pack/autofit_step_deltas.csv |
+| AutoFitV2E | AutoFitV3 | funding_raised_usd | 24 | -7.710224 | -8.830684 | docs/benchmarks/block3_truth_pack/autofit_step_deltas.csv |
+| AutoFitV2E | AutoFitV3 | investors_count | 15 | -25.342449 | -126.053120 | docs/benchmarks/block3_truth_pack/autofit_step_deltas.csv |
 | AutoFitV2E | AutoFitV3 | is_funded | 0 |  |  | docs/benchmarks/block3_truth_pack/autofit_step_deltas.csv |
-| AutoFitV3 | AutoFitV3E | funding_raised_usd | 22 | 8.675501 | 9.162008 | docs/benchmarks/block3_truth_pack/autofit_step_deltas.csv |
-| AutoFitV3 | AutoFitV3E | investors_count | 9 | 22.467430 | 83.313365 | docs/benchmarks/block3_truth_pack/autofit_step_deltas.csv |
+| AutoFitV3 | AutoFitV3E | funding_raised_usd | 24 | 8.700787 | 9.196811 | docs/benchmarks/block3_truth_pack/autofit_step_deltas.csv |
+| AutoFitV3 | AutoFitV3E | investors_count | 15 | 22.538691 | 83.826466 | docs/benchmarks/block3_truth_pack/autofit_step_deltas.csv |
 | AutoFitV3 | AutoFitV3E | is_funded | 0 |  |  | docs/benchmarks/block3_truth_pack/autofit_step_deltas.csv |
-| AutoFitV3E | AutoFitV3Max | funding_raised_usd | 10 | -7.979787 | -9.157229 | docs/benchmarks/block3_truth_pack/autofit_step_deltas.csv |
-| AutoFitV3E | AutoFitV3Max | investors_count | 1 | -32.495409 | -147.367977 | docs/benchmarks/block3_truth_pack/autofit_step_deltas.csv |
+| AutoFitV3E | AutoFitV3Max | funding_raised_usd | 20 | -8.025776 | -9.231988 | docs/benchmarks/block3_truth_pack/autofit_step_deltas.csv |
+| AutoFitV3E | AutoFitV3Max | investors_count | 11 | -32.787017 | -149.437749 | docs/benchmarks/block3_truth_pack/autofit_step_deltas.csv |
 | AutoFitV3E | AutoFitV3Max | is_funded | 0 |  |  | docs/benchmarks/block3_truth_pack/autofit_step_deltas.csv |
-| AutoFitV3Max | AutoFitV4 | funding_raised_usd | 12 | 7.946049 | 8.391517 | docs/benchmarks/block3_truth_pack/autofit_step_deltas.csv |
-| AutoFitV3Max | AutoFitV4 | investors_count | 9 | 43.330789 | 132.763431 | docs/benchmarks/block3_truth_pack/autofit_step_deltas.csv |
-| AutoFitV3Max | AutoFitV4 | is_funded | 2 | -17.180305 | -57.922611 | docs/benchmarks/block3_truth_pack/autofit_step_deltas.csv |
-| AutoFitV4 | AutoFitV5 | funding_raised_usd | 12 | -7.361130 | -8.391517 | docs/benchmarks/block3_truth_pack/autofit_step_deltas.csv |
-| AutoFitV4 | AutoFitV5 | investors_count | 9 | 28.594007 | 125.573030 | docs/benchmarks/block3_truth_pack/autofit_step_deltas.csv |
-| AutoFitV4 | AutoFitV5 | is_funded | 2 | 10.289077 | 28.729450 | docs/benchmarks/block3_truth_pack/autofit_step_deltas.csv |
-| AutoFitV5 | AutoFitV6 | funding_raised_usd | 12 | 0.000000 | 0.000000 | docs/benchmarks/block3_truth_pack/autofit_step_deltas.csv |
-| AutoFitV5 | AutoFitV6 | investors_count | 9 | 18.861235 | 106.515356 | docs/benchmarks/block3_truth_pack/autofit_step_deltas.csv |
-| AutoFitV5 | AutoFitV6 | is_funded | 2 | -1.289353 | -3.970592 | docs/benchmarks/block3_truth_pack/autofit_step_deltas.csv |
-| AutoFitV6 | AutoFitV7 | funding_raised_usd | 12 | 0.341861 | 0.360343 | docs/benchmarks/block3_truth_pack/autofit_step_deltas.csv |
-| AutoFitV6 | AutoFitV7 | investors_count | 9 | -10.969084 | -73.611548 | docs/benchmarks/block3_truth_pack/autofit_step_deltas.csv |
-| AutoFitV6 | AutoFitV7 | is_funded | 2 | -7.644913 | -23.239135 | docs/benchmarks/block3_truth_pack/autofit_step_deltas.csv |
-| AutoFitV7 | AutoFitV71 | funding_raised_usd | 12 | -0.131639 | -0.139524 | docs/benchmarks/block3_truth_pack/autofit_step_deltas.csv |
-| AutoFitV7 | AutoFitV71 | investors_count | 9 | 2.500023 | 14.938281 | docs/benchmarks/block3_truth_pack/autofit_step_deltas.csv |
-| AutoFitV7 | AutoFitV71 | is_funded | 2 | -3.880613 | -10.894531 | docs/benchmarks/block3_truth_pack/autofit_step_deltas.csv |
+| AutoFitV3Max | AutoFitV4 | funding_raised_usd | 20 | 8.049631 | 8.516542 | docs/benchmarks/block3_truth_pack/autofit_step_deltas.csv |
+| AutoFitV3Max | AutoFitV4 | investors_count | 20 | 43.330811 | 132.774319 | docs/benchmarks/block3_truth_pack/autofit_step_deltas.csv |
+| AutoFitV3Max | AutoFitV4 | is_funded | 3 | -17.180369 | -57.935938 | docs/benchmarks/block3_truth_pack/autofit_step_deltas.csv |
+| AutoFitV4 | AutoFitV5 | funding_raised_usd | 20 | -7.449938 | -8.516542 | docs/benchmarks/block3_truth_pack/autofit_step_deltas.csv |
+| AutoFitV4 | AutoFitV5 | investors_count | 20 | 28.593987 | 125.583328 | docs/benchmarks/block3_truth_pack/autofit_step_deltas.csv |
+| AutoFitV4 | AutoFitV5 | is_funded | 3 | 10.289162 | 28.735952 | docs/benchmarks/block3_truth_pack/autofit_step_deltas.csv |
+| AutoFitV5 | AutoFitV6 | funding_raised_usd | 20 | 0.000000 | 0.000000 | docs/benchmarks/block3_truth_pack/autofit_step_deltas.csv |
+| AutoFitV5 | AutoFitV6 | investors_count | 20 | 18.861235 | 106.515356 | docs/benchmarks/block3_truth_pack/autofit_step_deltas.csv |
+| AutoFitV5 | AutoFitV6 | is_funded | 3 | -1.289353 | -3.971520 | docs/benchmarks/block3_truth_pack/autofit_step_deltas.csv |
+| AutoFitV6 | AutoFitV7 | funding_raised_usd | 44 | 0.162989 | 0.172332 | docs/benchmarks/block3_truth_pack/autofit_step_deltas.csv |
+| AutoFitV6 | AutoFitV7 | investors_count | 37 | -10.969084 | -73.567374 | docs/benchmarks/block3_truth_pack/autofit_step_deltas.csv |
+| AutoFitV6 | AutoFitV7 | is_funded | 16 | -2.661028 | -8.217297 | docs/benchmarks/block3_truth_pack/autofit_step_deltas.csv |
+| AutoFitV7 | AutoFitV71 | funding_raised_usd | 44 | -0.131639 | -0.139524 | docs/benchmarks/block3_truth_pack/autofit_step_deltas.csv |
+| AutoFitV7 | AutoFitV71 | investors_count | 37 | 2.500120 | 14.940451 | docs/benchmarks/block3_truth_pack/autofit_step_deltas.csv |
+| AutoFitV7 | AutoFitV71 | is_funded | 16 | -8.265286 | -24.399714 | docs/benchmarks/block3_truth_pack/autofit_step_deltas.csv |
 | AutoFitV71 | AutoFitV72 | funding_raised_usd | 0 |  |  | docs/benchmarks/block3_truth_pack/autofit_step_deltas.csv |
-| AutoFitV71 | AutoFitV72 | investors_count | 0 |  |  | docs/benchmarks/block3_truth_pack/autofit_step_deltas.csv |
+| AutoFitV71 | AutoFitV72 | investors_count | 4 | 0.000074 | 0.000456 | docs/benchmarks/block3_truth_pack/autofit_step_deltas.csv |
 | AutoFitV71 | AutoFitV72 | is_funded | 0 |  |  | docs/benchmarks/block3_truth_pack/autofit_step_deltas.csv |
 <!-- END AUTO:AUTOFIT_VERSION_LADDER -->
 
@@ -853,31 +861,31 @@ Snapshot timestamp is absolute and all queue conclusions are time-bounded.
 
 | metric | value | evidence_path |
 |---|---|---|
-| snapshot_ts | 2026-02-18T23:47:26.146249+00:00 | docs/benchmarks/block3_truth_pack/slurm_snapshot.json |
+| snapshot_ts | 2026-02-21T22:19:00.241471+00:00 | docs/benchmarks/block3_truth_pack/slurm_snapshot.json |
 | running_total | 8 | docs/benchmarks/block3_truth_pack/slurm_snapshot.json |
-| pending_total | 103 | docs/benchmarks/block3_truth_pack/slurm_snapshot.json |
+| pending_total | 77 | docs/benchmarks/block3_truth_pack/slurm_snapshot.json |
 | running_by_partition | {"batch": 8} | docs/benchmarks/block3_truth_pack/slurm_snapshot.json |
-| pending_by_partition | {"batch": 95, "gpu": 8} | docs/benchmarks/block3_truth_pack/slurm_snapshot.json |
+| pending_by_partition | {"batch": 69, "gpu": 8} | docs/benchmarks/block3_truth_pack/slurm_snapshot.json |
 
 ### Pending Reasons
 
 | reason | count | evidence_path |
 |---|---|---|
-| (JobHeldUser) | 99 | docs/benchmarks/block3_truth_pack/slurm_snapshot.json |
-| (QOSMaxJobsPerUserLimit) | 4 | docs/benchmarks/block3_truth_pack/slurm_snapshot.json |
+| (QOSMaxJobsPerUserLimit) | 69 | docs/benchmarks/block3_truth_pack/slurm_snapshot.json |
+| (QOSGrpNodeLimit) | 8 | docs/benchmarks/block3_truth_pack/slurm_snapshot.json |
 
 ### Prefix Status (p7/p7r/p7x/p7xF)
 
 | prefix | source | state_counts | evidence_path |
 |---|---|---|---|
-| p7 | squeue | {"PENDING": 1, "RUNNING": 8} | docs/benchmarks/block3_truth_pack/slurm_snapshot.json |
-| p7r | squeue | {"PENDING": 6} | docs/benchmarks/block3_truth_pack/slurm_snapshot.json |
-| p7x | squeue | {"PENDING": 66} | docs/benchmarks/block3_truth_pack/slurm_snapshot.json |
+| p7 | squeue | {"PENDING": 1} | docs/benchmarks/block3_truth_pack/slurm_snapshot.json |
+| p7r | squeue | {"PENDING": 3, "RUNNING": 3} | docs/benchmarks/block3_truth_pack/slurm_snapshot.json |
+| p7x | squeue | {"PENDING": 43, "RUNNING": 5} | docs/benchmarks/block3_truth_pack/slurm_snapshot.json |
 | p7xF | squeue | {"PENDING": 30} | docs/benchmarks/block3_truth_pack/slurm_snapshot.json |
-| p7 | sacct | {"CANCELLED": 66, "COMPLETED": 173, "FAILED": 8, "OUT_OF_ME": 4, "RUNNING": 8} | docs/benchmarks/block3_truth_pack/slurm_snapshot.json |
-| p7r | sacct | {"PENDING": 4} | docs/benchmarks/block3_truth_pack/slurm_snapshot.json |
-| p7x | sacct | {"COMPLETED": 55} | docs/benchmarks/block3_truth_pack/slurm_snapshot.json |
-| p7xF | sacct | {"COMPLETED": 47} | docs/benchmarks/block3_truth_pack/slurm_snapshot.json |
+| p7 | sacct | {"CANCELLED": 66, "COMPLETED": 177, "FAILED": 12, "OUT_OF_ME": 4, "PENDING": 1} | docs/benchmarks/block3_truth_pack/slurm_snapshot.json |
+| p7r | sacct | {"CANCELLED": 4, "COMPLETED": 4, "PENDING": 3, "RUNNING": 3} | docs/benchmarks/block3_truth_pack/slurm_snapshot.json |
+| p7x | sacct | {"COMPLETED": 73, "PENDING": 43, "RUNNING": 5} | docs/benchmarks/block3_truth_pack/slurm_snapshot.json |
+| p7xF | sacct | {"COMPLETED": 47, "PENDING": 30} | docs/benchmarks/block3_truth_pack/slurm_snapshot.json |
 
 ### Collection Commands
 

@@ -6,8 +6,8 @@
 # Fixed scope:
 #   task1_outcome / core_edgar / investors_count / horizon in {1,7,14,30}
 #
-# Resource profile (Heavy+safe):
-#   partition=batch, qos=iris-batch-long, mem=160G, cpus=24
+# Resource profile (Heavy+schedulable on Iris batch):
+#   partition=batch, qos=iris-batch-long, mem=112G, cpus=28
 #
 # Usage:
 #   bash scripts/submit_v72_failure_pool_rerun_heavy.sh --dry-run
@@ -41,8 +41,8 @@ ACCOUNT="${SLURM_ACCOUNT:-yves.letraon}"
 PARTITION="batch"
 QOS="iris-batch-long"
 TIME_LIMIT="4-00:00:00"
-MEMORY="160G"
-CPUS="24"
+MEMORY="${V72_FAILURE_POOL_MEM:-112G}"
+CPUS="${V72_FAILURE_POOL_CPUS:-28}"
 SEED="42"
 PRESET="full"
 MODELS="AutoFitV71,AutoFitV72"
@@ -51,6 +51,36 @@ OUTPUT_BASE="runs/benchmarks/block3_${STAMP}_phase7_v72_failure_pool_rerun_heavy
 SLURM_DIR="${REPO}/.slurm_scripts/v72_failure_pool_rerun_heavy_${RUN_TAG}"
 LOG_DIR="/work/projects/eint/logs/v72_failure_pool_rerun_heavy_${RUN_TAG}"
 mkdir -p "${SLURM_DIR}" "${LOG_DIR}"
+
+parse_mem_to_mb() {
+    local mem="$1"
+    if [[ "${mem}" =~ ^([0-9]+)[Gg]$ ]]; then
+        echo "$(( ${BASH_REMATCH[1]} * 1024 ))"
+        return 0
+    fi
+    if [[ "${mem}" =~ ^([0-9]+)[Mm]$ ]]; then
+        echo "${BASH_REMATCH[1]}"
+        return 0
+    fi
+    echo "Unsupported memory format: ${mem}" >&2
+    return 1
+}
+
+batch_mem_guard() {
+    if ! command -v sinfo >/dev/null 2>&1; then
+        return 0
+    fi
+    local min_mem_mb req_mem_mb
+    min_mem_mb="$(sinfo -p "${PARTITION}" -h -o "%m" | awk 'NR==1{m=$1} $1<m{m=$1} END{print m+0}')"
+    req_mem_mb="$(parse_mem_to_mb "${MEMORY}")"
+    if [[ -n "${min_mem_mb}" ]] && (( req_mem_mb > min_mem_mb )); then
+        echo "FATAL: Requested mem=${MEMORY} exceeds ${PARTITION} node memory cap (${min_mem_mb}MB)." >&2
+        echo "Hint: export V72_FAILURE_POOL_MEM=112G (or <= node cap)." >&2
+        exit 2
+    fi
+}
+
+batch_mem_guard
 
 ENV_BLOCK='
 export MAMBA_ROOT_PREFIX=/mnt/aiongpfs/projects/eint/envs/.micromamba
@@ -78,7 +108,7 @@ submit_one() {
 #SBATCH --output=${LOG_DIR}/${job}_%j.out
 #SBATCH --error=${LOG_DIR}/${job}_%j.err
 #SBATCH --export=ALL
-#SBATCH --signal=B:USR1@120
+#SBATCH --signal=USR1@120
 
 set -euo pipefail
 ${ENV_BLOCK}
@@ -122,4 +152,3 @@ for h in 1 7 14 30; do
 done
 
 echo "Done."
-

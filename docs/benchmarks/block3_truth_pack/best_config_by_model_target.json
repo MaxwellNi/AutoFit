@@ -1,0 +1,1044 @@
+{
+  "generated_at_utc": "2026-02-18T23:42:37.440736+00:00",
+  "selection_scope": "train_val_oof_only",
+  "search_budget_per_model": 96,
+  "targets": {
+    "funding_raised_usd": {
+      "AutoFitV72": {
+        "target_family": "heavy_tail",
+        "category": "unknown",
+        "status": "planned",
+        "search_budget": 96,
+        "trials_executed": 0,
+        "best_config": {
+          "top_k": 8,
+          "search_budget": 96,
+          "dynamic_weighting": true,
+          "count_safe_mode": true,
+          "champion_anchor": true
+        },
+        "best_mae_observed_strict": null,
+        "search_space": {
+          "top_k": [
+            6,
+            8,
+            10
+          ],
+          "search_budget": [
+            96
+          ],
+          "dynamic_weighting": [
+            true
+          ],
+          "count_safe_mode": [
+            true
+          ],
+          "champion_anchor": [
+            true
+          ]
+        },
+        "evidence_path": "docs/benchmarks/block3_truth_pack/condition_leaderboard.csv"
+      },
+      "PatchTST": {
+        "target_family": "heavy_tail",
+        "category": "transformer_sota",
+        "status": "planned_with_evidence",
+        "search_budget": 96,
+        "trials_executed": 0,
+        "best_config": {
+          "max_steps": 2000,
+          "learning_rate": 0.0003,
+          "dropout": 0.1,
+          "hidden_size": 128
+        },
+        "best_mae_observed_strict": 374564.44013368135,
+        "search_space": {
+          "max_steps": [
+            1000,
+            2000,
+            3000
+          ],
+          "learning_rate": [
+            0.0001,
+            0.0003,
+            0.001
+          ],
+          "dropout": [
+            0.0,
+            0.1,
+            0.2
+          ],
+          "hidden_size": [
+            64,
+            128,
+            256
+          ]
+        },
+        "evidence_path": "/mnt/aiongpfs/projects/eint/runs/benchmarks/block3_20260203_225620_phase7/task1_outcome/transformer_sota/full/metrics.json"
+      },
+      "NHITS": {
+        "target_family": "heavy_tail",
+        "category": "deep_classical",
+        "status": "planned_with_evidence",
+        "search_budget": 96,
+        "trials_executed": 0,
+        "best_config": {
+          "max_steps": 2000,
+          "learning_rate": 0.0003,
+          "dropout_prob_theta": 0.1
+        },
+        "best_mae_observed_strict": 374432.3574093943,
+        "search_space": {
+          "max_steps": [
+            1000,
+            2000,
+            3000
+          ],
+          "learning_rate": [
+            0.0001,
+            0.0003,
+            0.001
+          ],
+          "dropout_prob_theta": [
+            0.0,
+            0.1,
+            0.2
+          ]
+        },
+        "evidence_path": "/mnt/aiongpfs/projects/eint/runs/benchmarks/block3_20260203_225620_phase7_v71extreme_20260214_130737/full/deep_refs/task1_outcome/deep_classical/core_edgar/metrics.json"
+      },
+      "NBEATS": {
+        "target_family": "heavy_tail",
+        "category": "deep_classical",
+        "status": "planned_with_evidence",
+        "search_budget": 96,
+        "trials_executed": 0,
+        "best_config": {
+          "max_steps": 2000,
+          "learning_rate": 0.0003,
+          "dropout_prob_theta": 0.1
+        },
+        "best_mae_observed_strict": 374514.6840344768,
+        "search_space": {
+          "max_steps": [
+            1000,
+            2000,
+            3000
+          ],
+          "learning_rate": [
+            0.0001,
+            0.0003,
+            0.001
+          ],
+          "dropout_prob_theta": [
+            0.0,
+            0.1,
+            0.2
+          ]
+        },
+        "evidence_path": "/mnt/aiongpfs/projects/eint/runs/benchmarks/block3_20260203_225620_phase7_v71extreme_20260214_130737/full/deep_refs/task3_risk_adjust/deep_classical/full/metrics.json"
+      },
+      "Chronos": {
+        "target_family": "heavy_tail",
+        "category": "foundation",
+        "status": "planned_with_evidence",
+        "search_budget": 96,
+        "trials_executed": 0,
+        "best_config": {
+          "num_samples": 50,
+          "temperature": 0.9
+        },
+        "best_mae_observed_strict": 374610.31410290516,
+        "search_space": {
+          "prediction_length": [
+            1,
+            7,
+            14,
+            30
+          ],
+          "num_samples": [
+            20,
+            50,
+            100
+          ],
+          "temperature": [
+            0.7,
+            0.9,
+            1.0
+          ]
+        },
+        "evidence_path": "/mnt/aiongpfs/projects/eint/runs/benchmarks/block3_20260203_225620_phase7/task1_outcome/foundation/full/metrics.json"
+      },
+      "Moirai2": {
+        "target_family": "heavy_tail",
+        "category": "foundation",
+        "status": "planned_with_evidence",
+        "search_budget": 96,
+        "trials_executed": 0,
+        "best_config": {
+          "num_samples": 50,
+          "temperature": 0.9
+        },
+        "best_mae_observed_strict": 446570.6359553115,
+        "search_space": {
+          "prediction_length": [
+            1,
+            7,
+            14,
+            30
+          ],
+          "num_samples": [
+            20,
+            50,
+            100
+          ],
+          "temperature": [
+            0.7,
+            0.9,
+            1.0
+          ]
+        },
+        "evidence_path": "/mnt/aiongpfs/projects/eint/runs/benchmarks/block3_20260203_225620_phase7_v71extreme_20260214_032205/pilot/foundation_refs/task1_outcome/foundation/core_only/metrics.json"
+      },
+      "LightGBM": {
+        "target_family": "heavy_tail",
+        "category": "ml_tabular",
+        "status": "planned_with_evidence",
+        "search_budget": 96,
+        "trials_executed": 0,
+        "best_config": {
+          "learning_rate": 0.03,
+          "num_leaves": 127,
+          "min_child_samples": 40,
+          "feature_fraction": 0.85,
+          "bagging_fraction": 0.9
+        },
+        "best_mae_observed_strict": 510180.29051876476,
+        "search_space": {
+          "learning_rate": [
+            0.01,
+            0.03,
+            0.05
+          ],
+          "num_leaves": [
+            63,
+            127,
+            255
+          ],
+          "min_child_samples": [
+            20,
+            40,
+            80
+          ],
+          "feature_fraction": [
+            0.7,
+            0.85,
+            1.0
+          ],
+          "bagging_fraction": [
+            0.7,
+            0.9,
+            1.0
+          ]
+        },
+        "evidence_path": "/mnt/aiongpfs/projects/eint/runs/benchmarks/block3_20260203_225620_phase7/task3_risk_adjust/ml_tabular/core_edgar/metrics.json"
+      },
+      "XGBoost": {
+        "target_family": "heavy_tail",
+        "category": "ml_tabular",
+        "status": "planned_with_evidence",
+        "search_budget": 96,
+        "trials_executed": 0,
+        "best_config": {
+          "learning_rate": 0.03,
+          "max_depth": 8,
+          "min_child_weight": 2.0,
+          "subsample": 0.85,
+          "colsample_bytree": 0.85
+        },
+        "best_mae_observed_strict": 477212.6570808882,
+        "search_space": {
+          "learning_rate": [
+            0.01,
+            0.03,
+            0.05
+          ],
+          "max_depth": [
+            6,
+            8,
+            10
+          ],
+          "min_child_weight": [
+            1.0,
+            2.0,
+            4.0
+          ],
+          "subsample": [
+            0.7,
+            0.85,
+            1.0
+          ],
+          "colsample_bytree": [
+            0.7,
+            0.85,
+            1.0
+          ]
+        },
+        "evidence_path": "/mnt/aiongpfs/projects/eint/runs/benchmarks/block3_20260203_225620_phase7/task1_outcome/ml_tabular/core_edgar/metrics.json"
+      },
+      "CatBoost": {
+        "target_family": "heavy_tail",
+        "category": "ml_tabular",
+        "status": "planned_with_evidence",
+        "search_budget": 96,
+        "trials_executed": 0,
+        "best_config": {
+          "learning_rate": 0.03,
+          "depth": 8,
+          "l2_leaf_reg": 6.0,
+          "bagging_temperature": 1.0
+        },
+        "best_mae_observed_strict": 586123.943694678,
+        "search_space": {
+          "learning_rate": [
+            0.01,
+            0.03,
+            0.05
+          ],
+          "depth": [
+            6,
+            8,
+            10
+          ],
+          "l2_leaf_reg": [
+            3.0,
+            6.0,
+            12.0
+          ],
+          "bagging_temperature": [
+            0.0,
+            1.0,
+            2.0
+          ]
+        },
+        "evidence_path": "/mnt/aiongpfs/projects/eint/runs/benchmarks/block3_20260203_225620_phase7/task1_outcome/ml_tabular/core_edgar/metrics.json"
+      },
+      "TabPFNRegressor": {
+        "target_family": "heavy_tail",
+        "category": "unknown",
+        "status": "planned",
+        "search_budget": 96,
+        "trials_executed": 0,
+        "best_config": {
+          "ensemble_size": 16,
+          "subsample": 10000
+        },
+        "best_mae_observed_strict": null,
+        "search_space": {
+          "n_estimators": [
+            1
+          ],
+          "ensemble_size": [
+            8,
+            16,
+            32
+          ],
+          "subsample": [
+            5000,
+            10000,
+            20000
+          ]
+        },
+        "evidence_path": "docs/benchmarks/block3_truth_pack/condition_leaderboard.csv"
+      }
+    },
+    "investors_count": {
+      "AutoFitV72": {
+        "target_family": "count",
+        "category": "unknown",
+        "status": "planned",
+        "search_budget": 96,
+        "trials_executed": 0,
+        "best_config": {
+          "top_k": 8,
+          "search_budget": 96,
+          "dynamic_weighting": true,
+          "count_safe_mode": true,
+          "champion_anchor": true
+        },
+        "best_mae_observed_strict": null,
+        "search_space": {
+          "top_k": [
+            6,
+            8,
+            10
+          ],
+          "search_budget": [
+            96
+          ],
+          "dynamic_weighting": [
+            true
+          ],
+          "count_safe_mode": [
+            true
+          ],
+          "champion_anchor": [
+            true
+          ]
+        },
+        "evidence_path": "docs/benchmarks/block3_truth_pack/condition_leaderboard.csv"
+      },
+      "NHITS": {
+        "target_family": "count",
+        "category": "deep_classical",
+        "status": "planned_with_evidence",
+        "search_budget": 96,
+        "trials_executed": 0,
+        "best_config": {
+          "max_steps": 2000,
+          "learning_rate": 0.0003,
+          "dropout_prob_theta": 0.1
+        },
+        "best_mae_observed_strict": 44.738015213673336,
+        "search_space": {
+          "max_steps": [
+            1000,
+            2000,
+            3000
+          ],
+          "learning_rate": [
+            0.0001,
+            0.0003,
+            0.001
+          ],
+          "dropout_prob_theta": [
+            0.0,
+            0.1,
+            0.2
+          ]
+        },
+        "evidence_path": "/mnt/aiongpfs/projects/eint/runs/benchmarks/block3_20260203_225620_phase7_v71extreme_20260214_032205/pilot/deep_refs/task1_outcome/deep_classical/core_only/metrics.json"
+      },
+      "NBEATS": {
+        "target_family": "count",
+        "category": "deep_classical",
+        "status": "planned_with_evidence",
+        "search_budget": 96,
+        "trials_executed": 0,
+        "best_config": {
+          "max_steps": 2000,
+          "learning_rate": 0.0003,
+          "dropout_prob_theta": 0.1
+        },
+        "best_mae_observed_strict": 44.726689230844215,
+        "search_space": {
+          "max_steps": [
+            1000,
+            2000,
+            3000
+          ],
+          "learning_rate": [
+            0.0001,
+            0.0003,
+            0.001
+          ],
+          "dropout_prob_theta": [
+            0.0,
+            0.1,
+            0.2
+          ]
+        },
+        "evidence_path": "/mnt/aiongpfs/projects/eint/runs/benchmarks/block3_20260203_225620_phase7_v71extreme_20260214_032205/pilot/deep_refs/task1_outcome/deep_classical/core_only/metrics.json"
+      },
+      "PatchTST": {
+        "target_family": "count",
+        "category": "transformer_sota",
+        "status": "planned_with_evidence",
+        "search_budget": 96,
+        "trials_executed": 0,
+        "best_config": {
+          "max_steps": 2000,
+          "learning_rate": 0.0003,
+          "dropout": 0.1,
+          "hidden_size": 128
+        },
+        "best_mae_observed_strict": 44.77180869366277,
+        "search_space": {
+          "max_steps": [
+            1000,
+            2000,
+            3000
+          ],
+          "learning_rate": [
+            0.0001,
+            0.0003,
+            0.001
+          ],
+          "dropout": [
+            0.0,
+            0.1,
+            0.2
+          ],
+          "hidden_size": [
+            64,
+            128,
+            256
+          ]
+        },
+        "evidence_path": "/mnt/aiongpfs/projects/eint/runs/benchmarks/block3_20260203_225620_phase7_v71extreme_20260214_032205/pilot/ts_refs/task1_outcome/transformer_sota/core_only/metrics.json"
+      },
+      "iTransformer": {
+        "target_family": "count",
+        "category": "transformer_sota",
+        "status": "planned_with_evidence",
+        "search_budget": 96,
+        "trials_executed": 0,
+        "best_config": {
+          "max_steps": 2000,
+          "learning_rate": 0.0003,
+          "dropout": 0.1,
+          "d_model": 128
+        },
+        "best_mae_observed_strict": 119.25932666022587,
+        "search_space": {
+          "max_steps": [
+            1000,
+            2000,
+            3000
+          ],
+          "learning_rate": [
+            0.0001,
+            0.0003,
+            0.001
+          ],
+          "dropout": [
+            0.0,
+            0.1,
+            0.2
+          ],
+          "d_model": [
+            64,
+            128,
+            256
+          ]
+        },
+        "evidence_path": "/mnt/aiongpfs/projects/eint/runs/benchmarks/block3_20260203_225620_phase7_v71extreme_20260214_032205/pilot/ts_refs/task2_forecast/transformer_sota/core_edgar/metrics.json"
+      },
+      "XGBoostPoisson": {
+        "target_family": "count",
+        "category": "ml_tabular",
+        "status": "planned_with_evidence",
+        "search_budget": 96,
+        "trials_executed": 0,
+        "best_config": {
+          "learning_rate": 0.03,
+          "max_depth": 6,
+          "min_child_weight": 2.0,
+          "subsample": 0.9
+        },
+        "best_mae_observed_strict": 175.6918382596547,
+        "search_space": {
+          "learning_rate": [
+            0.01,
+            0.03,
+            0.05
+          ],
+          "max_depth": [
+            4,
+            6,
+            8
+          ],
+          "min_child_weight": [
+            1.0,
+            2.0,
+            4.0
+          ],
+          "subsample": [
+            0.7,
+            0.9,
+            1.0
+          ]
+        },
+        "evidence_path": "/mnt/aiongpfs/projects/eint/runs/benchmarks/block3_20260203_225620_phase7/task1_outcome/ml_tabular/core_edgar/metrics.json"
+      },
+      "LightGBMTweedie": {
+        "target_family": "count",
+        "category": "ml_tabular",
+        "status": "planned_with_evidence",
+        "search_budget": 96,
+        "trials_executed": 0,
+        "best_config": {
+          "learning_rate": 0.03,
+          "num_leaves": 127,
+          "tweedie_variance_power": 1.3,
+          "min_child_samples": 40
+        },
+        "best_mae_observed_strict": 199.17120257060444,
+        "search_space": {
+          "learning_rate": [
+            0.01,
+            0.03,
+            0.05
+          ],
+          "num_leaves": [
+            63,
+            127,
+            255
+          ],
+          "tweedie_variance_power": [
+            1.1,
+            1.3,
+            1.5
+          ],
+          "min_child_samples": [
+            20,
+            40,
+            80
+          ]
+        },
+        "evidence_path": "/mnt/aiongpfs/projects/eint/runs/benchmarks/block3_20260203_225620_phase7/task1_outcome/ml_tabular/core_edgar/metrics.json"
+      },
+      "LightGBM": {
+        "target_family": "count",
+        "category": "ml_tabular",
+        "status": "planned_with_evidence",
+        "search_budget": 96,
+        "trials_executed": 0,
+        "best_config": {
+          "learning_rate": 0.03,
+          "num_leaves": 127,
+          "min_child_samples": 40,
+          "feature_fraction": 0.85,
+          "bagging_fraction": 0.9
+        },
+        "best_mae_observed_strict": 199.17120257060444,
+        "search_space": {
+          "learning_rate": [
+            0.01,
+            0.03,
+            0.05
+          ],
+          "num_leaves": [
+            63,
+            127,
+            255
+          ],
+          "min_child_samples": [
+            20,
+            40,
+            80
+          ],
+          "feature_fraction": [
+            0.7,
+            0.85,
+            1.0
+          ],
+          "bagging_fraction": [
+            0.7,
+            0.9,
+            1.0
+          ]
+        },
+        "evidence_path": "/mnt/aiongpfs/projects/eint/runs/benchmarks/block3_20260203_225620_phase7/task1_outcome/ml_tabular/core_edgar/metrics.json"
+      },
+      "XGBoost": {
+        "target_family": "count",
+        "category": "ml_tabular",
+        "status": "planned_with_evidence",
+        "search_budget": 96,
+        "trials_executed": 0,
+        "best_config": {
+          "learning_rate": 0.03,
+          "max_depth": 8,
+          "min_child_weight": 2.0,
+          "subsample": 0.85,
+          "colsample_bytree": 0.85
+        },
+        "best_mae_observed_strict": 175.6918382596547,
+        "search_space": {
+          "learning_rate": [
+            0.01,
+            0.03,
+            0.05
+          ],
+          "max_depth": [
+            6,
+            8,
+            10
+          ],
+          "min_child_weight": [
+            1.0,
+            2.0,
+            4.0
+          ],
+          "subsample": [
+            0.7,
+            0.85,
+            1.0
+          ],
+          "colsample_bytree": [
+            0.7,
+            0.85,
+            1.0
+          ]
+        },
+        "evidence_path": "/mnt/aiongpfs/projects/eint/runs/benchmarks/block3_20260203_225620_phase7/task1_outcome/ml_tabular/core_edgar/metrics.json"
+      },
+      "CatBoost": {
+        "target_family": "count",
+        "category": "ml_tabular",
+        "status": "planned_with_evidence",
+        "search_budget": 96,
+        "trials_executed": 0,
+        "best_config": {
+          "learning_rate": 0.03,
+          "depth": 8,
+          "l2_leaf_reg": 6.0,
+          "bagging_temperature": 1.0
+        },
+        "best_mae_observed_strict": 505.3142265932834,
+        "search_space": {
+          "learning_rate": [
+            0.01,
+            0.03,
+            0.05
+          ],
+          "depth": [
+            6,
+            8,
+            10
+          ],
+          "l2_leaf_reg": [
+            3.0,
+            6.0,
+            12.0
+          ],
+          "bagging_temperature": [
+            0.0,
+            1.0,
+            2.0
+          ]
+        },
+        "evidence_path": "/mnt/aiongpfs/projects/eint/runs/benchmarks/block3_20260203_225620_phase7/task1_outcome/ml_tabular/core_edgar/metrics.json"
+      },
+      "Moirai2": {
+        "target_family": "count",
+        "category": "foundation",
+        "status": "planned_with_evidence",
+        "search_budget": 96,
+        "trials_executed": 0,
+        "best_config": {
+          "num_samples": 50,
+          "temperature": 0.9
+        },
+        "best_mae_observed_strict": 228.7646966347054,
+        "search_space": {
+          "prediction_length": [
+            1,
+            7,
+            14,
+            30
+          ],
+          "num_samples": [
+            20,
+            50,
+            100
+          ],
+          "temperature": [
+            0.7,
+            0.9,
+            1.0
+          ]
+        },
+        "evidence_path": "/mnt/aiongpfs/projects/eint/runs/benchmarks/block3_20260203_225620_phase7/task1_outcome/foundation/full/metrics.json"
+      },
+      "Chronos": {
+        "target_family": "count",
+        "category": "foundation",
+        "status": "planned_with_evidence",
+        "search_budget": 96,
+        "trials_executed": 0,
+        "best_config": {
+          "num_samples": 50,
+          "temperature": 0.9
+        },
+        "best_mae_observed_strict": 45.554431746837324,
+        "search_space": {
+          "prediction_length": [
+            1,
+            7,
+            14,
+            30
+          ],
+          "num_samples": [
+            20,
+            50,
+            100
+          ],
+          "temperature": [
+            0.7,
+            0.9,
+            1.0
+          ]
+        },
+        "evidence_path": "/mnt/aiongpfs/projects/eint/runs/benchmarks/block3_20260203_225620_phase7/task1_outcome/foundation/full/metrics.json"
+      }
+    },
+    "is_funded": {
+      "AutoFitV72": {
+        "target_family": "binary",
+        "category": "unknown",
+        "status": "planned",
+        "search_budget": 96,
+        "trials_executed": 0,
+        "best_config": {
+          "top_k": 8,
+          "search_budget": 96,
+          "dynamic_weighting": true,
+          "count_safe_mode": true,
+          "champion_anchor": true
+        },
+        "best_mae_observed_strict": null,
+        "search_space": {
+          "top_k": [
+            6,
+            8,
+            10
+          ],
+          "search_budget": [
+            96
+          ],
+          "dynamic_weighting": [
+            true
+          ],
+          "count_safe_mode": [
+            true
+          ],
+          "champion_anchor": [
+            true
+          ]
+        },
+        "evidence_path": "docs/benchmarks/block3_truth_pack/condition_leaderboard.csv"
+      },
+      "PatchTST": {
+        "target_family": "binary",
+        "category": "transformer_sota",
+        "status": "planned_with_evidence",
+        "search_budget": 96,
+        "trials_executed": 0,
+        "best_config": {
+          "max_steps": 2000,
+          "learning_rate": 0.0003,
+          "dropout": 0.1,
+          "hidden_size": 128
+        },
+        "best_mae_observed_strict": 0.032280800947848576,
+        "search_space": {
+          "max_steps": [
+            1000,
+            2000,
+            3000
+          ],
+          "learning_rate": [
+            0.0001,
+            0.0003,
+            0.001
+          ],
+          "dropout": [
+            0.0,
+            0.1,
+            0.2
+          ],
+          "hidden_size": [
+            64,
+            128,
+            256
+          ]
+        },
+        "evidence_path": "/mnt/aiongpfs/projects/eint/runs/benchmarks/block3_20260203_225620_phase7/task1_outcome/transformer_sota/full/metrics.json"
+      },
+      "NHITS": {
+        "target_family": "binary",
+        "category": "deep_classical",
+        "status": "planned_with_evidence",
+        "search_budget": 96,
+        "trials_executed": 0,
+        "best_config": {
+          "max_steps": 2000,
+          "learning_rate": 0.0003,
+          "dropout_prob_theta": 0.1
+        },
+        "best_mae_observed_strict": 0.03224843655460842,
+        "search_space": {
+          "max_steps": [
+            1000,
+            2000,
+            3000
+          ],
+          "learning_rate": [
+            0.0001,
+            0.0003,
+            0.001
+          ],
+          "dropout_prob_theta": [
+            0.0,
+            0.1,
+            0.2
+          ]
+        },
+        "evidence_path": "/mnt/aiongpfs/projects/eint/runs/benchmarks/block3_20260203_225620_phase7_v71extreme_20260214_130737/full/deep_refs/task1_outcome/deep_classical/core_edgar/metrics.json"
+      },
+      "LightGBM": {
+        "target_family": "binary",
+        "category": "ml_tabular",
+        "status": "planned_with_evidence",
+        "search_budget": 96,
+        "trials_executed": 0,
+        "best_config": {
+          "learning_rate": 0.03,
+          "num_leaves": 127,
+          "min_child_samples": 40,
+          "feature_fraction": 0.85,
+          "bagging_fraction": 0.9
+        },
+        "best_mae_observed_strict": 0.09678662744688599,
+        "search_space": {
+          "learning_rate": [
+            0.01,
+            0.03,
+            0.05
+          ],
+          "num_leaves": [
+            63,
+            127,
+            255
+          ],
+          "min_child_samples": [
+            20,
+            40,
+            80
+          ],
+          "feature_fraction": [
+            0.7,
+            0.85,
+            1.0
+          ],
+          "bagging_fraction": [
+            0.7,
+            0.9,
+            1.0
+          ]
+        },
+        "evidence_path": "/mnt/aiongpfs/projects/eint/runs/benchmarks/block3_20260203_225620_phase7/task1_outcome/ml_tabular/core_edgar/metrics.json"
+      },
+      "XGBoost": {
+        "target_family": "binary",
+        "category": "ml_tabular",
+        "status": "planned_with_evidence",
+        "search_budget": 96,
+        "trials_executed": 0,
+        "best_config": {
+          "learning_rate": 0.03,
+          "max_depth": 8,
+          "min_child_weight": 2.0,
+          "subsample": 0.85,
+          "colsample_bytree": 0.85
+        },
+        "best_mae_observed_strict": 0.09905975714461265,
+        "search_space": {
+          "learning_rate": [
+            0.01,
+            0.03,
+            0.05
+          ],
+          "max_depth": [
+            6,
+            8,
+            10
+          ],
+          "min_child_weight": [
+            1.0,
+            2.0,
+            4.0
+          ],
+          "subsample": [
+            0.7,
+            0.85,
+            1.0
+          ],
+          "colsample_bytree": [
+            0.7,
+            0.85,
+            1.0
+          ]
+        },
+        "evidence_path": "/mnt/aiongpfs/projects/eint/runs/benchmarks/block3_20260203_225620_phase7/task1_outcome/ml_tabular/core_edgar/metrics.json"
+      },
+      "CatBoost": {
+        "target_family": "binary",
+        "category": "ml_tabular",
+        "status": "planned_with_evidence",
+        "search_budget": 96,
+        "trials_executed": 0,
+        "best_config": {
+          "learning_rate": 0.03,
+          "depth": 8,
+          "l2_leaf_reg": 6.0,
+          "bagging_temperature": 1.0
+        },
+        "best_mae_observed_strict": 0.10531176937117738,
+        "search_space": {
+          "learning_rate": [
+            0.01,
+            0.03,
+            0.05
+          ],
+          "depth": [
+            6,
+            8,
+            10
+          ],
+          "l2_leaf_reg": [
+            3.0,
+            6.0,
+            12.0
+          ],
+          "bagging_temperature": [
+            0.0,
+            1.0,
+            2.0
+          ]
+        },
+        "evidence_path": "/mnt/aiongpfs/projects/eint/runs/benchmarks/block3_20260203_225620_phase7/task1_outcome/ml_tabular/core_edgar/metrics.json"
+      },
+      "TabPFNClassifier": {
+        "target_family": "binary",
+        "category": "unknown",
+        "status": "planned",
+        "search_budget": 96,
+        "trials_executed": 0,
+        "best_config": {
+          "ensemble_size": 16,
+          "subsample": 10000
+        },
+        "best_mae_observed_strict": null,
+        "search_space": {
+          "n_estimators": [
+            1
+          ],
+          "ensemble_size": [
+            8,
+            16,
+            32
+          ],
+          "subsample": [
+            5000,
+            10000,
+            20000
+          ]
+        },
+        "evidence_path": "docs/benchmarks/block3_truth_pack/condition_leaderboard.csv"
+      }
+    }
+  }
+}

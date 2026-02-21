@@ -142,9 +142,9 @@ def main() -> None:
         static_sql = f"""
         WITH base AS (
             SELECT *,
-                   COALESCE(snapshot_ts,
-                            CAST(crawled_date_day AS TIMESTAMP),
-                            crawled_date) AS snapshot_ts2
+                   COALESCE(TRY_CAST(snapshot_ts AS TIMESTAMP),
+                            TRY_CAST(crawled_date_day AS TIMESTAMP),
+                            TRY_CAST(crawled_date AS TIMESTAMP)) AS snapshot_ts2
             FROM read_parquet('{out_daily.as_posix()}')
         ), ranked AS (
             SELECT *,

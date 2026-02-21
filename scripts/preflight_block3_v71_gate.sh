@@ -157,6 +157,7 @@ RUN_TAG="$(date +%Y%m%d_%H%M%S)"
 V71_VARIANT="g02"
 SKIP_PYTEST=false
 SKIP_SMOKE=false
+SKIP_AUDITS=false
 
 for arg in "$@"; do
     case "$arg" in
@@ -171,6 +172,9 @@ for arg in "$@"; do
             ;;
         --skip-smoke)
             SKIP_SMOKE=true
+            ;;
+        --skip-audits)
+            SKIP_AUDITS=true
             ;;
         *)
             echo "Unknown argument: $arg"
@@ -201,6 +205,7 @@ echo "Variant:    ${V71_VARIANT}"
 echo "Smoke out:  ${SMOKE_OUT}"
 echo "Skip pytest:${SKIP_PYTEST}"
 echo "Skip smoke: ${SKIP_SMOKE}"
+echo "Skip audits:${SKIP_AUDITS}"
 echo "Repo root:  ${REPO}"
 echo "================================================================"
 
@@ -263,13 +268,13 @@ export LD_LIBRARY_PATH="${CONDA_PREFIX:-}/lib:${LD_LIBRARY_PATH:-}"
 cd "${REPO}"
 export PYTHONPATH="${REPO}/src:${PYTHONPATH:-}"
 
-echo "[1/5] Freeze verification..."
+echo "[1/7] Freeze verification..."
 python3 scripts/block3_verify_freeze.py
 
-echo "[2/5] Phase-7 fix verification..."
+echo "[2/7] Phase-7 fix verification..."
 python3 scripts/verify_phase7_fixes.py
 
-echo "[3/5] AutoFitV71 factory sanity on all known variants..."
+echo "[3/7] AutoFitV71 factory sanity on all known variants..."
 python3 - << 'PY'
 import json
 from narrative.block3.models.registry import get_model
@@ -290,7 +295,7 @@ print("AutoFitV71 variant factory sanity PASS")
 PY
 
 if ! $SKIP_PYTEST; then
-    echo "[4/5] Targeted V7.1 tests..."
+    echo "[4/7] Targeted V7.1 tests..."
     TEST_FILES=(
         "test/test_autofit_v71_no_leakage.py"
         "test/test_autofit_v71_coverage_guard.py"
@@ -307,7 +312,7 @@ if ! $SKIP_PYTEST; then
     if [[ "${#EXISTING_TESTS[@]}" -gt 0 ]]; then
         python3 -m pytest -q "${EXISTING_TESTS[@]}"
     else
-        echo "[4/5] Dedicated V7.1 test files not found. Running inline sanity checks..."
+        echo "[4/7] Dedicated V7.1 test files not found. Running inline sanity checks..."
         python3 - << 'PY'
 import numpy as np
 import pandas as pd
@@ -341,11 +346,11 @@ print("Inline V7.1 sanity checks PASS")
 PY
     fi
 else
-    echo "[4/5] Targeted V7.1 tests... SKIPPED"
+    echo "[4/7] Targeted V7.1 tests... SKIPPED"
 fi
 
 if ! $SKIP_SMOKE; then
-    echo "[5/5] Synthetic smoke execution with AutoFitV71..."
+    echo "[5/7] Synthetic smoke execution with AutoFitV71..."
     CUDA_VISIBLE_DEVICES="" python3 - << PY
 import json
 import numpy as np
@@ -416,7 +421,49 @@ for lane_name, y in targets.items():
     )
 PY
 else
-    echo "[5/5] Smoke shard execution... SKIPPED"
+    echo "[5/7] Smoke shard execution... SKIPPED"
+fi
+
+if ! $SKIP_AUDITS; then
+    echo "[6/7] Data integrity audit (read-only)..."
+    python3 scripts/audit_block3_data_integrity.py
+
+    echo "[7/7] Investors-count stability audit..."
+    python3 scripts/audit_investors_count_stability.py
+
+    echo "[Gate-S] Enforcing audit thresholds..."
+    python3 - <<'PY'
+import json
+from pathlib import Path
+
+root = Path("docs/benchmarks/block3_truth_pack")
+data_p = root / "data_integrity_audit_latest.json"
+inv_p = root / "investors_count_stability_audit_latest.json"
+if not data_p.exists() or not inv_p.exists():
+    raise SystemExit("Gate-S FAIL: latest audit artifacts not found.")
+
+data = json.loads(data_p.read_text(encoding="utf-8"))
+inv = json.loads(inv_p.read_text(encoding="utf-8"))
+
+checks = {
+    "data_integrity_overall_pass": bool(data.get("overall_pass") is True),
+    "distribution_available": bool(inv.get("checks", {}).get("distribution_available") is True),
+    "catastrophic_spikes_zero": int(inv.get("catastrophic_spikes", -1)) == 0,
+}
+failed = [k for k, ok in checks.items() if not ok]
+for k, ok in checks.items():
+    print(f"  {k}: {'PASS' if ok else 'FAIL'}")
+if failed:
+    raise SystemExit("Gate-S FAIL: " + ", ".join(failed))
+print("Gate-S PASS")
+PY
+
+    echo "Latest audit artifacts:"
+    echo "  docs/benchmarks/block3_truth_pack/data_integrity_audit_latest.json"
+    echo "  docs/benchmarks/block3_truth_pack/investors_count_stability_audit_latest.json"
+else
+    echo "[6/7] Data integrity audit... SKIPPED"
+    echo "[7/7] Investors-count stability audit... SKIPPED"
 fi
 
 echo "================================================================"

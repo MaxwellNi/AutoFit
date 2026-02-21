@@ -113,9 +113,33 @@ fi
 
 mapfile -t P7R_PENDING_IDS < <(get_p7r_ids_by_state "PENDING")
 mapfile -t P7R_RUNNING_IDS < <(get_p7r_ids_by_state "RUNNING")
+mapfile -t P7R_PENDING_REASONS < <(
+    for line in "${QUEUE_LINES[@]}"; do
+        IFS='|' read -r id name state reason <<< "${line}"
+        if [[ "${state}" == "PENDING" && "${name}" =~ ${P7R_REGEX} ]]; then
+            echo "${id}|${reason}"
+        fi
+    done
+)
 
 echo "p7r pending: ${#P7R_PENDING_IDS[@]} ${P7R_PENDING_IDS[*]:-}"
 echo "p7r running: ${#P7R_RUNNING_IDS[@]} ${P7R_RUNNING_IDS[*]:-}"
+
+bad_constraints=()
+for row in "${P7R_PENDING_REASONS[@]}"; do
+    jid="${row%%|*}"
+    reason="${row#*|}"
+    reason="${reason#(}"
+    reason="${reason%)}"
+    if [[ "${reason}" == "BadConstraints" ]]; then
+        bad_constraints+=("${jid}")
+    fi
+done
+if [[ "${#bad_constraints[@]}" -gt 0 ]]; then
+    echo "FATAL: p7r jobs are blocked by BadConstraints: ${bad_constraints[*]}"
+    echo "Do not hold more jobs. Fix resource request and resubmit p7r first."
+    exit 3
+fi
 
 if [[ "${#P7R_PENDING_IDS[@]}" -eq 0 && "${#P7R_RUNNING_IDS[@]}" -eq 0 ]]; then
     echo "No p7r_v72 failure-pool jobs found in queue."

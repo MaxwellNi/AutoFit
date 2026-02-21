@@ -76,6 +76,19 @@ while true; do
     squeue -u "${USER_NAME}" -h -o '%j|%T' \
       | awk -F'|' '$1 ~ /^p7r_v72_ic_ce_h(1|7|14|30)_heavy$/ && $2=="RUNNING" {print $1}'
   )
+  mapfile -t v72_badconstraints < <(
+    squeue -u "${USER_NAME}" -h -o '%A|%j|%T|%R' \
+      | awk -F'|' '$2 ~ /^p7r_v72_ic_ce_h(1|7|14|30)_heavy$/ && $3=="PENDING" && $4=="(BadConstraints)" {print $1 "|" $2}'
+  )
+
+  if (( ${#v72_badconstraints[@]} > 0 )); then
+    echo "Detected p7r jobs blocked by BadConstraints:"
+    printf '  %s\n' "${v72_badconstraints[@]}"
+    echo "Releasing temporary holds to avoid deadlock..."
+    bash scripts/soft_bump_v72_failure_pool_queue.sh --release-held --apply || true
+    echo "Fix submit resources, then resubmit p7r jobs."
+    exit 4
+  fi
 
   if (( loop_count % 10 == 0 )); then
     mapfile -t v72_pending < <(
