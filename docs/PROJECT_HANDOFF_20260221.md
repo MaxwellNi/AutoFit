@@ -107,3 +107,16 @@ If the next agent starts in another IDE session, read in this order:
 3. `docs/benchmarks/block3_truth_pack/truth_pack_summary.json`
 4. `docs/benchmarks/block3_truth_pack/v72_pilot_gate_report.json`
 
+## 9) Local 4090 AutoFitV72 Completion Snapshot
+
+- Completion date (UTC): `2026-02-21`
+- Run root:
+  `runs/benchmarks/block3_20260203_225620_phase7_v72_4090_20260219_173137/`
+- Task completion:
+  - `task1_outcome/core_only`: `12/12`
+  - `task2_forecast/core_edgar`: `8/8`
+  - Overall: `20/20`
+- Local comparison package for Iris pull:
+  - `docs/benchmarks/block3_v72_local_4090/v72_completion_summary_20260221.json`
+  - `docs/benchmarks/block3_v72_local_4090/v72_completion_summary_20260221.md`
+  - `docs/benchmarks/block3_v72_local_4090/v72_metrics_autofitv72_20260221.csv`

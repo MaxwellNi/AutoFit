@@ -1,6 +1,6 @@
 # Block 3 Benchmark Results
 
-> Last Updated: 2026-02-21 22:19:00 UTC
+> Last Updated: 2026-02-21 22:55:00 UTC
 > Single source of truth: `docs/AUTOFIT_V72_EVIDENCE_MASTER_20260217.md`
 > Agent handoff: `docs/PROJECT_HANDOFF_20260221.md`
 
@@ -15,8 +15,13 @@
 | critical_failures | 4 | `docs/benchmarks/block3_truth_pack/failure_taxonomy.csv` |
 | running_total | 8 | `docs/benchmarks/block3_truth_pack/slurm_snapshot.json` |
 | pending_total | 77 | `docs/benchmarks/block3_truth_pack/slurm_snapshot.json` |
+| v72_local_4090_completed_pairs | 20/20 | `docs/benchmarks/block3_v72_local_4090/v72_completion_summary_20260221.json` |
+| v72_local_4090_completion_ratio | 1.0 | `docs/benchmarks/block3_v72_local_4090/v72_completion_summary_20260221.json` |
+| v72_local_4090_fairness_all_pass | true | `docs/benchmarks/block3_v72_local_4090/v72_completion_summary_20260221.json` |
 
 ## Notes
 
 1. Use the master evidence document for full task/subtask, ladder, and SOTA analysis tables.
 2. This file keeps only high-level snapshot metrics.
+3. Local 4090 AutoFitV72 detailed records for Iris-side pull and comparison:
+   `docs/benchmarks/block3_v72_local_4090/v72_completion_summary_20260221.md`.

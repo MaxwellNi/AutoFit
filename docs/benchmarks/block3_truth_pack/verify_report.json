@@ -1,0 +1,38 @@
+{
+  "verified_at": "2026-02-19T23:11:11.513008Z",
+  "pointer_path": "/home/pni/projects/repo_root/docs/audits/FULL_SCALE_POINTER.yaml",
+  "expected_stamp": "20260203_225620",
+  "expected_variant": "TRAIN_WIDE_FINAL",
+  "all_gates_pass": true,
+  "checks": [
+    {
+      "check": "pointer",
+      "passed": true,
+      "fails": []
+    },
+    {
+      "check": "column_manifest",
+      "path": "runs/orchestrator/20260129_073037/analysis/wide_20260203_225620/column_manifest.json",
+      "passed": true,
+      "fails": []
+    },
+    {
+      "check": "raw_cardinality_coverage",
+      "path": "runs/orchestrator/20260129_073037/analysis/wide_20260203_225620/raw_cardinality_coverage_wide_20260203_225620.json",
+      "passed": true,
+      "fails": []
+    },
+    {
+      "check": "freeze_candidates",
+      "path": "runs/orchestrator/20260129_073037/analysis/wide_20260203_225620/freeze_candidates.json",
+      "passed": true,
+      "fails": []
+    },
+    {
+      "check": "offer_day_coverage_exact",
+      "path": "runs/orchestrator/20260129_073037/analysis/wide_20260203_225620/offer_day_coverage_exact.json",
+      "passed": true,
+      "fails": []
+    }
+  ]
+}

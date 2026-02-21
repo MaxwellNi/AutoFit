@@ -1,0 +1,124 @@
+{
+  "generated_at_utc": "2026-02-21T23:00:06.001656+00:00",
+  "run_root": "runs/benchmarks/block3_20260203_225620_phase7_v72_4090_20260219_173137",
+  "model": "AutoFitV72",
+  "tasks": [
+    {
+      "task": "task1_outcome",
+      "ablation": "core_only",
+      "manifest_status": "completed",
+      "started_at": "2026-02-21T01:08:22.626514+00:00",
+      "finished_at": "2026-02-21T19:45:34.085967+00:00",
+      "expected_pairs": 12,
+      "completed_pairs": 12,
+      "completion_ratio": 1.0,
+      "completed_target_horizon_pairs": [
+        {
+          "target": "funding_raised_usd",
+          "horizon": 1
+        },
+        {
+          "target": "funding_raised_usd",
+          "horizon": 7
+        },
+        {
+          "target": "funding_raised_usd",
+          "horizon": 14
+        },
+        {
+          "target": "funding_raised_usd",
+          "horizon": 30
+        },
+        {
+          "target": "investors_count",
+          "horizon": 1
+        },
+        {
+          "target": "investors_count",
+          "horizon": 7
+        },
+        {
+          "target": "investors_count",
+          "horizon": 14
+        },
+        {
+          "target": "investors_count",
+          "horizon": 30
+        },
+        {
+          "target": "is_funded",
+          "horizon": 1
+        },
+        {
+          "target": "is_funded",
+          "horizon": 7
+        },
+        {
+          "target": "is_funded",
+          "horizon": 14
+        },
+        {
+          "target": "is_funded",
+          "horizon": 30
+        }
+      ],
+      "fairness_all_pass": true,
+      "prediction_coverage_min": 1.0,
+      "average_train_time_seconds": 8115.566856046517,
+      "average_inference_time_seconds": 2.4217206239700317
+    },
+    {
+      "task": "task2_forecast",
+      "ablation": "core_edgar",
+      "manifest_status": "completed",
+      "started_at": "2026-02-21T01:08:22.624360+00:00",
+      "finished_at": "2026-02-21T12:31:30.222303+00:00",
+      "expected_pairs": 8,
+      "completed_pairs": 8,
+      "completion_ratio": 1.0,
+      "completed_target_horizon_pairs": [
+        {
+          "target": "funding_raised_usd",
+          "horizon": 1
+        },
+        {
+          "target": "funding_raised_usd",
+          "horizon": 7
+        },
+        {
+          "target": "funding_raised_usd",
+          "horizon": 14
+        },
+        {
+          "target": "funding_raised_usd",
+          "horizon": 30
+        },
+        {
+          "target": "investors_count",
+          "horizon": 1
+        },
+        {
+          "target": "investors_count",
+          "horizon": 7
+        },
+        {
+          "target": "investors_count",
+          "horizon": 14
+        },
+        {
+          "target": "investors_count",
+          "horizon": 30
+        }
+      ],
+      "fairness_all_pass": true,
+      "prediction_coverage_min": 1.0,
+      "average_train_time_seconds": 9618.459925740957,
+      "average_inference_time_seconds": 5.17264261841774
+    }
+  ],
+  "overall_expected_pairs": 20,
+  "overall_completed_pairs": 20,
+  "overall_completion_ratio": 1.0,
+  "overall_fairness_all_pass": true,
+  "overall_prediction_coverage_min": 1.0
+}
