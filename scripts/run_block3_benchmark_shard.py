@@ -248,6 +248,11 @@ class ModelMetrics:
     lane_clip_rate: float = 0.0
     inverse_transform_guard_hits: int = 0
     anchor_models_used: List[str] = field(default_factory=list)
+    lane_family: Optional[str] = None
+    champion_template: Optional[str] = None
+    hazard_calibration_method: Optional[str] = None
+    tail_pinball_q90: Optional[float] = None
+    time_consistency_violation_rate: Optional[float] = None
     policy_action_id: Optional[str] = None
     oof_guard_triggered: bool = False
     train_time_seconds: Optional[float] = None
@@ -617,6 +622,11 @@ class BenchmarkShard:
             "lane_clip_rate": 0.0,
             "inverse_transform_guard_hits": 0,
             "anchor_models_used": [],
+            "lane_family": None,
+            "champion_template": None,
+            "hazard_calibration_method": None,
+            "tail_pinball_q90": None,
+            "time_consistency_violation_rate": None,
             "policy_action_id": None,
             "oof_guard_triggered": False,
         }
@@ -631,6 +641,33 @@ class BenchmarkShard:
                     anchors = info.get("anchor_models_used", info.get("anchor_set", []))
                     if isinstance(anchors, list):
                         signals["anchor_models_used"] = [str(x) for x in anchors]
+                    lane_family = info.get("lane_family", info.get("lane_selected"))
+                    if lane_family is not None:
+                        signals["lane_family"] = str(lane_family)
+                    champion_template = info.get("champion_template")
+                    if isinstance(champion_template, dict):
+                        lane = champion_template.get("lane")
+                        band = champion_template.get("horizon_band")
+                        primary = champion_template.get("primary")
+                        if lane or band or primary:
+                            signals["champion_template"] = "|".join(
+                                [
+                                    f"lane={lane}" if lane is not None else "",
+                                    f"band={band}" if band is not None else "",
+                                    f"primary={primary}" if primary is not None else "",
+                                ]
+                            ).strip("|")
+                    elif champion_template is not None:
+                        signals["champion_template"] = str(champion_template)
+                    hazard_method = info.get("hazard_calibration_method", info.get("binary_calibrator"))
+                    if hazard_method is not None:
+                        signals["hazard_calibration_method"] = str(hazard_method)
+                    tp_q90 = info.get("tail_pinball_q90")
+                    if tp_q90 is not None:
+                        signals["tail_pinball_q90"] = float(tp_q90)
+                    tcvr = info.get("time_consistency_violation_rate")
+                    if tcvr is not None:
+                        signals["time_consistency_violation_rate"] = float(tcvr)
                     signals["policy_action_id"] = (
                         None if info.get("policy_action_id") is None
                         else str(info.get("policy_action_id"))
@@ -756,6 +793,11 @@ class BenchmarkShard:
                 lane_clip_rate=float(routing_signals["lane_clip_rate"]),
                 inverse_transform_guard_hits=int(routing_signals["inverse_transform_guard_hits"]),
                 anchor_models_used=list(routing_signals["anchor_models_used"]),
+                lane_family=routing_signals["lane_family"],
+                champion_template=routing_signals["champion_template"],
+                hazard_calibration_method=routing_signals["hazard_calibration_method"],
+                tail_pinball_q90=routing_signals["tail_pinball_q90"],
+                time_consistency_violation_rate=routing_signals["time_consistency_violation_rate"],
                 policy_action_id=routing_signals["policy_action_id"],
                 oof_guard_triggered=bool(routing_signals["oof_guard_triggered"]),
                 train_time_seconds=train_time,

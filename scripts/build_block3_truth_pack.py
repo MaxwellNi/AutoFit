@@ -309,6 +309,88 @@ def _is_autofit(model_name: str, category: str) -> bool:
     return category == "autofit" or "AutoFit" in model_name
 
 
+def _infer_autofit_variant_id(row: Dict[str, Any]) -> Optional[str]:
+    model_name = str(row.get("model_name") or "")
+    source = str(row.get("_source_path") or "")
+    if not _is_autofit(model_name, str(row.get("category") or "")):
+        return None
+    if model_name == "AutoFitV72":
+        return "v72"
+    if model_name == "AutoFitV71":
+        m = re.search(r"(v71_g0[1-5])", source)
+        return m.group(1) if m else "v71_unlabeled"
+    if model_name.startswith("AutoFit"):
+        return model_name.lower()
+    return None
+
+
+def _v72_priority_group(task: str, ablation: str) -> Tuple[int, str]:
+    if task == "task1_outcome" and ablation in {"core_text", "full", "core_edgar"}:
+        return 1, "P1_task1_core_text_full_core_edgar"
+    if task == "task2_forecast" and ablation in {"core_only", "core_text", "full"}:
+        return 2, "P2_task2_core_only_text_full"
+    if task == "task3_risk_adjust" and ablation in {"core_only", "core_edgar", "full"}:
+        return 3, "P3_task3_all_ablations"
+    return 4, "P4_other"
+
+
+def _build_v72_missing_key_manifest(
+    strict_records: Sequence[Dict[str, Any]],
+    expected_conditions: Sequence[Tuple[str, str, str, int]],
+) -> Tuple[List[Dict[str, Any]], int, float]:
+    expected = sorted(set(expected_conditions))
+    v72_keys: set[Tuple[str, str, str, int]] = set()
+    for row in strict_records:
+        if str(row.get("model_name", "")) != "AutoFitV72":
+            continue
+        key = row.get("_condition_key")
+        if key is None:
+            continue
+        v72_keys.add(key)
+
+    missing_keys = [k for k in expected if k not in v72_keys]
+    manifest: List[Dict[str, Any]] = []
+    for task, ablation, target, horizon in missing_keys:
+        rank, group = _v72_priority_group(task, ablation)
+        manifest.append(
+            {
+                "task": task,
+                "ablation": ablation,
+                "target": target,
+                "horizon": horizon,
+                "priority_rank": rank,
+                "priority_group": group,
+                "reason": "v72_strict_missing",
+            }
+        )
+
+    total = len(expected)
+    coverage_ratio = (float(total - len(missing_keys)) / float(total)) if total else 0.0
+    return manifest, len(missing_keys), coverage_ratio
+
+
+def _estimate_queue_eta_model(slurm_snapshot: Dict[str, Any]) -> Dict[str, Any]:
+    """Simple queue ETA heuristic for planning (not a scheduler guarantee)."""
+    running_total = int(slurm_snapshot.get("running_total", 0) or 0)
+    pending_total = int(slurm_snapshot.get("pending_total", 0) or 0)
+    qos_caps = slurm_snapshot.get("qos_caps", {}) if isinstance(slurm_snapshot, dict) else {}
+    batch_cap = _to_int((qos_caps.get("iris-batch-long") or {}).get("MaxJobsPU")) or 8
+    gpu_cap = _to_int((qos_caps.get("iris-gpu-long") or {}).get("MaxJobsPU")) or 4
+    effective_parallelism = max(1, batch_cap + gpu_cap)
+    assumed_avg_hours_per_job = 18.0
+    pending_hours = (float(pending_total) / float(effective_parallelism)) * assumed_avg_hours_per_job
+    running_tail_hours = assumed_avg_hours_per_job if running_total > 0 else 0.0
+    eta_hours = pending_hours + running_tail_hours
+    return {
+        "method": "heuristic_v1",
+        "assumed_avg_hours_per_job": assumed_avg_hours_per_job,
+        "effective_parallelism": effective_parallelism,
+        "batch_cap_max_jobs_pu": batch_cap,
+        "gpu_cap_max_jobs_pu": gpu_cap,
+        "estimated_hours_to_clear": round(eta_hours, 2),
+    }
+
+
 def _quantiles(values: Sequence[float], qs: Sequence[float]) -> List[Optional[float]]:
     vals = sorted(v for v in values if math.isfinite(v))
     if not vals:
@@ -705,6 +787,7 @@ def _build_condition_leaderboard(
                     "best_non_autofit_category": best_non.get("category") if best_non else None,
                     "best_non_autofit_mae": best_non.get("mae") if best_non else None,
                     "best_autofit_model": best_af.get("model_name") if best_af else None,
+                    "best_autofit_variant_id": _infer_autofit_variant_id(best_af) if best_af else None,
                     "best_autofit_mae": best_af.get("mae") if best_af else None,
                     "autofit_gap_pct": (
                         (float(best_af["mae"]) / max(float(best_non["mae"]), 1e-12) - 1.0) * 100.0
@@ -727,6 +810,7 @@ def _build_condition_leaderboard(
                     "best_non_autofit_category": None,
                     "best_non_autofit_mae": None,
                     "best_autofit_model": None,
+                    "best_autofit_variant_id": None,
                     "best_autofit_mae": None,
                     "autofit_gap_pct": None,
                     "bench_dirs": "",
@@ -3095,6 +3179,7 @@ def build_truth_pack(
     slurm_since: str,
     update_master_doc: bool,
     master_doc_path: Path,
+    duplicate_jobs_removed: int = 0,
 ) -> Dict[str, Any]:
     raw_records: List[Dict[str, Any]] = []
     for bdir in bench_dirs:
@@ -3178,6 +3263,10 @@ def build_truth_pack(
         condition_rows=condition_rows,
         failure_rows=failure_rows,
     )
+    v72_missing_manifest_rows, v72_missing_keys, v72_coverage_ratio = _build_v72_missing_key_manifest(
+        strict_records=strict_records,
+        expected_conditions=expected_conditions,
+    )
     sota_rows = _build_sota_feature_value_map(
         condition_rows=condition_rows,
         failure_rows=failure_rows,
@@ -3225,6 +3314,7 @@ def build_truth_pack(
             "best_non_autofit_category",
             "best_non_autofit_mae",
             "best_autofit_model",
+            "best_autofit_variant_id",
             "best_autofit_mae",
             "autofit_gap_pct",
             "bench_dirs",
@@ -3291,6 +3381,7 @@ def build_truth_pack(
     run_history_obs_path = output_dir / "run_history_observations.csv"
     ladder_path = output_dir / "autofit_version_ladder.csv"
     delta_path = output_dir / "autofit_step_deltas.csv"
+    v72_missing_manifest_path = output_dir / "missing_key_manifest.csv"
     model_family_coverage_path = output_dir / "model_family_coverage_audit.csv"
     target_subtasks_path = output_dir / "subtasks_by_target_full.csv"
     top3_path = output_dir / "top3_representative_models_by_target.csv"
@@ -3472,6 +3563,19 @@ def build_truth_pack(
         ],
     )
     _write_csv(
+        v72_missing_manifest_path,
+        v72_missing_manifest_rows,
+        [
+            "task",
+            "ablation",
+            "target",
+            "horizon",
+            "priority_rank",
+            "priority_group",
+            "reason",
+        ],
+    )
+    _write_csv(
         sota_path,
         sota_rows,
         [
@@ -3594,6 +3698,7 @@ def build_truth_pack(
         else None
     )
     overlap_median = _quantiles([g for g in overlap_gains if g is not None], [0.5])[0] if overlap_gains else None
+    queue_eta_model = _estimate_queue_eta_model(slurm_snapshot)
 
     summary = {
         "bench_dirs": [_display_path(p) for p in bench_dirs],
@@ -3630,6 +3735,10 @@ def build_truth_pack(
             if isinstance(pilot_gate_payload, dict)
             else None
         ),
+        "v72_missing_keys": v72_missing_keys,
+        "v72_coverage_ratio": v72_coverage_ratio,
+        "duplicate_jobs_removed": int(max(0, duplicate_jobs_removed)),
+        "queue_eta_model": queue_eta_model,
         "slurm_snapshot_path": _display_path(slurm_json_path),
         "slurm_live_snapshot_path": _display_path(slurm_live_json_path),
         "outputs": {
@@ -3637,6 +3746,7 @@ def build_truth_pack(
             "autofit_lineage": _display_path(lineage_path),
             "failure_taxonomy": _display_path(failures_path),
             "v71_vs_v7_overlap": _display_path(overlap_path),
+            "missing_key_manifest": _display_path(v72_missing_manifest_path),
             "task_subtask_catalog": _display_path(task_subtask_path),
             "condition_inventory_full": _display_path(condition_inventory_path),
             "run_history_ledger": _display_path(run_history_ledger_path),
@@ -3688,6 +3798,10 @@ def build_truth_pack(
         ),
         "- Critical failures tagged: **%s**" % summary["critical_failures"],
         "- High-severity failures tagged: **%s**" % summary["high_failures"],
+        "- AutoFitV72 missing keys: **%s**" % summary["v72_missing_keys"],
+        "- AutoFitV72 coverage ratio: **%.4f**" % summary["v72_coverage_ratio"],
+        "- Duplicate jobs removed (reported): **%s**" % summary["duplicate_jobs_removed"],
+        "- Queue ETA model: `%s`" % json.dumps(summary["queue_eta_model"], sort_keys=True),
         "- Slurm snapshot: `%s`" % summary["slurm_snapshot_path"],
         "",
         "## Output Files",
@@ -3809,6 +3923,12 @@ def parse_args() -> argparse.Namespace:
         default=DEFAULT_MASTER_DOC,
         help="Master doc path to update when --update-master-doc is set.",
     )
+    parser.add_argument(
+        "--duplicate-jobs-removed",
+        type=int,
+        default=0,
+        help="Number of duplicate Slurm jobs removed before this snapshot (for audit trace).",
+    )
     return parser.parse_args()
 
 
@@ -3830,6 +3950,7 @@ def main() -> None:
         slurm_since=str(args.slurm_since),
         update_master_doc=bool(args.update_master_doc),
         master_doc_path=args.master_doc.resolve(),
+        duplicate_jobs_removed=int(args.duplicate_jobs_removed),
     )
     print("Block3 truth pack generated:")
     print(json.dumps(summary, indent=2))

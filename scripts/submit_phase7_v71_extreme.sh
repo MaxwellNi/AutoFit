@@ -7,7 +7,8 @@
 #
 # Usage:
 #   bash scripts/submit_phase7_v71_extreme.sh --pilot
-#   bash scripts/submit_phase7_v71_extreme.sh --full --v71-variant g03
+#   bash scripts/submit_phase7_v71_extreme.sh --full --v71-variant=g02
+#   bash scripts/submit_phase7_v71_extreme.sh --pilot --variant-ablation
 #   bash scripts/submit_phase7_v71_extreme.sh --pilot --dry-run
 #   ALLOW_UNSAFE_SKIP_PREFLIGHT=1 bash scripts/submit_phase7_v71_extreme.sh --full --v71-variant g02 --skip-preflight
 # ============================================================================
@@ -19,8 +20,9 @@ STAMP="20260203_225620"
 RUN_TAG="$(date +%Y%m%d_%H%M%S)"
 MODE="pilot"
 DRY_RUN=false
-BEST_V71_VARIANT="g01"
+BEST_V71_VARIANT="g02"
 SKIP_PREFLIGHT=false
+VARIANT_ABLATION=false
 
 for arg in "$@"; do
     case "$arg" in
@@ -38,6 +40,9 @@ for arg in "$@"; do
             ;;
         --run-tag=*)
             RUN_TAG="${arg#*=}"
+            ;;
+        --variant-ablation)
+            VARIANT_ABLATION=true
             ;;
         --skip-preflight)
             SKIP_PREFLIGHT=true
@@ -69,7 +74,7 @@ mkdir -p "$LOG_DIR" "$SLURM_DIR"
 if $DRY_RUN; then
     echo "=== DRY RUN MODE ==="
 fi
-echo "=== Mode: ${MODE} | Run tag: ${RUN_TAG} | Output: ${OUTPUT_BASE} ==="
+echo "=== Mode: ${MODE} | Run tag: ${RUN_TAG} | Output: ${OUTPUT_BASE} | Variant ablation: ${VARIANT_ABLATION} ==="
 
 if ! $DRY_RUN && ! $SKIP_PREFLIGHT; then
     PREFLIGHT_VARIANT="${BEST_V71_VARIANT}"
@@ -271,7 +276,13 @@ if [[ "$MODE" == "pilot" ]]; then
             "$TASK" "autofit" "$ABL" "$AF_BASELINE_MODELS" "pilot/autofit_baseline" ""
     done
 
-    for variant in g01 g02 g03 g04 g05; do
+    if $VARIANT_ABLATION; then
+        VARIANTS=(g01 g02 g03 g04 g05)
+    else
+        # Mainline fair benchmark keeps a single V7.1 baseline variant.
+        VARIANTS=(g02)
+    fi
+    for variant in "${VARIANTS[@]}"; do
         KW="${V71_VARIANTS[$variant]}"
         for ta in "${ALL_TASKS_ABLATIONS[@]}"; do
             IFS=':' read -r TASK ABL <<< "$ta"
@@ -286,6 +297,11 @@ if [[ "$MODE" == "full" ]]; then
     if [[ -z "${V71_VARIANTS[$BEST_V71_VARIANT]:-}" ]]; then
         echo "Unknown --v71-variant=${BEST_V71_VARIANT}. Available: g01,g02,g03,g04,g05"
         exit 1
+    fi
+    if ! $VARIANT_ABLATION && [[ "${BEST_V71_VARIANT}" != "g02" ]]; then
+        echo "Mainline full mode enforces --v71-variant=g02 for fair single-baseline comparison."
+        echo "Use --variant-ablation if you intentionally want non-mainline variants."
+        exit 2
     fi
     echo "--- Stage-B Full: selected V7.1 variant=${BEST_V71_VARIANT} + SOTA refs ---"
 

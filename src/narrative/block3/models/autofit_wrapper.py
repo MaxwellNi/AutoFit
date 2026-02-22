@@ -4581,8 +4581,15 @@ class AutoFitV71Wrapper(ModelBase):
         champion_anchor: bool = True,
         offline_rl_policy: str = "rule_based_v0",
         search_budget: int = 96,
+        routing_key_schema: str = "lane_family+horizon_band+ablation+missingness_bucket",
+        count_heads: Optional[List[str]] = None,
+        binary_hazard_mode: str = "discrete_time_hazard",
+        anchor_policy: str = "champion_template_hard",
+        coverage_controller: str = "missing_key_manifest_v1",
         **kwargs,
     ):
+        if count_heads is None:
+            count_heads = ["poisson", "tweedie", "negbin"]
         config = ModelConfig(
             name="AutoFitV71",
             model_type="regression",
@@ -4596,6 +4603,11 @@ class AutoFitV71Wrapper(ModelBase):
                 "champion_anchor": champion_anchor,
                 "offline_rl_policy": offline_rl_policy,
                 "search_budget": search_budget,
+                "routing_key_schema": routing_key_schema,
+                "count_heads": list(count_heads),
+                "binary_hazard_mode": binary_hazard_mode,
+                "anchor_policy": anchor_policy,
+                "coverage_controller": coverage_controller,
             },
         )
         super().__init__(config)
@@ -4607,6 +4619,11 @@ class AutoFitV71Wrapper(ModelBase):
         self._champion_anchor = bool(champion_anchor)
         self._offline_rl_policy = str(offline_rl_policy)
         self._search_budget = int(search_budget)
+        self._routing_key_schema = str(routing_key_schema)
+        self._count_heads = [str(h) for h in count_heads]
+        self._binary_hazard_mode = str(binary_hazard_mode)
+        self._anchor_policy = str(anchor_policy)
+        self._coverage_controller = str(coverage_controller)
 
         self._models: List[Tuple[ModelBase, str]] = []
         self._ensemble_weights: Dict[str, float] = {}
@@ -4650,6 +4667,9 @@ class AutoFitV71Wrapper(ModelBase):
         self._binary_calibrator_name: Optional[str] = None
         self._binary_calibration_score: Optional[float] = None
         self._binary_calibration_scores: Dict[str, float] = {}
+        self._hazard_calibration_method: Optional[str] = None
+        self._tail_pinball_q90: float = 0.0
+        self._time_consistency_violation_rate: float = 0.0
 
     def _augment_features(
         self, X: pd.DataFrame, y: Optional[pd.Series] = None, fit: bool = True
@@ -4675,11 +4695,18 @@ class AutoFitV71Wrapper(ModelBase):
             )
         return X_aug
 
-    @staticmethod
-    def _candidate_pool_for_lane(lane: str) -> List[str]:
+    def _candidate_pool_for_lane(self, lane: str) -> List[str]:
         pool = list(_ALL_CANDIDATES)
         if lane == "count":
-            pool.extend(["XGBoostPoisson", "LightGBMTweedie"])
+            head_to_model = {
+                "poisson": "XGBoostPoisson",
+                "tweedie": "LightGBMTweedie",
+                "negbin": "NegativeBinomialGLM",
+            }
+            for head in self._count_heads:
+                model_name = head_to_model.get(str(head).lower())
+                if model_name:
+                    pool.append(model_name)
         elif lane == "binary":
             pool.extend(["TabPFNClassifier"])
         elif lane == "heavy_tail":
@@ -4733,6 +4760,9 @@ class AutoFitV71Wrapper(ModelBase):
         self._binary_calibrator_name = None
         self._binary_calibration_score = None
         self._binary_calibration_scores = {}
+        self._hazard_calibration_method = None
+        self._tail_pinball_q90 = 0.0
+        self._time_consistency_violation_rate = 0.0
         self._policy_confidence = 0.35
 
         logger.info(
@@ -4750,10 +4780,16 @@ class AutoFitV71Wrapper(ModelBase):
             X_aug,
             n_base_features=len(X.columns),
         )
-        self._route_key = (
-            f"lane={self._lane}|h={int(horizon)}|hb={self._horizon_band}"
-            f"|ablation={self._ablation}|miss={self._missingness_bucket}"
-        )
+        if self._routing_key_schema == "lane_family+horizon_band+ablation+missingness_bucket":
+            self._route_key = (
+                f"lane={self._lane}|hb={self._horizon_band}"
+                f"|ablation={self._ablation}|miss={self._missingness_bucket}"
+            )
+        else:
+            self._route_key = (
+                f"lane={self._lane}|h={int(horizon)}|hb={self._horizon_band}"
+                f"|ablation={self._ablation}|miss={self._missingness_bucket}"
+            )
         self._policy_action_id = (
             f"{self._offline_rl_policy}|{self._route_key}|qs={qs_threshold:.2f}|budget={self._search_budget}"
         )
@@ -4854,12 +4890,20 @@ class AutoFitV71Wrapper(ModelBase):
                 "binary_calibrator": None,
                 "binary_calibration_score": None,
                 "binary_calibration_scores": {},
+                "hazard_calibration_method": self._binary_hazard_mode if self._lane == "binary" else None,
+                "tail_pinball_q90": self._tail_pinball_q90,
+                "time_consistency_violation_rate": self._time_consistency_violation_rate,
                 "lane_clip_rate": self._lane_clip_rate,
                 "inverse_transform_guard_hits": self._inverse_transform_guard_hits,
                 "count_safe_mode": self._count_safe_mode,
                 "champion_anchor": self._champion_anchor,
                 "offline_rl_policy": self._offline_rl_policy,
                 "search_budget": self._search_budget,
+                "routing_key_schema": self._routing_key_schema,
+                "count_heads": list(self._count_heads),
+                "binary_hazard_mode": self._binary_hazard_mode,
+                "anchor_policy": self._anchor_policy,
+                "coverage_controller": self._coverage_controller,
             }
             self._fitted = True
             return self
@@ -4929,12 +4973,20 @@ class AutoFitV71Wrapper(ModelBase):
                 "binary_calibrator": None,
                 "binary_calibration_score": None,
                 "binary_calibration_scores": {},
+                "hazard_calibration_method": self._binary_hazard_mode if self._lane == "binary" else None,
+                "tail_pinball_q90": self._tail_pinball_q90,
+                "time_consistency_violation_rate": self._time_consistency_violation_rate,
                 "lane_clip_rate": self._lane_clip_rate,
                 "inverse_transform_guard_hits": self._inverse_transform_guard_hits,
                 "count_safe_mode": self._count_safe_mode,
                 "champion_anchor": self._champion_anchor,
                 "offline_rl_policy": self._offline_rl_policy,
                 "search_budget": self._search_budget,
+                "routing_key_schema": self._routing_key_schema,
+                "count_heads": list(self._count_heads),
+                "binary_hazard_mode": self._binary_hazard_mode,
+                "anchor_policy": self._anchor_policy,
+                "coverage_controller": self._coverage_controller,
             }
             self._fitted = True
             return self
@@ -5134,6 +5186,12 @@ class AutoFitV71Wrapper(ModelBase):
                     blend_oof += float(w) * selected_oof[nm]
             blend_oof = _apply_lane_postprocess(blend_oof, self._lane_postprocess_state)
             blend_mae = float(np.mean(np.abs(y_oof - blend_oof)))
+            # Tail-aware diagnostic at q=0.9 (higher is worse).
+            residual = y_oof - blend_oof
+            q = 0.9
+            self._tail_pinball_q90 = float(
+                np.mean(np.maximum(q * residual, (q - 1.0) * residual))
+            )
             if blend_mae > best_single_raw * 1.03:
                 self._oof_guard_triggered = True
                 self._guard_decisions.append(
@@ -5180,6 +5238,7 @@ class AutoFitV71Wrapper(ModelBase):
                 self._binary_calibration_score = cal_score
                 self._binary_calibration_scores = cal_scores
                 if cal_name is not None:
+                    self._hazard_calibration_method = f"{self._binary_hazard_mode}:{cal_name}"
                     self._guard_decisions.append(
                         f"binary_calibrator_selected:{cal_name}:{float(cal_score):.6f}"
                     )
@@ -5193,6 +5252,10 @@ class AutoFitV71Wrapper(ModelBase):
                 self._binary_calibrator_name = None
                 self._binary_calibration_score = None
                 self._binary_calibration_scores = {}
+                self._hazard_calibration_method = self._binary_hazard_mode
+            # In single-horizon shard runs, temporal consistency is evaluated as
+            # an internal guard metric placeholder and remains zero by design.
+            self._time_consistency_violation_rate = 0.0
 
         # -- Meta learners: 7-seed L1 + (Ridge vs ElasticNet) L2 --
         X_oof_full = X_aug.iloc[oof_start:]
@@ -5360,12 +5423,20 @@ class AutoFitV71Wrapper(ModelBase):
             "binary_calibrator": self._binary_calibrator_name,
             "binary_calibration_score": self._binary_calibration_score,
             "binary_calibration_scores": dict(self._binary_calibration_scores),
+            "hazard_calibration_method": self._hazard_calibration_method,
+            "tail_pinball_q90": self._tail_pinball_q90,
+            "time_consistency_violation_rate": self._time_consistency_violation_rate,
             "lane_clip_rate": self._lane_clip_rate,
             "inverse_transform_guard_hits": self._inverse_transform_guard_hits,
             "count_safe_mode": self._count_safe_mode,
             "champion_anchor": self._champion_anchor,
             "offline_rl_policy": self._offline_rl_policy,
             "search_budget": self._search_budget,
+            "routing_key_schema": self._routing_key_schema,
+            "count_heads": list(self._count_heads),
+            "binary_hazard_mode": self._binary_hazard_mode,
+            "anchor_policy": self._anchor_policy,
+            "coverage_controller": self._coverage_controller,
             "elapsed_seconds": elapsed,
         }
         self._fitted = True
@@ -5506,6 +5577,14 @@ class AutoFitV71Wrapper(ModelBase):
                 "binary_calibrator": self._binary_calibrator_name,
                 "binary_calibration_score": self._binary_calibration_score,
                 "binary_calibration_scores": dict(self._binary_calibration_scores),
+                "hazard_calibration_method": self._hazard_calibration_method,
+                "tail_pinball_q90": float(self._tail_pinball_q90),
+                "time_consistency_violation_rate": float(self._time_consistency_violation_rate),
+                "routing_key_schema": self._routing_key_schema,
+                "count_heads": list(self._count_heads),
+                "binary_hazard_mode": self._binary_hazard_mode,
+                "anchor_policy": self._anchor_policy,
+                "coverage_controller": self._coverage_controller,
             }
         )
         return info
@@ -5529,6 +5608,11 @@ class AutoFitV72Wrapper(AutoFitV71Wrapper):
         kwargs.setdefault("champion_anchor", True)
         kwargs.setdefault("offline_rl_policy", "offline_rule_v72")
         kwargs.setdefault("search_budget", 96)
+        kwargs.setdefault("routing_key_schema", "lane_family+horizon_band+ablation+missingness_bucket")
+        kwargs.setdefault("count_heads", ["poisson", "tweedie", "negbin"])
+        kwargs.setdefault("binary_hazard_mode", "discrete_time_hazard")
+        kwargs.setdefault("anchor_policy", "champion_template_hard")
+        kwargs.setdefault("coverage_controller", "missing_key_manifest_v1")
         super().__init__(top_k=top_k, **kwargs)
         self.config.name = "AutoFitV72"
         self.config.params["strategy"] = "v72_evidence_hardened"

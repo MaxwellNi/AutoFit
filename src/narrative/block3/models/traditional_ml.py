@@ -518,6 +518,66 @@ def create_lightgbm_tweedie(**kwargs) -> ModelBase:
     return create_lightgbm(**kwargs)
 
 
+class NegativeBinomialGLMWrapper(ModelBase):
+    """Statsmodels GLM Negative Binomial wrapper for count targets."""
+
+    def __init__(self, alpha: float = 1.0, **kwargs):
+        config = ModelConfig(
+            name="NegativeBinomialGLM",
+            model_type="regression",
+            params={"alpha": alpha, **kwargs},
+            optional_dependency="statsmodels",
+        )
+        super().__init__(config)
+        self._alpha = float(alpha)
+        self._feature_names: list[str] = []
+        self._result = None
+
+    @staticmethod
+    def _design_matrix(X: pd.DataFrame) -> Any:
+        import statsmodels.api as sm
+
+        Xf = X.fillna(0.0).astype(float)
+        return sm.add_constant(Xf, has_constant="add")
+
+    def fit(self, X: pd.DataFrame, y: pd.Series, **kwargs) -> "NegativeBinomialGLMWrapper":
+        try:
+            import statsmodels.api as sm
+        except ImportError:
+            raise ImportError("statsmodels not installed. Run: pip install statsmodels")
+
+        self._feature_names = list(X.columns)
+        y_count = np.maximum(np.asarray(y, dtype=float), 0.0)
+        design = self._design_matrix(X)
+        try:
+            model = sm.GLM(
+                y_count,
+                design,
+                family=sm.families.NegativeBinomial(alpha=self._alpha),
+            )
+            self._result = model.fit(maxiter=200, disp=False)
+        except Exception as e:
+            _logger.warning(
+                "  [NegativeBinomialGLM] NegativeBinomial fit failed (%s), fallback to Poisson",
+                e,
+            )
+            model = sm.GLM(y_count, design, family=sm.families.Poisson())
+            self._result = model.fit(maxiter=200, disp=False)
+        self._fitted = True
+        return self
+
+    def predict(self, X: pd.DataFrame, **kwargs) -> np.ndarray:
+        X_use = X[self._feature_names] if self._feature_names else X
+        design = self._design_matrix(X_use)
+        pred = np.asarray(self._result.predict(design), dtype=float)
+        return np.clip(pred, 0.0, None)
+
+
+def create_negative_binomial_glm(**kwargs) -> ModelBase:
+    """Negative Binomial GLM for count targets."""
+    return NegativeBinomialGLMWrapper(**kwargs)
+
+
 # ============================================================================
 # Quantile Regression
 # ============================================================================
@@ -620,6 +680,7 @@ TRADITIONAL_ML_MODELS = {
     # Objective-specialized variants
     "XGBoostPoisson": create_xgboost_poisson,
     "LightGBMTweedie": create_lightgbm_tweedie,
+    "NegativeBinomialGLM": create_negative_binomial_glm,
     # TabPFN variants (optional dependency)
     "TabPFNRegressor": lambda **kwargs: TabPFNRegressorWrapper(**kwargs),
     "TabPFNClassifier": lambda **kwargs: TabPFNClassifierWrapper(**kwargs),

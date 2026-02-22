@@ -257,3 +257,69 @@ def test_best_config_and_pilot_gate_row_builders():
     )
     assert len(gate_rows) >= 4
     assert any(r["key"] == "overall_pass" for r in gate_rows)
+
+
+def test_infer_autofit_variant_id():
+    module = _load_module()
+
+    row_v71_g03 = {
+        "model_name": "AutoFitV71",
+        "category": "autofit",
+        "_source_path": "runs/benchmarks/x/pilot/v71_g03/task1_outcome/autofit/core_only/metrics.json",
+    }
+    row_v71_unknown = {
+        "model_name": "AutoFitV71",
+        "category": "autofit",
+        "_source_path": "runs/benchmarks/x/task1_outcome/autofit/core_only/metrics.json",
+    }
+    row_v72 = {
+        "model_name": "AutoFitV72",
+        "category": "autofit",
+        "_source_path": "runs/benchmarks/x/task2_forecast/autofit/core_edgar/metrics.json",
+    }
+
+    assert module._infer_autofit_variant_id(row_v71_g03) == "v71_g03"
+    assert module._infer_autofit_variant_id(row_v71_unknown) == "v71_unlabeled"
+    assert module._infer_autofit_variant_id(row_v72) == "v72"
+
+
+def test_build_v72_missing_key_manifest():
+    module = _load_module()
+    expected = [
+        ("task1_outcome", "core_text", "funding_raised_usd", 1),
+        ("task2_forecast", "core_only", "investors_count", 7),
+        ("task3_risk_adjust", "core_edgar", "investors_count", 30),
+    ]
+    strict = [
+        {
+            "model_name": "AutoFitV72",
+            "_condition_key": ("task1_outcome", "core_text", "funding_raised_usd", 1),
+        }
+    ]
+    rows, missing_count, coverage_ratio = module._build_v72_missing_key_manifest(
+        strict_records=strict,
+        expected_conditions=expected,
+    )
+
+    assert missing_count == 2
+    assert coverage_ratio > 0.0
+    assert len(rows) == 2
+    groups = {r["priority_group"] for r in rows}
+    assert "P2_task2_core_only_text_full" in groups
+    assert "P3_task3_all_ablations" in groups
+
+
+def test_queue_eta_model_builder():
+    module = _load_module()
+    snapshot = {
+        "running_total": 8,
+        "pending_total": 64,
+        "qos_caps": {
+            "iris-batch-long": {"MaxJobsPU": "8"},
+            "iris-gpu-long": {"MaxJobsPU": "4"},
+        },
+    }
+    eta = module._estimate_queue_eta_model(snapshot)
+    assert eta["method"] == "heuristic_v1"
+    assert eta["effective_parallelism"] == 12
+    assert eta["estimated_hours_to_clear"] > 0

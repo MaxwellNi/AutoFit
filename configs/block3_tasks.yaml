@@ -197,6 +197,11 @@ autofit_v72:
   count_safe_mode: true
   champion_anchor: true
   offline_rl_policy: "offline_rule_v72"
+  routing_key_schema: "lane_family+horizon_band+ablation+missingness_bucket"
+  count_heads: ["poisson", "tweedie", "negbin"]
+  binary_hazard_mode: "discrete_time_hazard"
+  anchor_policy: "champion_template_hard"
+  coverage_controller: "missing_key_manifest_v1"
   search_budget: 96
 
 # Model categories for benchmarking
