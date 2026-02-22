@@ -72,7 +72,7 @@ import gc
 import logging
 import time
 from itertools import combinations
-from typing import Any, Callable, Dict, List, Optional, Tuple
+from typing import Any, Callable, Dict, List, Optional, Sequence, Tuple
 
 import numpy as np
 import pandas as pd
@@ -3986,6 +3986,336 @@ def _apply_binary_calibrator(
     return np.clip(p, 0.0, 1.0)
 
 
+def _expected_calibration_error(
+    y_true: np.ndarray,
+    y_prob: np.ndarray,
+    n_bins: int = 10,
+) -> float:
+    """Compute ECE for binary probabilities."""
+    y = np.asarray(y_true, dtype=float).reshape(-1)
+    p = np.asarray(y_prob, dtype=float).reshape(-1)
+    if len(y) == 0:
+        return 0.0
+    p = np.clip(p, 0.0, 1.0)
+    bins = np.linspace(0.0, 1.0, int(max(2, n_bins)) + 1)
+    ece = 0.0
+    n = float(len(y))
+    for i in range(len(bins) - 1):
+        lo, hi = float(bins[i]), float(bins[i + 1])
+        if i == len(bins) - 2:
+            mask = (p >= lo) & (p <= hi)
+        else:
+            mask = (p >= lo) & (p < hi)
+        if not np.any(mask):
+            continue
+        conf = float(np.mean(p[mask]))
+        acc = float(np.mean(y[mask]))
+        ece += abs(acc - conf) * (float(np.sum(mask)) / n)
+    return float(ece)
+
+
+def _prob_to_daily_hazard(prob: np.ndarray, horizon: int) -> np.ndarray:
+    """Map cumulative event probability at horizon H to per-step hazard."""
+    p = np.asarray(prob, dtype=float).reshape(-1)
+    p = np.clip(p, 1e-7, 1.0 - 1e-7)
+    h = max(1, int(horizon))
+    return np.clip(1.0 - np.power(1.0 - p, 1.0 / float(h)), 0.0, 1.0)
+
+
+def _daily_hazard_to_cumulative(hazard: np.ndarray, horizon: int) -> np.ndarray:
+    """Map per-step hazard to cumulative event probability at horizon H."""
+    hz = np.asarray(hazard, dtype=float).reshape(-1)
+    hz = np.clip(hz, 0.0, 1.0)
+    h = max(1, int(horizon))
+    return np.clip(1.0 - np.power(1.0 - hz, float(h)), 0.0, 1.0)
+
+
+def _fit_discrete_time_hazard_head(
+    raw_prob: np.ndarray,
+    y_true: np.ndarray,
+    horizon: int,
+    mode: str = "discrete_time_hazard",
+) -> Tuple[Optional[Any], str, Optional[float], Dict[str, Any]]:
+    """Fit/choose a discrete-time hazard calibrator using OOF probabilities."""
+    p = np.asarray(raw_prob, dtype=float).reshape(-1)
+    y = np.asarray(y_true, dtype=float).reshape(-1)
+    y = (y > 0.5).astype(int)
+    hz = max(1, int(horizon))
+
+    if mode != "discrete_time_hazard":
+        calibrator, cal_name, cal_score, cal_scores = _fit_binary_calibrator(p, y)
+        return calibrator, str(cal_name or "identity"), cal_score, {
+            "scores": dict(cal_scores),
+            "logloss": None,
+            "brier": None,
+            "ece": None,
+            "time_consistency_violation_rate": 0.0,
+            "mode": mode,
+        }
+
+    n = len(y)
+    if n < 60 or len(np.unique(y)) < 2:
+        p_safe = np.clip(p, 0.0, 1.0)
+        return None, "identity", None, {
+            "scores": {},
+            "logloss": _binary_logloss(y, p_safe) if n > 0 else None,
+            "brier": _binary_brier(y, p_safe) if n > 0 else None,
+            "ece": _expected_calibration_error(y, p_safe) if n > 0 else None,
+            "time_consistency_violation_rate": 0.0,
+            "mode": mode,
+        }
+
+    split = max(24, int(n * 0.75))
+    split = min(split, n - 24)
+    if split <= 0 or split >= n:
+        split = int(n * 0.8)
+    if split <= 0 or split >= n:
+        p_safe = np.clip(p, 0.0, 1.0)
+        return None, "identity", None, {
+            "scores": {},
+            "logloss": _binary_logloss(y, p_safe),
+            "brier": _binary_brier(y, p_safe),
+            "ece": _expected_calibration_error(y, p_safe),
+            "time_consistency_violation_rate": 0.0,
+            "mode": mode,
+        }
+
+    p_tr, p_va = p[:split], p[split:]
+    y_tr, y_va = y[:split], y[split:]
+    if len(np.unique(y_tr)) < 2 or len(np.unique(y_va)) < 2:
+        p_safe = np.clip(p, 0.0, 1.0)
+        return None, "identity", None, {
+            "scores": {},
+            "logloss": _binary_logloss(y, p_safe),
+            "brier": _binary_brier(y, p_safe),
+            "ece": _expected_calibration_error(y, p_safe),
+            "time_consistency_violation_rate": 0.0,
+            "mode": mode,
+        }
+
+    h_tr = _prob_to_daily_hazard(p_tr, hz)
+    h_va = _prob_to_daily_hazard(p_va, hz)
+
+    scores: Dict[str, float] = {}
+    diagnostics: Dict[str, Dict[str, float]] = {}
+    best_name = "identity"
+    best_model: Optional[Any] = None
+    best_score: Optional[float] = None
+
+    def _eval_candidate(name: str, model: Optional[Any], h_in: np.ndarray) -> Tuple[float, Dict[str, float]]:
+        h_out = np.asarray(h_in, dtype=float).reshape(-1)
+        h_out = np.clip(h_out, 0.0, 1.0)
+        p_out = _daily_hazard_to_cumulative(h_out, hz)
+        ll = _binary_logloss(y_va, p_out)
+        br = _binary_brier(y_va, p_out)
+        ece = _expected_calibration_error(y_va, p_out)
+        # Keep a balanced score focused on probabilistic calibration quality.
+        score = 0.45 * ll + 0.35 * br + 0.20 * ece
+        diag = {
+            "logloss": float(ll),
+            "brier": float(br),
+            "ece": float(ece),
+            "score": float(score),
+        }
+        return float(score), diag
+
+    # Identity baseline.
+    s_identity, d_identity = _eval_candidate("identity", None, h_va)
+    scores["identity"] = s_identity
+    diagnostics["identity"] = d_identity
+    best_score = s_identity
+
+    try:
+        from sklearn.isotonic import IsotonicRegression
+        from sklearn.linear_model import LogisticRegression
+
+        platt = LogisticRegression(random_state=42, max_iter=1000, solver="lbfgs")
+        platt.fit(h_tr.reshape(-1, 1), y_tr)
+        h_platt = platt.predict_proba(h_va.reshape(-1, 1))[:, 1]
+        s_platt, d_platt = _eval_candidate("platt", platt, h_platt)
+        scores["platt"] = s_platt
+        diagnostics["platt"] = d_platt
+        if s_platt < float(best_score):
+            best_name = "platt"
+            best_model = platt
+            best_score = s_platt
+
+        iso = IsotonicRegression(out_of_bounds="clip")
+        iso.fit(h_tr, y_tr)
+        h_iso = np.asarray(iso.predict(h_va), dtype=float)
+        s_iso, d_iso = _eval_candidate("isotonic", iso, h_iso)
+        scores["isotonic"] = s_iso
+        diagnostics["isotonic"] = d_iso
+        if s_iso < float(best_score):
+            best_name = "isotonic"
+            best_model = iso
+            best_score = s_iso
+    except Exception:
+        pass
+
+    # Violation proxy: non-finite or out-of-range hazards prior to clipping.
+    h_all = _prob_to_daily_hazard(np.clip(p, 0.0, 1.0), hz)
+    violations = (~np.isfinite(h_all)) | (h_all < 0.0) | (h_all > 1.0)
+    violation_rate = float(np.mean(violations.astype(float))) if len(h_all) else 0.0
+    best_diag = diagnostics.get(best_name, d_identity)
+    return best_model, best_name, best_score, {
+        "scores": scores,
+        "logloss": float(best_diag.get("logloss", d_identity["logloss"])),
+        "brier": float(best_diag.get("brier", d_identity["brier"])),
+        "ece": float(best_diag.get("ece", d_identity["ece"])),
+        "time_consistency_violation_rate": violation_rate,
+        "mode": mode,
+        "horizon": hz,
+    }
+
+
+def _apply_discrete_time_hazard_head(
+    prob: np.ndarray,
+    calibrator: Optional[Any],
+    calibrator_name: Optional[str],
+    horizon: int,
+    mode: str = "discrete_time_hazard",
+) -> np.ndarray:
+    """Apply discrete-time hazard calibration and convert back to cumulative probability."""
+    p = np.asarray(prob, dtype=float).reshape(-1)
+    p = np.clip(p, 0.0, 1.0)
+    if mode != "discrete_time_hazard":
+        return _apply_binary_calibrator(p, calibrator, calibrator_name)
+
+    hz = max(1, int(horizon))
+    h = _prob_to_daily_hazard(p, hz)
+    name = str(calibrator_name or "identity")
+    try:
+        if calibrator is not None and name == "platt" and hasattr(calibrator, "predict_proba"):
+            h = calibrator.predict_proba(h.reshape(-1, 1))[:, 1]
+        elif calibrator is not None and name == "isotonic":
+            h = calibrator.predict(h)
+    except Exception:
+        pass
+    h = np.clip(np.asarray(h, dtype=float), 0.0, 1.0)
+    return _daily_hazard_to_cumulative(h, hz)
+
+
+def _lane_specialist_bonus(lane: str, model_name: str, horizon_band: str) -> float:
+    """Lane-aware prior bonus used by sparse-MoE routing."""
+    name = str(model_name)
+    if lane == "count":
+        if name in {"NBEATS", "NHITS", "KAN", "XGBoostPoisson", "LightGBMTweedie", "NegativeBinomialGLM"}:
+            return 0.18
+        return 0.0
+    if lane == "binary":
+        if name in {"PatchTST", "NHITS", "NBEATSx", "TabPFNClassifier"}:
+            return 0.20
+        return 0.0
+    if lane == "heavy_tail":
+        if name in {"Chronos", "PatchTST", "NHITS", "NBEATS"}:
+            base = 0.12
+            if horizon_band == "long" and name == "Chronos":
+                base += 0.04
+            if horizon_band == "short" and name in {"PatchTST", "NHITS"}:
+                base += 0.03
+            return base
+    return 0.0
+
+
+def _build_sparse_moe_route(
+    selected_names: Sequence[str],
+    sorted_by_adj: Sequence[Tuple[str, float]],
+    div_scores: Dict[str, float],
+    lane: str,
+    horizon_band: str,
+    missingness_bucket: str,
+    template_candidates: Sequence[str],
+    required_anchors: int,
+    max_experts: int = 3,
+    temperature: float = 0.45,
+    min_weight: float = 0.05,
+) -> Dict[str, Any]:
+    """Build sparse-MoE style route: score experts, activate top-k, produce softmax weights."""
+    names = [str(nm) for nm in selected_names]
+    if not names:
+        return {
+            "active_experts": [],
+            "weights": {},
+            "scores": {},
+            "forced_anchors": [],
+            "max_experts": int(max_experts),
+            "temperature": float(temperature),
+            "min_weight": float(min_weight),
+        }
+
+    rank_map = {str(nm): i for i, (nm, _adj) in enumerate(sorted_by_adj)}
+    n_rank = max(1, len(rank_map))
+    div_vals = [float(div_scores.get(nm, 0.0)) for nm in names]
+    div_min = float(min(div_vals)) if div_vals else 0.0
+    div_max = float(max(div_vals)) if div_vals else 1.0
+    div_den = max(div_max - div_min, 1e-8)
+
+    template_set = {str(nm) for nm in template_candidates}
+    tree_family = {"LightGBM", "XGBoost", "CatBoost", "RandomForest", "ExtraTrees", "HistGradientBoosting"}
+
+    scores: Dict[str, float] = {}
+    for nm in names:
+        rank = int(rank_map.get(nm, n_rank - 1))
+        rank_quality = 1.0 - float(rank) / float(max(1, n_rank - 1))
+        div_raw = float(div_scores.get(nm, div_min))
+        div_norm = (div_raw - div_min) / div_den if div_den > 0 else 0.0
+        score = 1.30 * rank_quality + 0.35 * div_norm
+        if nm in template_set:
+            score += 0.20
+        score += _lane_specialist_bonus(lane, nm, horizon_band)
+        if missingness_bucket == "high" and nm in tree_family:
+            score += 0.08
+        if missingness_bucket == "low" and lane in {"binary", "heavy_tail"} and nm in {"PatchTST", "Chronos"}:
+            score += 0.05
+        scores[nm] = float(score)
+
+    forced_anchors: List[str] = []
+    need = max(0, int(required_anchors))
+    if need > 0:
+        for cand in template_candidates:
+            c = str(cand)
+            if c in names and c not in forced_anchors:
+                forced_anchors.append(c)
+            if len(forced_anchors) >= need:
+                break
+
+    max_active = max(1, min(int(max_experts), len(names)))
+    active: List[str] = list(forced_anchors[:max_active])
+    remaining = sorted(
+        (nm for nm in names if nm not in active),
+        key=lambda x: scores.get(x, -1e9),
+        reverse=True,
+    )
+    for nm in remaining:
+        if len(active) >= max_active:
+            break
+        active.append(nm)
+
+    if not active:
+        active = [names[0]]
+
+    temp = max(0.05, float(temperature))
+    raw = np.asarray([scores.get(nm, 0.0) for nm in active], dtype=float)
+    raw = raw - float(np.max(raw))
+    prob = np.exp(raw / temp)
+    prob = prob / max(float(np.sum(prob)), 1e-12)
+    floor = max(0.0, min(0.20, float(min_weight)))
+    if floor > 0.0 and len(prob) > 1:
+        prob = np.maximum(prob, floor)
+        prob = prob / max(float(np.sum(prob)), 1e-12)
+    weights = {nm: float(w) for nm, w in zip(active, prob)}
+    return {
+        "active_experts": active,
+        "weights": weights,
+        "scores": scores,
+        "forced_anchors": forced_anchors,
+        "max_experts": max_active,
+        "temperature": temp,
+        "min_weight": floor,
+    }
+
+
 def _build_regime_retrieval_features(
     X: pd.DataFrame,
     fit: bool = True,
@@ -4586,6 +4916,11 @@ class AutoFitV71Wrapper(ModelBase):
         binary_hazard_mode: str = "discrete_time_hazard",
         anchor_policy: str = "champion_template_hard",
         coverage_controller: str = "missing_key_manifest_v1",
+        sparse_moe_enabled: bool = True,
+        sparse_moe_max_experts: int = 3,
+        sparse_moe_temperature: float = 0.45,
+        sparse_moe_min_weight: float = 0.05,
+        sparse_moe_blend_alpha: float = 0.20,
         **kwargs,
     ):
         if count_heads is None:
@@ -4608,6 +4943,11 @@ class AutoFitV71Wrapper(ModelBase):
                 "binary_hazard_mode": binary_hazard_mode,
                 "anchor_policy": anchor_policy,
                 "coverage_controller": coverage_controller,
+                "sparse_moe_enabled": sparse_moe_enabled,
+                "sparse_moe_max_experts": sparse_moe_max_experts,
+                "sparse_moe_temperature": sparse_moe_temperature,
+                "sparse_moe_min_weight": sparse_moe_min_weight,
+                "sparse_moe_blend_alpha": sparse_moe_blend_alpha,
             },
         )
         super().__init__(config)
@@ -4624,6 +4964,11 @@ class AutoFitV71Wrapper(ModelBase):
         self._binary_hazard_mode = str(binary_hazard_mode)
         self._anchor_policy = str(anchor_policy)
         self._coverage_controller = str(coverage_controller)
+        self._sparse_moe_enabled = bool(sparse_moe_enabled)
+        self._sparse_moe_max_experts = int(max(1, sparse_moe_max_experts))
+        self._sparse_moe_temperature = float(max(0.05, sparse_moe_temperature))
+        self._sparse_moe_min_weight = float(min(max(0.0, sparse_moe_min_weight), 0.20))
+        self._sparse_moe_blend_alpha = float(min(max(0.0, sparse_moe_blend_alpha), 0.50))
 
         self._models: List[Tuple[ModelBase, str]] = []
         self._ensemble_weights: Dict[str, float] = {}
@@ -4668,8 +5013,11 @@ class AutoFitV71Wrapper(ModelBase):
         self._binary_calibration_score: Optional[float] = None
         self._binary_calibration_scores: Dict[str, float] = {}
         self._hazard_calibration_method: Optional[str] = None
+        self._binary_hazard_horizon: int = 1
+        self._binary_hazard_diagnostics: Dict[str, Any] = {}
         self._tail_pinball_q90: float = 0.0
         self._time_consistency_violation_rate: float = 0.0
+        self._sparse_moe_route: Dict[str, Any] = {}
 
     def _augment_features(
         self, X: pd.DataFrame, y: Optional[pd.Series] = None, fit: bool = True
@@ -4761,8 +5109,11 @@ class AutoFitV71Wrapper(ModelBase):
         self._binary_calibration_score = None
         self._binary_calibration_scores = {}
         self._hazard_calibration_method = None
+        self._binary_hazard_horizon = max(1, int(horizon))
+        self._binary_hazard_diagnostics = {}
         self._tail_pinball_q90 = 0.0
         self._time_consistency_violation_rate = 0.0
+        self._sparse_moe_route = {}
         self._policy_confidence = 0.35
 
         logger.info(
@@ -4890,7 +5241,10 @@ class AutoFitV71Wrapper(ModelBase):
                 "binary_calibrator": None,
                 "binary_calibration_score": None,
                 "binary_calibration_scores": {},
-                "hazard_calibration_method": self._binary_hazard_mode if self._lane == "binary" else None,
+                "hazard_calibration_method": (
+                    f"{self._binary_hazard_mode}:identity"
+                    if self._lane == "binary" else None
+                ),
                 "tail_pinball_q90": self._tail_pinball_q90,
                 "time_consistency_violation_rate": self._time_consistency_violation_rate,
                 "lane_clip_rate": self._lane_clip_rate,
@@ -4904,6 +5258,11 @@ class AutoFitV71Wrapper(ModelBase):
                 "binary_hazard_mode": self._binary_hazard_mode,
                 "anchor_policy": self._anchor_policy,
                 "coverage_controller": self._coverage_controller,
+                "binary_hazard_horizon": self._binary_hazard_horizon,
+                "binary_hazard_diagnostics": dict(self._binary_hazard_diagnostics),
+                "sparse_moe_enabled": self._sparse_moe_enabled,
+                "sparse_moe_route": dict(self._sparse_moe_route),
+                "sparse_moe_blend_alpha": self._sparse_moe_blend_alpha,
             }
             self._fitted = True
             return self
@@ -4973,7 +5332,10 @@ class AutoFitV71Wrapper(ModelBase):
                 "binary_calibrator": None,
                 "binary_calibration_score": None,
                 "binary_calibration_scores": {},
-                "hazard_calibration_method": self._binary_hazard_mode if self._lane == "binary" else None,
+                "hazard_calibration_method": (
+                    f"{self._binary_hazard_mode}:identity"
+                    if self._lane == "binary" else None
+                ),
                 "tail_pinball_q90": self._tail_pinball_q90,
                 "time_consistency_violation_rate": self._time_consistency_violation_rate,
                 "lane_clip_rate": self._lane_clip_rate,
@@ -4987,6 +5349,11 @@ class AutoFitV71Wrapper(ModelBase):
                 "binary_hazard_mode": self._binary_hazard_mode,
                 "anchor_policy": self._anchor_policy,
                 "coverage_controller": self._coverage_controller,
+                "binary_hazard_horizon": self._binary_hazard_horizon,
+                "binary_hazard_diagnostics": dict(self._binary_hazard_diagnostics),
+                "sparse_moe_enabled": self._sparse_moe_enabled,
+                "sparse_moe_route": dict(self._sparse_moe_route),
+                "sparse_moe_blend_alpha": self._sparse_moe_blend_alpha,
             }
             self._fitted = True
             return self
@@ -5062,7 +5429,7 @@ class AutoFitV71Wrapper(ModelBase):
 
         # Count-lane anti-collapse: keep one count-specialist if almost tied.
         if self._lane == "count":
-            count_specialists = {"XGBoostPoisson", "LightGBMTweedie"}
+            count_specialists = {"XGBoostPoisson", "LightGBMTweedie", "NegativeBinomialGLM"}
             has_count_specialist = any(nm in count_specialists for nm in ensemble_list)
             if not has_count_specialist:
                 for cand, _ in sorted_by_adj:
@@ -5155,6 +5522,32 @@ class AutoFitV71Wrapper(ModelBase):
         selected_names = ensemble_list[:self._top_k]
         self._pred_names = selected_names
         selected_oof = {nm: oof_clean[nm] for nm in selected_names if nm in oof_clean}
+        self._sparse_moe_route = _build_sparse_moe_route(
+            selected_names=selected_names,
+            sorted_by_adj=sorted_by_adj,
+            div_scores=div_scores,
+            lane=self._lane,
+            horizon_band=self._horizon_band,
+            missingness_bucket=self._missingness_bucket,
+            template_candidates=template_candidates,
+            required_anchors=required_anchors if self._champion_anchor else 0,
+            max_experts=self._sparse_moe_max_experts,
+            temperature=self._sparse_moe_temperature,
+            min_weight=self._sparse_moe_min_weight,
+        )
+        if self._sparse_moe_enabled and len(selected_names) > 1:
+            moe_active = [
+                nm for nm in self._sparse_moe_route.get("active_experts", [])
+                if nm in selected_oof
+            ]
+            if moe_active:
+                selected_names = moe_active
+                self._pred_names = selected_names
+                selected_oof = {nm: selected_oof[nm] for nm in selected_names}
+                self._anchor_set = [nm for nm in self._anchor_set if nm in selected_names]
+                self._guard_decisions.append(
+                    "sparse_moe_active:" + ",".join(selected_names)
+                )
 
         # -- Caruana + conformal blend with lane-adaptive weighting --
         caruana_weights = _caruana_greedy_ensemble_transformed(
@@ -5174,6 +5567,18 @@ class AutoFitV71Wrapper(ModelBase):
                 caruana_alpha * c_dict.get(name, 0.0)
                 + conformal_alpha * conformal_weights.get(name, 0.0)
             )
+        if self._sparse_moe_enabled:
+            moe_weights = {
+                str(k): float(v)
+                for k, v in self._sparse_moe_route.get("weights", {}).items()
+            }
+            if moe_weights:
+                alpha = float(self._sparse_moe_blend_alpha)
+                for name in selected_names:
+                    blended_weights[name] = (
+                        (1.0 - alpha) * blended_weights.get(name, 0.0)
+                        + alpha * moe_weights.get(name, 0.0)
+                    )
         total_bw = sum(blended_weights.values()) or 1.0
         blended_weights = {nm: w / total_bw for nm, w in blended_weights.items()}
 
@@ -5229,33 +5634,39 @@ class AutoFitV71Wrapper(ModelBase):
                     if nm in selected_oof:
                         oof_prob += float(w) * np.asarray(selected_oof[nm], dtype=float)
                 oof_prob = np.clip(oof_prob, 0.0, 1.0)
-                calibrator, cal_name, cal_score, cal_scores = _fit_binary_calibrator(
+                calibrator, cal_name, cal_score, cal_diag = _fit_discrete_time_hazard_head(
                     oof_prob,
                     y_oof,
+                    horizon=int(horizon),
+                    mode=self._binary_hazard_mode,
                 )
                 self._binary_calibrator = calibrator
                 self._binary_calibrator_name = cal_name
                 self._binary_calibration_score = cal_score
-                self._binary_calibration_scores = cal_scores
+                self._binary_calibration_scores = dict(cal_diag.get("scores", {}))
+                self._binary_hazard_horizon = max(1, int(horizon))
+                self._binary_hazard_diagnostics = dict(cal_diag)
+                self._time_consistency_violation_rate = float(
+                    cal_diag.get("time_consistency_violation_rate", 0.0)
+                )
                 if cal_name is not None:
                     self._hazard_calibration_method = f"{self._binary_hazard_mode}:{cal_name}"
                     self._guard_decisions.append(
-                        f"binary_calibrator_selected:{cal_name}:{float(cal_score):.6f}"
+                        f"binary_hazard_selected:{cal_name}:{float(cal_score or 0.0):.6f}"
                     )
                     logger.info(
-                        f"[AutoFitV71] Binary calibrator selected: {cal_name} "
-                        f"(score={float(cal_score):.6f})"
+                        f"[AutoFitV71] Binary hazard calibrator selected: {cal_name} "
+                        f"(score={float(cal_score or 0.0):.6f})"
                     )
             except Exception as e:
                 logger.warning(f"[AutoFitV71] Binary calibration skipped: {e}")
                 self._binary_calibrator = None
-                self._binary_calibrator_name = None
+                self._binary_calibrator_name = "identity"
                 self._binary_calibration_score = None
                 self._binary_calibration_scores = {}
-                self._hazard_calibration_method = self._binary_hazard_mode
-            # In single-horizon shard runs, temporal consistency is evaluated as
-            # an internal guard metric placeholder and remains zero by design.
-            self._time_consistency_violation_rate = 0.0
+                self._binary_hazard_diagnostics = {}
+                self._hazard_calibration_method = f"{self._binary_hazard_mode}:identity"
+                self._time_consistency_violation_rate = 0.0
 
         # -- Meta learners: 7-seed L1 + (Ridge vs ElasticNet) L2 --
         X_oof_full = X_aug.iloc[oof_start:]
@@ -5424,6 +5835,8 @@ class AutoFitV71Wrapper(ModelBase):
             "binary_calibration_score": self._binary_calibration_score,
             "binary_calibration_scores": dict(self._binary_calibration_scores),
             "hazard_calibration_method": self._hazard_calibration_method,
+            "binary_hazard_horizon": self._binary_hazard_horizon,
+            "binary_hazard_diagnostics": dict(self._binary_hazard_diagnostics),
             "tail_pinball_q90": self._tail_pinball_q90,
             "time_consistency_violation_rate": self._time_consistency_violation_rate,
             "lane_clip_rate": self._lane_clip_rate,
@@ -5437,6 +5850,9 @@ class AutoFitV71Wrapper(ModelBase):
             "binary_hazard_mode": self._binary_hazard_mode,
             "anchor_policy": self._anchor_policy,
             "coverage_controller": self._coverage_controller,
+            "sparse_moe_enabled": self._sparse_moe_enabled,
+            "sparse_moe_route": dict(self._sparse_moe_route),
+            "sparse_moe_blend_alpha": self._sparse_moe_blend_alpha,
             "elapsed_seconds": elapsed,
         }
         self._fitted = True
@@ -5455,15 +5871,21 @@ class AutoFitV71Wrapper(ModelBase):
 
         X_aug = self._augment_features(X, fit=False)
         lane_postprocess = lambda arr: _apply_lane_postprocess(arr, self._lane_postprocess_state)
+        predict_horizon = max(
+            1,
+            int(kwargs.get("horizon", self._binary_hazard_horizon)),
+        )
 
         def final_postprocess(arr: np.ndarray) -> np.ndarray:
             out, stats = _apply_lane_postprocess_with_stats(arr, self._lane_postprocess_state)
             self._lane_clip_rate = float(stats.get("clip_rate", 0.0))
             if self._lane == "binary":
-                out = _apply_binary_calibrator(
+                out = _apply_discrete_time_hazard_head(
                     out,
-                    self._binary_calibrator,
-                    self._binary_calibrator_name,
+                    calibrator=self._binary_calibrator,
+                    calibrator_name=self._binary_calibrator_name,
+                    horizon=predict_horizon,
+                    mode=self._binary_hazard_mode,
                 )
             return out
 
@@ -5578,6 +6000,8 @@ class AutoFitV71Wrapper(ModelBase):
                 "binary_calibration_score": self._binary_calibration_score,
                 "binary_calibration_scores": dict(self._binary_calibration_scores),
                 "hazard_calibration_method": self._hazard_calibration_method,
+                "binary_hazard_horizon": self._binary_hazard_horizon,
+                "binary_hazard_diagnostics": dict(self._binary_hazard_diagnostics),
                 "tail_pinball_q90": float(self._tail_pinball_q90),
                 "time_consistency_violation_rate": float(self._time_consistency_violation_rate),
                 "routing_key_schema": self._routing_key_schema,
@@ -5585,6 +6009,9 @@ class AutoFitV71Wrapper(ModelBase):
                 "binary_hazard_mode": self._binary_hazard_mode,
                 "anchor_policy": self._anchor_policy,
                 "coverage_controller": self._coverage_controller,
+                "sparse_moe_enabled": self._sparse_moe_enabled,
+                "sparse_moe_route": dict(self._sparse_moe_route),
+                "sparse_moe_blend_alpha": self._sparse_moe_blend_alpha,
             }
         )
         return info
@@ -5613,6 +6040,11 @@ class AutoFitV72Wrapper(AutoFitV71Wrapper):
         kwargs.setdefault("binary_hazard_mode", "discrete_time_hazard")
         kwargs.setdefault("anchor_policy", "champion_template_hard")
         kwargs.setdefault("coverage_controller", "missing_key_manifest_v1")
+        kwargs.setdefault("sparse_moe_enabled", True)
+        kwargs.setdefault("sparse_moe_max_experts", 3)
+        kwargs.setdefault("sparse_moe_temperature", 0.45)
+        kwargs.setdefault("sparse_moe_min_weight", 0.05)
+        kwargs.setdefault("sparse_moe_blend_alpha", 0.20)
         super().__init__(top_k=top_k, **kwargs)
         self.config.name = "AutoFitV72"
         self.config.params["strategy"] = "v72_evidence_hardened"

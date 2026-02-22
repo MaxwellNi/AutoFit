@@ -202,6 +202,11 @@ autofit_v72:
   binary_hazard_mode: "discrete_time_hazard"
   anchor_policy: "champion_template_hard"
   coverage_controller: "missing_key_manifest_v1"
+  sparse_moe_enabled: true
+  sparse_moe_max_experts: 3
+  sparse_moe_temperature: 0.45
+  sparse_moe_min_weight: 0.05
+  sparse_moe_blend_alpha: 0.20
   search_budget: 96
 
 # Model categories for benchmarking

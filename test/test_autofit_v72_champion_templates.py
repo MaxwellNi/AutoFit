@@ -67,3 +67,62 @@ def test_binary_calibrator_returns_supported_name():
         assert cal is not None
         assert score is not None
         assert isinstance(scores, dict)
+
+
+def test_discrete_time_hazard_head_fit_and_apply():
+    module = _load_module()
+    n = 320
+    y = np.array([0] * 190 + [1] * 130)
+    raw = np.linspace(0.02, 0.98, n)
+    calibrator, cal_name, cal_score, diag = module._fit_discrete_time_hazard_head(
+        raw,
+        y,
+        horizon=14,
+        mode="discrete_time_hazard",
+    )
+    assert cal_name in {"identity", "platt", "isotonic"}
+    assert "scores" in diag
+    assert "ece" in diag
+    pred = module._apply_discrete_time_hazard_head(
+        raw,
+        calibrator=calibrator,
+        calibrator_name=cal_name,
+        horizon=14,
+        mode="discrete_time_hazard",
+    )
+    assert pred.shape == raw.shape
+    assert np.all(np.isfinite(pred))
+    assert np.all(pred >= 0.0) and np.all(pred <= 1.0)
+    if cal_score is not None:
+        assert isinstance(cal_score, float)
+
+
+def test_sparse_moe_route_keeps_anchor_and_budget():
+    module = _load_module()
+    selected = ["PatchTST", "NHITS", "NBEATSx", "LightGBM"]
+    sorted_by_adj = [
+        ("PatchTST", 0.09),
+        ("NHITS", 0.11),
+        ("NBEATSx", 0.12),
+        ("LightGBM", 0.18),
+    ]
+    div_scores = {"PatchTST": 0.1, "NHITS": 0.4, "NBEATSx": 0.2, "LightGBM": 0.05}
+    route = module._build_sparse_moe_route(
+        selected_names=selected,
+        sorted_by_adj=sorted_by_adj,
+        div_scores=div_scores,
+        lane="binary",
+        horizon_band="mid",
+        missingness_bucket="medium",
+        template_candidates=["PatchTST", "NHITS"],
+        required_anchors=2,
+        max_experts=3,
+        temperature=0.45,
+        min_weight=0.05,
+    )
+    active = route["active_experts"]
+    assert len(active) <= 3
+    assert "PatchTST" in active
+    assert "NHITS" in active
+    w = route["weights"]
+    assert abs(sum(w.values()) - 1.0) < 1e-8
