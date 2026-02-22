@@ -10,10 +10,6 @@ Refresh command:
 python scripts/build_block3_truth_pack.py --include-freeze-history --update-master-doc
 ```
 
-Agent handoff entrypoint:
-
-- `docs/PROJECT_HANDOFF_20260221.md`
-
 ## Evidence Snapshot
 
 <!-- BEGIN AUTO:EVIDENCE_SNAPSHOT -->
@@ -21,18 +17,53 @@ Generated from strict/legacy layered truth pack outputs under `docs/benchmarks/b
 
 | metric | value | evidence_path |
 |---|---|---|
-| bench_dirs | runs/benchmarks/block3_20260203_225620_iris;runs/benchmarks/block3_20260203_225620_iris_phase3;runs/benchmarks/block3_20260203_225620_iris_full;runs/benchmarks/block3_20260203_225620_iris_phase7;runs/benchmarks/block3_20260203_225620_phase7;runs/benchmarks/block3_20260203_225620_phase7_v71extreme_20260214_032205;runs/benchmarks/block3_20260203_225620_phase7_v71extreme_20260214_130737;runs/benchmarks/block3_20260203_225620_phase7_v72_failure_pool_rerun_heavy_20260219_v72fix_sched | docs/benchmarks/block3_truth_pack/truth_pack_summary.json |
-| raw_records | 13871 | docs/benchmarks/block3_truth_pack/truth_pack_summary.json |
-| strict_records | 4489 | docs/benchmarks/block3_truth_pack/truth_pack_summary.json |
+| bench_dirs | runs/benchmarks/block3_20260203_225620_iris;runs/benchmarks/block3_20260203_225620_iris_phase3;runs/benchmarks/block3_20260203_225620_iris_full;runs/benchmarks/block3_20260203_225620_iris_phase7;runs/benchmarks/block3_20260203_225620_phase7;runs/benchmarks/block3_20260203_225620_phase7_v71extreme_20260214_032205;runs/benchmarks/block3_20260203_225620_phase7_v71extreme_20260214_130737;runs/benchmarks/block3_20260203_225620_dual3090_phase7_20260215_172651;runs/benchmarks/block3_20260203_225620_dual3090_phase7_20260215_173453;runs/benchmarks/block3_20260203_225620_dual3090_phase7_20260215_182303;runs/benchmarks/block3_20260203_225620_dual3090_phase7_20260215_185618;runs/benchmarks/block3_20260203_225620_dual3090_phase7_20260215_191536;runs/benchmarks/block3_20260203_225620_phase7_v72_4090_20260219_173137;runs/benchmarks/block3_20260203_225620_phase7_v72_failure_pool_rerun_heavy_20260219_v72fix_sched | docs/benchmarks/block3_truth_pack/truth_pack_summary.json |
+| raw_records | 14491 | docs/benchmarks/block3_truth_pack/truth_pack_summary.json |
+| strict_records | 5109 | docs/benchmarks/block3_truth_pack/truth_pack_summary.json |
 | legacy_unverified_records | 9382 | docs/benchmarks/block3_truth_pack/truth_pack_summary.json |
 | strict_condition_completion | 104/104 | docs/benchmarks/block3_truth_pack/truth_pack_summary.json |
 | legacy_condition_completion | 104/104 | docs/benchmarks/block3_truth_pack/truth_pack_summary.json |
-| v71_win_rate_vs_v7 | 0.453608 | docs/benchmarks/block3_truth_pack/v71_vs_v7_overlap.csv |
+| v71_win_rate_vs_v7 | 0.440000 | docs/benchmarks/block3_truth_pack/v71_vs_v7_overlap.csv |
 | v71_median_relative_gain_vs_v7_pct | -0.333876 | docs/benchmarks/block3_truth_pack/v71_vs_v7_overlap.csv |
 | critical_failures | 4 | docs/benchmarks/block3_truth_pack/failure_taxonomy.csv |
 | v72_pilot_overall_pass | false | docs/benchmarks/block3_truth_pack/v72_pilot_gate_report.json |
-| v72_pilot_overlap_keys | 0 | docs/benchmarks/block3_truth_pack/v72_pilot_gate_report.json |
+| v72_pilot_overlap_keys | 24 | docs/benchmarks/block3_truth_pack/v72_pilot_gate_report.json |
 <!-- END AUTO:EVIDENCE_SNAPSHOT -->
+
+## Current Global Verdict (Strict Comparable)
+
+This section reflects the latest merged benchmark state after syncing additional outputs from `dual3090_phase7` and `phase7_v72_4090` into Iris.
+
+### Fairness-Bounded Overall Status
+
+| item | value | evidence_path |
+|---|---|---|
+| strict_records | 5109 | `docs/benchmarks/block3_truth_pack/truth_pack_summary.json` |
+| strict_condition_completion | 104/104 | `docs/benchmarks/block3_truth_pack/truth_pack_summary.json` |
+| champion_distribution | deep_classical=62, transformer_sota=36, foundation=6, autofit=0 | `docs/benchmarks/block3_truth_pack/condition_leaderboard.csv` |
+| v72_rows_raw | 24 | `docs/benchmarks/block3_truth_pack/v72_pilot_gate_report.json` |
+| v72_overlap_keys_v7_v72_non_autofit | 24 | `docs/benchmarks/block3_truth_pack/v72_pilot_gate_report.json` |
+| v72_vs_v7_win_rate_pct | 50.0 | `docs/benchmarks/block3_truth_pack/v72_pilot_gate_report.json` |
+| v72_global_normalized_mae_improvement_pct_vs_v7 | 1.4909248231112944 | `docs/benchmarks/block3_truth_pack/v72_pilot_gate_report.json` |
+| v72_investors_count_gap_reduction_pct_vs_v7 | -2.917353146000108 | `docs/benchmarks/block3_truth_pack/v72_pilot_gate_report.json` |
+| v72_gate_overall_pass | false | `docs/benchmarks/block3_truth_pack/v72_pilot_gate_report.json` |
+
+### V7.2 Position in the Current Matrix
+
+| target | v72_condition_coverage | v72_median_gap_vs_best_non_autofit_pct | current_interpretation | evidence_path |
+|---|---:|---:|---|---|
+| funding_raised_usd | 8/44 | 5.468318 | Near historical AutoFit heavy-tail band, still behind SOTA best models. | `docs/benchmarks/block3_truth_pack/autofit_lineage.csv` |
+| investors_count | 12/44 | 512.184619 | Core weakness remains; no strict evidence of count-gap recovery yet. | `docs/benchmarks/block3_truth_pack/autofit_lineage.csv` |
+| is_funded | 4/16 | 180.692830 | Binary lane still far from top deep/transformer winners. | `docs/benchmarks/block3_truth_pack/autofit_lineage.csv` |
+
+### Synced Run Contributions (Newly Ingested)
+
+| run_name | strict_records | strict_condition_coverage | notes | evidence_path |
+|---|---:|---:|---|---|
+| block3_20260203_225620_dual3090_phase7_20260215_191536 | 580 | 0.230769 | Added strict reference coverage for multiple non-autofit families. | `docs/benchmarks/block3_truth_pack/run_history_ledger.csv` |
+| block3_20260203_225620_phase7_v72_4090_20260219_173137 | 29 | 0.192308 | Added V7.2 strict rows on partial key space. | `docs/benchmarks/block3_truth_pack/run_history_ledger.csv` |
+| block3_20260203_225620_phase7_v72_failure_pool_rerun_heavy_20260219_v72fix_sched | 8 | 0.038462 | Added targeted V7.2 count failure-pool rerun rows. | `docs/benchmarks/block3_truth_pack/run_history_ledger.csv` |
+| block3_20260203_225620_dual3090_phase7_20260215_172651 / 173453 / 182303 / 185618 | 0 | 0.000000 | No strict records were materialized in these run directories. | `docs/benchmarks/block3_truth_pack/run_history_ledger.csv` |
 
 ## Audit Gates Snapshot
 
@@ -103,25 +134,25 @@ Gate snapshot is sourced from latest read-only audit artifacts.
 | task1_outcome | core_only | funding_raised_usd | 7 | true | true | true | NHITS | deep_classical | 380577.133 | docs/benchmarks/block3_truth_pack/condition_inventory_full.csv |
 | task1_outcome | core_only | funding_raised_usd | 14 | true | true | true | PatchTST | transformer_sota | 381200.561 | docs/benchmarks/block3_truth_pack/condition_inventory_full.csv |
 | task1_outcome | core_only | funding_raised_usd | 30 | true | true | true | PatchTST | transformer_sota | 381617.171 | docs/benchmarks/block3_truth_pack/condition_inventory_full.csv |
-| task1_outcome | core_only | investors_count | 1 | true | true | true | NHITS | deep_classical | 44.771955 | docs/benchmarks/block3_truth_pack/condition_inventory_full.csv |
-| task1_outcome | core_only | investors_count | 7 | true | true | true | NBEATS | deep_classical | 44.726689 | docs/benchmarks/block3_truth_pack/condition_inventory_full.csv |
+| task1_outcome | core_only | investors_count | 1 | true | true | true | KAN | transformer_sota | 44.703800 | docs/benchmarks/block3_truth_pack/condition_inventory_full.csv |
+| task1_outcome | core_only | investors_count | 7 | true | true | true | KAN | transformer_sota | 44.692755 | docs/benchmarks/block3_truth_pack/condition_inventory_full.csv |
 | task1_outcome | core_only | investors_count | 14 | true | true | true | NBEATS | deep_classical | 44.734036 | docs/benchmarks/block3_truth_pack/condition_inventory_full.csv |
 | task1_outcome | core_only | investors_count | 30 | true | true | true | NBEATS | deep_classical | 44.746757 | docs/benchmarks/block3_truth_pack/condition_inventory_full.csv |
-| task1_outcome | core_only | is_funded | 1 | true | true | true | PatchTST | transformer_sota | 0.033009 | docs/benchmarks/block3_truth_pack/condition_inventory_full.csv |
-| task1_outcome | core_only | is_funded | 7 | true | true | true | NHITS | deep_classical | 0.033030 | docs/benchmarks/block3_truth_pack/condition_inventory_full.csv |
-| task1_outcome | core_only | is_funded | 14 | true | true | true | PatchTST | transformer_sota | 0.033002 | docs/benchmarks/block3_truth_pack/condition_inventory_full.csv |
+| task1_outcome | core_only | is_funded | 1 | true | true | true | NHITS | deep_classical | 0.032965 | docs/benchmarks/block3_truth_pack/condition_inventory_full.csv |
+| task1_outcome | core_only | is_funded | 7 | true | true | true | PatchTST | transformer_sota | 0.033024 | docs/benchmarks/block3_truth_pack/condition_inventory_full.csv |
+| task1_outcome | core_only | is_funded | 14 | true | true | true | PatchTST | transformer_sota | 0.032960 | docs/benchmarks/block3_truth_pack/condition_inventory_full.csv |
 | task1_outcome | core_only | is_funded | 30 | true | true | true | NHITS | deep_classical | 0.032970 | docs/benchmarks/block3_truth_pack/condition_inventory_full.csv |
 | task1_outcome | core_text | funding_raised_usd | 1 | true | true | true | NBEATS | deep_classical | 380659.460 | docs/benchmarks/block3_truth_pack/condition_inventory_full.csv |
 | task1_outcome | core_text | funding_raised_usd | 7 | true | true | true | NHITS | deep_classical | 380577.133 | docs/benchmarks/block3_truth_pack/condition_inventory_full.csv |
 | task1_outcome | core_text | funding_raised_usd | 14 | true | true | true | PatchTST | transformer_sota | 381200.561 | docs/benchmarks/block3_truth_pack/condition_inventory_full.csv |
 | task1_outcome | core_text | funding_raised_usd | 30 | true | true | true | PatchTST | transformer_sota | 381617.171 | docs/benchmarks/block3_truth_pack/condition_inventory_full.csv |
-| task1_outcome | core_text | investors_count | 1 | true | true | true | NHITS | deep_classical | 44.771955 | docs/benchmarks/block3_truth_pack/condition_inventory_full.csv |
-| task1_outcome | core_text | investors_count | 7 | true | true | true | NBEATS | deep_classical | 44.726689 | docs/benchmarks/block3_truth_pack/condition_inventory_full.csv |
+| task1_outcome | core_text | investors_count | 1 | true | true | true | KAN | transformer_sota | 44.703800 | docs/benchmarks/block3_truth_pack/condition_inventory_full.csv |
+| task1_outcome | core_text | investors_count | 7 | true | true | true | KAN | transformer_sota | 44.692755 | docs/benchmarks/block3_truth_pack/condition_inventory_full.csv |
 | task1_outcome | core_text | investors_count | 14 | true | true | true | NBEATS | deep_classical | 44.734036 | docs/benchmarks/block3_truth_pack/condition_inventory_full.csv |
 | task1_outcome | core_text | investors_count | 30 | true | true | true | NBEATS | deep_classical | 44.746757 | docs/benchmarks/block3_truth_pack/condition_inventory_full.csv |
-| task1_outcome | core_text | is_funded | 1 | true | true | true | PatchTST | transformer_sota | 0.033015 | docs/benchmarks/block3_truth_pack/condition_inventory_full.csv |
-| task1_outcome | core_text | is_funded | 7 | true | true | true | NHITS | deep_classical | 0.033030 | docs/benchmarks/block3_truth_pack/condition_inventory_full.csv |
-| task1_outcome | core_text | is_funded | 14 | true | true | true | PatchTST | transformer_sota | 0.033002 | docs/benchmarks/block3_truth_pack/condition_inventory_full.csv |
+| task1_outcome | core_text | is_funded | 1 | true | true | true | NHITS | deep_classical | 0.032959 | docs/benchmarks/block3_truth_pack/condition_inventory_full.csv |
+| task1_outcome | core_text | is_funded | 7 | true | true | true | PatchTST | transformer_sota | 0.033024 | docs/benchmarks/block3_truth_pack/condition_inventory_full.csv |
+| task1_outcome | core_text | is_funded | 14 | true | true | true | PatchTST | transformer_sota | 0.032960 | docs/benchmarks/block3_truth_pack/condition_inventory_full.csv |
 | task1_outcome | core_text | is_funded | 30 | true | true | true | NHITS | deep_classical | 0.032970 | docs/benchmarks/block3_truth_pack/condition_inventory_full.csv |
 | task1_outcome | full | funding_raised_usd | 1 | true | true | true | NBEATSx | transformer_sota | 374514.684 | docs/benchmarks/block3_truth_pack/condition_inventory_full.csv |
 | task1_outcome | full | funding_raised_usd | 7 | true | true | true | NHITS | deep_classical | 374432.357 | docs/benchmarks/block3_truth_pack/condition_inventory_full.csv |
@@ -211,12 +242,12 @@ Derived subtasks are created from target lane semantics and target missingness/c
 | category | n_models_registered | n_models_observed_strict | strict_model_coverage_ratio | models_observed_strict | missing_models_strict | condition_wins | condition_win_share | evidence_path |
 |---|---|---|---|---|---|---|---|---|
 | autofit | 12 | 12 | 1.000000 | AutoFitV1;AutoFitV2;AutoFitV2E;AutoFitV3;AutoFitV3E;AutoFitV3Max;AutoFitV4;AutoFitV5;AutoFitV6;AutoFitV7;AutoFitV71;AutoFitV72 |  | 0 | 0.000000 | docs/benchmarks/block3_truth_pack/condition_leaderboard.csv |
-| deep_classical | 4 | 4 | 1.000000 | DeepAR;NBEATS;NHITS;TFT |  | 66 | 0.634615 | docs/benchmarks/block3_truth_pack/condition_leaderboard.csv |
+| deep_classical | 4 | 4 | 1.000000 | DeepAR;NBEATS;NHITS;TFT |  | 62 | 0.596154 | docs/benchmarks/block3_truth_pack/condition_leaderboard.csv |
 | foundation | 11 | 10 | 0.909091 | Chronos;ChronosBolt;LagLlama;MOMENT;Moirai;Moirai2;MoiraiLarge;TimeMoE;Timer;TimesFM | Chronos2 | 6 | 0.057692 | docs/benchmarks/block3_truth_pack/condition_leaderboard.csv |
 | irregular | 2 | 0 | 0.000000 |  | GRU-D;SAITS | 0 | 0.000000 | docs/benchmarks/block3_truth_pack/condition_leaderboard.csv |
 | ml_tabular | 19 | 17 | 0.894737 | CatBoost;ElasticNet;ExtraTrees;HistGradientBoosting;KNN;Lasso;LightGBM;LightGBMTweedie;LogisticRegression;MeanPredictor;QuantileRegressor;RandomForest;Ridge;SVR;SeasonalNaive;XGBoost;XGBoostPoisson | TabPFNClassifier;TabPFNRegressor | 0 | 0.000000 | docs/benchmarks/block3_truth_pack/condition_leaderboard.csv |
 | statistical | 5 | 5 | 1.000000 | AutoARIMA;AutoETS;AutoTheta;MSTL;SF_SeasonalNaive |  | 0 | 0.000000 | docs/benchmarks/block3_truth_pack/condition_leaderboard.csv |
-| transformer_sota | 20 | 20 | 1.000000 | Autoformer;BiTCN;DLinear;FEDformer;Informer;KAN;NBEATSx;NLinear;PatchTST;RMoK;SOFTS;StemGNN;TSMixer;TSMixerx;TiDE;TimeMixer;TimeXer;TimesNet;VanillaTransformer;iTransformer |  | 32 | 0.307692 | docs/benchmarks/block3_truth_pack/condition_leaderboard.csv |
+| transformer_sota | 20 | 20 | 1.000000 | Autoformer;BiTCN;DLinear;FEDformer;Informer;KAN;NBEATSx;NLinear;PatchTST;RMoK;SOFTS;StemGNN;TSMixer;TSMixerx;TiDE;TimeMixer;TimeXer;TimesNet;VanillaTransformer;iTransformer |  | 36 | 0.346154 | docs/benchmarks/block3_truth_pack/condition_leaderboard.csv |
 <!-- END AUTO:MODEL_FAMILY_COVERAGE_AUDIT -->
 
 ## Target Subtasks (is_funded / funding_raised_usd / investors_count)
@@ -272,12 +303,12 @@ Derived subtasks are created from target lane semantics and target missingness/c
 | task1_outcome__core_edgar__investors_count__h7 | task1_outcome | core_edgar | investors_count | count | 7 | true | true | NBEATS | deep_classical | 44.791632 | docs/benchmarks/block3_truth_pack/condition_inventory_full.csv |
 | task1_outcome__core_edgar__investors_count__h14 | task1_outcome | core_edgar | investors_count | count | 14 | true | true | NBEATS | deep_classical | 44.798978 | docs/benchmarks/block3_truth_pack/condition_inventory_full.csv |
 | task1_outcome__core_edgar__investors_count__h30 | task1_outcome | core_edgar | investors_count | count | 30 | true | true | NBEATS | deep_classical | 44.811699 | docs/benchmarks/block3_truth_pack/condition_inventory_full.csv |
-| task1_outcome__core_only__investors_count__h1 | task1_outcome | core_only | investors_count | count | 1 | true | true | NHITS | deep_classical | 44.771955 | docs/benchmarks/block3_truth_pack/condition_inventory_full.csv |
-| task1_outcome__core_only__investors_count__h7 | task1_outcome | core_only | investors_count | count | 7 | true | true | NBEATS | deep_classical | 44.726689 | docs/benchmarks/block3_truth_pack/condition_inventory_full.csv |
+| task1_outcome__core_only__investors_count__h1 | task1_outcome | core_only | investors_count | count | 1 | true | true | KAN | transformer_sota | 44.703800 | docs/benchmarks/block3_truth_pack/condition_inventory_full.csv |
+| task1_outcome__core_only__investors_count__h7 | task1_outcome | core_only | investors_count | count | 7 | true | true | KAN | transformer_sota | 44.692755 | docs/benchmarks/block3_truth_pack/condition_inventory_full.csv |
 | task1_outcome__core_only__investors_count__h14 | task1_outcome | core_only | investors_count | count | 14 | true | true | NBEATS | deep_classical | 44.734036 | docs/benchmarks/block3_truth_pack/condition_inventory_full.csv |
 | task1_outcome__core_only__investors_count__h30 | task1_outcome | core_only | investors_count | count | 30 | true | true | NBEATS | deep_classical | 44.746757 | docs/benchmarks/block3_truth_pack/condition_inventory_full.csv |
-| task1_outcome__core_text__investors_count__h1 | task1_outcome | core_text | investors_count | count | 1 | true | true | NHITS | deep_classical | 44.771955 | docs/benchmarks/block3_truth_pack/condition_inventory_full.csv |
-| task1_outcome__core_text__investors_count__h7 | task1_outcome | core_text | investors_count | count | 7 | true | true | NBEATS | deep_classical | 44.726689 | docs/benchmarks/block3_truth_pack/condition_inventory_full.csv |
+| task1_outcome__core_text__investors_count__h1 | task1_outcome | core_text | investors_count | count | 1 | true | true | KAN | transformer_sota | 44.703800 | docs/benchmarks/block3_truth_pack/condition_inventory_full.csv |
+| task1_outcome__core_text__investors_count__h7 | task1_outcome | core_text | investors_count | count | 7 | true | true | KAN | transformer_sota | 44.692755 | docs/benchmarks/block3_truth_pack/condition_inventory_full.csv |
 | task1_outcome__core_text__investors_count__h14 | task1_outcome | core_text | investors_count | count | 14 | true | true | NBEATS | deep_classical | 44.734036 | docs/benchmarks/block3_truth_pack/condition_inventory_full.csv |
 | task1_outcome__core_text__investors_count__h30 | task1_outcome | core_text | investors_count | count | 30 | true | true | NBEATS | deep_classical | 44.746757 | docs/benchmarks/block3_truth_pack/condition_inventory_full.csv |
 | task1_outcome__full__investors_count__h1 | task1_outcome | full | investors_count | count | 1 | true | true | KAN | transformer_sota | 44.809991 | docs/benchmarks/block3_truth_pack/condition_inventory_full.csv |
@@ -316,13 +347,13 @@ Derived subtasks are created from target lane semantics and target missingness/c
 | task1_outcome__core_edgar__is_funded__h7 | task1_outcome | core_edgar | is_funded | binary | 7 | true | true | NHITS | deep_classical | 0.032309 | docs/benchmarks/block3_truth_pack/condition_inventory_full.csv |
 | task1_outcome__core_edgar__is_funded__h14 | task1_outcome | core_edgar | is_funded | binary | 14 | true | true | PatchTST | transformer_sota | 0.032281 | docs/benchmarks/block3_truth_pack/condition_inventory_full.csv |
 | task1_outcome__core_edgar__is_funded__h30 | task1_outcome | core_edgar | is_funded | binary | 30 | true | true | NHITS | deep_classical | 0.032248 | docs/benchmarks/block3_truth_pack/condition_inventory_full.csv |
-| task1_outcome__core_only__is_funded__h1 | task1_outcome | core_only | is_funded | binary | 1 | true | true | PatchTST | transformer_sota | 0.033009 | docs/benchmarks/block3_truth_pack/condition_inventory_full.csv |
-| task1_outcome__core_only__is_funded__h7 | task1_outcome | core_only | is_funded | binary | 7 | true | true | NHITS | deep_classical | 0.033030 | docs/benchmarks/block3_truth_pack/condition_inventory_full.csv |
-| task1_outcome__core_only__is_funded__h14 | task1_outcome | core_only | is_funded | binary | 14 | true | true | PatchTST | transformer_sota | 0.033002 | docs/benchmarks/block3_truth_pack/condition_inventory_full.csv |
+| task1_outcome__core_only__is_funded__h1 | task1_outcome | core_only | is_funded | binary | 1 | true | true | NHITS | deep_classical | 0.032965 | docs/benchmarks/block3_truth_pack/condition_inventory_full.csv |
+| task1_outcome__core_only__is_funded__h7 | task1_outcome | core_only | is_funded | binary | 7 | true | true | PatchTST | transformer_sota | 0.033024 | docs/benchmarks/block3_truth_pack/condition_inventory_full.csv |
+| task1_outcome__core_only__is_funded__h14 | task1_outcome | core_only | is_funded | binary | 14 | true | true | PatchTST | transformer_sota | 0.032960 | docs/benchmarks/block3_truth_pack/condition_inventory_full.csv |
 | task1_outcome__core_only__is_funded__h30 | task1_outcome | core_only | is_funded | binary | 30 | true | true | NHITS | deep_classical | 0.032970 | docs/benchmarks/block3_truth_pack/condition_inventory_full.csv |
-| task1_outcome__core_text__is_funded__h1 | task1_outcome | core_text | is_funded | binary | 1 | true | true | PatchTST | transformer_sota | 0.033015 | docs/benchmarks/block3_truth_pack/condition_inventory_full.csv |
-| task1_outcome__core_text__is_funded__h7 | task1_outcome | core_text | is_funded | binary | 7 | true | true | NHITS | deep_classical | 0.033030 | docs/benchmarks/block3_truth_pack/condition_inventory_full.csv |
-| task1_outcome__core_text__is_funded__h14 | task1_outcome | core_text | is_funded | binary | 14 | true | true | PatchTST | transformer_sota | 0.033002 | docs/benchmarks/block3_truth_pack/condition_inventory_full.csv |
+| task1_outcome__core_text__is_funded__h1 | task1_outcome | core_text | is_funded | binary | 1 | true | true | NHITS | deep_classical | 0.032959 | docs/benchmarks/block3_truth_pack/condition_inventory_full.csv |
+| task1_outcome__core_text__is_funded__h7 | task1_outcome | core_text | is_funded | binary | 7 | true | true | PatchTST | transformer_sota | 0.033024 | docs/benchmarks/block3_truth_pack/condition_inventory_full.csv |
+| task1_outcome__core_text__is_funded__h14 | task1_outcome | core_text | is_funded | binary | 14 | true | true | PatchTST | transformer_sota | 0.032960 | docs/benchmarks/block3_truth_pack/condition_inventory_full.csv |
 | task1_outcome__core_text__is_funded__h30 | task1_outcome | core_text | is_funded | binary | 30 | true | true | NHITS | deep_classical | 0.032970 | docs/benchmarks/block3_truth_pack/condition_inventory_full.csv |
 | task1_outcome__full__is_funded__h1 | task1_outcome | full | is_funded | binary | 1 | true | true | PatchTST | transformer_sota | 0.032294 | docs/benchmarks/block3_truth_pack/condition_inventory_full.csv |
 | task1_outcome__full__is_funded__h7 | task1_outcome | full | is_funded | binary | 7 | true | true | NHITS | deep_classical | 0.032309 | docs/benchmarks/block3_truth_pack/condition_inventory_full.csv |
@@ -338,9 +369,9 @@ Derived subtasks are created from target lane semantics and target missingness/c
 | funding_raised_usd | heavy_tail | 1 | PatchTST | transformer_sota | 16 | 0.363636 | 44 | docs/benchmarks/block3_truth_pack/condition_leaderboard.csv |
 | funding_raised_usd | heavy_tail | 2 | NHITS | deep_classical | 11 | 0.250000 | 44 | docs/benchmarks/block3_truth_pack/condition_leaderboard.csv |
 | funding_raised_usd | heavy_tail | 3 | NBEATS | deep_classical | 9 | 0.204545 | 44 | docs/benchmarks/block3_truth_pack/condition_leaderboard.csv |
-| investors_count | count | 1 | NBEATS | deep_classical | 30 | 0.681818 | 44 | docs/benchmarks/block3_truth_pack/condition_leaderboard.csv |
-| investors_count | count | 2 | NHITS | deep_classical | 8 | 0.181818 | 44 | docs/benchmarks/block3_truth_pack/condition_leaderboard.csv |
-| investors_count | count | 3 | KAN | transformer_sota | 3 | 0.068182 | 44 | docs/benchmarks/block3_truth_pack/condition_leaderboard.csv |
+| investors_count | count | 1 | NBEATS | deep_classical | 28 | 0.636364 | 44 | docs/benchmarks/block3_truth_pack/condition_leaderboard.csv |
+| investors_count | count | 2 | KAN | transformer_sota | 7 | 0.159091 | 44 | docs/benchmarks/block3_truth_pack/condition_leaderboard.csv |
+| investors_count | count | 3 | NHITS | deep_classical | 6 | 0.136364 | 44 | docs/benchmarks/block3_truth_pack/condition_leaderboard.csv |
 | is_funded | binary | 1 | PatchTST | transformer_sota | 8 | 0.500000 | 16 | docs/benchmarks/block3_truth_pack/condition_leaderboard.csv |
 | is_funded | binary | 2 | NHITS | deep_classical | 8 | 0.500000 | 16 | docs/benchmarks/block3_truth_pack/condition_leaderboard.csv |
 <!-- END AUTO:TOP3_REPRESENTATIVE_MODELS -->
@@ -356,12 +387,12 @@ Derived subtasks are created from target lane semantics and target missingness/c
 | funding_raised_usd | heavy_tail | ml_tabular | RandomForest | 396360.349 | NHITS | deep_classical | 374432.357 | 5.856329 | runs/benchmarks/block3_20260203_225620_phase7/task1_outcome/ml_tabular/core_edgar/metrics.json |
 | funding_raised_usd | heavy_tail | statistical | SF_SeasonalNaive | 4064930.583 | NHITS | deep_classical | 374432.357 | 985.624814 | runs/benchmarks/block3_20260203_225620_phase7/task1_outcome/statistical/core_edgar/metrics.json |
 | funding_raised_usd | heavy_tail | transformer_sota | NBEATSx | 374514.684 | NHITS | deep_classical | 374432.357 | 0.021987 | runs/benchmarks/block3_20260203_225620_phase7/task1_outcome/transformer_sota/full/metrics.json |
-| investors_count | count | autofit | AutoFitV6 | 114.116541 | NBEATS | deep_classical | 44.726689 | 155.141936 | runs/benchmarks/block3_20260203_225620_phase7_v71extreme_20260214_032205/pilot/autofit_baseline/task2_forecast/autofit/core_text/metrics.json |
-| investors_count | count | deep_classical | NBEATS | 44.726689 | NBEATS | deep_classical | 44.726689 | 0.000000 | runs/benchmarks/block3_20260203_225620_phase7_v71extreme_20260214_032205/pilot/deep_refs/task1_outcome/deep_classical/core_only/metrics.json |
-| investors_count | count | foundation | ChronosBolt | 44.992359 | NBEATS | deep_classical | 44.726689 | 0.593984 | runs/benchmarks/block3_20260203_225620_phase7/task1_outcome/foundation/full/metrics.json |
-| investors_count | count | ml_tabular | RandomForest | 95.599464 | NBEATS | deep_classical | 44.726689 | 113.741427 | runs/benchmarks/block3_20260203_225620_phase7_v71extreme_20260214_032205/pilot/ml_refs/task2_forecast/ml_tabular/core_only/metrics.json |
-| investors_count | count | statistical | MSTL | 48.222248 | NBEATS | deep_classical | 44.726689 | 7.815376 | runs/benchmarks/block3_20260203_225620_phase7/task1_outcome/statistical/core_edgar/metrics.json |
-| investors_count | count | transformer_sota | PatchTST | 44.771809 | NBEATS | deep_classical | 44.726689 | 0.100878 | runs/benchmarks/block3_20260203_225620_phase7_v71extreme_20260214_032205/pilot/ts_refs/task1_outcome/transformer_sota/core_only/metrics.json |
+| investors_count | count | autofit | AutoFitV6 | 114.116541 | KAN | transformer_sota | 44.692755 | 155.335657 | runs/benchmarks/block3_20260203_225620_phase7_v71extreme_20260214_032205/pilot/autofit_baseline/task2_forecast/autofit/core_text/metrics.json |
+| investors_count | count | deep_classical | NBEATS | 44.726689 | KAN | transformer_sota | 44.692755 | 0.075927 | runs/benchmarks/block3_20260203_225620_phase7_v71extreme_20260214_032205/pilot/deep_refs/task1_outcome/deep_classical/core_only/metrics.json |
+| investors_count | count | foundation | ChronosBolt | 44.992359 | KAN | transformer_sota | 44.692755 | 0.670361 | runs/benchmarks/block3_20260203_225620_phase7/task1_outcome/foundation/full/metrics.json |
+| investors_count | count | ml_tabular | RandomForest | 95.599464 | KAN | transformer_sota | 44.692755 | 113.903713 | runs/benchmarks/block3_20260203_225620_phase7_v71extreme_20260214_032205/pilot/ml_refs/task2_forecast/ml_tabular/core_only/metrics.json |
+| investors_count | count | statistical | MSTL | 48.222248 | KAN | transformer_sota | 44.692755 | 7.897236 | runs/benchmarks/block3_20260203_225620_phase7/task1_outcome/statistical/core_edgar/metrics.json |
+| investors_count | count | transformer_sota | KAN | 44.692755 | KAN | transformer_sota | 44.692755 | 0.000000 | runs/benchmarks/block3_20260203_225620_dual3090_phase7_20260215_191536/task1_outcome/transformer_sota_B/core_only/metrics.json |
 | is_funded | binary | autofit | AutoFitV71 | 0.086412 | NHITS | deep_classical | 0.032248 | 167.958234 | runs/benchmarks/block3_20260203_225620_phase7_v71extreme_20260214_032205/pilot/v71_g02/task1_outcome/autofit/core_text/metrics.json |
 | is_funded | binary | deep_classical | NHITS | 0.032248 | NHITS | deep_classical | 0.032248 | 0.000000 | runs/benchmarks/block3_20260203_225620_phase7_v71extreme_20260214_130737/full/deep_refs/task1_outcome/deep_classical/core_edgar/metrics.json |
 | is_funded | binary | foundation | ChronosBolt | 0.033394 | NHITS | deep_classical | 0.032248 | 3.551434 | runs/benchmarks/block3_20260203_225620_phase7/task1_outcome/foundation/full/metrics.json |
@@ -384,8 +415,8 @@ Derived subtasks are created from target lane semantics and target missingness/c
 | binary__mid__core_text | binary | mid | core_text | PatchTST |  | 1 | {"PatchTST": {"win_rate": 1.0, "wins": 1}} | {"autofit_gap_gt_100pct": 16} | docs/benchmarks/block3_truth_pack/condition_leaderboard.csv |
 | binary__mid__full | binary | mid | full | PatchTST |  | 1 | {"PatchTST": {"win_rate": 1.0, "wins": 1}} | {"autofit_gap_gt_100pct": 16} | docs/benchmarks/block3_truth_pack/condition_leaderboard.csv |
 | binary__short__core_edgar | binary | short | core_edgar | PatchTST | NHITS | 2 | {"NHITS": {"win_rate": 0.5, "wins": 1}, "PatchTST": {"win_rate": 0.5, "wins": 1}} | {"autofit_gap_gt_100pct": 16} | docs/benchmarks/block3_truth_pack/condition_leaderboard.csv |
-| binary__short__core_only | binary | short | core_only | PatchTST | NHITS | 2 | {"NHITS": {"win_rate": 0.5, "wins": 1}, "PatchTST": {"win_rate": 0.5, "wins": 1}} | {"autofit_gap_gt_100pct": 16} | docs/benchmarks/block3_truth_pack/condition_leaderboard.csv |
-| binary__short__core_text | binary | short | core_text | PatchTST | NHITS | 2 | {"NHITS": {"win_rate": 0.5, "wins": 1}, "PatchTST": {"win_rate": 0.5, "wins": 1}} | {"autofit_gap_gt_100pct": 16} | docs/benchmarks/block3_truth_pack/condition_leaderboard.csv |
+| binary__short__core_only | binary | short | core_only | NHITS | PatchTST | 2 | {"NHITS": {"win_rate": 0.5, "wins": 1}, "PatchTST": {"win_rate": 0.5, "wins": 1}} | {"autofit_gap_gt_100pct": 16} | docs/benchmarks/block3_truth_pack/condition_leaderboard.csv |
+| binary__short__core_text | binary | short | core_text | NHITS | PatchTST | 2 | {"NHITS": {"win_rate": 0.5, "wins": 1}, "PatchTST": {"win_rate": 0.5, "wins": 1}} | {"autofit_gap_gt_100pct": 16} | docs/benchmarks/block3_truth_pack/condition_leaderboard.csv |
 | binary__short__full | binary | short | full | PatchTST | NHITS | 2 | {"NHITS": {"win_rate": 0.5, "wins": 1}, "PatchTST": {"win_rate": 0.5, "wins": 1}} | {"autofit_gap_gt_100pct": 16} | docs/benchmarks/block3_truth_pack/condition_leaderboard.csv |
 | count__long__core_edgar | count | long | core_edgar | NBEATS |  | 3 | {"NBEATS": {"win_rate": 1.0, "wins": 3}} | {"autofit_gap_gt_100pct": 44, "v71_count_explosion": 4} | docs/benchmarks/block3_truth_pack/condition_leaderboard.csv |
 | count__long__core_only | count | long | core_only | NBEATS |  | 3 | {"NBEATS": {"win_rate": 1.0, "wins": 3}} | {"autofit_gap_gt_100pct": 44, "v71_count_explosion": 4} | docs/benchmarks/block3_truth_pack/condition_leaderboard.csv |
@@ -396,8 +427,8 @@ Derived subtasks are created from target lane semantics and target missingness/c
 | count__mid__core_text | count | mid | core_text | NBEATS |  | 2 | {"NBEATS": {"win_rate": 1.0, "wins": 2}} | {"autofit_gap_gt_100pct": 44, "v71_count_explosion": 4} | docs/benchmarks/block3_truth_pack/condition_leaderboard.csv |
 | count__mid__full | count | mid | full | NBEATS | NBEATSx | 3 | {"NBEATS": {"win_rate": 0.6666666666666666, "wins": 2}, "NBEATSx": {"win_rate": 0.3333333333333333, "wins": 1}} | {"autofit_gap_gt_100pct": 44, "v71_count_explosion": 4} | docs/benchmarks/block3_truth_pack/condition_leaderboard.csv |
 | count__short__core_edgar | count | short | core_edgar | NHITS | NBEATS | 6 | {"NBEATS": {"win_rate": 0.5, "wins": 3}, "NHITS": {"win_rate": 0.5, "wins": 3}} | {"autofit_gap_gt_100pct": 44, "v71_count_explosion": 4} | docs/benchmarks/block3_truth_pack/condition_leaderboard.csv |
-| count__short__core_only | count | short | core_only | NHITS | NBEATS | 6 | {"NBEATS": {"win_rate": 0.5, "wins": 3}, "NHITS": {"win_rate": 0.5, "wins": 3}} | {"autofit_gap_gt_100pct": 44, "v71_count_explosion": 4} | docs/benchmarks/block3_truth_pack/condition_leaderboard.csv |
-| count__short__core_text | count | short | core_text | NHITS | NBEATS | 4 | {"NBEATS": {"win_rate": 0.5, "wins": 2}, "NHITS": {"win_rate": 0.5, "wins": 2}} | {"autofit_gap_gt_100pct": 44, "v71_count_explosion": 4} | docs/benchmarks/block3_truth_pack/condition_leaderboard.csv |
+| count__short__core_only | count | short | core_only | KAN | NHITS,NBEATS | 6 | {"KAN": {"win_rate": 0.3333333333333333, "wins": 2}, "NBEATS": {"win_rate": 0.3333333333333333, "wins": 2}, "NHITS": {"win_rate": 0.3333333333333333, "wins": 2}} | {"autofit_gap_gt_100pct": 44, "v71_count_explosion": 4} | docs/benchmarks/block3_truth_pack/condition_leaderboard.csv |
+| count__short__core_text | count | short | core_text | KAN | NHITS,NBEATS | 4 | {"KAN": {"win_rate": 0.5, "wins": 2}, "NBEATS": {"win_rate": 0.25, "wins": 1}, "NHITS": {"win_rate": 0.25, "wins": 1}} | {"autofit_gap_gt_100pct": 44, "v71_count_explosion": 4} | docs/benchmarks/block3_truth_pack/condition_leaderboard.csv |
 | count__short__full | count | short | full | KAN | NBEATS,NBEATSx | 6 | {"KAN": {"win_rate": 0.5, "wins": 3}, "NBEATS": {"win_rate": 0.3333333333333333, "wins": 2}, "NBEATSx": {"win_rate": 0.16666666666666666, "wins": 1}} | {"autofit_gap_gt_100pct": 44, "v71_count_explosion": 4} | docs/benchmarks/block3_truth_pack/condition_leaderboard.csv |
 | heavy_tail__long__core_edgar | heavy_tail | long | core_edgar | PatchTST |  | 3 | {"PatchTST": {"win_rate": 1.0, "wins": 3}} | {} | docs/benchmarks/block3_truth_pack/condition_leaderboard.csv |
 | heavy_tail__long__core_only | heavy_tail | long | core_only | PatchTST |  | 3 | {"PatchTST": {"win_rate": 1.0, "wins": 3}} | {} | docs/benchmarks/block3_truth_pack/condition_leaderboard.csv |
@@ -685,20 +716,20 @@ Derived subtasks are created from target lane semantics and target missingness/c
 <!-- BEGIN AUTO:V72_PILOT_GATE_REPORT -->
 | section | key | value | evidence_path |
 |---|---|---|---|
-| summary | generated_at_utc | 2026-02-18T23:47:03.306668+00:00 | docs/benchmarks/block3_truth_pack/v72_pilot_gate_report.json |
+| summary | generated_at_utc | 2026-02-22T00:56:16.742599+00:00 | docs/benchmarks/block3_truth_pack/v72_pilot_gate_report.json |
 | summary | overall_pass | false | docs/benchmarks/block3_truth_pack/v72_pilot_gate_report.json |
-| counts | overlap_keys_v7_v72_non_autofit | 0 | docs/benchmarks/block3_truth_pack/v72_pilot_gate_report.json |
-| counts | rows_strict | 4034 | docs/benchmarks/block3_truth_pack/v72_pilot_gate_report.json |
-| counts | rows_total | 13416 | docs/benchmarks/block3_truth_pack/v72_pilot_gate_report.json |
-| counts | v72_rows_raw | 0 | docs/benchmarks/block3_truth_pack/v72_pilot_gate_report.json |
-| metrics | global_normalized_mae_improvement_pct |  | docs/benchmarks/block3_truth_pack/v72_pilot_gate_report.json |
-| metrics | global_normalized_mae_v7 |  | docs/benchmarks/block3_truth_pack/v72_pilot_gate_report.json |
-| metrics | global_normalized_mae_v72 |  | docs/benchmarks/block3_truth_pack/v72_pilot_gate_report.json |
-| metrics | investors_count_gap_reduction_pct |  | docs/benchmarks/block3_truth_pack/v72_pilot_gate_report.json |
-| metrics | investors_count_median_gap_v7 |  | docs/benchmarks/block3_truth_pack/v72_pilot_gate_report.json |
-| metrics | investors_count_median_gap_v72 |  | docs/benchmarks/block3_truth_pack/v72_pilot_gate_report.json |
-| metrics | v72_vs_v7_win_rate_pct |  | docs/benchmarks/block3_truth_pack/v72_pilot_gate_report.json |
-| checks | fairness_pass_100 | false | docs/benchmarks/block3_truth_pack/v72_pilot_gate_report.json |
+| counts | overlap_keys_v7_v72_non_autofit | 24 | docs/benchmarks/block3_truth_pack/v72_pilot_gate_report.json |
+| counts | rows_strict | 5109 | docs/benchmarks/block3_truth_pack/v72_pilot_gate_report.json |
+| counts | rows_total | 14491 | docs/benchmarks/block3_truth_pack/v72_pilot_gate_report.json |
+| counts | v72_rows_raw | 24 | docs/benchmarks/block3_truth_pack/v72_pilot_gate_report.json |
+| metrics | global_normalized_mae_improvement_pct | 1.490925 | docs/benchmarks/block3_truth_pack/v72_pilot_gate_report.json |
+| metrics | global_normalized_mae_v7 | 1.102229 | docs/benchmarks/block3_truth_pack/v72_pilot_gate_report.json |
+| metrics | global_normalized_mae_v72 | 1.085796 | docs/benchmarks/block3_truth_pack/v72_pilot_gate_report.json |
+| metrics | investors_count_gap_reduction_pct | -2.917353 | docs/benchmarks/block3_truth_pack/v72_pilot_gate_report.json |
+| metrics | investors_count_median_gap_v7 | 4.976659 | docs/benchmarks/block3_truth_pack/v72_pilot_gate_report.json |
+| metrics | investors_count_median_gap_v72 | 5.121846 | docs/benchmarks/block3_truth_pack/v72_pilot_gate_report.json |
+| metrics | v72_vs_v7_win_rate_pct | 50.000000 | docs/benchmarks/block3_truth_pack/v72_pilot_gate_report.json |
+| checks | fairness_pass_100 | true | docs/benchmarks/block3_truth_pack/v72_pilot_gate_report.json |
 | checks | global_normalized_mae_improvement_ge_8pct | false | docs/benchmarks/block3_truth_pack/v72_pilot_gate_report.json |
 | checks | investors_count_gap_reduction_ge_50pct | false | docs/benchmarks/block3_truth_pack/v72_pilot_gate_report.json |
 <!-- END AUTO:V72_PILOT_GATE_REPORT -->
@@ -715,8 +746,14 @@ Derived subtasks are created from target lane semantics and target missingness/c
 | block3_20260203_225620_iris_full | iris_full_baseline | 2646 | 0 | 2646 | 0.000000 | 49 | 7 | 0.000000 | 0.538462 | {} | {} | runs/benchmarks/block3_20260203_225620_iris_full |
 | block3_20260203_225620_iris_phase7 | iris_phase7_partial | 1060 | 0 | 1060 | 0.000000 | 56 | 6 | 0.000000 | 0.230769 | {} | {} | runs/benchmarks/block3_20260203_225620_iris_phase7 |
 | block3_20260203_225620_phase7 | phase7_canonical | 5134 | 1839 | 3295 | 0.358200 | 68 | 7 | 0.615385 | 1.000000 | {"funding_raised_usd": {"category": "deep_classical", "mae": 374432.35741397936, "model": "NHITS"}, "investors_count": {"category": "transformer_sota", "mae": 44.79163160827051, "model": "NBEATSx"}, "is_funded": {"category": "transformer_sota", "mae": 0.032280800947848576, "model": "PatchTST"}} | {"autofit_gap_gt_100pct": 16} | runs/benchmarks/block3_20260203_225620_phase7 |
-| block3_20260203_225620_phase7_v71extreme_20260214_032205 | v71_pilot | 1530 | 1530 | 0 | 1.000000 | 18 | 5 | 1.000000 | 0.000000 | {"funding_raised_usd": {"category": "deep_classical", "mae": 374432.35741397936, "model": "NHITS"}, "investors_count": {"category": "deep_classical", "mae": 44.726689230844215, "model": "NBEATS"}, "is_funded": {"category": "deep_classical", "mae": 0.03232223233914305, "model": "NHITS"}} | {"autofit_gap_gt_100pct": 44, "v71_count_explosion": 8} | runs/benchmarks/block3_20260203_225620_phase7_v71extreme_20260214_032205 |
+| block3_20260203_225620_phase7_v71extreme_20260214_032205 | v71_pilot | 1541 | 1541 | 0 | 1.000000 | 18 | 5 | 1.000000 | 0.000000 | {"funding_raised_usd": {"category": "deep_classical", "mae": 374432.35741397936, "model": "NHITS"}, "investors_count": {"category": "deep_classical", "mae": 44.726689230844215, "model": "NBEATS"}, "is_funded": {"category": "deep_classical", "mae": 0.03232223233914305, "model": "NHITS"}} | {"autofit_gap_gt_100pct": 28, "v71_count_explosion": 8} | runs/benchmarks/block3_20260203_225620_phase7_v71extreme_20260214_032205 |
 | block3_20260203_225620_phase7_v71extreme_20260214_130737 | v71_full | 1112 | 1112 | 0 | 1.000000 | 12 | 4 | 1.000000 | 0.000000 | {"funding_raised_usd": {"category": "deep_classical", "mae": 374432.3574093943, "model": "NHITS"}, "investors_count": {"category": "deep_classical", "mae": 44.726689230844215, "model": "NBEATS"}, "is_funded": {"category": "deep_classical", "mae": 0.03224843655460842, "model": "NHITS"}} | {} | runs/benchmarks/block3_20260203_225620_phase7_v71extreme_20260214_130737 |
+| block3_20260203_225620_dual3090_phase7_20260215_172651 | other | 0 | 0 | 0 | 0.000000 | 0 | 0 | 0.000000 | 0.000000 | {} | {} | runs/benchmarks/block3_20260203_225620_dual3090_phase7_20260215_172651 |
+| block3_20260203_225620_dual3090_phase7_20260215_173453 | other | 0 | 0 | 0 | 0.000000 | 0 | 0 | 0.000000 | 0.000000 | {} | {} | runs/benchmarks/block3_20260203_225620_dual3090_phase7_20260215_173453 |
+| block3_20260203_225620_dual3090_phase7_20260215_182303 | other | 0 | 0 | 0 | 0.000000 | 0 | 0 | 0.000000 | 0.000000 | {} | {} | runs/benchmarks/block3_20260203_225620_dual3090_phase7_20260215_182303 |
+| block3_20260203_225620_dual3090_phase7_20260215_185618 | other | 0 | 0 | 0 | 0.000000 | 0 | 0 | 0.000000 | 0.000000 | {} | {} | runs/benchmarks/block3_20260203_225620_dual3090_phase7_20260215_185618 |
+| block3_20260203_225620_dual3090_phase7_20260215_191536 | other | 580 | 580 | 0 | 1.000000 | 45 | 5 | 0.230769 | 0.000000 | {"funding_raised_usd": {"category": "deep_classical", "mae": 380745.9910913987, "model": "NBEATS"}, "investors_count": {"category": "transformer_sota", "mae": 44.69275549359792, "model": "KAN"}, "is_funded": {"category": "deep_classical", "mae": 0.03295886751735992, "model": "NHITS"}} | {"autofit_gap_gt_100pct": 16} | runs/benchmarks/block3_20260203_225620_dual3090_phase7_20260215_191536 |
+| block3_20260203_225620_phase7_v72_4090_20260219_173137 | other | 29 | 29 | 0 | 1.000000 | 3 | 1 | 0.192308 | 0.000000 | {"funding_raised_usd": {"category": "autofit", "mae": 396381.2919287242, "model": "AutoFitV71"}, "investors_count": {"category": "autofit", "mae": 257.7900048566551, "model": "AutoFitV72"}, "is_funded": {"category": "autofit", "mae": 0.09253663529720278, "model": "AutoFitV72"}} | {} | runs/benchmarks/block3_20260203_225620_phase7_v72_4090_20260219_173137 |
 | block3_20260203_225620_phase7_v72_failure_pool_rerun_heavy_20260219_v72fix_sched | other | 8 | 8 | 0 | 1.000000 | 2 | 1 | 0.038462 | 0.000000 | {"investors_count": {"category": "autofit", "mae": 274.4063475010302, "model": "AutoFitV72"}} | {} | runs/benchmarks/block3_20260203_225620_phase7_v72_failure_pool_rerun_heavy_20260219_v72fix_sched |
 
 ### Observations
@@ -735,13 +772,28 @@ Derived subtasks are created from target lane semantics and target missingness/c
 | block3_20260203_225620_phase7 | strict_condition_coverage | Coverage ratio of expected 104 keys under strict comparability. | 0.6154 | docs/benchmarks/block3_truth_pack/condition_inventory_full.csv |
 | block3_20260203_225620_phase7 | strict_ratio | Share of strict-comparable records among all valid records. | 0.3582 | runs/benchmarks/block3_20260203_225620_phase7 |
 | block3_20260203_225620_phase7 | target_winners | Best strict model per target for this run. | {"funding_raised_usd": {"category": "deep_classical", "mae": 374432.35741397936, "model": "NHITS"}, "investors_count": {"category": "transformer_sota", "mae": 44.79163160827051, "model": "NBEATSx"}, "is_funded": {"category": "transformer_sota", "mae": 0.032280800947848576, "model": "PatchTST"}} | runs/benchmarks/block3_20260203_225620_phase7 |
-| block3_20260203_225620_phase7_v71extreme_20260214_032205 | failure_tags | Failure taxonomy tags found in this run. | {"autofit_gap_gt_100pct": 44, "v71_count_explosion": 8} | docs/benchmarks/block3_truth_pack/failure_taxonomy.csv |
+| block3_20260203_225620_phase7_v71extreme_20260214_032205 | failure_tags | Failure taxonomy tags found in this run. | {"autofit_gap_gt_100pct": 28, "v71_count_explosion": 8} | docs/benchmarks/block3_truth_pack/failure_taxonomy.csv |
 | block3_20260203_225620_phase7_v71extreme_20260214_032205 | strict_condition_coverage | Coverage ratio of expected 104 keys under strict comparability. | 1.0000 | docs/benchmarks/block3_truth_pack/condition_inventory_full.csv |
 | block3_20260203_225620_phase7_v71extreme_20260214_032205 | strict_ratio | Share of strict-comparable records among all valid records. | 1.0000 | runs/benchmarks/block3_20260203_225620_phase7_v71extreme_20260214_032205 |
 | block3_20260203_225620_phase7_v71extreme_20260214_032205 | target_winners | Best strict model per target for this run. | {"funding_raised_usd": {"category": "deep_classical", "mae": 374432.35741397936, "model": "NHITS"}, "investors_count": {"category": "deep_classical", "mae": 44.726689230844215, "model": "NBEATS"}, "is_funded": {"category": "deep_classical", "mae": 0.03232223233914305, "model": "NHITS"}} | runs/benchmarks/block3_20260203_225620_phase7_v71extreme_20260214_032205 |
 | block3_20260203_225620_phase7_v71extreme_20260214_130737 | strict_condition_coverage | Coverage ratio of expected 104 keys under strict comparability. | 1.0000 | docs/benchmarks/block3_truth_pack/condition_inventory_full.csv |
 | block3_20260203_225620_phase7_v71extreme_20260214_130737 | strict_ratio | Share of strict-comparable records among all valid records. | 1.0000 | runs/benchmarks/block3_20260203_225620_phase7_v71extreme_20260214_130737 |
 | block3_20260203_225620_phase7_v71extreme_20260214_130737 | target_winners | Best strict model per target for this run. | {"funding_raised_usd": {"category": "deep_classical", "mae": 374432.3574093943, "model": "NHITS"}, "investors_count": {"category": "deep_classical", "mae": 44.726689230844215, "model": "NBEATS"}, "is_funded": {"category": "deep_classical", "mae": 0.03224843655460842, "model": "NHITS"}} | runs/benchmarks/block3_20260203_225620_phase7_v71extreme_20260214_130737 |
+| block3_20260203_225620_dual3090_phase7_20260215_172651 | strict_condition_coverage | Coverage ratio of expected 104 keys under strict comparability. | 0.0000 | docs/benchmarks/block3_truth_pack/condition_inventory_full.csv |
+| block3_20260203_225620_dual3090_phase7_20260215_172651 | strict_ratio | Share of strict-comparable records among all valid records. | 0.0000 | runs/benchmarks/block3_20260203_225620_dual3090_phase7_20260215_172651 |
+| block3_20260203_225620_dual3090_phase7_20260215_173453 | strict_condition_coverage | Coverage ratio of expected 104 keys under strict comparability. | 0.0000 | docs/benchmarks/block3_truth_pack/condition_inventory_full.csv |
+| block3_20260203_225620_dual3090_phase7_20260215_173453 | strict_ratio | Share of strict-comparable records among all valid records. | 0.0000 | runs/benchmarks/block3_20260203_225620_dual3090_phase7_20260215_173453 |
+| block3_20260203_225620_dual3090_phase7_20260215_182303 | strict_condition_coverage | Coverage ratio of expected 104 keys under strict comparability. | 0.0000 | docs/benchmarks/block3_truth_pack/condition_inventory_full.csv |
+| block3_20260203_225620_dual3090_phase7_20260215_182303 | strict_ratio | Share of strict-comparable records among all valid records. | 0.0000 | runs/benchmarks/block3_20260203_225620_dual3090_phase7_20260215_182303 |
+| block3_20260203_225620_dual3090_phase7_20260215_185618 | strict_condition_coverage | Coverage ratio of expected 104 keys under strict comparability. | 0.0000 | docs/benchmarks/block3_truth_pack/condition_inventory_full.csv |
+| block3_20260203_225620_dual3090_phase7_20260215_185618 | strict_ratio | Share of strict-comparable records among all valid records. | 0.0000 | runs/benchmarks/block3_20260203_225620_dual3090_phase7_20260215_185618 |
+| block3_20260203_225620_dual3090_phase7_20260215_191536 | failure_tags | Failure taxonomy tags found in this run. | {"autofit_gap_gt_100pct": 16} | docs/benchmarks/block3_truth_pack/failure_taxonomy.csv |
+| block3_20260203_225620_dual3090_phase7_20260215_191536 | strict_condition_coverage | Coverage ratio of expected 104 keys under strict comparability. | 0.2308 | docs/benchmarks/block3_truth_pack/condition_inventory_full.csv |
+| block3_20260203_225620_dual3090_phase7_20260215_191536 | strict_ratio | Share of strict-comparable records among all valid records. | 1.0000 | runs/benchmarks/block3_20260203_225620_dual3090_phase7_20260215_191536 |
+| block3_20260203_225620_dual3090_phase7_20260215_191536 | target_winners | Best strict model per target for this run. | {"funding_raised_usd": {"category": "deep_classical", "mae": 380745.9910913987, "model": "NBEATS"}, "investors_count": {"category": "transformer_sota", "mae": 44.69275549359792, "model": "KAN"}, "is_funded": {"category": "deep_classical", "mae": 0.03295886751735992, "model": "NHITS"}} | runs/benchmarks/block3_20260203_225620_dual3090_phase7_20260215_191536 |
+| block3_20260203_225620_phase7_v72_4090_20260219_173137 | strict_condition_coverage | Coverage ratio of expected 104 keys under strict comparability. | 0.1923 | docs/benchmarks/block3_truth_pack/condition_inventory_full.csv |
+| block3_20260203_225620_phase7_v72_4090_20260219_173137 | strict_ratio | Share of strict-comparable records among all valid records. | 1.0000 | runs/benchmarks/block3_20260203_225620_phase7_v72_4090_20260219_173137 |
+| block3_20260203_225620_phase7_v72_4090_20260219_173137 | target_winners | Best strict model per target for this run. | {"funding_raised_usd": {"category": "autofit", "mae": 396381.2919287242, "model": "AutoFitV71"}, "investors_count": {"category": "autofit", "mae": 257.7900048566551, "model": "AutoFitV72"}, "is_funded": {"category": "autofit", "mae": 0.09253663529720278, "model": "AutoFitV72"}} | runs/benchmarks/block3_20260203_225620_phase7_v72_4090_20260219_173137 |
 | block3_20260203_225620_phase7_v72_failure_pool_rerun_heavy_20260219_v72fix_sched | strict_condition_coverage | Coverage ratio of expected 104 keys under strict comparability. | 0.0385 | docs/benchmarks/block3_truth_pack/condition_inventory_full.csv |
 | block3_20260203_225620_phase7_v72_failure_pool_rerun_heavy_20260219_v72fix_sched | strict_ratio | Share of strict-comparable records among all valid records. | 1.0000 | runs/benchmarks/block3_20260203_225620_phase7_v72_failure_pool_rerun_heavy_20260219_v72fix_sched |
 | block3_20260203_225620_phase7_v72_failure_pool_rerun_heavy_20260219_v72fix_sched | target_winners | Best strict model per target for this run. | {"investors_count": {"category": "autofit", "mae": 274.4063475010302, "model": "AutoFitV72"}} | runs/benchmarks/block3_20260203_225620_phase7_v72_failure_pool_rerun_heavy_20260219_v72fix_sched |
@@ -760,12 +812,12 @@ Derived subtasks are created from target lane semantics and target missingness/c
 | AutoFitV3 | 320c314 | Temporal CV + greedy/exhaustive subset selection with diversity preference. | Temporal OOF stacking with subset search. | funding_raised_usd,investors_count | {"funding_raised_usd": 395955.94231643423, "investors_count": 166.5901593917879} | {"funding_raised_usd": 5.7122780068785906, "investors_count": 271.8469491563099} | no_critical_failure_observed | docs/benchmarks/block3_truth_pack/autofit_lineage.csv |
 | AutoFitV3E | 320c314 | Top-K stacking variant under V3 temporal CV framework. | OOF-based stacking simplification. | funding_raised_usd,investors_count | {"funding_raised_usd": 430407.32656598045, "investors_count": 204.14996378872286} | {"funding_raised_usd": 14.908285029875124, "investors_count": 355.71599809717395} | no_critical_failure_observed | docs/benchmarks/block3_truth_pack/autofit_lineage.csv |
 | AutoFitV3Max | 320c314 | Exhaustive V3 search with bounded candidate budget. | Combinatorial ensemble search. | funding_raised_usd,investors_count,is_funded | {"funding_raised_usd": 396360.34859371965, "investors_count": 137.25314473071458, "is_funded": 0.10890193145407928} | {"funding_raised_usd": 5.784237218695543, "investors_count": 206.3042367132195, "is_funded": 237.22422339168654} | high_gap_vs_best_non_autofit | docs/benchmarks/block3_truth_pack/autofit_lineage.csv |
-| AutoFitV4 | c53abf6 | Target transforms + full OOF stacking + diversity-aware selection. | NCL and transform-aware robust stacking. | funding_raised_usd,investors_count,is_funded | {"funding_raised_usd": 428265.8942024873, "investors_count": 196.73858138376124, "is_funded": 0.09019217803206035} | {"funding_raised_usd": 14.30077913562794, "investors_count": 339.1945823307518, "is_funded": 179.157310539888} | no_critical_failure_observed | docs/benchmarks/block3_truth_pack/autofit_lineage.csv |
+| AutoFitV4 | c53abf6 | Target transforms + full OOF stacking + diversity-aware selection. | NCL and transform-aware robust stacking. | funding_raised_usd,investors_count,is_funded | {"funding_raised_usd": 428265.89420248836, "investors_count": 196.73858138376124, "is_funded": 0.09019217803206035} | {"funding_raised_usd": 14.299559151635744, "investors_count": 339.1945823307518, "is_funded": 179.157310539888} | no_critical_failure_observed | docs/benchmarks/block3_truth_pack/autofit_lineage.csv |
 | AutoFitV5 | dce0ff9 | Regime-aware tiered evaluation and collapse detection guard. | Cost-aware routing with monotonic fallback guard. | funding_raised_usd,investors_count,is_funded | {"funding_raised_usd": 396360.34859371965, "investors_count": 252.99398560055954, "is_funded": 0.09947219709664773} | {"funding_raised_usd": 5.784237218695543, "investors_count": 464.57128211048683, "is_funded": 208.02423765207965} | no_critical_failure_observed | docs/benchmarks/block3_truth_pack/autofit_lineage.csv |
 | AutoFitV6 | ad07032 | Caruana-style greedy ensembling + two-layer stacking + conformal weighting. | AutoGluon-style weighted ensemble with robust transform. | funding_raised_usd,investors_count,is_funded | {"funding_raised_usd": 396360.34859371965, "investors_count": 300.71177668475053, "is_funded": 0.09818964911714113} | {"funding_raised_usd": 5.6403187950616385, "investors_count": 571.0564004342739, "is_funded": 203.91059367313343} | high_gap_vs_best_non_autofit | docs/benchmarks/block3_truth_pack/autofit_lineage.csv |
-| AutoFitV7 | faafdcf | Data-adapted robust ensemble with missingness/ratio features and repeated temporal CV. | SOTA tabular feature engineering + robust ensemble selection. | funding_raised_usd,investors_count,is_funded | {"funding_raised_usd": 397006.3727232514, "investors_count": 267.726448471727, "is_funded": 0.09068313538611147} | {"funding_raised_usd": 5.90463673324555, "investors_count": 497.61730862455914, "is_funded": 181.20164905530132} | high_gap_vs_best_non_autofit | docs/benchmarks/block3_truth_pack/autofit_lineage.csv |
-| AutoFitV71 | phase7_v71_extreme_branch | Lane-adaptive routing, dynamic thresholds, count-safe mode, anchor and policy logging. | Target-family specialization with fairness-first guards. | funding_raised_usd,investors_count,is_funded | {"funding_raised_usd": 396399.79881869024, "investors_count": 274.42056977394475, "is_funded": 0.08716407382070858} | {"funding_raised_usd": 5.568690813313937, "investors_count": 512.6576866110931, "is_funded": 169.91107236916724} | v71_count_explosion | docs/benchmarks/block3_truth_pack/autofit_lineage.csv |
-| AutoFitV72 | planned_not_materialized | Count-safe hardening + champion-anchor + offline policy layer (planned). | Evidence-driven v7.2 design gates. | investors_count | {"investors_count": 274.40715326426096} | {"investors_count": 512.4429864117574} | planned_not_materialized | docs/benchmarks/block3_truth_pack/autofit_lineage.csv |
+| AutoFitV7 | faafdcf | Data-adapted robust ensemble with missingness/ratio features and repeated temporal CV. | SOTA tabular feature engineering + robust ensemble selection. | funding_raised_usd,investors_count,is_funded | {"funding_raised_usd": 397006.3727232514, "investors_count": 267.726448471727, "is_funded": 0.09068313538611147} | {"funding_raised_usd": 5.8526194810582854, "investors_count": 497.61730862455914, "is_funded": 181.20164905530132} | high_gap_vs_best_non_autofit | docs/benchmarks/block3_truth_pack/autofit_lineage.csv |
+| AutoFitV71 | phase7_v71_extreme_branch | Lane-adaptive routing, dynamic thresholds, count-safe mode, anchor and policy logging. | Target-family specialization with fairness-first guards. | funding_raised_usd,investors_count,is_funded | {"funding_raised_usd": 396418.30570865615, "investors_count": 274.42056977394475, "is_funded": 0.08716407382070858} | {"funding_raised_usd": 5.568690813313926, "investors_count": 512.6576866110931, "is_funded": 169.91107236916724} | v71_count_explosion | docs/benchmarks/block3_truth_pack/autofit_lineage.csv |
+| AutoFitV72 | planned_not_materialized | Count-safe hardening + champion-anchor + offline policy layer (planned). | Evidence-driven v7.2 design gates. | funding_raised_usd,investors_count,is_funded | {"funding_raised_usd": 398693.79909221013, "investors_count": 274.40665472125744, "is_funded": 0.09253663529720282} | {"funding_raised_usd": 5.4683181461985475, "investors_count": 512.1846192283012, "is_funded": 180.69282978374306} | planned_not_materialized | docs/benchmarks/block3_truth_pack/autofit_lineage.csv |
 
 ### Step Deltas
 
@@ -789,21 +841,21 @@ Derived subtasks are created from target lane semantics and target missingness/c
 | AutoFitV3Max | AutoFitV4 | funding_raised_usd | 20 | 8.049631 | 8.516542 | docs/benchmarks/block3_truth_pack/autofit_step_deltas.csv |
 | AutoFitV3Max | AutoFitV4 | investors_count | 20 | 43.330811 | 132.774319 | docs/benchmarks/block3_truth_pack/autofit_step_deltas.csv |
 | AutoFitV3Max | AutoFitV4 | is_funded | 3 | -17.180369 | -57.935938 | docs/benchmarks/block3_truth_pack/autofit_step_deltas.csv |
-| AutoFitV4 | AutoFitV5 | funding_raised_usd | 20 | -7.449938 | -8.516542 | docs/benchmarks/block3_truth_pack/autofit_step_deltas.csv |
+| AutoFitV4 | AutoFitV5 | funding_raised_usd | 21 | -7.449938 | -8.515322 | docs/benchmarks/block3_truth_pack/autofit_step_deltas.csv |
 | AutoFitV4 | AutoFitV5 | investors_count | 20 | 28.593987 | 125.583328 | docs/benchmarks/block3_truth_pack/autofit_step_deltas.csv |
 | AutoFitV4 | AutoFitV5 | is_funded | 3 | 10.289162 | 28.735952 | docs/benchmarks/block3_truth_pack/autofit_step_deltas.csv |
-| AutoFitV5 | AutoFitV6 | funding_raised_usd | 20 | 0.000000 | 0.000000 | docs/benchmarks/block3_truth_pack/autofit_step_deltas.csv |
+| AutoFitV5 | AutoFitV6 | funding_raised_usd | 21 | 0.000000 | 0.000000 | docs/benchmarks/block3_truth_pack/autofit_step_deltas.csv |
 | AutoFitV5 | AutoFitV6 | investors_count | 20 | 18.861235 | 106.515356 | docs/benchmarks/block3_truth_pack/autofit_step_deltas.csv |
 | AutoFitV5 | AutoFitV6 | is_funded | 3 | -1.289353 | -3.971520 | docs/benchmarks/block3_truth_pack/autofit_step_deltas.csv |
 | AutoFitV6 | AutoFitV7 | funding_raised_usd | 44 | 0.162989 | 0.172332 | docs/benchmarks/block3_truth_pack/autofit_step_deltas.csv |
-| AutoFitV6 | AutoFitV7 | investors_count | 37 | -10.969084 | -73.567374 | docs/benchmarks/block3_truth_pack/autofit_step_deltas.csv |
-| AutoFitV6 | AutoFitV7 | is_funded | 16 | -2.661028 | -8.217297 | docs/benchmarks/block3_truth_pack/autofit_step_deltas.csv |
+| AutoFitV6 | AutoFitV7 | investors_count | 40 | -7.634288 | -50.853440 | docs/benchmarks/block3_truth_pack/autofit_step_deltas.csv |
+| AutoFitV6 | AutoFitV7 | is_funded | 16 | -2.661028 | -8.216656 | docs/benchmarks/block3_truth_pack/autofit_step_deltas.csv |
 | AutoFitV7 | AutoFitV71 | funding_raised_usd | 44 | -0.131639 | -0.139524 | docs/benchmarks/block3_truth_pack/autofit_step_deltas.csv |
-| AutoFitV7 | AutoFitV71 | investors_count | 37 | 2.500120 | 14.940451 | docs/benchmarks/block3_truth_pack/autofit_step_deltas.csv |
-| AutoFitV7 | AutoFitV71 | is_funded | 16 | -8.265286 | -24.399714 | docs/benchmarks/block3_truth_pack/autofit_step_deltas.csv |
-| AutoFitV71 | AutoFitV72 | funding_raised_usd | 0 |  |  | docs/benchmarks/block3_truth_pack/autofit_step_deltas.csv |
-| AutoFitV71 | AutoFitV72 | investors_count | 4 | 0.000074 | 0.000456 | docs/benchmarks/block3_truth_pack/autofit_step_deltas.csv |
-| AutoFitV71 | AutoFitV72 | is_funded | 0 |  |  | docs/benchmarks/block3_truth_pack/autofit_step_deltas.csv |
+| AutoFitV7 | AutoFitV71 | investors_count | 40 | 2.500121 | 14.942444 | docs/benchmarks/block3_truth_pack/autofit_step_deltas.csv |
+| AutoFitV7 | AutoFitV71 | is_funded | 16 | -8.265286 | -24.403283 | docs/benchmarks/block3_truth_pack/autofit_step_deltas.csv |
+| AutoFitV71 | AutoFitV72 | funding_raised_usd | 8 | 0.335957 | 0.350670 | docs/benchmarks/block3_truth_pack/autofit_step_deltas.csv |
+| AutoFitV71 | AutoFitV72 | investors_count | 12 | -0.004231 | -0.025918 | docs/benchmarks/block3_truth_pack/autofit_step_deltas.csv |
+| AutoFitV71 | AutoFitV72 | is_funded | 4 | 7.087291 | 18.576917 | docs/benchmarks/block3_truth_pack/autofit_step_deltas.csv |
 <!-- END AUTO:AUTOFIT_VERSION_LADDER -->
 
 ## High-Value SOTA Components For This Freeze
@@ -811,7 +863,7 @@ Derived subtasks are created from target lane semantics and target missingness/c
 <!-- BEGIN AUTO:HIGH_VALUE_SOTA_COMPONENTS -->
 | feature_component | winner_evidence | affected_subtasks | why_effective | integration_priority | risk | verification_test | evidence_path |
 |---|---|---|---|---|---|---|---|
-| Deep sequence inductive bias | investors_count winners by category: deep_classical=38, transformer_sota=6 | target_family:count; task2_forecast investors_count | Deep temporal models preserve count trajectory structure better than current AutoFit count lane. | high | Over-parameterized deep models may become unstable on sparse slices. | Track median gap reduction on investors_count under strict comparability. | docs/benchmarks/block3_truth_pack/condition_leaderboard.csv |
+| Deep sequence inductive bias | investors_count winners by category: deep_classical=34, transformer_sota=10 | target_family:count; task2_forecast investors_count | Deep temporal models preserve count trajectory structure better than current AutoFit count lane. | high | Over-parameterized deep models may become unstable on sparse slices. | Track median gap reduction on investors_count under strict comparability. | docs/benchmarks/block3_truth_pack/condition_leaderboard.csv |
 | Foundation-model global priors | funding_raised_usd winners by category: deep_classical=20, transformer_sota=18, foundation=6 | target_family:heavy_tail | Foundation/deep models are robust to heavy-tail dynamics and long-range temporal drift. | high | Inference cost and dependency drift across clusters. | Monitor heavy-tail lane median MAE and tail quantile errors. | docs/benchmarks/block3_truth_pack/condition_leaderboard.csv |
 | Transformer representation for binary outcome | is_funded winners by model: PatchTST=8, NHITS=8 | target_family:binary; task1_outcome is_funded | Temporal representation improves ranking and calibration for binary outcome targets. | medium | Calibration drift when class balance shifts over time. | Track binary MAE/logloss/AUC drift by horizon under strict guard. | docs/benchmarks/block3_truth_pack/condition_leaderboard.csv |
 | Count-safe postprocess hard guard | failure tags: autofit_gap_gt_100pct=60, v71_count_explosion=4 | target_family:count; core_edgar investors_count | Count explosions indicate inverse-transform and clipping chain needs hard rejection logic. | critical | Over-clipping can suppress true extreme events. | Count lane guard-hit accounting and no catastrophic MAE spikes. | docs/benchmarks/block3_truth_pack/failure_taxonomy.csv |
@@ -861,17 +913,17 @@ Snapshot timestamp is absolute and all queue conclusions are time-bounded.
 
 | metric | value | evidence_path |
 |---|---|---|
-| snapshot_ts | 2026-02-21T22:19:00.241471+00:00 | docs/benchmarks/block3_truth_pack/slurm_snapshot.json |
+| snapshot_ts | 2026-02-22T00:56:17.071110+00:00 | docs/benchmarks/block3_truth_pack/slurm_snapshot.json |
 | running_total | 8 | docs/benchmarks/block3_truth_pack/slurm_snapshot.json |
-| pending_total | 77 | docs/benchmarks/block3_truth_pack/slurm_snapshot.json |
+| pending_total | 76 | docs/benchmarks/block3_truth_pack/slurm_snapshot.json |
 | running_by_partition | {"batch": 8} | docs/benchmarks/block3_truth_pack/slurm_snapshot.json |
-| pending_by_partition | {"batch": 69, "gpu": 8} | docs/benchmarks/block3_truth_pack/slurm_snapshot.json |
+| pending_by_partition | {"batch": 68, "gpu": 8} | docs/benchmarks/block3_truth_pack/slurm_snapshot.json |
 
 ### Pending Reasons
 
 | reason | count | evidence_path |
 |---|---|---|
-| (QOSMaxJobsPerUserLimit) | 69 | docs/benchmarks/block3_truth_pack/slurm_snapshot.json |
+| (QOSMaxJobsPerUserLimit) | 68 | docs/benchmarks/block3_truth_pack/slurm_snapshot.json |
 | (QOSGrpNodeLimit) | 8 | docs/benchmarks/block3_truth_pack/slurm_snapshot.json |
 
 ### Prefix Status (p7/p7r/p7x/p7xF)
@@ -880,11 +932,11 @@ Snapshot timestamp is absolute and all queue conclusions are time-bounded.
 |---|---|---|---|
 | p7 | squeue | {"PENDING": 1} | docs/benchmarks/block3_truth_pack/slurm_snapshot.json |
 | p7r | squeue | {"PENDING": 3, "RUNNING": 3} | docs/benchmarks/block3_truth_pack/slurm_snapshot.json |
-| p7x | squeue | {"PENDING": 43, "RUNNING": 5} | docs/benchmarks/block3_truth_pack/slurm_snapshot.json |
+| p7x | squeue | {"PENDING": 42, "RUNNING": 5} | docs/benchmarks/block3_truth_pack/slurm_snapshot.json |
 | p7xF | squeue | {"PENDING": 30} | docs/benchmarks/block3_truth_pack/slurm_snapshot.json |
 | p7 | sacct | {"CANCELLED": 66, "COMPLETED": 177, "FAILED": 12, "OUT_OF_ME": 4, "PENDING": 1} | docs/benchmarks/block3_truth_pack/slurm_snapshot.json |
 | p7r | sacct | {"CANCELLED": 4, "COMPLETED": 4, "PENDING": 3, "RUNNING": 3} | docs/benchmarks/block3_truth_pack/slurm_snapshot.json |
-| p7x | sacct | {"COMPLETED": 73, "PENDING": 43, "RUNNING": 5} | docs/benchmarks/block3_truth_pack/slurm_snapshot.json |
+| p7x | sacct | {"COMPLETED": 74, "PENDING": 42, "RUNNING": 5} | docs/benchmarks/block3_truth_pack/slurm_snapshot.json |
 | p7xF | sacct | {"COMPLETED": 47, "PENDING": 30} | docs/benchmarks/block3_truth_pack/slurm_snapshot.json |
 
 ### Collection Commands
