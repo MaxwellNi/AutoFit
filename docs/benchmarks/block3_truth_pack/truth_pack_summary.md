@@ -1,7 +1,7 @@
 # Block3 Truth Pack Summary
 
-- Raw records: **14815**
-- Strict comparable records: **5433**
+- Raw records: **14826**
+- Strict comparable records: **5444**
 - Legacy unverified records: **9382**
 - Strict excluded records: **0**
 - Expected condition keys: **104**
@@ -10,10 +10,10 @@
 - V7.1 vs V7 overlap: **104** (win_rate=0.423, median_gain=-0.334%)
 - Critical failures tagged: **4**
 - High-severity failures tagged: **60**
-- AutoFitV72 missing keys: **74**
-- AutoFitV72 coverage ratio: **0.2885**
+- AutoFitV72 missing keys: **69**
+- AutoFitV72 coverage ratio: **0.3365**
 - Duplicate jobs removed (reported): **0**
-- Queue ETA model: `{"assumed_avg_hours_per_job": 18.0, "batch_cap_max_jobs_pu": 8, "effective_parallelism": 12, "estimated_hours_to_clear": 39.0, "gpu_cap_max_jobs_pu": 4, "method": "heuristic_v1"}`
+- Queue ETA model: `{"assumed_avg_hours_per_job": 18.0, "batch_cap_max_jobs_pu": 8, "effective_parallelism": 12, "estimated_hours_to_clear": 36.0, "gpu_cap_max_jobs_pu": 4, "method": "heuristic_v1"}`
 - Slurm snapshot: `docs/benchmarks/block3_truth_pack/slurm_snapshot.json`
 
 ## Output Files
@@ -32,12 +32,13 @@
 - `family_gap_by_target`: `docs/benchmarks/block3_truth_pack/family_gap_by_target.csv`
 - `hyperparam_search_ledger`: `docs/benchmarks/block3_truth_pack/hyperparam_search_ledger.csv`
 - `missing_key_manifest`: `docs/benchmarks/block3_truth_pack/missing_key_manifest.csv`
+- `missing_key_manifest_summary`: `docs/benchmarks/block3_truth_pack/missing_key_manifest_summary.json`
 - `model_family_coverage_audit`: `docs/benchmarks/block3_truth_pack/model_family_coverage_audit.csv`
 - `primary_literature_matrix`: `docs/benchmarks/block3_truth_pack/primary_literature_matrix.csv`
 - `run_history_ledger`: `docs/benchmarks/block3_truth_pack/run_history_ledger.csv`
 - `run_history_observations`: `docs/benchmarks/block3_truth_pack/run_history_observations.csv`
-- `slurm_live_snapshot_json`: `docs/benchmarks/block3_truth_pack/slurm_live_snapshot_20260223_124306.json`
-- `slurm_live_snapshot_md`: `docs/benchmarks/block3_truth_pack/slurm_live_snapshot_20260223_124306.md`
+- `slurm_live_snapshot_json`: `docs/benchmarks/block3_truth_pack/slurm_live_snapshot_20260223_144722.json`
+- `slurm_live_snapshot_md`: `docs/benchmarks/block3_truth_pack/slurm_live_snapshot_20260223_144722.md`
 - `slurm_snapshot_json`: `docs/benchmarks/block3_truth_pack/slurm_snapshot.json`
 - `slurm_snapshot_md`: `docs/benchmarks/block3_truth_pack/slurm_snapshot.md`
 - `sota_feature_value_map`: `docs/benchmarks/block3_truth_pack/sota_feature_value_map.csv`

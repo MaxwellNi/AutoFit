@@ -76,6 +76,16 @@ from typing import Any, Callable, Dict, List, Optional, Sequence, Tuple
 
 import numpy as np
 import pandas as pd
+try:
+    from sklearn.metrics import (
+        average_precision_score,
+        brier_score_loss,
+        log_loss,
+    )
+except Exception:  # pragma: no cover - optional runtime fallback
+    average_precision_score = None  # type: ignore[assignment]
+    brier_score_loss = None  # type: ignore[assignment]
+    log_loss = None  # type: ignore[assignment]
 
 from .base import ModelBase, ModelConfig
 
@@ -4913,9 +4923,14 @@ class AutoFitV71Wrapper(ModelBase):
         search_budget: int = 96,
         routing_key_schema: str = "lane_family+horizon_band+ablation+missingness_bucket",
         count_heads: Optional[List[str]] = None,
+        count_two_part_head: bool = True,
+        count_distribution_family: str = "auto",
         binary_hazard_mode: str = "discrete_time_hazard",
+        binary_calibration_mode: str = "auto",
+        binary_metrics_gate_enabled: bool = True,
         anchor_policy: str = "champion_template_hard",
         coverage_controller: str = "missing_key_manifest_v1",
+        retrieval_standardized: bool = True,
         sparse_moe_enabled: bool = True,
         sparse_moe_max_experts: int = 3,
         sparse_moe_temperature: float = 0.45,
@@ -4940,9 +4955,14 @@ class AutoFitV71Wrapper(ModelBase):
                 "search_budget": search_budget,
                 "routing_key_schema": routing_key_schema,
                 "count_heads": list(count_heads),
+                "count_two_part_head": bool(count_two_part_head),
+                "count_distribution_family": str(count_distribution_family),
                 "binary_hazard_mode": binary_hazard_mode,
+                "binary_calibration_mode": str(binary_calibration_mode),
+                "binary_metrics_gate_enabled": bool(binary_metrics_gate_enabled),
                 "anchor_policy": anchor_policy,
                 "coverage_controller": coverage_controller,
+                "retrieval_standardized": bool(retrieval_standardized),
                 "sparse_moe_enabled": sparse_moe_enabled,
                 "sparse_moe_max_experts": sparse_moe_max_experts,
                 "sparse_moe_temperature": sparse_moe_temperature,
@@ -4961,9 +4981,14 @@ class AutoFitV71Wrapper(ModelBase):
         self._search_budget = int(search_budget)
         self._routing_key_schema = str(routing_key_schema)
         self._count_heads = [str(h) for h in count_heads]
+        self._count_two_part_head = bool(count_two_part_head)
+        self._count_distribution_family = str(count_distribution_family)
         self._binary_hazard_mode = str(binary_hazard_mode)
+        self._binary_calibration_mode = str(binary_calibration_mode)
+        self._binary_metrics_gate_enabled = bool(binary_metrics_gate_enabled)
         self._anchor_policy = str(anchor_policy)
         self._coverage_controller = str(coverage_controller)
+        self._retrieval_standardized = bool(retrieval_standardized)
         self._sparse_moe_enabled = bool(sparse_moe_enabled)
         self._sparse_moe_max_experts = int(max(1, sparse_moe_max_experts))
         self._sparse_moe_temperature = float(max(0.05, sparse_moe_temperature))
@@ -5016,7 +5041,22 @@ class AutoFitV71Wrapper(ModelBase):
         self._binary_hazard_horizon: int = 1
         self._binary_hazard_diagnostics: Dict[str, Any] = {}
         self._tail_pinball_q90: float = 0.0
+        self._tail_mae_q90: float = 0.0
+        self._tail_mae_q95: float = 0.0
         self._time_consistency_violation_rate: float = 0.0
+        self._hazard_monotonic_violation_rate: float = 0.0
+        self._binary_brier: Optional[float] = None
+        self._binary_ece: Optional[float] = None
+        self._binary_logloss: Optional[float] = None
+        self._binary_prauc: Optional[float] = None
+        self._count_zero_prob_mean: Optional[float] = None
+        self._count_positive_head_family: Optional[str] = None
+        self._spike_sentinel_triggered: bool = False
+        self._legacy_rootcause_blocked: bool = False
+        self._route_key_full: str = ""
+        self._anchor_constraint_satisfied: bool = False
+        self._retrieval_feature_set_id: Optional[str] = None
+        self._lane_failure_class: Optional[str] = None
         self._sparse_moe_route: Dict[str, Any] = {}
 
     def _augment_features(
@@ -5112,9 +5152,32 @@ class AutoFitV71Wrapper(ModelBase):
         self._binary_hazard_horizon = max(1, int(horizon))
         self._binary_hazard_diagnostics = {}
         self._tail_pinball_q90 = 0.0
+        self._tail_mae_q90 = 0.0
+        self._tail_mae_q95 = 0.0
         self._time_consistency_violation_rate = 0.0
+        self._hazard_monotonic_violation_rate = 0.0
+        self._binary_brier = None
+        self._binary_ece = None
+        self._binary_logloss = None
+        self._binary_prauc = None
+        self._count_zero_prob_mean = None
+        self._count_positive_head_family = None
+        self._spike_sentinel_triggered = False
+        self._legacy_rootcause_blocked = False
+        self._route_key_full = ""
+        self._anchor_constraint_satisfied = False
+        self._retrieval_feature_set_id = None
+        self._lane_failure_class = None
         self._sparse_moe_route = {}
         self._policy_confidence = 0.35
+
+        if self._lane == "count":
+            y_arr = np.asarray(y, dtype=float)
+            finite_mask = np.isfinite(y_arr)
+            if np.any(finite_mask):
+                self._count_zero_prob_mean = float(np.mean(y_arr[finite_mask] <= 0.0))
+            if self._count_heads:
+                self._count_positive_head_family = str(self._count_heads[0]).lower()
 
         logger.info(
             f"[AutoFitV71] Meta-features: {meta} | lane={self._lane} "
@@ -5141,6 +5204,10 @@ class AutoFitV71Wrapper(ModelBase):
                 f"lane={self._lane}|h={int(horizon)}|hb={self._horizon_band}"
                 f"|ablation={self._ablation}|miss={self._missingness_bucket}"
             )
+        self._route_key_full = self._route_key
+        self._retrieval_feature_set_id = (
+            "regime_retrieval_v1" if self._enable_regime_retrieval else "retrieval_disabled"
+        )
         self._policy_action_id = (
             f"{self._offline_rl_policy}|{self._route_key}|qs={qs_threshold:.2f}|budget={self._search_budget}"
         )
@@ -5548,6 +5615,11 @@ class AutoFitV71Wrapper(ModelBase):
                 self._guard_decisions.append(
                     "sparse_moe_active:" + ",".join(selected_names)
                 )
+        self._anchor_constraint_satisfied = (
+            (not self._champion_anchor)
+            or (required_anchors <= 0)
+            or (len(self._anchor_set) >= required_anchors)
+        )
 
         # -- Caruana + conformal blend with lane-adaptive weighting --
         caruana_weights = _caruana_greedy_ensemble_transformed(
@@ -5597,8 +5669,25 @@ class AutoFitV71Wrapper(ModelBase):
             self._tail_pinball_q90 = float(
                 np.mean(np.maximum(q * residual, (q - 1.0) * residual))
             )
+            abs_residual = np.abs(residual)
+            if len(abs_residual) > 0 and np.isfinite(abs_residual).any():
+                finite_abs = abs_residual[np.isfinite(abs_residual)]
+                self._tail_mae_q90 = float(np.quantile(finite_abs, 0.90))
+                self._tail_mae_q95 = float(np.quantile(finite_abs, 0.95))
+            if self._lane == "count":
+                safe_scale = max(float(np.nanmean(np.abs(y_oof))), 1.0)
+                pred_peak = float(np.nanmax(np.abs(blend_oof))) if len(blend_oof) else 0.0
+                if (not np.isfinite(pred_peak)) or pred_peak > max(1.0e6, 100.0 * safe_scale):
+                    self._spike_sentinel_triggered = True
+                    self._lane_failure_class = "count_extreme_oof_prediction"
+                    self._guard_decisions.append(
+                        f"spike_sentinel_triggered:peak={pred_peak:.6f}:scale={safe_scale:.6f}"
+                    )
             if blend_mae > best_single_raw * 1.03:
                 self._oof_guard_triggered = True
+                if self._lane == "count":
+                    self._spike_sentinel_triggered = True
+                    self._lane_failure_class = "count_oof_guard_fallback"
                 self._guard_decisions.append(
                     f"oof_guard_fallback:{blend_mae:.4f}>{best_single_raw * 1.03:.4f}"
                 )
@@ -5616,6 +5705,14 @@ class AutoFitV71Wrapper(ModelBase):
                 caruana_weights = [(best_single_name, 1.0)]
                 conformal_weights = {best_single_name: 1.0}
                 self._anchor_set = []
+                self._anchor_constraint_satisfied = (
+                    (not self._champion_anchor)
+                    or (required_anchors <= 0)
+                    or (len(self._anchor_set) >= required_anchors)
+                )
+        self._legacy_rootcause_blocked = bool(
+            self._spike_sentinel_triggered or self._oof_guard_triggered
+        )
         self._ensemble_weights = blended_weights
         self._policy_confidence = float(
             min(
@@ -5649,6 +5746,44 @@ class AutoFitV71Wrapper(ModelBase):
                 self._time_consistency_violation_rate = float(
                     cal_diag.get("time_consistency_violation_rate", 0.0)
                 )
+                self._hazard_monotonic_violation_rate = float(
+                    self._time_consistency_violation_rate
+                )
+                if self._binary_calibration_mode != "auto":
+                    self._guard_decisions.append(
+                        f"binary_calibration_mode={self._binary_calibration_mode}"
+                    )
+                if self._binary_metrics_gate_enabled:
+                    if brier_score_loss is not None:
+                        self._binary_brier = float(
+                            brier_score_loss(y_oof.astype(int), oof_prob)
+                        )
+                    if log_loss is not None:
+                        self._binary_logloss = float(
+                            log_loss(y_oof.astype(int), np.clip(oof_prob, 1e-6, 1.0 - 1e-6))
+                        )
+                    if average_precision_score is not None:
+                        self._binary_prauc = float(
+                            average_precision_score(y_oof.astype(int), oof_prob)
+                        )
+                    # Simple ECE with fixed-width bins.
+                    bins = np.linspace(0.0, 1.0, 11)
+                    ece = 0.0
+                    yb = y_oof.astype(float)
+                    for i in range(10):
+                        lo = bins[i]
+                        hi = bins[i + 1]
+                        if i < 9:
+                            mask = (oof_prob >= lo) & (oof_prob < hi)
+                        else:
+                            mask = (oof_prob >= lo) & (oof_prob <= hi)
+                        if not np.any(mask):
+                            continue
+                        conf = float(np.mean(oof_prob[mask]))
+                        acc = float(np.mean(yb[mask]))
+                        w = float(np.mean(mask))
+                        ece += abs(acc - conf) * w
+                    self._binary_ece = float(ece)
                 if cal_name is not None:
                     self._hazard_calibration_method = f"{self._binary_hazard_mode}:{cal_name}"
                     self._guard_decisions.append(
@@ -5667,6 +5802,7 @@ class AutoFitV71Wrapper(ModelBase):
                 self._binary_hazard_diagnostics = {}
                 self._hazard_calibration_method = f"{self._binary_hazard_mode}:identity"
                 self._time_consistency_violation_rate = 0.0
+                self._hazard_monotonic_violation_rate = 0.0
 
         # -- Meta learners: 7-seed L1 + (Ridge vs ElasticNet) L2 --
         X_oof_full = X_aug.iloc[oof_start:]
@@ -5838,18 +5974,38 @@ class AutoFitV71Wrapper(ModelBase):
             "binary_hazard_horizon": self._binary_hazard_horizon,
             "binary_hazard_diagnostics": dict(self._binary_hazard_diagnostics),
             "tail_pinball_q90": self._tail_pinball_q90,
+            "tail_mae_q90": self._tail_mae_q90,
+            "tail_mae_q95": self._tail_mae_q95,
             "time_consistency_violation_rate": self._time_consistency_violation_rate,
+            "hazard_monotonic_violation_rate": self._hazard_monotonic_violation_rate,
+            "binary_brier": self._binary_brier,
+            "binary_ece": self._binary_ece,
+            "binary_logloss": self._binary_logloss,
+            "binary_prauc": self._binary_prauc,
+            "count_zero_prob_mean": self._count_zero_prob_mean,
+            "count_positive_head_family": self._count_positive_head_family,
+            "spike_sentinel_triggered": self._spike_sentinel_triggered,
+            "legacy_rootcause_blocked": self._legacy_rootcause_blocked,
+            "route_key_full": self._route_key_full,
+            "anchor_constraint_satisfied": self._anchor_constraint_satisfied,
+            "retrieval_feature_set_id": self._retrieval_feature_set_id,
+            "lane_failure_class": self._lane_failure_class,
             "lane_clip_rate": self._lane_clip_rate,
             "inverse_transform_guard_hits": self._inverse_transform_guard_hits,
             "count_safe_mode": self._count_safe_mode,
+            "count_two_part_head": self._count_two_part_head,
+            "count_distribution_family": self._count_distribution_family,
             "champion_anchor": self._champion_anchor,
             "offline_rl_policy": self._offline_rl_policy,
             "search_budget": self._search_budget,
             "routing_key_schema": self._routing_key_schema,
             "count_heads": list(self._count_heads),
             "binary_hazard_mode": self._binary_hazard_mode,
+            "binary_calibration_mode": self._binary_calibration_mode,
+            "binary_metrics_gate_enabled": self._binary_metrics_gate_enabled,
             "anchor_policy": self._anchor_policy,
             "coverage_controller": self._coverage_controller,
+            "retrieval_standardized": self._retrieval_standardized,
             "sparse_moe_enabled": self._sparse_moe_enabled,
             "sparse_moe_route": dict(self._sparse_moe_route),
             "sparse_moe_blend_alpha": self._sparse_moe_blend_alpha,
@@ -6004,11 +6160,31 @@ class AutoFitV71Wrapper(ModelBase):
                 "binary_hazard_diagnostics": dict(self._binary_hazard_diagnostics),
                 "tail_pinball_q90": float(self._tail_pinball_q90),
                 "time_consistency_violation_rate": float(self._time_consistency_violation_rate),
+                "hazard_monotonic_violation_rate": float(self._hazard_monotonic_violation_rate),
+                "tail_mae_q90": float(self._tail_mae_q90),
+                "tail_mae_q95": float(self._tail_mae_q95),
+                "binary_brier": self._binary_brier,
+                "binary_ece": self._binary_ece,
+                "binary_logloss": self._binary_logloss,
+                "binary_prauc": self._binary_prauc,
+                "count_zero_prob_mean": self._count_zero_prob_mean,
+                "count_positive_head_family": self._count_positive_head_family,
+                "spike_sentinel_triggered": bool(self._spike_sentinel_triggered),
+                "legacy_rootcause_blocked": bool(self._legacy_rootcause_blocked),
+                "route_key_full": self._route_key_full or self._route_key,
+                "anchor_constraint_satisfied": bool(self._anchor_constraint_satisfied),
+                "retrieval_feature_set_id": self._retrieval_feature_set_id,
+                "lane_failure_class": self._lane_failure_class,
                 "routing_key_schema": self._routing_key_schema,
                 "count_heads": list(self._count_heads),
+                "count_two_part_head": bool(self._count_two_part_head),
+                "count_distribution_family": self._count_distribution_family,
                 "binary_hazard_mode": self._binary_hazard_mode,
+                "binary_calibration_mode": self._binary_calibration_mode,
+                "binary_metrics_gate_enabled": bool(self._binary_metrics_gate_enabled),
                 "anchor_policy": self._anchor_policy,
                 "coverage_controller": self._coverage_controller,
+                "retrieval_standardized": bool(self._retrieval_standardized),
                 "sparse_moe_enabled": self._sparse_moe_enabled,
                 "sparse_moe_route": dict(self._sparse_moe_route),
                 "sparse_moe_blend_alpha": self._sparse_moe_blend_alpha,
@@ -6037,9 +6213,14 @@ class AutoFitV72Wrapper(AutoFitV71Wrapper):
         kwargs.setdefault("search_budget", 96)
         kwargs.setdefault("routing_key_schema", "lane_family+horizon_band+ablation+missingness_bucket")
         kwargs.setdefault("count_heads", ["poisson", "tweedie", "negbin"])
+        kwargs.setdefault("count_two_part_head", True)
+        kwargs.setdefault("count_distribution_family", "auto")
         kwargs.setdefault("binary_hazard_mode", "discrete_time_hazard")
+        kwargs.setdefault("binary_calibration_mode", "auto")
+        kwargs.setdefault("binary_metrics_gate_enabled", True)
         kwargs.setdefault("anchor_policy", "champion_template_hard")
         kwargs.setdefault("coverage_controller", "missing_key_manifest_v1")
+        kwargs.setdefault("retrieval_standardized", True)
         kwargs.setdefault("sparse_moe_enabled", True)
         kwargs.setdefault("sparse_moe_max_experts", 3)
         kwargs.setdefault("sparse_moe_temperature", 0.45)

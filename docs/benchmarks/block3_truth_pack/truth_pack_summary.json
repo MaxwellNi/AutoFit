@@ -18,11 +18,11 @@
   ],
   "config_path": "configs/block3_tasks.yaml",
   "min_coverage": 0.98,
-  "raw_records": 14815,
-  "strict_records": 5433,
+  "raw_records": 14826,
+  "strict_records": 5444,
   "legacy_unverified_records": 9382,
   "strict_excluded_records": 0,
-  "filtered_records": 5433,
+  "filtered_records": 5444,
   "expected_conditions": 104,
   "strict_completed_conditions": 104,
   "legacy_completed_conditions": 104,
@@ -37,8 +37,8 @@
   "high_failures": 60,
   "v72_pilot_overall_pass": false,
   "v72_pilot_overlap_keys": 30,
-  "v72_missing_keys": 74,
-  "v72_coverage_ratio": 0.28846153846153844,
+  "v72_missing_keys": 69,
+  "v72_coverage_ratio": 0.33653846153846156,
   "duplicate_jobs_removed": 0,
   "queue_eta_model": {
     "method": "heuristic_v1",
@@ -46,16 +46,17 @@
     "effective_parallelism": 12,
     "batch_cap_max_jobs_pu": 8,
     "gpu_cap_max_jobs_pu": 4,
-    "estimated_hours_to_clear": 39.0
+    "estimated_hours_to_clear": 36.0
   },
   "slurm_snapshot_path": "docs/benchmarks/block3_truth_pack/slurm_snapshot.json",
-  "slurm_live_snapshot_path": "docs/benchmarks/block3_truth_pack/slurm_live_snapshot_20260223_124306.json",
+  "slurm_live_snapshot_path": "docs/benchmarks/block3_truth_pack/slurm_live_snapshot_20260223_144722.json",
   "outputs": {
     "condition_leaderboard": "docs/benchmarks/block3_truth_pack/condition_leaderboard.csv",
     "autofit_lineage": "docs/benchmarks/block3_truth_pack/autofit_lineage.csv",
     "failure_taxonomy": "docs/benchmarks/block3_truth_pack/failure_taxonomy.csv",
     "v71_vs_v7_overlap": "docs/benchmarks/block3_truth_pack/v71_vs_v7_overlap.csv",
     "missing_key_manifest": "docs/benchmarks/block3_truth_pack/missing_key_manifest.csv",
+    "missing_key_manifest_summary": "docs/benchmarks/block3_truth_pack/missing_key_manifest_summary.json",
     "task_subtask_catalog": "docs/benchmarks/block3_truth_pack/task_subtask_catalog.csv",
     "condition_inventory_full": "docs/benchmarks/block3_truth_pack/condition_inventory_full.csv",
     "run_history_ledger": "docs/benchmarks/block3_truth_pack/run_history_ledger.csv",
@@ -77,7 +78,7 @@
     "v72_pilot_gate_report": "docs/benchmarks/block3_truth_pack/v72_pilot_gate_report.json",
     "slurm_snapshot_json": "docs/benchmarks/block3_truth_pack/slurm_snapshot.json",
     "slurm_snapshot_md": "docs/benchmarks/block3_truth_pack/slurm_snapshot.md",
-    "slurm_live_snapshot_json": "docs/benchmarks/block3_truth_pack/slurm_live_snapshot_20260223_124306.json",
-    "slurm_live_snapshot_md": "docs/benchmarks/block3_truth_pack/slurm_live_snapshot_20260223_124306.md"
+    "slurm_live_snapshot_json": "docs/benchmarks/block3_truth_pack/slurm_live_snapshot_20260223_144722.json",
+    "slurm_live_snapshot_md": "docs/benchmarks/block3_truth_pack/slurm_live_snapshot_20260223_144722.md"
   }
 }

@@ -252,6 +252,21 @@ class ModelMetrics:
     champion_template: Optional[str] = None
     hazard_calibration_method: Optional[str] = None
     tail_pinball_q90: Optional[float] = None
+    tail_mae_q90: Optional[float] = None
+    tail_mae_q95: Optional[float] = None
+    count_zero_prob_mean: Optional[float] = None
+    count_positive_head_family: Optional[str] = None
+    binary_brier: Optional[float] = None
+    binary_ece: Optional[float] = None
+    binary_logloss: Optional[float] = None
+    binary_prauc: Optional[float] = None
+    hazard_monotonic_violation_rate: Optional[float] = None
+    spike_sentinel_triggered: bool = False
+    legacy_rootcause_blocked: bool = False
+    route_key_full: Optional[str] = None
+    anchor_constraint_satisfied: Optional[bool] = None
+    retrieval_feature_set_id: Optional[str] = None
+    lane_failure_class: Optional[str] = None
     time_consistency_violation_rate: Optional[float] = None
     policy_action_id: Optional[str] = None
     oof_guard_triggered: bool = False
@@ -626,6 +641,21 @@ class BenchmarkShard:
             "champion_template": None,
             "hazard_calibration_method": None,
             "tail_pinball_q90": None,
+            "tail_mae_q90": None,
+            "tail_mae_q95": None,
+            "count_zero_prob_mean": None,
+            "count_positive_head_family": None,
+            "binary_brier": None,
+            "binary_ece": None,
+            "binary_logloss": None,
+            "binary_prauc": None,
+            "hazard_monotonic_violation_rate": None,
+            "spike_sentinel_triggered": False,
+            "legacy_rootcause_blocked": False,
+            "route_key_full": None,
+            "anchor_constraint_satisfied": None,
+            "retrieval_feature_set_id": None,
+            "lane_failure_class": None,
             "time_consistency_violation_rate": None,
             "policy_action_id": None,
             "oof_guard_triggered": False,
@@ -665,6 +695,52 @@ class BenchmarkShard:
                     tp_q90 = info.get("tail_pinball_q90")
                     if tp_q90 is not None:
                         signals["tail_pinball_q90"] = float(tp_q90)
+                    tmae_q90 = info.get("tail_mae_q90")
+                    if tmae_q90 is not None:
+                        signals["tail_mae_q90"] = float(tmae_q90)
+                    tmae_q95 = info.get("tail_mae_q95")
+                    if tmae_q95 is not None:
+                        signals["tail_mae_q95"] = float(tmae_q95)
+                    czp = info.get("count_zero_prob_mean")
+                    if czp is not None:
+                        signals["count_zero_prob_mean"] = float(czp)
+                    cph = info.get("count_positive_head_family")
+                    if cph is not None:
+                        signals["count_positive_head_family"] = str(cph)
+                    bb = info.get("binary_brier")
+                    if bb is not None:
+                        signals["binary_brier"] = float(bb)
+                    be = info.get("binary_ece")
+                    if be is not None:
+                        signals["binary_ece"] = float(be)
+                    bl = info.get("binary_logloss")
+                    if bl is not None:
+                        signals["binary_logloss"] = float(bl)
+                    bp = info.get("binary_prauc")
+                    if bp is not None:
+                        signals["binary_prauc"] = float(bp)
+                    hmvr = info.get("hazard_monotonic_violation_rate")
+                    if hmvr is not None:
+                        signals["hazard_monotonic_violation_rate"] = float(hmvr)
+                    signals["spike_sentinel_triggered"] = bool(
+                        info.get("spike_sentinel_triggered", False)
+                    )
+                    signals["legacy_rootcause_blocked"] = bool(
+                        info.get("legacy_rootcause_blocked", False)
+                    )
+                    rkf = info.get("route_key_full", info.get("routing_key"))
+                    if rkf is not None:
+                        signals["route_key_full"] = str(rkf)
+                    if "anchor_constraint_satisfied" in info:
+                        signals["anchor_constraint_satisfied"] = bool(
+                            info.get("anchor_constraint_satisfied")
+                        )
+                    rfsid = info.get("retrieval_feature_set_id")
+                    if rfsid is not None:
+                        signals["retrieval_feature_set_id"] = str(rfsid)
+                    lfc = info.get("lane_failure_class")
+                    if lfc is not None:
+                        signals["lane_failure_class"] = str(lfc)
                     tcvr = info.get("time_consistency_violation_rate")
                     if tcvr is not None:
                         signals["time_consistency_violation_rate"] = float(tcvr)
@@ -797,6 +873,21 @@ class BenchmarkShard:
                 champion_template=routing_signals["champion_template"],
                 hazard_calibration_method=routing_signals["hazard_calibration_method"],
                 tail_pinball_q90=routing_signals["tail_pinball_q90"],
+                tail_mae_q90=routing_signals["tail_mae_q90"],
+                tail_mae_q95=routing_signals["tail_mae_q95"],
+                count_zero_prob_mean=routing_signals["count_zero_prob_mean"],
+                count_positive_head_family=routing_signals["count_positive_head_family"],
+                binary_brier=routing_signals["binary_brier"],
+                binary_ece=routing_signals["binary_ece"],
+                binary_logloss=routing_signals["binary_logloss"],
+                binary_prauc=routing_signals["binary_prauc"],
+                hazard_monotonic_violation_rate=routing_signals["hazard_monotonic_violation_rate"],
+                spike_sentinel_triggered=bool(routing_signals["spike_sentinel_triggered"]),
+                legacy_rootcause_blocked=bool(routing_signals["legacy_rootcause_blocked"]),
+                route_key_full=routing_signals["route_key_full"],
+                anchor_constraint_satisfied=routing_signals["anchor_constraint_satisfied"],
+                retrieval_feature_set_id=routing_signals["retrieval_feature_set_id"],
+                lane_failure_class=routing_signals["lane_failure_class"],
                 time_consistency_violation_rate=routing_signals["time_consistency_violation_rate"],
                 policy_action_id=routing_signals["policy_action_id"],
                 oof_guard_triggered=bool(routing_signals["oof_guard_triggered"]),

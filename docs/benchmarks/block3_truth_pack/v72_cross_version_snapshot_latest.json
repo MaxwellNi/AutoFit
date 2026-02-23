@@ -1,0 +1,48 @@
+{
+  "generated_at_utc": "2026-02-23T14:47:32.198097+00:00",
+  "strict_comparable_conditions": {
+    "completed": 104,
+    "expected": 104
+  },
+  "v72_coverage": {
+    "completed": 35,
+    "expected": 104,
+    "missing": 69,
+    "ratio": 0.33653846153846156
+  },
+  "gate_status": {
+    "overall_pass": false,
+    "fairness_pass_100": true,
+    "global_normalized_mae_improvement_pct": 1.469218479667083,
+    "investors_count_gap_reduction_pct": -2.917353146000108
+  },
+  "fairness_certification": {
+    "overall_certified": false,
+    "label": "NOT CERTIFIED"
+  },
+  "champion_distribution": {
+    "deep_classical": 62,
+    "transformer_sota": 36,
+    "foundation": 6,
+    "autofit": 0
+  },
+  "cross_version_signals": {
+    "v71_vs_v7_investors_count_median_gain_pct": -2.495737625989734,
+    "v71_vs_v7_is_funded_median_gain_pct": 8.265285780588611,
+    "strict_autofit_investors_count_median_gap_pct": 206.22208453307476,
+    "strict_autofit_is_funded_median_gap_pct": 165.98364070277023,
+    "failure_issue_counts": {
+      "v71_count_explosion": 4,
+      "autofit_gap_gt_100pct": 60
+    }
+  },
+  "evidence_paths": {
+    "condition_leaderboard": "docs/benchmarks/block3_truth_pack/condition_leaderboard.csv",
+    "failure_taxonomy": "docs/benchmarks/block3_truth_pack/failure_taxonomy.csv",
+    "v71_vs_v7_overlap": "docs/benchmarks/block3_truth_pack/v71_vs_v7_overlap.csv",
+    "autofit_lineage": "docs/benchmarks/block3_truth_pack/autofit_lineage.csv",
+    "v72_pilot_gate_report": "docs/benchmarks/block3_truth_pack/v72_pilot_gate_report.json",
+    "fairness_certification": "docs/benchmarks/block3_truth_pack/fairness_certification_latest.json",
+    "missing_manifest_summary": "docs/benchmarks/block3_truth_pack/missing_key_manifest_summary.json"
+  }
+}

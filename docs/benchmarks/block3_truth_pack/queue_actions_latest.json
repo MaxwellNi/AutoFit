@@ -1,5 +1,5 @@
 {
-  "generated_at_utc": "2026-02-23T12:45:38.241571+00:00",
+  "generated_at_utc": "2026-02-23T14:47:32.773249+00:00",
   "policy": "V72-first",
   "actions": [
     {
@@ -13,7 +13,7 @@
       "reason": "contributes_to_v72_or_required_resubmit_coverage",
       "expected_eta_delta_hours": 0.0,
       "evidence_path": "docs/benchmarks/block3_truth_pack/missing_key_manifest.csv",
-      "timestamp_utc": "2026-02-23T12:45:38.241481+00:00"
+      "timestamp_utc": "2026-02-23T14:47:32.773104+00:00"
     },
     {
       "job_id": "5190743",
@@ -26,7 +26,7 @@
       "reason": "contributes_to_v72_or_required_resubmit_coverage",
       "expected_eta_delta_hours": 0.0,
       "evidence_path": "docs/benchmarks/block3_truth_pack/missing_key_manifest.csv",
-      "timestamp_utc": "2026-02-23T12:45:38.241494+00:00"
+      "timestamp_utc": "2026-02-23T14:47:32.773117+00:00"
     },
     {
       "job_id": "5190742",
@@ -39,7 +39,7 @@
       "reason": "contributes_to_v72_or_required_resubmit_coverage",
       "expected_eta_delta_hours": 0.0,
       "evidence_path": "docs/benchmarks/block3_truth_pack/missing_key_manifest.csv",
-      "timestamp_utc": "2026-02-23T12:45:38.241499+00:00"
+      "timestamp_utc": "2026-02-23T14:47:32.773156+00:00"
     },
     {
       "job_id": "5190741",
@@ -52,33 +52,7 @@
       "reason": "contributes_to_v72_or_required_resubmit_coverage",
       "expected_eta_delta_hours": 0.0,
       "evidence_path": "docs/benchmarks/block3_truth_pack/missing_key_manifest.csv",
-      "timestamp_utc": "2026-02-23T12:45:38.241503+00:00"
-    },
-    {
-      "job_id": "5190740",
-      "job_name": "p7v72c_t2_ct",
-      "state": "PENDING",
-      "partition": "batch",
-      "group": "autofit_v72_completion",
-      "action": "keep_priority",
-      "redundancy_check": "required_for_v72_first",
-      "reason": "contributes_to_v72_or_required_resubmit_coverage",
-      "expected_eta_delta_hours": 0.0,
-      "evidence_path": "docs/benchmarks/block3_truth_pack/missing_key_manifest.csv",
-      "timestamp_utc": "2026-02-23T12:45:38.241507+00:00"
-    },
-    {
-      "job_id": "5190739",
-      "job_name": "p7v72c_t2_co",
-      "state": "PENDING",
-      "partition": "batch",
-      "group": "autofit_v72_completion",
-      "action": "keep_priority",
-      "redundancy_check": "required_for_v72_first",
-      "reason": "contributes_to_v72_or_required_resubmit_coverage",
-      "expected_eta_delta_hours": 0.0,
-      "evidence_path": "docs/benchmarks/block3_truth_pack/missing_key_manifest.csv",
-      "timestamp_utc": "2026-02-23T12:45:38.241510+00:00"
+      "timestamp_utc": "2026-02-23T14:47:32.773162+00:00"
     },
     {
       "job_id": "5186430",
@@ -91,7 +65,7 @@
       "reason": "contributes_to_v72_or_required_resubmit_coverage",
       "expected_eta_delta_hours": 0.0,
       "evidence_path": "docs/benchmarks/block3_truth_pack/missing_key_manifest.csv",
-      "timestamp_utc": "2026-02-23T12:45:38.241514+00:00"
+      "timestamp_utc": "2026-02-23T14:47:32.773166+00:00"
     },
     {
       "job_id": "5186429",
@@ -104,7 +78,7 @@
       "reason": "contributes_to_v72_or_required_resubmit_coverage",
       "expected_eta_delta_hours": 0.0,
       "evidence_path": "docs/benchmarks/block3_truth_pack/missing_key_manifest.csv",
-      "timestamp_utc": "2026-02-23T12:45:38.241518+00:00"
+      "timestamp_utc": "2026-02-23T14:47:32.773170+00:00"
     },
     {
       "job_id": "5186428",
@@ -117,33 +91,33 @@
       "reason": "contributes_to_v72_or_required_resubmit_coverage",
       "expected_eta_delta_hours": 0.0,
       "evidence_path": "docs/benchmarks/block3_truth_pack/missing_key_manifest.csv",
-      "timestamp_utc": "2026-02-23T12:45:38.241521+00:00"
+      "timestamp_utc": "2026-02-23T14:47:32.773173+00:00"
     },
     {
-      "job_id": "5180375",
-      "job_name": "p7_sta_t1_ct",
+      "job_id": "5190740",
+      "job_name": "p7v72c_t2_ct",
       "state": "RUNNING",
       "partition": "batch",
-      "group": "statistical_resubmit",
+      "group": "autofit_v72_completion",
       "action": "keep_priority",
       "redundancy_check": "required_for_v72_first",
       "reason": "contributes_to_v72_or_required_resubmit_coverage",
       "expected_eta_delta_hours": 0.0,
       "evidence_path": "docs/benchmarks/block3_truth_pack/missing_key_manifest.csv",
-      "timestamp_utc": "2026-02-23T12:45:38.241525+00:00"
+      "timestamp_utc": "2026-02-23T14:47:32.773177+00:00"
     },
     {
-      "job_id": "5179668",
-      "job_name": "p7x_g01_t2_ce",
+      "job_id": "5190739",
+      "job_name": "p7v72c_t2_co",
       "state": "RUNNING",
       "partition": "batch",
-      "group": "v71_g01",
-      "action": "no_action_running",
-      "redundancy_check": "strict_matrix_already_complete=true",
-      "reason": "residual_v71_variant_not_required_for_v72_first_completion",
+      "group": "autofit_v72_completion",
+      "action": "keep_priority",
+      "redundancy_check": "required_for_v72_first",
+      "reason": "contributes_to_v72_or_required_resubmit_coverage",
       "expected_eta_delta_hours": 0.0,
-      "evidence_path": "docs/benchmarks/block3_truth_pack/condition_inventory_full.csv",
-      "timestamp_utc": "2026-02-23T12:45:38.241529+00:00"
+      "evidence_path": "docs/benchmarks/block3_truth_pack/missing_key_manifest.csv",
+      "timestamp_utc": "2026-02-23T14:47:32.773180+00:00"
     },
     {
       "job_id": "5190738",
@@ -156,7 +130,7 @@
       "reason": "contributes_to_v72_or_required_resubmit_coverage",
       "expected_eta_delta_hours": 0.0,
       "evidence_path": "docs/benchmarks/block3_truth_pack/missing_key_manifest.csv",
-      "timestamp_utc": "2026-02-23T12:45:38.241532+00:00"
+      "timestamp_utc": "2026-02-23T14:47:32.773188+00:00"
     },
     {
       "job_id": "5190737",
@@ -169,7 +143,7 @@
       "reason": "contributes_to_v72_or_required_resubmit_coverage",
       "expected_eta_delta_hours": 0.0,
       "evidence_path": "docs/benchmarks/block3_truth_pack/missing_key_manifest.csv",
-      "timestamp_utc": "2026-02-23T12:45:38.241535+00:00"
+      "timestamp_utc": "2026-02-23T14:47:32.773191+00:00"
     },
     {
       "job_id": "5190736",
@@ -182,7 +156,7 @@
       "reason": "contributes_to_v72_or_required_resubmit_coverage",
       "expected_eta_delta_hours": 0.0,
       "evidence_path": "docs/benchmarks/block3_truth_pack/missing_key_manifest.csv",
-      "timestamp_utc": "2026-02-23T12:45:38.241538+00:00"
+      "timestamp_utc": "2026-02-23T14:47:32.773195+00:00"
     },
     {
       "job_id": "5179938",
@@ -195,7 +169,7 @@
       "reason": "duplicate_reference_branch_already_covered_in_strict_matrix",
       "expected_eta_delta_hours": 1.0,
       "evidence_path": "docs/benchmarks/block3_truth_pack/condition_inventory_full.csv",
-      "timestamp_utc": "2026-02-23T12:45:38.241542+00:00"
+      "timestamp_utc": "2026-02-23T14:47:32.773199+00:00"
     },
     {
       "job_id": "5179939",
@@ -208,7 +182,7 @@
       "reason": "duplicate_reference_branch_already_covered_in_strict_matrix",
       "expected_eta_delta_hours": 1.0,
       "evidence_path": "docs/benchmarks/block3_truth_pack/condition_inventory_full.csv",
-      "timestamp_utc": "2026-02-23T12:45:38.241549+00:00"
+      "timestamp_utc": "2026-02-23T14:47:32.773202+00:00"
     },
     {
       "job_id": "5179940",
@@ -221,7 +195,7 @@
       "reason": "duplicate_reference_branch_already_covered_in_strict_matrix",
       "expected_eta_delta_hours": 1.0,
       "evidence_path": "docs/benchmarks/block3_truth_pack/condition_inventory_full.csv",
-      "timestamp_utc": "2026-02-23T12:45:38.241552+00:00"
+      "timestamp_utc": "2026-02-23T14:47:32.773206+00:00"
     },
     {
       "job_id": "5179941",
@@ -234,7 +208,7 @@
       "reason": "duplicate_reference_branch_already_covered_in_strict_matrix",
       "expected_eta_delta_hours": 1.0,
       "evidence_path": "docs/benchmarks/block3_truth_pack/condition_inventory_full.csv",
-      "timestamp_utc": "2026-02-23T12:45:38.241555+00:00"
+      "timestamp_utc": "2026-02-23T14:47:32.773230+00:00"
     },
     {
       "job_id": "5179942",
@@ -247,7 +221,7 @@
       "reason": "duplicate_reference_branch_already_covered_in_strict_matrix",
       "expected_eta_delta_hours": 1.0,
       "evidence_path": "docs/benchmarks/block3_truth_pack/condition_inventory_full.csv",
-      "timestamp_utc": "2026-02-23T12:45:38.241559+00:00"
+      "timestamp_utc": "2026-02-23T14:47:32.773233+00:00"
     },
     {
       "job_id": "5179943",
@@ -260,7 +234,7 @@
       "reason": "duplicate_reference_branch_already_covered_in_strict_matrix",
       "expected_eta_delta_hours": 1.0,
       "evidence_path": "docs/benchmarks/block3_truth_pack/condition_inventory_full.csv",
-      "timestamp_utc": "2026-02-23T12:45:38.241562+00:00"
+      "timestamp_utc": "2026-02-23T14:47:32.773239+00:00"
     },
     {
       "job_id": "5179944",
@@ -273,7 +247,7 @@
       "reason": "duplicate_reference_branch_already_covered_in_strict_matrix",
       "expected_eta_delta_hours": 1.0,
       "evidence_path": "docs/benchmarks/block3_truth_pack/condition_inventory_full.csv",
-      "timestamp_utc": "2026-02-23T12:45:38.241565+00:00"
+      "timestamp_utc": "2026-02-23T14:47:32.773243+00:00"
     },
     {
       "job_id": "5179945",
@@ -286,7 +260,7 @@
       "reason": "duplicate_reference_branch_already_covered_in_strict_matrix",
       "expected_eta_delta_hours": 1.0,
       "evidence_path": "docs/benchmarks/block3_truth_pack/condition_inventory_full.csv",
-      "timestamp_utc": "2026-02-23T12:45:38.241568+00:00"
+      "timestamp_utc": "2026-02-23T14:47:32.773246+00:00"
     }
   ]
 }

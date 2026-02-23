@@ -195,13 +195,18 @@ autofit_v71:
 autofit_v72:
   enabled: true
   count_safe_mode: true
+  count_two_part_head: true
+  count_distribution_family: "auto"  # auto|poisson|tweedie|zinb
   champion_anchor: true
   offline_rl_policy: "offline_rule_v72"
   routing_key_schema: "lane_family+horizon_band+ablation+missingness_bucket"
   count_heads: ["poisson", "tweedie", "negbin"]
   binary_hazard_mode: "discrete_time_hazard"
+  binary_calibration_mode: "auto"  # auto|platt|isotonic
+  binary_metrics_gate_enabled: true
   anchor_policy: "champion_template_hard"
   coverage_controller: "missing_key_manifest_v1"
+  retrieval_standardized: true
   sparse_moe_enabled: true
   sparse_moe_max_experts: 3
   sparse_moe_temperature: 0.45

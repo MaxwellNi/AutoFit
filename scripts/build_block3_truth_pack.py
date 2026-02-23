@@ -3575,6 +3575,18 @@ def build_truth_pack(
             "reason",
         ],
     )
+    missing_summary_path = output_dir / "missing_key_manifest_summary.json"
+    missing_summary_payload = {
+        "expected_keys": len(expected_conditions),
+        "v72_strict_keys": int(max(0, len(expected_conditions) - int(v72_missing_keys))),
+        "missing_keys": int(v72_missing_keys),
+        "coverage_ratio": float(v72_coverage_ratio),
+        "output": _display_path(v72_missing_manifest_path),
+    }
+    missing_summary_path.write_text(
+        json.dumps(missing_summary_payload, indent=2),
+        encoding="utf-8",
+    )
     _write_csv(
         sota_path,
         sota_rows,
@@ -3747,6 +3759,7 @@ def build_truth_pack(
             "failure_taxonomy": _display_path(failures_path),
             "v71_vs_v7_overlap": _display_path(overlap_path),
             "missing_key_manifest": _display_path(v72_missing_manifest_path),
+            "missing_key_manifest_summary": _display_path(missing_summary_path),
             "task_subtask_catalog": _display_path(task_subtask_path),
             "condition_inventory_full": _display_path(condition_inventory_path),
             "run_history_ledger": _display_path(run_history_ledger_path),

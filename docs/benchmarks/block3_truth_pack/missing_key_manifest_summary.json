@@ -1,7 +1,7 @@
 {
   "expected_keys": 104,
-  "v72_strict_keys": 30,
-  "missing_keys": 74,
-  "coverage_ratio": 0.28846153846153844,
+  "v72_strict_keys": 35,
+  "missing_keys": 69,
+  "coverage_ratio": 0.33653846153846156,
   "output": "docs/benchmarks/block3_truth_pack/missing_key_manifest.csv"
 }

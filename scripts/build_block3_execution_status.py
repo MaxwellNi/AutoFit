@@ -758,6 +758,18 @@ def _render_fairness_md(payload):
     return "\n".join(lines)
 
 
+def _render_csv_rows_md(rows, columns):
+    if not rows:
+        return "_No rows available._"
+    lines = [
+        "| " + " | ".join(columns) + " |",
+        "|" + "|".join(["---" for _ in columns]) + "|",
+    ]
+    for row in rows:
+        lines.append("| " + " | ".join(str(row.get(c, "")) for c in columns) + " |")
+    return "\n".join(lines)
+
+
 def _replace_or_append_auto_section(doc_text, section_name, heading, body):
     begin = "<!-- BEGIN AUTO:%s -->" % section_name
     end = "<!-- END AUTO:%s -->" % section_name
@@ -1123,6 +1135,102 @@ def main():
             "IMPLEMENTED_PENDING_IMPROVEMENTS",
             "## Implemented vs Pending Improvements",
             impl_pending_md,
+        )
+
+        cross_snapshot = _read_json(truth_dir / "v72_cross_version_snapshot_latest.json", {}) or {}
+        cross_snapshot_rows = []
+        if cross_snapshot:
+            strict_info = cross_snapshot.get("strict_comparable_conditions", {}) or {}
+            v72_cov = cross_snapshot.get("v72_coverage", {}) or {}
+            gate = cross_snapshot.get("gate_status", {}) or {}
+            cert = cross_snapshot.get("fairness_certification", {}) or {}
+            cross_snapshot_rows = [
+                {
+                    "metric": "generated_at_utc",
+                    "value": cross_snapshot.get("generated_at_utc"),
+                    "evidence_path": "docs/benchmarks/block3_truth_pack/v72_cross_version_snapshot_latest.json",
+                },
+                {
+                    "metric": "strict_comparable_completion",
+                    "value": "%s/%s" % (strict_info.get("completed"), strict_info.get("expected")),
+                    "evidence_path": "docs/benchmarks/block3_truth_pack/condition_leaderboard.csv",
+                },
+                {
+                    "metric": "v72_coverage",
+                    "value": "%s/%s (missing=%s)"
+                    % (v72_cov.get("completed"), v72_cov.get("expected"), v72_cov.get("missing")),
+                    "evidence_path": "docs/benchmarks/block3_truth_pack/missing_key_manifest_summary.json",
+                },
+                {
+                    "metric": "gate_overall_pass",
+                    "value": gate.get("overall_pass"),
+                    "evidence_path": "docs/benchmarks/block3_truth_pack/v72_pilot_gate_report.json",
+                },
+                {
+                    "metric": "global_normalized_mae_improvement_pct",
+                    "value": gate.get("global_normalized_mae_improvement_pct"),
+                    "evidence_path": "docs/benchmarks/block3_truth_pack/v72_pilot_gate_report.json",
+                },
+                {
+                    "metric": "investors_count_gap_reduction_pct",
+                    "value": gate.get("investors_count_gap_reduction_pct"),
+                    "evidence_path": "docs/benchmarks/block3_truth_pack/v72_pilot_gate_report.json",
+                },
+                {
+                    "metric": "fairness_certification_label",
+                    "value": cert.get("label"),
+                    "evidence_path": "docs/benchmarks/block3_truth_pack/fairness_certification_latest.json",
+                },
+            ]
+        master_text = _replace_or_append_auto_section(
+            master_text,
+            "CROSS_VERSION_SNAPSHOT",
+            "## Cross-Version Snapshot (V7/V7.1/V7.2)",
+            _render_csv_rows_md(
+                cross_snapshot_rows,
+                ["metric", "value", "evidence_path"],
+            ),
+        )
+
+        cross_rootcause_rows = _read_csv(truth_dir / "v72_cross_version_rootcause_matrix.csv")
+        master_text = _replace_or_append_auto_section(
+            master_text,
+            "CROSS_VERSION_ROOTCAUSE_MATRIX",
+            "## Cross-Version Root-Cause Matrix",
+            _render_csv_rows_md(
+                cross_rootcause_rows,
+                [
+                    "problem_id",
+                    "introduced_or_observed_in",
+                    "still_unresolved_in_v72",
+                    "evidence_path",
+                    "impact_targets",
+                    "impact_scale",
+                    "root_mechanism",
+                    "fix_component",
+                    "gate_link",
+                ],
+            ),
+        )
+
+        frontier_rows = _read_csv(truth_dir / "v72_frontier_fix_map_20260223.csv")
+        master_text = _replace_or_append_auto_section(
+            master_text,
+            "FRONTIER_FIX_MAP",
+            "## Frontier-to-Fix Mapping (Primary Sources, 2026-02-23)",
+            _render_csv_rows_md(
+                frontier_rows,
+                [
+                    "problem",
+                    "source",
+                    "mechanism",
+                    "integration_point",
+                    "risk",
+                    "verification_test",
+                    "primary_link",
+                    "status",
+                ],
+            ),
         )
         _write_text(master_doc, master_text)
 

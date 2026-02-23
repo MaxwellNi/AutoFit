@@ -1,12 +1,12 @@
 {
-  "snapshot_ts": "2026-02-23T12:43:06.589093+00:00",
+  "snapshot_ts": "2026-02-23T14:47:22.088014+00:00",
   "running_total": 8,
-  "pending_total": 14,
+  "pending_total": 12,
   "running_by_partition": {
     "batch": 8
   },
   "pending_by_partition": {
-    "batch": 6,
+    "batch": 4,
     "gpu": 8
   },
   "pending_reason_topk": [
@@ -16,7 +16,7 @@
     },
     {
       "reason": "(QOSMaxJobsPerUserLimit)",
-      "count": 6
+      "count": 4
     }
   ],
   "qos_caps": {
@@ -32,26 +32,21 @@
     }
   },
   "prefix_status_squeue": {
-    "p7": {
-      "RUNNING": 1
-    },
+    "p7": {},
     "p7r": {
       "RUNNING": 3
     },
-    "p7x": {
-      "RUNNING": 1
-    },
+    "p7x": {},
     "p7xF": {
       "PENDING": 8
     }
   },
   "prefix_status_sacct": {
     "p7": {
-      "COMPLETED": 177,
+      "COMPLETED": 178,
       "CANCELLED": 66,
       "OUT_OF_ME": 4,
-      "FAILED": 12,
-      "RUNNING": 1
+      "FAILED": 12
     },
     "p7r": {
       "CANCELLED": 4,
@@ -59,8 +54,7 @@
       "RUNNING": 3
     },
     "p7x": {
-      "COMPLETED": 87,
-      "RUNNING": 1,
+      "COMPLETED": 88,
       "CANCELLED": 33
     },
     "p7xF": {
