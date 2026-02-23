@@ -13,15 +13,16 @@
     "runs/benchmarks/block3_20260203_225620_dual3090_phase7_20260215_185618",
     "runs/benchmarks/block3_20260203_225620_dual3090_phase7_20260215_191536",
     "runs/benchmarks/block3_20260203_225620_phase7_v72_4090_20260219_173137",
+    "runs/benchmarks/block3_20260203_225620_phase7_v72_completion_20260222_224025",
     "runs/benchmarks/block3_20260203_225620_phase7_v72_failure_pool_rerun_heavy_20260219_v72fix_sched"
   ],
   "config_path": "configs/block3_tasks.yaml",
   "min_coverage": 0.98,
-  "raw_records": 14618,
-  "strict_records": 5236,
+  "raw_records": 14815,
+  "strict_records": 5433,
   "legacy_unverified_records": 9382,
   "strict_excluded_records": 0,
-  "filtered_records": 5236,
+  "filtered_records": 5433,
   "expected_conditions": 104,
   "strict_completed_conditions": 104,
   "legacy_completed_conditions": 104,
@@ -35,20 +36,20 @@
   "critical_failures": 4,
   "high_failures": 60,
   "v72_pilot_overall_pass": false,
-  "v72_pilot_overlap_keys": 24,
-  "v72_missing_keys": 80,
-  "v72_coverage_ratio": 0.23076923076923078,
-  "duplicate_jobs_removed": 44,
+  "v72_pilot_overlap_keys": 30,
+  "v72_missing_keys": 74,
+  "v72_coverage_ratio": 0.28846153846153844,
+  "duplicate_jobs_removed": 0,
   "queue_eta_model": {
     "method": "heuristic_v1",
     "assumed_avg_hours_per_job": 18.0,
     "effective_parallelism": 12,
     "batch_cap_max_jobs_pu": 8,
     "gpu_cap_max_jobs_pu": 4,
-    "estimated_hours_to_clear": 63.0
+    "estimated_hours_to_clear": 39.0
   },
   "slurm_snapshot_path": "docs/benchmarks/block3_truth_pack/slurm_snapshot.json",
-  "slurm_live_snapshot_path": "docs/benchmarks/block3_truth_pack/slurm_live_snapshot_20260222_214034.json",
+  "slurm_live_snapshot_path": "docs/benchmarks/block3_truth_pack/slurm_live_snapshot_20260223_124306.json",
   "outputs": {
     "condition_leaderboard": "docs/benchmarks/block3_truth_pack/condition_leaderboard.csv",
     "autofit_lineage": "docs/benchmarks/block3_truth_pack/autofit_lineage.csv",
@@ -76,7 +77,7 @@
     "v72_pilot_gate_report": "docs/benchmarks/block3_truth_pack/v72_pilot_gate_report.json",
     "slurm_snapshot_json": "docs/benchmarks/block3_truth_pack/slurm_snapshot.json",
     "slurm_snapshot_md": "docs/benchmarks/block3_truth_pack/slurm_snapshot.md",
-    "slurm_live_snapshot_json": "docs/benchmarks/block3_truth_pack/slurm_live_snapshot_20260222_214034.json",
-    "slurm_live_snapshot_md": "docs/benchmarks/block3_truth_pack/slurm_live_snapshot_20260222_214034.md"
+    "slurm_live_snapshot_json": "docs/benchmarks/block3_truth_pack/slurm_live_snapshot_20260223_124306.json",
+    "slurm_live_snapshot_md": "docs/benchmarks/block3_truth_pack/slurm_live_snapshot_20260223_124306.md"
   }
 }

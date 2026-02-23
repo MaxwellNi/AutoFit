@@ -1,6 +1,6 @@
 {
-  "verified_at": "2026-02-19T23:11:11.513008Z",
-  "pointer_path": "/home/pni/projects/repo_root/docs/audits/FULL_SCALE_POINTER.yaml",
+  "verified_at": "2026-02-23T12:42:15.152258Z",
+  "pointer_path": "/mnt/aiongpfs/projects/eint/repo_root/docs/audits/FULL_SCALE_POINTER.yaml",
   "expected_stamp": "20260203_225620",
   "expected_variant": "TRAIN_WIDE_FINAL",
   "all_gates_pass": true,

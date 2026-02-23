@@ -1,7 +1,7 @@
 # Block 3 Freeze Verification Report
 
-**Verified at:** 2026-02-19T23:11:11.513008Z
-**Pointer:** `/home/pni/projects/repo_root/docs/audits/FULL_SCALE_POINTER.yaml`
+**Verified at:** 2026-02-23T12:42:15.152258Z
+**Pointer:** `/mnt/aiongpfs/projects/eint/repo_root/docs/audits/FULL_SCALE_POINTER.yaml`
 **Expected stamp:** `20260203_225620`
 **Expected variant:** `TRAIN_WIDE_FINAL`
 

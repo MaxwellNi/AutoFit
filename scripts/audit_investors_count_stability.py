@@ -15,6 +15,7 @@ import json
 import math
 import subprocess
 import statistics
+import sys
 from collections import Counter, defaultdict
 from datetime import datetime, timezone
 from pathlib import Path
@@ -36,6 +37,10 @@ except Exception:  # pragma: no cover
     yaml = None
 
 ROOT = Path(__file__).resolve().parent.parent
+if str(ROOT) not in sys.path:
+    sys.path.insert(0, str(ROOT))
+if str(ROOT / "src") not in sys.path:
+    sys.path.insert(0, str(ROOT / "src"))
 
 
 def _mean(vals: List[float]) -> float:
@@ -169,7 +174,10 @@ def _load_split(cfg_path: Path) -> Dict[str, Any]:
 def _load_panel_for_target(pointer_path: Path, target: str = "investors_count") -> pd.DataFrame:
     if pd is None:
         raise RuntimeError("pandas is required for panel distribution audit")
-    from src.narrative.data_preprocessing.block3_dataset import Block3Dataset  # pylint: disable=import-outside-toplevel
+    try:
+        from src.narrative.data_preprocessing.block3_dataset import Block3Dataset  # pylint: disable=import-outside-toplevel
+    except ModuleNotFoundError:
+        from narrative.data_preprocessing.block3_dataset import Block3Dataset  # type: ignore  # pylint: disable=import-outside-toplevel
 
     ds = Block3Dataset.from_pointer(pointer_path)
     core = ds.get_offers_core_daily(columns=["crawled_date_day", target])
