@@ -99,11 +99,66 @@ activate_insider_env() {
 
 activate_insider_env
 
+detect_insider_prefix() {
+    if [[ -n "${CONDA_PREFIX:-}" && "${CONDA_PREFIX}" == *"insider"* && -d "${CONDA_PREFIX}" ]]; then
+        echo "${CONDA_PREFIX}"
+        return 0
+    fi
+    local candidates=(
+        "/mnt/aiongpfs/projects/eint/envs/.micromamba/envs/insider"
+        "${HOME}/miniforge3/envs/insider"
+        "${HOME}/mambaforge/envs/insider"
+        "${HOME}/anaconda3/envs/insider"
+        "${HOME}/miniconda3/envs/insider"
+    )
+    local c
+    for c in "${candidates[@]}"; do
+        if [[ -d "${c}" ]]; then
+            echo "${c}"
+            return 0
+        fi
+    done
+    return 1
+}
+
+repair_insider_bin_permissions() {
+    local prefix="$1"
+    local bindir="${prefix}/bin"
+    [[ -d "${bindir}" ]] || return 0
+    local repaired=0
+    local exe
+    for exe in python python3 python3.11 python3.12 pip pip3 pytest; do
+        local path="${bindir}/${exe}"
+        if [[ -f "${path}" && ! -x "${path}" ]]; then
+            chmod u+x "${path}"
+            repaired=$((repaired + 1))
+        fi
+    done
+    if [[ "${repaired}" -gt 0 ]]; then
+        echo "Repaired execute permissions for ${repaired} insider runtime executables."
+    fi
+}
+
+INSIDER_PREFIX="$(detect_insider_prefix || true)"
+if [[ -n "${INSIDER_PREFIX}" ]]; then
+    repair_insider_bin_permissions "${INSIDER_PREFIX}"
+    export PATH="${INSIDER_PREFIX}/bin:${PATH}"
+fi
+
 PY_BIN="$(command -v python3 || true)"
 if [[ -z "${PY_BIN}" || "${PY_BIN}" != *"insider"* ]]; then
     echo "FATAL: python3 is not from insider env: ${PY_BIN:-<missing>}"
     exit 2
 fi
+
+python3 - <<'PY'
+import sys
+if sys.version_info < (3, 11):
+    raise SystemExit(
+        f"FATAL: python >=3.11 required, got {sys.version_info.major}.{sys.version_info.minor}.{sys.version_info.micro}"
+    )
+print(f"Runtime python OK: {sys.executable} ({sys.version.split()[0]})")
+PY
 
 cd "${REPO}"
 

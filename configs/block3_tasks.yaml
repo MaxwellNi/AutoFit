@@ -207,6 +207,8 @@ autofit_v72:
   anchor_policy: "champion_template_hard"
   coverage_controller: "missing_key_manifest_v1"
   retrieval_standardized: true
+  execution_contract_required: true
+  scheduler_memory_policy: "admission_guard_v1"
   sparse_moe_enabled: true
   sparse_moe_max_experts: 3
   sparse_moe_temperature: 0.45

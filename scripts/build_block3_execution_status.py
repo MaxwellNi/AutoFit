@@ -7,6 +7,7 @@ import json
 import math
 import re
 import subprocess
+import sys
 from collections import Counter, defaultdict
 from datetime import datetime, timezone
 from pathlib import Path
@@ -863,6 +864,9 @@ def _refresh_light_docs(status_doc_path, results_doc_path, snapshot_ts, strict_d
             "|---|---:|---|",
             "| strict_condition_completion | %d/%d | `docs/benchmarks/block3_truth_pack/condition_inventory_full.csv` |" % (strict_done, strict_total),
             "| v72_condition_completion | %d/%d | `docs/benchmarks/block3_truth_pack/missing_key_manifest.csv` |" % (v72_done, v72_total),
+            "| contract_assertion | pass/fail in latest audit | `docs/benchmarks/block3_truth_pack/v72_runtime_contract_audit.json` |",
+            "| key_job_manifest_keys | see latest file | `docs/benchmarks/block3_truth_pack/v72_key_job_manifest.csv` |",
+            "| memory_plan_keys | see latest file | `docs/benchmarks/block3_truth_pack/v72_memory_plan.json` |",
             "| running_total | %s | `docs/benchmarks/block3_truth_pack/execution_status_latest.json` |" % slurm.get("running_total"),
             "| pending_total | %s | `docs/benchmarks/block3_truth_pack/execution_status_latest.json` |" % slurm.get("pending_total"),
             "| eta_baseline_hours | %s | `docs/benchmarks/block3_truth_pack/execution_status_latest.json` |" % eta_model.get("baseline_hours"),
@@ -892,6 +896,7 @@ def _refresh_light_docs(status_doc_path, results_doc_path, snapshot_ts, strict_d
 
     status_md += "\n\n## Queue Governance\n\n"
     status_md += "- V72-first policy ledger: `%s`\n" % queue_actions_path
+    status_md += "- Mandatory execution contract: `docs/BLOCK3_EXECUTION_CONTRACT.md`\n"
     status_md += "- Actions are recommendation-only; this report does not mutate live queue state.\n"
 
     _write_text(status_doc_path, status_md + "\n")
@@ -913,6 +918,9 @@ def _refresh_light_docs(status_doc_path, results_doc_path, snapshot_ts, strict_d
             "| champion_transformer_sota | %d | `docs/benchmarks/block3_truth_pack/condition_inventory_full.csv` |" % champion_counts.get("transformer_sota", 0),
             "| champion_foundation | %d | `docs/benchmarks/block3_truth_pack/condition_inventory_full.csv` |" % champion_counts.get("foundation", 0),
             "| champion_autofit | %d | `docs/benchmarks/block3_truth_pack/condition_inventory_full.csv` |" % champion_counts.get("autofit", 0),
+            "| policy_training_report | available | `docs/benchmarks/block3_truth_pack/v72_policy_training_report.json` |",
+            "| key_job_manifest | available | `docs/benchmarks/block3_truth_pack/v72_key_job_manifest.csv` |",
+            "| memory_plan | available | `docs/benchmarks/block3_truth_pack/v72_memory_plan.json` |",
             "| running_total | %s | `docs/benchmarks/block3_truth_pack/execution_status_latest.json` |" % slurm.get("running_total"),
             "| pending_total | %s | `docs/benchmarks/block3_truth_pack/execution_status_latest.json` |" % slurm.get("pending_total"),
             "| eta_baseline_hours | %s | `docs/benchmarks/block3_truth_pack/execution_status_latest.json` |" % eta_model.get("baseline_hours"),
@@ -937,6 +945,8 @@ def parse_args():
     p.add_argument("--master-doc", type=Path, default=DEFAULT_MASTER_DOC)
     p.add_argument("--status-doc", type=Path, default=DEFAULT_STATUS_DOC)
     p.add_argument("--results-doc", type=Path, default=DEFAULT_RESULTS_DOC)
+    p.add_argument("--enforce-style-guard", action="store_true", default=True)
+    p.add_argument("--no-enforce-style-guard", dest="enforce_style_guard", action="store_false")
     return p.parse_args()
 
 
@@ -1136,6 +1146,47 @@ def main():
             "## Implemented vs Pending Improvements",
             impl_pending_md,
         )
+        contract_rows = [
+            {
+                "control": "execution_contract",
+                "status": "enforced",
+                "detail": "Contract assertion is wired into preflight, submit, and local production entrypoints.",
+                "evidence_path": "docs/BLOCK3_EXECUTION_CONTRACT.md",
+            },
+            {
+                "control": "runtime_contract_audit",
+                "status": "materialized",
+                "detail": "Latest contract assertion audit is written as JSON for traceability.",
+                "evidence_path": "docs/benchmarks/block3_truth_pack/v72_runtime_contract_audit.json",
+            },
+            {
+                "control": "key_level_completion",
+                "status": "materialized",
+                "detail": "Missing-key completion jobs are generated at (task,ablation,target,horizon) granularity.",
+                "evidence_path": "docs/benchmarks/block3_truth_pack/v72_key_job_manifest.csv",
+            },
+            {
+                "control": "memory_aware_scheduler",
+                "status": "materialized",
+                "detail": "Per-key memory plan emits admission-guard resource classes (L/XL).",
+                "evidence_path": "docs/benchmarks/block3_truth_pack/v72_memory_plan.json",
+            },
+            {
+                "control": "offline_policy_training",
+                "status": "materialized",
+                "detail": "Offline policy report is generated from strict historical evidence without test feedback.",
+                "evidence_path": "docs/benchmarks/block3_truth_pack/v72_policy_training_report.json",
+            },
+        ]
+        master_text = _replace_or_append_auto_section(
+            master_text,
+            "EXECUTION_CONTRACT_AND_ACCELERATION",
+            "## Execution Contract and Acceleration Controls (2026-02-24)",
+            _render_csv_rows_md(
+                contract_rows,
+                ["control", "status", "detail", "evidence_path"],
+            ),
+        )
 
         cross_snapshot = _read_json(truth_dir / "v72_cross_version_snapshot_latest.json", {}) or {}
         cross_snapshot_rows = []
@@ -1247,6 +1298,27 @@ def main():
             champion_counts=dict(champion_counts),
             queue_actions_path="docs/benchmarks/block3_truth_pack/queue_actions_latest.json",
         )
+
+        if args.enforce_style_guard:
+            guard_cmd = [
+                sys.executable,
+                str(ROOT / "scripts" / "style_guard_docs.py"),
+                "--paths",
+                ",".join(
+                    [
+                        str(args.master_doc.resolve()),
+                        str(args.status_doc.resolve()),
+                        str(args.results_doc.resolve()),
+                    ]
+                ),
+            ]
+            guard = subprocess.run(guard_cmd, capture_output=True, text=True, check=False)
+            if guard.returncode != 0:
+                raise RuntimeError(
+                    "Style guard failed for status docs.\n"
+                    + guard.stdout
+                    + ("\n" + guard.stderr if guard.stderr else "")
+                )
 
     out = {
         "snapshot_ts": status_payload["snapshot_ts"],

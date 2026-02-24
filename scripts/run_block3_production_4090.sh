@@ -29,6 +29,49 @@ REPO="$(cd "$(dirname "$0")/.." && pwd)"
 OUTROOT="${REPO}/runs/benchmarks/block3_${STAMP}_4090_production"
 PRESET="full"
 
+activate_insider_env() {
+    if [[ "${CONDA_DEFAULT_ENV:-}" == "insider" ]]; then
+        return 0
+    fi
+    if command -v conda >/dev/null 2>&1; then
+        # shellcheck disable=SC1090
+        source "$(conda info --base)/etc/profile.d/conda.sh"
+        if conda activate insider; then
+            return 0
+        fi
+    fi
+    if command -v micromamba >/dev/null 2>&1; then
+        eval "$(micromamba shell hook -s bash)"
+        if micromamba activate insider; then
+            return 0
+        fi
+    fi
+    echo "FATAL: failed to activate insider environment."
+    return 2
+}
+
+activate_insider_env
+PY_BIN="$(command -v python3 || true)"
+if [[ -z "${PY_BIN}" || "${PY_BIN}" != *"insider"* ]]; then
+    echo "FATAL: python3 is not from insider env: ${PY_BIN:-<missing>}"
+    exit 2
+fi
+python3 - <<'PY'
+import sys
+if sys.version_info < (3, 11):
+    raise SystemExit(
+        f"FATAL: insider python must be >=3.11, got {sys.version_info.major}.{sys.version_info.minor}.{sys.version_info.micro}"
+    )
+PY
+python3 "${REPO}/scripts/assert_block3_execution_contract.py" \
+    --entrypoint "scripts/run_block3_production_4090.sh"
+INSIDER_PY="${CONDA_PREFIX}/bin/python3"
+if [[ ! -x "${INSIDER_PY}" ]]; then
+    echo "FATAL: insider python missing or non-executable: ${INSIDER_PY}"
+    exit 2
+fi
+bash "${REPO}/scripts/install_block3_deps_in_insider.sh"
+
 TASKS=("task1_outcome" "task2_forecast" "task3_risk_adjust")
 ABLATIONS=("core_only" "full")
 
@@ -72,7 +115,7 @@ run_shard() {
     OMP_NUM_THREADS=8 \
     MKL_NUM_THREADS=8 \
     OPENBLAS_NUM_THREADS=8 \
-    python "${REPO}/scripts/run_block3_benchmark_shard.py" \
+    "${INSIDER_PY}" "${REPO}/scripts/run_block3_benchmark_shard.py" \
         --task "${task}" \
         --category "${category}" \
         --ablation "${ablation}" \

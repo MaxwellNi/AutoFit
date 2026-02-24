@@ -1,14 +1,14 @@
 {
-  "generated_at_utc": "2026-02-23T14:47:32.198097+00:00",
+  "generated_at_utc": "2026-02-24T00:58:08.299967+00:00",
   "strict_comparable_conditions": {
     "completed": 104,
     "expected": 104
   },
   "v72_coverage": {
-    "completed": 35,
+    "completed": 51,
     "expected": 104,
-    "missing": 69,
-    "ratio": 0.33653846153846156
+    "missing": 53,
+    "ratio": 0.49038461538461536
   },
   "gate_status": {
     "overall_pass": false,

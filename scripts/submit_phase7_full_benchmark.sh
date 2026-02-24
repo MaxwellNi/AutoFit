@@ -60,6 +60,62 @@ for arg in "$@"; do
     esac
 done
 
+activate_insider_env() {
+    if [[ "${CONDA_DEFAULT_ENV:-}" == "insider" ]]; then
+        return 0
+    fi
+    if command -v micromamba >/dev/null 2>&1; then
+        local roots=()
+        if [[ -n "${MAMBA_ROOT_PREFIX:-}" ]]; then
+            roots+=("${MAMBA_ROOT_PREFIX}")
+        fi
+        roots+=(
+            "/mnt/aiongpfs/projects/eint/envs/.micromamba"
+            "${HOME}/.local/share/micromamba"
+            "${HOME}/micromamba"
+        )
+        local r
+        for r in "${roots[@]}"; do
+            [[ -d "${r}" ]] || continue
+            export MAMBA_ROOT_PREFIX="${r}"
+            eval "$(micromamba shell hook -s bash)"
+            if micromamba activate insider; then
+                return 0
+            fi
+        done
+    fi
+    if command -v conda >/dev/null 2>&1; then
+        local conda_base
+        conda_base="$(conda info --base 2>/dev/null || true)"
+        if [[ -n "${conda_base}" && -f "${conda_base}/etc/profile.d/conda.sh" ]]; then
+            # shellcheck disable=SC1090
+            source "${conda_base}/etc/profile.d/conda.sh"
+            if conda activate insider; then
+                return 0
+            fi
+        fi
+    fi
+    echo "FATAL: failed to activate insider environment."
+    return 1
+}
+
+activate_insider_env
+PY_BIN="$(command -v python3 || true)"
+if [[ -z "${PY_BIN}" || "${PY_BIN}" != *"insider"* ]]; then
+    echo "FATAL: python3 is not from insider env: ${PY_BIN:-<missing>}"
+    exit 2
+fi
+python3 - <<'PY'
+import sys
+if sys.version_info < (3, 11):
+    raise SystemExit(
+        f"FATAL: insider python must be >=3.11, got {sys.version_info.major}.{sys.version_info.minor}.{sys.version_info.micro}"
+    )
+PY
+python3 scripts/assert_block3_execution_contract.py \
+  --entrypoint "scripts/submit_phase7_full_benchmark.sh"
+bash scripts/install_block3_deps_in_insider.sh
+
 if $SKIP_PREFLIGHT && [[ "${ALLOW_UNSAFE_SKIP_PREFLIGHT:-0}" != "1" ]]; then
     echo "Refusing --skip-preflight without explicit override."
     echo "If you must bypass the gate, rerun with:"
@@ -91,11 +147,30 @@ micromamba activate insider
 export LD_LIBRARY_PATH="${CONDA_PREFIX}/lib:${LD_LIBRARY_PATH:-}"
 cd /home/users/npin/repo_root
 
+INSIDER_PY="${CONDA_PREFIX}/bin/python3"
+if [[ ! -x "${INSIDER_PY}" ]]; then
+  echo "FATAL: insider python missing or non-executable: ${INSIDER_PY}"
+  exit 2
+fi
+
 echo "============================================================"
 echo "Job ${SLURM_JOB_ID} on $(hostname) — $(date -Iseconds)"
 echo "Python: $(which python3)"
+echo "PythonV: $(python3 -V)"
+echo "INSIDER_PY: ${INSIDER_PY}"
 echo "GPU:    $(nvidia-smi --query-gpu=name --format=csv,noheader 2>/dev/null || echo 'N/A')"
 echo "============================================================"
+python3 - <<'PY'
+import sys
+print("sys.executable:", sys.executable)
+if "insider" not in sys.executable:
+    raise SystemExit("FATAL: runtime python is not insider")
+if sys.version_info < (3, 11):
+    raise SystemExit(
+        f"FATAL: insider python must be >=3.11, got {sys.version_info.major}.{sys.version_info.minor}.{sys.version_info.micro}"
+    )
+PY
+${INSIDER_PY} scripts/assert_block3_execution_contract.py --entrypoint "slurm:${SLURM_JOB_NAME}"
 ENVBLOCK
 
 TOTAL_SUBMITTED=0
@@ -180,7 +255,7 @@ echo "Preset: ${PRESET} | Seed: ${SEED}"
 echo "Output: ${OUTDIR}"
 echo "============================================================"
 
-python3 scripts/run_block3_benchmark_shard.py \\
+"\${INSIDER_PY}" scripts/run_block3_benchmark_shard.py \\
     --task ${TASK} \\
     --category ${CATEGORY} \\
     --ablation ${ABLATION} \\

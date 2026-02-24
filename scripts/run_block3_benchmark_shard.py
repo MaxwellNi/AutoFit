@@ -47,6 +47,7 @@ import gc
 import json
 import logging
 import os
+import resource
 import subprocess
 import sys
 import time
@@ -207,6 +208,9 @@ class ShardManifest:
     model_kwargs_overrides: Dict[str, Dict[str, Any]] = field(default_factory=dict)
     target_filter: List[str] = field(default_factory=list)
     horizons_filter: List[int] = field(default_factory=list)
+    global_dedup_enabled: bool = False
+    global_dedup_bench_glob: str = ""
+    global_dedup_skipped: int = 0
     
     def to_dict(self) -> Dict[str, Any]:
         return asdict(self)
@@ -270,6 +274,9 @@ class ModelMetrics:
     time_consistency_violation_rate: Optional[float] = None
     policy_action_id: Optional[str] = None
     oof_guard_triggered: bool = False
+    peak_rss_gb: Optional[float] = None
+    memory_class: Optional[str] = None
+    resource_profile_id: Optional[str] = None
     train_time_seconds: Optional[float] = None
     inference_time_seconds: Optional[float] = None
     seed: int = GLOBAL_SEED
@@ -305,6 +312,8 @@ class BenchmarkShard:
         model_kwargs_overrides: Optional[Dict[str, Dict[str, Any]]] = None,
         target_filter: Optional[List[str]] = None,
         horizons_filter: Optional[List[int]] = None,
+        enable_global_dedup: bool = False,
+        global_dedup_bench_glob: str = "block3_20260203_225620*",
     ):
         self.task = task
         self.category = category
@@ -321,6 +330,8 @@ class BenchmarkShard:
         self.model_kwargs_overrides = model_kwargs_overrides or {}
         self.target_filter = [str(t) for t in (target_filter or [])]
         self.horizons_filter = [int(h) for h in (horizons_filter or [])]
+        self.enable_global_dedup = bool(enable_global_dedup)
+        self.global_dedup_bench_glob = str(global_dedup_bench_glob)
         
         # Determine models to run
         if models:
@@ -363,6 +374,8 @@ class BenchmarkShard:
             model_kwargs_overrides=self.model_kwargs_overrides,
             target_filter=self.target_filter,
             horizons_filter=self.horizons_filter,
+            global_dedup_enabled=self.enable_global_dedup,
+            global_dedup_bench_glob=self.global_dedup_bench_glob,
         )
         
         set_global_seed(seed)
@@ -602,6 +615,83 @@ class BenchmarkShard:
                 pass
         
         return metrics
+
+    @staticmethod
+    def _get_peak_rss_gb() -> float:
+        """Best-effort process peak RSS in GB."""
+        try:
+            rss_kb = float(resource.getrusage(resource.RUSAGE_SELF).ru_maxrss)
+            # Linux reports KB for ru_maxrss.
+            return rss_kb / (1024.0 * 1024.0)
+        except Exception:
+            return 0.0
+
+    def _load_global_done_combos(self) -> set:
+        """
+        Load globally materialized strict combos across benchmark runs.
+
+        Key format: (model_name, target, horizon) scoped to this task/ablation.
+        """
+        done: set = set()
+        if not self.enable_global_dedup:
+            return done
+
+        runs_root = Path(__file__).resolve().parent.parent / "runs" / "benchmarks"
+        if not runs_root.exists():
+            return done
+
+        pattern = str(runs_root / self.global_dedup_bench_glob / "**" / "metrics.json")
+        current_metrics = (
+            str((self.output_dir / "metrics.json").resolve())
+            if self.output_dir is not None
+            else None
+        )
+
+        import glob
+
+        scanned = 0
+        for mpath in glob.glob(pattern, recursive=True):
+            try:
+                resolved = str(Path(mpath).resolve())
+            except Exception:
+                resolved = mpath
+            if current_metrics and resolved == current_metrics:
+                continue
+            scanned += 1
+            try:
+                payload = json.loads(Path(mpath).read_text(encoding="utf-8"))
+            except Exception:
+                continue
+            if not isinstance(payload, list):
+                continue
+            for rec in payload:
+                if not isinstance(rec, dict):
+                    continue
+                try:
+                    if str(rec.get("task")) != self.task:
+                        continue
+                    if str(rec.get("ablation")) != self.ablation:
+                        continue
+                    if str(rec.get("model_name", "")) not in self.models:
+                        continue
+                    if rec.get("fairness_pass") is not True:
+                        continue
+                    if float(rec.get("prediction_coverage_ratio", 0.0)) < 0.98:
+                        continue
+                    key = (
+                        str(rec.get("model_name")),
+                        str(rec.get("target")),
+                        int(rec.get("horizon")),
+                    )
+                    done.add(key)
+                except Exception:
+                    continue
+        if done:
+            logger.info(
+                f"  [global-dedup] loaded {len(done)} strict combos from {scanned} metrics files "
+                f"(glob={self.global_dedup_bench_glob})"
+            )
+        return done
     
     # Classification-only models: skip for regression targets
     _CLASSIFICATION_ONLY_MODELS = {"LogisticRegression"}
@@ -891,6 +981,9 @@ class BenchmarkShard:
                 time_consistency_violation_rate=routing_signals["time_consistency_violation_rate"],
                 policy_action_id=routing_signals["policy_action_id"],
                 oof_guard_triggered=bool(routing_signals["oof_guard_triggered"]),
+                peak_rss_gb=float(self._get_peak_rss_gb()),
+                memory_class=str(os.environ.get("B3_MEMORY_CLASS", "")) or None,
+                resource_profile_id=str(os.environ.get("B3_RESOURCE_PROFILE_ID", "")) or None,
                 train_time_seconds=train_time,
                 inference_time_seconds=infer_time,
                 seed=self.seed,
@@ -958,6 +1051,10 @@ class BenchmarkShard:
 
         # Resume support: load existing partial metrics
         done_combos: set = set()  # (model_name, target, horizon) already done
+        global_done = self._load_global_done_combos()
+        if global_done:
+            done_combos.update(global_done)
+            self.manifest.global_dedup_skipped = len(global_done)
         if self.output_dir:
             metrics_path = self.output_dir / "metrics.json"
             if metrics_path.exists():
@@ -1003,6 +1100,7 @@ class BenchmarkShard:
                 )
             
             # Run each combination
+            dedup_skips_runtime = 0
             for target in targets:  # ALL targets for KDD'26 full paper
                 # Cross-sectional models produce identical results for all
                 # horizons (features are horizon-independent).  Run only the
@@ -1026,6 +1124,7 @@ class BenchmarkShard:
                         # Skip already-completed combos (resume support)
                         if (model_name, target, horizon) in done_combos:
                             logger.info(f"  [resume] Skipping {model_name} (already done for target={target}, h={horizon})")
+                            dedup_skips_runtime += 1
                             continue
                         result = self.run_model(model_name, train, val, test, target, horizon)
                         if result:
@@ -1046,6 +1145,7 @@ class BenchmarkShard:
             
             self.manifest.status = "completed"
             self.manifest.finished_at = datetime.now(timezone.utc).isoformat()
+            self.manifest.global_dedup_skipped = int(self.manifest.global_dedup_skipped) + dedup_skips_runtime
             
         except Exception as e:
             self.manifest.status = "failed"
@@ -1210,6 +1310,17 @@ def main():
     # Other
     parser.add_argument("--verify-first", action="store_true", default=True, help="Verify freeze before running")
     parser.add_argument("--no-verify-first", dest="verify_first", action="store_false", help="Skip freeze verification")
+    parser.add_argument(
+        "--enable-global-dedup",
+        action="store_true",
+        help="Skip already strict-materialized keys across benchmark runs.",
+    )
+    parser.add_argument(
+        "--global-dedup-bench-glob",
+        type=str,
+        default="block3_20260203_225620*",
+        help="Benchmark run glob used for global dedup scan under runs/benchmarks.",
+    )
     
     args = parser.parse_args()
     
@@ -1292,6 +1403,8 @@ def main():
         model_kwargs_overrides=model_kwargs_overrides,
         target_filter=target_filter,
         horizons_filter=horizons_filter,
+        enable_global_dedup=args.enable_global_dedup,
+        global_dedup_bench_glob=args.global_dedup_bench_glob,
     )
     
     success = shard.run()

@@ -1,72 +1,7 @@
 {
-  "generated_at_utc": "2026-02-23T14:47:32.773249+00:00",
+  "generated_at_utc": "2026-02-24T00:59:38.012111+00:00",
   "policy": "V72-first",
   "actions": [
-    {
-      "job_id": "5190744",
-      "job_name": "p7v72c_t3_fu",
-      "state": "PENDING",
-      "partition": "batch",
-      "group": "autofit_v72_completion",
-      "action": "keep_priority",
-      "redundancy_check": "required_for_v72_first",
-      "reason": "contributes_to_v72_or_required_resubmit_coverage",
-      "expected_eta_delta_hours": 0.0,
-      "evidence_path": "docs/benchmarks/block3_truth_pack/missing_key_manifest.csv",
-      "timestamp_utc": "2026-02-23T14:47:32.773104+00:00"
-    },
-    {
-      "job_id": "5190743",
-      "job_name": "p7v72c_t3_co",
-      "state": "PENDING",
-      "partition": "batch",
-      "group": "autofit_v72_completion",
-      "action": "keep_priority",
-      "redundancy_check": "required_for_v72_first",
-      "reason": "contributes_to_v72_or_required_resubmit_coverage",
-      "expected_eta_delta_hours": 0.0,
-      "evidence_path": "docs/benchmarks/block3_truth_pack/missing_key_manifest.csv",
-      "timestamp_utc": "2026-02-23T14:47:32.773117+00:00"
-    },
-    {
-      "job_id": "5190742",
-      "job_name": "p7v72c_t3_ce",
-      "state": "PENDING",
-      "partition": "batch",
-      "group": "autofit_v72_completion",
-      "action": "keep_priority",
-      "redundancy_check": "required_for_v72_first",
-      "reason": "contributes_to_v72_or_required_resubmit_coverage",
-      "expected_eta_delta_hours": 0.0,
-      "evidence_path": "docs/benchmarks/block3_truth_pack/missing_key_manifest.csv",
-      "timestamp_utc": "2026-02-23T14:47:32.773156+00:00"
-    },
-    {
-      "job_id": "5190741",
-      "job_name": "p7v72c_t2_fu",
-      "state": "PENDING",
-      "partition": "batch",
-      "group": "autofit_v72_completion",
-      "action": "keep_priority",
-      "redundancy_check": "required_for_v72_first",
-      "reason": "contributes_to_v72_or_required_resubmit_coverage",
-      "expected_eta_delta_hours": 0.0,
-      "evidence_path": "docs/benchmarks/block3_truth_pack/missing_key_manifest.csv",
-      "timestamp_utc": "2026-02-23T14:47:32.773162+00:00"
-    },
-    {
-      "job_id": "5186430",
-      "job_name": "p7r_af2_t1_ce",
-      "state": "RUNNING",
-      "partition": "batch",
-      "group": "autofit_resubmit",
-      "action": "keep_priority",
-      "redundancy_check": "required_for_v72_first",
-      "reason": "contributes_to_v72_or_required_resubmit_coverage",
-      "expected_eta_delta_hours": 0.0,
-      "evidence_path": "docs/benchmarks/block3_truth_pack/missing_key_manifest.csv",
-      "timestamp_utc": "2026-02-23T14:47:32.773166+00:00"
-    },
     {
       "job_id": "5186429",
       "job_name": "p7r_af1_t1_ce",
@@ -78,24 +13,11 @@
       "reason": "contributes_to_v72_or_required_resubmit_coverage",
       "expected_eta_delta_hours": 0.0,
       "evidence_path": "docs/benchmarks/block3_truth_pack/missing_key_manifest.csv",
-      "timestamp_utc": "2026-02-23T14:47:32.773170+00:00"
+      "timestamp_utc": "2026-02-24T00:59:38.012057+00:00"
     },
     {
-      "job_id": "5186428",
-      "job_name": "p7r_af2_t1_fu",
-      "state": "RUNNING",
-      "partition": "batch",
-      "group": "autofit_resubmit",
-      "action": "keep_priority",
-      "redundancy_check": "required_for_v72_first",
-      "reason": "contributes_to_v72_or_required_resubmit_coverage",
-      "expected_eta_delta_hours": 0.0,
-      "evidence_path": "docs/benchmarks/block3_truth_pack/missing_key_manifest.csv",
-      "timestamp_utc": "2026-02-23T14:47:32.773173+00:00"
-    },
-    {
-      "job_id": "5190740",
-      "job_name": "p7v72c_t2_ct",
+      "job_id": "5190741",
+      "job_name": "p7v72c_t2_fu",
       "state": "RUNNING",
       "partition": "batch",
       "group": "autofit_v72_completion",
@@ -104,20 +26,7 @@
       "reason": "contributes_to_v72_or_required_resubmit_coverage",
       "expected_eta_delta_hours": 0.0,
       "evidence_path": "docs/benchmarks/block3_truth_pack/missing_key_manifest.csv",
-      "timestamp_utc": "2026-02-23T14:47:32.773177+00:00"
-    },
-    {
-      "job_id": "5190739",
-      "job_name": "p7v72c_t2_co",
-      "state": "RUNNING",
-      "partition": "batch",
-      "group": "autofit_v72_completion",
-      "action": "keep_priority",
-      "redundancy_check": "required_for_v72_first",
-      "reason": "contributes_to_v72_or_required_resubmit_coverage",
-      "expected_eta_delta_hours": 0.0,
-      "evidence_path": "docs/benchmarks/block3_truth_pack/missing_key_manifest.csv",
-      "timestamp_utc": "2026-02-23T14:47:32.773180+00:00"
+      "timestamp_utc": "2026-02-24T00:59:38.012069+00:00"
     },
     {
       "job_id": "5190738",
@@ -130,20 +39,7 @@
       "reason": "contributes_to_v72_or_required_resubmit_coverage",
       "expected_eta_delta_hours": 0.0,
       "evidence_path": "docs/benchmarks/block3_truth_pack/missing_key_manifest.csv",
-      "timestamp_utc": "2026-02-23T14:47:32.773188+00:00"
-    },
-    {
-      "job_id": "5190737",
-      "job_name": "p7v72c_t1_ct",
-      "state": "RUNNING",
-      "partition": "batch",
-      "group": "autofit_v72_completion",
-      "action": "keep_priority",
-      "redundancy_check": "required_for_v72_first",
-      "reason": "contributes_to_v72_or_required_resubmit_coverage",
-      "expected_eta_delta_hours": 0.0,
-      "evidence_path": "docs/benchmarks/block3_truth_pack/missing_key_manifest.csv",
-      "timestamp_utc": "2026-02-23T14:47:32.773191+00:00"
+      "timestamp_utc": "2026-02-24T00:59:38.012074+00:00"
     },
     {
       "job_id": "5190736",
@@ -156,98 +52,7 @@
       "reason": "contributes_to_v72_or_required_resubmit_coverage",
       "expected_eta_delta_hours": 0.0,
       "evidence_path": "docs/benchmarks/block3_truth_pack/missing_key_manifest.csv",
-      "timestamp_utc": "2026-02-23T14:47:32.773195+00:00"
-    },
-    {
-      "job_id": "5179938",
-      "job_name": "p7xF_fdr_t1_fu",
-      "state": "PENDING",
-      "partition": "gpu",
-      "group": "foundation_reference",
-      "action": "deprioritize_hold_recommended",
-      "redundancy_check": "strict_matrix_already_complete=true",
-      "reason": "duplicate_reference_branch_already_covered_in_strict_matrix",
-      "expected_eta_delta_hours": 1.0,
-      "evidence_path": "docs/benchmarks/block3_truth_pack/condition_inventory_full.csv",
-      "timestamp_utc": "2026-02-23T14:47:32.773199+00:00"
-    },
-    {
-      "job_id": "5179939",
-      "job_name": "p7xF_fdr_t2_co",
-      "state": "PENDING",
-      "partition": "gpu",
-      "group": "foundation_reference",
-      "action": "deprioritize_hold_recommended",
-      "redundancy_check": "strict_matrix_already_complete=true",
-      "reason": "duplicate_reference_branch_already_covered_in_strict_matrix",
-      "expected_eta_delta_hours": 1.0,
-      "evidence_path": "docs/benchmarks/block3_truth_pack/condition_inventory_full.csv",
-      "timestamp_utc": "2026-02-23T14:47:32.773202+00:00"
-    },
-    {
-      "job_id": "5179940",
-      "job_name": "p7xF_fdr_t2_ct",
-      "state": "PENDING",
-      "partition": "gpu",
-      "group": "foundation_reference",
-      "action": "deprioritize_hold_recommended",
-      "redundancy_check": "strict_matrix_already_complete=true",
-      "reason": "duplicate_reference_branch_already_covered_in_strict_matrix",
-      "expected_eta_delta_hours": 1.0,
-      "evidence_path": "docs/benchmarks/block3_truth_pack/condition_inventory_full.csv",
-      "timestamp_utc": "2026-02-23T14:47:32.773206+00:00"
-    },
-    {
-      "job_id": "5179941",
-      "job_name": "p7xF_fdr_t2_ce",
-      "state": "PENDING",
-      "partition": "gpu",
-      "group": "foundation_reference",
-      "action": "deprioritize_hold_recommended",
-      "redundancy_check": "strict_matrix_already_complete=true",
-      "reason": "duplicate_reference_branch_already_covered_in_strict_matrix",
-      "expected_eta_delta_hours": 1.0,
-      "evidence_path": "docs/benchmarks/block3_truth_pack/condition_inventory_full.csv",
-      "timestamp_utc": "2026-02-23T14:47:32.773230+00:00"
-    },
-    {
-      "job_id": "5179942",
-      "job_name": "p7xF_fdr_t2_fu",
-      "state": "PENDING",
-      "partition": "gpu",
-      "group": "foundation_reference",
-      "action": "deprioritize_hold_recommended",
-      "redundancy_check": "strict_matrix_already_complete=true",
-      "reason": "duplicate_reference_branch_already_covered_in_strict_matrix",
-      "expected_eta_delta_hours": 1.0,
-      "evidence_path": "docs/benchmarks/block3_truth_pack/condition_inventory_full.csv",
-      "timestamp_utc": "2026-02-23T14:47:32.773233+00:00"
-    },
-    {
-      "job_id": "5179943",
-      "job_name": "p7xF_fdr_t3_co",
-      "state": "PENDING",
-      "partition": "gpu",
-      "group": "foundation_reference",
-      "action": "deprioritize_hold_recommended",
-      "redundancy_check": "strict_matrix_already_complete=true",
-      "reason": "duplicate_reference_branch_already_covered_in_strict_matrix",
-      "expected_eta_delta_hours": 1.0,
-      "evidence_path": "docs/benchmarks/block3_truth_pack/condition_inventory_full.csv",
-      "timestamp_utc": "2026-02-23T14:47:32.773239+00:00"
-    },
-    {
-      "job_id": "5179944",
-      "job_name": "p7xF_fdr_t3_ce",
-      "state": "PENDING",
-      "partition": "gpu",
-      "group": "foundation_reference",
-      "action": "deprioritize_hold_recommended",
-      "redundancy_check": "strict_matrix_already_complete=true",
-      "reason": "duplicate_reference_branch_already_covered_in_strict_matrix",
-      "expected_eta_delta_hours": 1.0,
-      "evidence_path": "docs/benchmarks/block3_truth_pack/condition_inventory_full.csv",
-      "timestamp_utc": "2026-02-23T14:47:32.773243+00:00"
+      "timestamp_utc": "2026-02-24T00:59:38.012077+00:00"
     },
     {
       "job_id": "5179945",
@@ -260,7 +65,98 @@
       "reason": "duplicate_reference_branch_already_covered_in_strict_matrix",
       "expected_eta_delta_hours": 1.0,
       "evidence_path": "docs/benchmarks/block3_truth_pack/condition_inventory_full.csv",
-      "timestamp_utc": "2026-02-23T14:47:32.773246+00:00"
+      "timestamp_utc": "2026-02-24T00:59:38.012081+00:00"
+    },
+    {
+      "job_id": "5179944",
+      "job_name": "p7xF_fdr_t3_ce",
+      "state": "PENDING",
+      "partition": "gpu",
+      "group": "foundation_reference",
+      "action": "deprioritize_hold_recommended",
+      "redundancy_check": "strict_matrix_already_complete=true",
+      "reason": "duplicate_reference_branch_already_covered_in_strict_matrix",
+      "expected_eta_delta_hours": 1.0,
+      "evidence_path": "docs/benchmarks/block3_truth_pack/condition_inventory_full.csv",
+      "timestamp_utc": "2026-02-24T00:59:38.012087+00:00"
+    },
+    {
+      "job_id": "5179943",
+      "job_name": "p7xF_fdr_t3_co",
+      "state": "PENDING",
+      "partition": "gpu",
+      "group": "foundation_reference",
+      "action": "deprioritize_hold_recommended",
+      "redundancy_check": "strict_matrix_already_complete=true",
+      "reason": "duplicate_reference_branch_already_covered_in_strict_matrix",
+      "expected_eta_delta_hours": 1.0,
+      "evidence_path": "docs/benchmarks/block3_truth_pack/condition_inventory_full.csv",
+      "timestamp_utc": "2026-02-24T00:59:38.012091+00:00"
+    },
+    {
+      "job_id": "5179942",
+      "job_name": "p7xF_fdr_t2_fu",
+      "state": "PENDING",
+      "partition": "gpu",
+      "group": "foundation_reference",
+      "action": "deprioritize_hold_recommended",
+      "redundancy_check": "strict_matrix_already_complete=true",
+      "reason": "duplicate_reference_branch_already_covered_in_strict_matrix",
+      "expected_eta_delta_hours": 1.0,
+      "evidence_path": "docs/benchmarks/block3_truth_pack/condition_inventory_full.csv",
+      "timestamp_utc": "2026-02-24T00:59:38.012094+00:00"
+    },
+    {
+      "job_id": "5179941",
+      "job_name": "p7xF_fdr_t2_ce",
+      "state": "PENDING",
+      "partition": "gpu",
+      "group": "foundation_reference",
+      "action": "deprioritize_hold_recommended",
+      "redundancy_check": "strict_matrix_already_complete=true",
+      "reason": "duplicate_reference_branch_already_covered_in_strict_matrix",
+      "expected_eta_delta_hours": 1.0,
+      "evidence_path": "docs/benchmarks/block3_truth_pack/condition_inventory_full.csv",
+      "timestamp_utc": "2026-02-24T00:59:38.012098+00:00"
+    },
+    {
+      "job_id": "5179940",
+      "job_name": "p7xF_fdr_t2_ct",
+      "state": "PENDING",
+      "partition": "gpu",
+      "group": "foundation_reference",
+      "action": "deprioritize_hold_recommended",
+      "redundancy_check": "strict_matrix_already_complete=true",
+      "reason": "duplicate_reference_branch_already_covered_in_strict_matrix",
+      "expected_eta_delta_hours": 1.0,
+      "evidence_path": "docs/benchmarks/block3_truth_pack/condition_inventory_full.csv",
+      "timestamp_utc": "2026-02-24T00:59:38.012101+00:00"
+    },
+    {
+      "job_id": "5179939",
+      "job_name": "p7xF_fdr_t2_co",
+      "state": "PENDING",
+      "partition": "gpu",
+      "group": "foundation_reference",
+      "action": "deprioritize_hold_recommended",
+      "redundancy_check": "strict_matrix_already_complete=true",
+      "reason": "duplicate_reference_branch_already_covered_in_strict_matrix",
+      "expected_eta_delta_hours": 1.0,
+      "evidence_path": "docs/benchmarks/block3_truth_pack/condition_inventory_full.csv",
+      "timestamp_utc": "2026-02-24T00:59:38.012104+00:00"
+    },
+    {
+      "job_id": "5179938",
+      "job_name": "p7xF_fdr_t1_fu",
+      "state": "PENDING",
+      "partition": "gpu",
+      "group": "foundation_reference",
+      "action": "deprioritize_hold_recommended",
+      "redundancy_check": "strict_matrix_already_complete=true",
+      "reason": "duplicate_reference_branch_already_covered_in_strict_matrix",
+      "expected_eta_delta_hours": 1.0,
+      "evidence_path": "docs/benchmarks/block3_truth_pack/condition_inventory_full.csv",
+      "timestamp_utc": "2026-02-24T00:59:38.012108+00:00"
     }
   ]
 }

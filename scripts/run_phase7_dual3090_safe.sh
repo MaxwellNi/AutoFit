@@ -147,6 +147,20 @@ if [[ -z "$PY_BIN" || "$PY_BIN" != *"insider"* ]]; then
     echo "FATAL: python3 is not from insider env: ${PY_BIN:-<missing>}"
     exit 2
 fi
+python3 - <<'PY'
+import sys
+if sys.version_info < (3, 11):
+    raise SystemExit(
+        f"FATAL: insider python must be >=3.11, got {sys.version_info.major}.{sys.version_info.minor}.{sys.version_info.micro}"
+    )
+PY
+python3 "${REPO}/scripts/assert_block3_execution_contract.py" \
+  --entrypoint "scripts/run_phase7_dual3090_safe.sh"
+INSIDER_PY="${CONDA_PREFIX}/bin/python3"
+if [[ ! -x "${INSIDER_PY}" ]]; then
+    echo "FATAL: insider python missing or non-executable: ${INSIDER_PY}"
+    exit 2
+fi
 
 GPU_COUNT="$(nvidia-smi --list-gpus | wc -l | tr -d ' ')"
 if [[ -z "$GPU_COUNT" || "$GPU_COUNT" -lt 2 ]]; then
@@ -309,7 +323,7 @@ run_job() {
     echo "[$(date -Iseconds)] START ${worker}: ${task}/${category}/${ablation} (models=${models:-ALL}, gpu=${gpu_id})"
 
     cmd=(
-        python3 scripts/run_block3_benchmark_shard.py
+        "${INSIDER_PY}" scripts/run_block3_benchmark_shard.py
         --task "$task"
         --category "$category"
         --ablation "$ablation"

@@ -69,9 +69,12 @@ Information flow guarantee (CRITICAL for fair comparison):
 from __future__ import annotations
 
 import gc
+import json
 import logging
+import os
 import time
 from itertools import combinations
+from pathlib import Path
 from typing import Any, Callable, Dict, List, Optional, Sequence, Tuple
 
 import numpy as np
@@ -4931,6 +4934,8 @@ class AutoFitV71Wrapper(ModelBase):
         anchor_policy: str = "champion_template_hard",
         coverage_controller: str = "missing_key_manifest_v1",
         retrieval_standardized: bool = True,
+        execution_contract_required: bool = True,
+        scheduler_memory_policy: str = "admission_guard_v1",
         sparse_moe_enabled: bool = True,
         sparse_moe_max_experts: int = 3,
         sparse_moe_temperature: float = 0.45,
@@ -4963,6 +4968,8 @@ class AutoFitV71Wrapper(ModelBase):
                 "anchor_policy": anchor_policy,
                 "coverage_controller": coverage_controller,
                 "retrieval_standardized": bool(retrieval_standardized),
+                "execution_contract_required": bool(execution_contract_required),
+                "scheduler_memory_policy": str(scheduler_memory_policy),
                 "sparse_moe_enabled": sparse_moe_enabled,
                 "sparse_moe_max_experts": sparse_moe_max_experts,
                 "sparse_moe_temperature": sparse_moe_temperature,
@@ -4989,6 +4996,8 @@ class AutoFitV71Wrapper(ModelBase):
         self._anchor_policy = str(anchor_policy)
         self._coverage_controller = str(coverage_controller)
         self._retrieval_standardized = bool(retrieval_standardized)
+        self._execution_contract_required = bool(execution_contract_required)
+        self._scheduler_memory_policy = str(scheduler_memory_policy)
         self._sparse_moe_enabled = bool(sparse_moe_enabled)
         self._sparse_moe_max_experts = int(max(1, sparse_moe_max_experts))
         self._sparse_moe_temperature = float(max(0.05, sparse_moe_temperature))
@@ -5058,6 +5067,13 @@ class AutoFitV71Wrapper(ModelBase):
         self._retrieval_feature_set_id: Optional[str] = None
         self._lane_failure_class: Optional[str] = None
         self._sparse_moe_route: Dict[str, Any] = {}
+        self._policy_report_path = Path(
+            os.environ.get(
+                "AUTOFIT_V72_POLICY_REPORT",
+                "docs/benchmarks/block3_truth_pack/v72_policy_training_report.json",
+            )
+        )
+        self._policy_state_rules: Optional[Dict[str, Dict[str, Any]]] = None
 
     def _augment_features(
         self, X: pd.DataFrame, y: Optional[pd.Series] = None, fit: bool = True
@@ -5107,6 +5123,73 @@ class AutoFitV71Wrapper(ModelBase):
                 deduped.append(name)
                 seen.add(name)
         return deduped
+
+    def _load_policy_state_rules(self) -> Dict[str, Dict[str, Any]]:
+        if self._policy_state_rules is not None:
+            return self._policy_state_rules
+        self._policy_state_rules = {}
+        path = self._policy_report_path
+        if not path.is_absolute():
+            path = Path(__file__).resolve().parents[4] / path
+        if not path.exists():
+            return self._policy_state_rules
+        try:
+            payload = json.loads(path.read_text(encoding="utf-8"))
+            state_policy = payload.get("state_policy", {})
+            if isinstance(state_policy, dict):
+                self._policy_state_rules = {
+                    str(k): dict(v)
+                    for k, v in state_policy.items()
+                    if isinstance(k, str) and isinstance(v, dict)
+                }
+        except Exception as e:
+            logger.warning(f"[AutoFitV71] Failed to load offline policy report: {e}")
+            self._policy_state_rules = {}
+        return self._policy_state_rules
+
+    def _apply_offline_policy_action(self, route_key: str) -> None:
+        rules = self._load_policy_state_rules()
+        action = dict(rules.get(route_key, {}))
+        if not action:
+            self._guard_decisions.append("offline_policy_fallback=no_matching_state")
+            return
+        top_k_raw = action.get("top_k")
+        if top_k_raw is not None:
+            try:
+                self._top_k = int(max(2, min(16, int(top_k_raw))))
+            except Exception:
+                pass
+        if self._lane == "count":
+            fam = str(action.get("count_family", "")).strip().lower()
+            if fam in {"auto", "poisson", "tweedie", "zinb", "negbin"}:
+                self._count_distribution_family = fam
+            subset = str(action.get("candidate_subset", "")).strip()
+            if subset:
+                heads = []
+                for token in subset.split(","):
+                    t = token.strip().lower()
+                    if t in {"xgboostpoisson", "poisson"}:
+                        heads.append("poisson")
+                    elif t in {"lightgbmtweedie", "tweedie"}:
+                        heads.append("tweedie")
+                    elif t in {"negativebinomialglm", "negbin", "zinb"}:
+                        heads.append("negbin")
+                if heads:
+                    # Stable de-dup preserving order
+                    seen = set()
+                    self._count_heads = [h for h in heads if not (h in seen or seen.add(h))]
+        if self._lane == "binary":
+            bcm = str(action.get("binary_calibration_mode", "")).strip().lower()
+            if bcm in {"auto", "platt", "isotonic"}:
+                self._binary_calibration_mode = bcm
+        confidence = action.get("confidence")
+        try:
+            self._policy_confidence = float(confidence) if confidence is not None else self._policy_confidence
+        except Exception:
+            pass
+        tid = str(action.get("template_id", "template")).strip() or "template"
+        self._policy_action_id = f"{self._offline_rl_policy}|{route_key}|{tid}"
+        self._guard_decisions.append(f"offline_policy_applied={tid}")
 
     def fit(self, X: pd.DataFrame, y: pd.Series, **kwargs) -> "AutoFitV71Wrapper":
         from .registry import check_model_available, get_model
@@ -5211,6 +5294,7 @@ class AutoFitV71Wrapper(ModelBase):
         self._policy_action_id = (
             f"{self._offline_rl_policy}|{self._route_key}|qs={qs_threshold:.2f}|budget={self._search_budget}"
         )
+        self._apply_offline_policy_action(self._route_key)
         self._dynamic_thresholds["missingness_bucket"] = self._missingness_bucket
         n_new_features = len(X_aug.columns) - len(X.columns)
         logger.info(
@@ -6006,6 +6090,8 @@ class AutoFitV71Wrapper(ModelBase):
             "anchor_policy": self._anchor_policy,
             "coverage_controller": self._coverage_controller,
             "retrieval_standardized": self._retrieval_standardized,
+            "execution_contract_required": self._execution_contract_required,
+            "scheduler_memory_policy": self._scheduler_memory_policy,
             "sparse_moe_enabled": self._sparse_moe_enabled,
             "sparse_moe_route": dict(self._sparse_moe_route),
             "sparse_moe_blend_alpha": self._sparse_moe_blend_alpha,
@@ -6185,6 +6271,8 @@ class AutoFitV71Wrapper(ModelBase):
                 "anchor_policy": self._anchor_policy,
                 "coverage_controller": self._coverage_controller,
                 "retrieval_standardized": bool(self._retrieval_standardized),
+                "execution_contract_required": bool(self._execution_contract_required),
+                "scheduler_memory_policy": self._scheduler_memory_policy,
                 "sparse_moe_enabled": self._sparse_moe_enabled,
                 "sparse_moe_route": dict(self._sparse_moe_route),
                 "sparse_moe_blend_alpha": self._sparse_moe_blend_alpha,
@@ -6221,6 +6309,8 @@ class AutoFitV72Wrapper(AutoFitV71Wrapper):
         kwargs.setdefault("anchor_policy", "champion_template_hard")
         kwargs.setdefault("coverage_controller", "missing_key_manifest_v1")
         kwargs.setdefault("retrieval_standardized", True)
+        kwargs.setdefault("execution_contract_required", True)
+        kwargs.setdefault("scheduler_memory_policy", "admission_guard_v1")
         kwargs.setdefault("sparse_moe_enabled", True)
         kwargs.setdefault("sparse_moe_max_experts", 3)
         kwargs.setdefault("sparse_moe_temperature", 0.45)

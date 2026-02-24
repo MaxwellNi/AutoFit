@@ -16,6 +16,7 @@ MODELS="${MODELS:-AutoFitV7,AutoFitV71,AutoFitV72}"
 V71_VARIANT="${V71_VARIANT:-g02}"
 SKIP_SANITY_CHECKS="${SKIP_SANITY_CHECKS:-0}"
 SKIP_TABPFN_UNINSTALL="${SKIP_TABPFN_UNINSTALL:-0}"
+SKIP_DEP_INSTALL="${SKIP_DEP_INSTALL:-0}"
 MEM_GUARD_GB="${MEM_GUARD_GB:-70}"
 GPU_GUARD_MB="${GPU_GUARD_MB:-8000}"
 
@@ -47,7 +48,18 @@ import sys
 print("python:", sys.executable)
 if "insider" not in sys.executable:
     raise SystemExit("FATAL: not running insider python")
+if sys.version_info < (3, 11):
+    raise SystemExit(
+        f"FATAL: insider python must be >=3.11, got {sys.version_info.major}.{sys.version_info.minor}.{sys.version_info.micro}"
+    )
 PY
+INSIDER_PY="${CONDA_PREFIX}/bin/python3"
+if [[ ! -x "${INSIDER_PY}" ]]; then
+    echo "FATAL: insider python missing or non-executable: ${INSIDER_PY}"
+    exit 2
+fi
+"${INSIDER_PY}" scripts/assert_block3_execution_contract.py \
+    --entrypoint "scripts/run_v72_4090_oneshot.sh"
 
 if ! command -v nvidia-smi >/dev/null 2>&1; then
     echo "FATAL: nvidia-smi not found"
@@ -68,7 +80,11 @@ export OPENBLAS_NUM_THREADS=20
 export HF_HUB_DISABLE_TELEMETRY=1
 
 if [[ "${SKIP_TABPFN_UNINSTALL}" != "1" ]]; then
-    python3 -m pip uninstall -y tabpfn tabpfn-common-utils >/dev/null 2>&1 || true
+    "${INSIDER_PY}" -m pip uninstall -y tabpfn tabpfn-common-utils >/dev/null 2>&1 || true
+fi
+
+if [[ "${SKIP_DEP_INSTALL}" != "1" ]]; then
+    bash scripts/install_block3_deps_in_insider.sh
 fi
 
 mkdir -p "${OUTBASE_ABS}/logs"
@@ -81,7 +97,7 @@ mkdir -p "${OUTBASE_ABS}/logs"
 } | tee "${OUTBASE_ABS}/RUN_INFO.txt"
 
 if [[ "${SKIP_SANITY_CHECKS}" != "1" ]]; then
-    python3 scripts/block3_verify_freeze.py >/dev/null
+    "${INSIDER_PY}" scripts/block3_verify_freeze.py >/dev/null
     bash scripts/preflight_block3_v71_gate.sh --v71-variant="${V71_VARIANT}" --skip-smoke >/dev/null
 fi
 
@@ -123,7 +139,7 @@ gpu_guard_mb() {
 is_done() {
     local outdir="$1"
     [[ -f "${outdir}/metrics.json" && -f "${outdir}/MANIFEST.json" ]] || return 1
-    python3 - <<PY >/dev/null 2>&1
+    "${INSIDER_PY}" - <<PY >/dev/null 2>&1
 import json
 import pathlib
 
@@ -159,7 +175,7 @@ run_shard() {
         echo "[$(date -Iseconds)] START ${worker} ${task}/${ablation} gpu=${gpu} attempt=${attempt}" | tee -a "${logf}"
         if OMP_NUM_THREADS="${threads}" MKL_NUM_THREADS="${threads}" OPENBLAS_NUM_THREADS="${threads}" \
             CUDA_VISIBLE_DEVICES="${gpu}" \
-            python3 scripts/run_block3_benchmark_shard.py \
+            "${INSIDER_PY}" scripts/run_block3_benchmark_shard.py \
                 --task "${task}" \
                 --category autofit \
                 --models "${MODELS}" \
@@ -231,4 +247,3 @@ fi
 
 echo "ALL_DONE final_rc=${FINAL_RC}" | tee -a "${OUTBASE_ABS}/RUN_INFO.txt"
 exit "${FINAL_RC}"
-

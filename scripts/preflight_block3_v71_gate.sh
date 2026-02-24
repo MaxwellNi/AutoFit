@@ -263,10 +263,23 @@ if [[ -z "${PY_BIN}" || "${PY_BIN}" != *"insider"* ]]; then
     echo "FATAL: python3 is not from insider env: ${PY_BIN:-<missing>}"
     exit 2
 fi
+python3 - <<'PY'
+import sys
+if sys.version_info < (3, 11):
+    raise SystemExit(
+        f"FATAL: insider python must be >=3.11, got {sys.version_info.major}.{sys.version_info.minor}.{sys.version_info.micro}"
+    )
+print(f"Runtime python: {sys.executable} ({sys.version.split()[0]})")
+PY
 
 export LD_LIBRARY_PATH="${CONDA_PREFIX:-}/lib:${LD_LIBRARY_PATH:-}"
 cd "${REPO}"
 export PYTHONPATH="${REPO}/src:${PYTHONPATH:-}"
+
+echo "[contract] Execution contract assertion..."
+python3 scripts/assert_block3_execution_contract.py \
+  --entrypoint "scripts/preflight_block3_v71_gate.sh"
+bash scripts/install_block3_deps_in_insider.sh
 
 echo "[1/7] Freeze verification..."
 python3 scripts/block3_verify_freeze.py

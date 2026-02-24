@@ -50,6 +50,12 @@ Block 3 modeling on the finalized WIDE2 freeze (`TRAIN_WIDE_FINAL`). The freeze 
 - Block 3 must read **only** `docs/audits/FULL_SCALE_POINTER.yaml` (via `FreezePointer` class).
 - **Freeze artifacts are read-only**: never modify files under `runs/*_20260203_225620/`.
 
+## Mandatory Execution Contract
+- Read and comply with `docs/BLOCK3_EXECUTION_CONTRACT.md` before every submission/execution path.
+- Run `python3 scripts/assert_block3_execution_contract.py --entrypoint <script>` before benchmark execution or job submission.
+- Runtime must be insider-only (`python >= 3.11`, insider interpreter path, no base env execution).
+- If contract assertion fails, stop and do not submit jobs.
+
 ## Block 3 Architecture
 
 ### Data Flow

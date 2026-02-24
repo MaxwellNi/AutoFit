@@ -3,6 +3,20 @@
 Last updated: 2026-02-18
 Scope: Block 3 benchmark, AutoFit V7/V7.1/V7.2 preparation
 
+## Mandatory Contract
+
+Before every submit/run path, execute:
+
+```bash
+python3 scripts/assert_block3_execution_contract.py --entrypoint <script-path>
+```
+
+Canonical contract file:
+
+- `docs/BLOCK3_EXECUTION_CONTRACT.md`
+
+If the assertion fails, stop immediately and fix blockers before scheduling.
+
 ## Non-Negotiable Gate
 
 Every code change that can affect benchmark behavior must pass the following gate **before** any pilot/full submission:
