@@ -1,6 +1,6 @@
 {
-  "generated_at_utc": "2026-02-24T00:58:36.938959+00:00",
-  "entrypoint": "manual_check",
+  "generated_at_utc": "2026-02-24T02:28:50.545977+00:00",
+  "entrypoint": "slurm:p7v72b_t1_ct_ic_h7",
   "contract_path": "/mnt/aiongpfs/projects/eint/repo_root/docs/BLOCK3_EXECUTION_CONTRACT.md",
   "contract_version": "2026-02-24",
   "policy_hash": "cae333137aa152bc12f534269c39ca096cf7bfefe129445b113b2df852047bbf",

@@ -991,85 +991,87 @@ sacctmgr show qos iris-batch-long,iris-gpu-long format=Name,MaxJobsPU,MaxWall,Pr
 ## Execution Status (Nested Progress + ETA)
 
 <!-- BEGIN AUTO:EXECUTION_STATUS -->
-- Snapshot UTC: **2026-02-24T00:59:38.010347+00:00**
+- Snapshot UTC: **2026-02-24T13:08:01.278591+00:00**
 - Queue policy: **V72-first**
 - Strict matrix progress: **[########################] 104/104 (100.0%)**
-- V7.2 coverage progress: **[############------------] 51/104 (49.0%)**
+- V7.2 coverage progress: **[###############---------] 66/104 (63.5%)**
 
 ## Active Queue Summary
 
 | metric | value |
 |---|---:|
-| running_total | 4 |
-| pending_total | 8 |
-| eta_optimistic_hours | 54.16 |
-| eta_baseline_hours | 77.37 |
-| eta_conservative_hours | 112.32 |
+| running_total | 3 |
+| pending_total | 50 |
+| eta_optimistic_hours | 56.86 |
+| eta_baseline_hours | 81.23 |
+| eta_conservative_hours | 117.72 |
 
 ### Active Jobs by Group
 
 | group | running | pending |
 |---|---:|---:|
-| autofit_v72_completion | 3 | 0 |
+| autofit_v72_completion | 2 | 0 |
 | autofit_resubmit | 1 | 0 |
 | statistical_resubmit | 0 | 0 |
 | v71_g01 | 0 | 0 |
 | foundation_reference | 0 | 8 |
-| other_active | 0 | 0 |
+| other_active | 0 | 42 |
 
 ### Queue Bottlenecks
 
 | reason | count |
 |---|---:|
-| (QOSGrpNodeLimit) | 8 |
+| (QOSGrpNodeLimit) | 47 |
+| (Priority) | 2 |
+| (Nodes required for job are DOWN, DRAINED or reserved for jobs in higher priority partitions) | 1 |
 
 ## Nested Task Progress
 
 ### task1_outcome
 - strict: [########################] 48/48 (100.0%)
-- v72: [###############---------] 30/48 (62.5%)
-- running_jobs: 3, pending_jobs: 1
+- v72: [#####################---] 42/48 (87.5%)
+- running_jobs: 3, pending_jobs: 11
 
 | ablation | strict_progress | v72_progress | running_jobs | pending_jobs |
 |---|---|---|---:|---:|
 | core_only | [########################] 12/12 (100.0%) | [########################] 12/12 (100.0%) | 0 | 0 |
-| core_text | [########################] 12/12 (100.0%) | [########----------------] 4/12 (33.3%) | 0 | 0 |
-| core_edgar | [########################] 12/12 (100.0%) | [################--------] 8/12 (66.7%) | 2 | 0 |
-| full | [########################] 12/12 (100.0%) | [############------------] 6/12 (50.0%) | 1 | 1 |
+| core_text | [########################] 12/12 (100.0%) | [################--------] 8/12 (66.7%) | 0 | 8 |
+| core_edgar | [########################] 12/12 (100.0%) | [######################--] 11/12 (91.7%) | 2 | 1 |
+| full | [########################] 12/12 (100.0%) | [######################--] 11/12 (91.7%) | 1 | 2 |
 
 | target | strict_done/expected | v72_done/expected | missing_horizons |
 |---|---:|---:|---|
 | funding_raised_usd | 16/16 | 16/16 | - |
-| investors_count | 16/16 | 10/16 | 1,7,14,30 |
-| is_funded | 16/16 | 4/16 | 1,7,14,30 |
+| investors_count | 16/16 | 12/16 | 1,7,14,30 |
+| is_funded | 16/16 | 14/16 | 30 |
 
 ### task2_forecast
 - strict: [########################] 32/32 (100.0%)
-- v72: [################--------] 21/32 (65.6%)
-- running_jobs: 1, pending_jobs: 4
+- v72: [##################------] 24/32 (75.0%)
+- running_jobs: 0, pending_jobs: 12
 
 | ablation | strict_progress | v72_progress | running_jobs | pending_jobs |
 |---|---|---|---:|---:|
-| core_only | [########################] 8/8 (100.0%) | [############------------] 4/8 (50.0%) | 0 | 1 |
-| core_text | [########################] 8/8 (100.0%) | [############------------] 4/8 (50.0%) | 0 | 1 |
+| core_only | [########################] 8/8 (100.0%) | [############------------] 4/8 (50.0%) | 0 | 5 |
+| core_text | [########################] 8/8 (100.0%) | [############------------] 4/8 (50.0%) | 0 | 5 |
 | core_edgar | [########################] 8/8 (100.0%) | [########################] 8/8 (100.0%) | 0 | 1 |
-| full | [########################] 8/8 (100.0%) | [###############---------] 5/8 (62.5%) | 1 | 1 |
+| full | [########################] 8/8 (100.0%) | [########################] 8/8 (100.0%) | 0 | 1 |
 
 | target | strict_done/expected | v72_done/expected | missing_horizons |
 |---|---:|---:|---|
 | funding_raised_usd | 16/16 | 16/16 | - |
-| investors_count | 16/16 | 5/16 | 1,7,14,30 |
+| investors_count | 16/16 | 8/16 | 1,7,14,30 |
 
 ### task3_risk_adjust
 - strict: [########################] 24/24 (100.0%)
 - v72: [------------------------] 0/24 (0.0%)
-- running_jobs: 0, pending_jobs: 3
+- running_jobs: 0, pending_jobs: 27
 
 | ablation | strict_progress | v72_progress | running_jobs | pending_jobs |
 |---|---|---|---:|---:|
-| core_only | [########################] 8/8 (100.0%) | [------------------------] 0/8 (0.0%) | 0 | 1 |
-| core_edgar | [########################] 8/8 (100.0%) | [------------------------] 0/8 (0.0%) | 0 | 1 |
-| full | [########################] 8/8 (100.0%) | [------------------------] 0/8 (0.0%) | 0 | 1 |
+| core_only | [########################] 8/8 (100.0%) | [------------------------] 0/8 (0.0%) | 0 | 9 |
+| core_edgar | [########################] 8/8 (100.0%) | [------------------------] 0/8 (0.0%) | 0 | 9 |
+| full | [########################] 8/8 (100.0%) | [------------------------] 0/8 (0.0%) | 0 | 9 |
 
 | target | strict_done/expected | v72_done/expected | missing_horizons |
 |---|---:|---:|---|
@@ -1082,31 +1084,31 @@ sacctmgr show qos iris-batch-long,iris-gpu-long format=Name,MaxJobsPU,MaxWall,Pr
 |---|---|---|---|
 | task1_outcome | core_edgar | funding_raised_usd | 1,7,14,30 |
 | task1_outcome | core_edgar | investors_count | 1,7,14,30 |
+| task1_outcome | core_edgar | is_funded | 1,7,14 |
 | task1_outcome | core_only | funding_raised_usd | 1,7,14,30 |
 | task1_outcome | core_only | investors_count | 1,7,14,30 |
 | task1_outcome | core_only | is_funded | 1,7,14,30 |
 | task1_outcome | core_text | funding_raised_usd | 1,7,14,30 |
+| task1_outcome | core_text | is_funded | 1,7,14,30 |
 | task1_outcome | full | funding_raised_usd | 1,7,14,30 |
-| task1_outcome | full | investors_count | 1,7 |
+| task1_outcome | full | investors_count | 1,7,14,30 |
+| task1_outcome | full | is_funded | 1,7,14 |
 | task2_forecast | core_edgar | funding_raised_usd | 1,7,14,30 |
 | task2_forecast | core_edgar | investors_count | 1,7,14,30 |
 | task2_forecast | core_only | funding_raised_usd | 1,7,14,30 |
 | task2_forecast | core_text | funding_raised_usd | 1,7,14,30 |
 | task2_forecast | full | funding_raised_usd | 1,7,14,30 |
-| task2_forecast | full | investors_count | 1 |
+| task2_forecast | full | investors_count | 1,7,14,30 |
 
 ## V7.2 Missing Subtasks (by task/ablation/target)
 
 | task | ablation | target | missing_horizons |
 |---|---|---|---|
-| task1_outcome | core_edgar | is_funded | 1,7,14,30 |
+| task1_outcome | core_edgar | is_funded | 30 |
 | task1_outcome | core_text | investors_count | 1,7,14,30 |
-| task1_outcome | core_text | is_funded | 1,7,14,30 |
-| task1_outcome | full | investors_count | 14,30 |
-| task1_outcome | full | is_funded | 1,7,14,30 |
+| task1_outcome | full | is_funded | 30 |
 | task2_forecast | core_only | investors_count | 1,7,14,30 |
 | task2_forecast | core_text | investors_count | 1,7,14,30 |
-| task2_forecast | full | investors_count | 7,14,30 |
 | task3_risk_adjust | core_edgar | funding_raised_usd | 1,7,14,30 |
 | task3_risk_adjust | core_edgar | investors_count | 1,7,14,30 |
 | task3_risk_adjust | core_only | funding_raised_usd | 1,7,14,30 |
@@ -1118,22 +1120,63 @@ sacctmgr show qos iris-batch-long,iris-gpu-long format=Name,MaxJobsPU,MaxWall,Pr
 ## Queue Actions (V72-first)
 
 <!-- BEGIN AUTO:QUEUE_ACTIONS -->
-- generated_at_utc: **2026-02-24T00:59:38.012111+00:00**
+- generated_at_utc: **2026-02-24T13:08:01.280655+00:00**
 
 | job_id | job_name | state | group | action | redundancy_check | expected_eta_delta_hours | evidence_path |
 |---|---|---|---|---|---|---:|---|
+| 5192139 | p7v72b3_t1_ce_if_h30 | PENDING | other_active | keep | non_redundant_required | 0.00 | docs/benchmarks/block3_truth_pack/condition_inventory_full.csv |
+| 5192140 | p7v72b3_t1_fu_if_h30 | PENDING | other_active | keep | non_redundant_required | 0.00 | docs/benchmarks/block3_truth_pack/condition_inventory_full.csv |
 | 5186429 | p7r_af1_t1_ce | RUNNING | autofit_resubmit | keep_priority | required_for_v72_first | 0.00 | docs/benchmarks/block3_truth_pack/missing_key_manifest.csv |
-| 5190741 | p7v72c_t2_fu | RUNNING | autofit_v72_completion | keep_priority | required_for_v72_first | 0.00 | docs/benchmarks/block3_truth_pack/missing_key_manifest.csv |
 | 5190738 | p7v72c_t1_fu | RUNNING | autofit_v72_completion | keep_priority | required_for_v72_first | 0.00 | docs/benchmarks/block3_truth_pack/missing_key_manifest.csv |
 | 5190736 | p7v72c_t1_ce | RUNNING | autofit_v72_completion | keep_priority | required_for_v72_first | 0.00 | docs/benchmarks/block3_truth_pack/missing_key_manifest.csv |
-| 5179945 | p7xF_fdr_t3_fu | PENDING | foundation_reference | deprioritize_hold_recommended | strict_matrix_already_complete=true | 1.00 | docs/benchmarks/block3_truth_pack/condition_inventory_full.csv |
-| 5179944 | p7xF_fdr_t3_ce | PENDING | foundation_reference | deprioritize_hold_recommended | strict_matrix_already_complete=true | 1.00 | docs/benchmarks/block3_truth_pack/condition_inventory_full.csv |
-| 5179943 | p7xF_fdr_t3_co | PENDING | foundation_reference | deprioritize_hold_recommended | strict_matrix_already_complete=true | 1.00 | docs/benchmarks/block3_truth_pack/condition_inventory_full.csv |
-| 5179942 | p7xF_fdr_t2_fu | PENDING | foundation_reference | deprioritize_hold_recommended | strict_matrix_already_complete=true | 1.00 | docs/benchmarks/block3_truth_pack/condition_inventory_full.csv |
-| 5179941 | p7xF_fdr_t2_ce | PENDING | foundation_reference | deprioritize_hold_recommended | strict_matrix_already_complete=true | 1.00 | docs/benchmarks/block3_truth_pack/condition_inventory_full.csv |
-| 5179940 | p7xF_fdr_t2_ct | PENDING | foundation_reference | deprioritize_hold_recommended | strict_matrix_already_complete=true | 1.00 | docs/benchmarks/block3_truth_pack/condition_inventory_full.csv |
-| 5179939 | p7xF_fdr_t2_co | PENDING | foundation_reference | deprioritize_hold_recommended | strict_matrix_already_complete=true | 1.00 | docs/benchmarks/block3_truth_pack/condition_inventory_full.csv |
+| 5191498 | p7v72k_t1_ct_ic_h1 | PENDING | other_active | keep | non_redundant_required | 0.00 | docs/benchmarks/block3_truth_pack/condition_inventory_full.csv |
+| 5191499 | p7v72k_t1_ct_ic_h7 | PENDING | other_active | keep | non_redundant_required | 0.00 | docs/benchmarks/block3_truth_pack/condition_inventory_full.csv |
+| 5191500 | p7v72k_t1_ct_ic_h14 | PENDING | other_active | keep | non_redundant_required | 0.00 | docs/benchmarks/block3_truth_pack/condition_inventory_full.csv |
+| 5191501 | p7v72k_t1_ct_ic_h30 | PENDING | other_active | keep | non_redundant_required | 0.00 | docs/benchmarks/block3_truth_pack/condition_inventory_full.csv |
+| 5191502 | p7v72k_t1_ct_if_h1 | PENDING | other_active | keep | non_redundant_required | 0.00 | docs/benchmarks/block3_truth_pack/condition_inventory_full.csv |
+| 5191503 | p7v72k_t1_ct_if_h7 | PENDING | other_active | keep | non_redundant_required | 0.00 | docs/benchmarks/block3_truth_pack/condition_inventory_full.csv |
+| 5191504 | p7v72k_t1_ct_if_h14 | PENDING | other_active | keep | non_redundant_required | 0.00 | docs/benchmarks/block3_truth_pack/condition_inventory_full.csv |
+| 5191505 | p7v72k_t1_ct_if_h30 | PENDING | other_active | keep | non_redundant_required | 0.00 | docs/benchmarks/block3_truth_pack/condition_inventory_full.csv |
+| 5191506 | p7v72k_t2_co_ic_h1 | PENDING | other_active | keep | non_redundant_required | 0.00 | docs/benchmarks/block3_truth_pack/condition_inventory_full.csv |
+| 5191507 | p7v72k_t2_co_ic_h7 | PENDING | other_active | keep | non_redundant_required | 0.00 | docs/benchmarks/block3_truth_pack/condition_inventory_full.csv |
+| 5191508 | p7v72k_t2_co_ic_h14 | PENDING | other_active | keep | non_redundant_required | 0.00 | docs/benchmarks/block3_truth_pack/condition_inventory_full.csv |
+| 5191509 | p7v72k_t2_co_ic_h30 | PENDING | other_active | keep | non_redundant_required | 0.00 | docs/benchmarks/block3_truth_pack/condition_inventory_full.csv |
+| 5191510 | p7v72k_t2_ct_ic_h1 | PENDING | other_active | keep | non_redundant_required | 0.00 | docs/benchmarks/block3_truth_pack/condition_inventory_full.csv |
+| 5191511 | p7v72k_t2_ct_ic_h7 | PENDING | other_active | keep | non_redundant_required | 0.00 | docs/benchmarks/block3_truth_pack/condition_inventory_full.csv |
+| 5191512 | p7v72k_t2_ct_ic_h14 | PENDING | other_active | keep | non_redundant_required | 0.00 | docs/benchmarks/block3_truth_pack/condition_inventory_full.csv |
+| 5191513 | p7v72k_t2_ct_ic_h30 | PENDING | other_active | keep | non_redundant_required | 0.00 | docs/benchmarks/block3_truth_pack/condition_inventory_full.csv |
+| 5191514 | p7v72k_t3_ce_fru_h1 | PENDING | other_active | keep | non_redundant_required | 0.00 | docs/benchmarks/block3_truth_pack/condition_inventory_full.csv |
+| 5191515 | p7v72k_t3_ce_fru_h7 | PENDING | other_active | keep | non_redundant_required | 0.00 | docs/benchmarks/block3_truth_pack/condition_inventory_full.csv |
+| 5191516 | p7v72k_t3_ce_fru_h14 | PENDING | other_active | keep | non_redundant_required | 0.00 | docs/benchmarks/block3_truth_pack/condition_inventory_full.csv |
+| 5191517 | p7v72k_t3_ce_fru_h30 | PENDING | other_active | keep | non_redundant_required | 0.00 | docs/benchmarks/block3_truth_pack/condition_inventory_full.csv |
+| 5191518 | p7v72k_t3_ce_ic_h1 | PENDING | other_active | keep | non_redundant_required | 0.00 | docs/benchmarks/block3_truth_pack/condition_inventory_full.csv |
+| 5191519 | p7v72k_t3_ce_ic_h7 | PENDING | other_active | keep | non_redundant_required | 0.00 | docs/benchmarks/block3_truth_pack/condition_inventory_full.csv |
+| 5191520 | p7v72k_t3_ce_ic_h14 | PENDING | other_active | keep | non_redundant_required | 0.00 | docs/benchmarks/block3_truth_pack/condition_inventory_full.csv |
+| 5191521 | p7v72k_t3_ce_ic_h30 | PENDING | other_active | keep | non_redundant_required | 0.00 | docs/benchmarks/block3_truth_pack/condition_inventory_full.csv |
+| 5191522 | p7v72k_t3_co_fru_h1 | PENDING | other_active | keep | non_redundant_required | 0.00 | docs/benchmarks/block3_truth_pack/condition_inventory_full.csv |
+| 5191523 | p7v72k_t3_co_fru_h7 | PENDING | other_active | keep | non_redundant_required | 0.00 | docs/benchmarks/block3_truth_pack/condition_inventory_full.csv |
+| 5191524 | p7v72k_t3_co_fru_h14 | PENDING | other_active | keep | non_redundant_required | 0.00 | docs/benchmarks/block3_truth_pack/condition_inventory_full.csv |
+| 5191525 | p7v72k_t3_co_fru_h30 | PENDING | other_active | keep | non_redundant_required | 0.00 | docs/benchmarks/block3_truth_pack/condition_inventory_full.csv |
+| 5191526 | p7v72k_t3_co_ic_h1 | PENDING | other_active | keep | non_redundant_required | 0.00 | docs/benchmarks/block3_truth_pack/condition_inventory_full.csv |
+| 5191527 | p7v72k_t3_co_ic_h7 | PENDING | other_active | keep | non_redundant_required | 0.00 | docs/benchmarks/block3_truth_pack/condition_inventory_full.csv |
+| 5191528 | p7v72k_t3_co_ic_h14 | PENDING | other_active | keep | non_redundant_required | 0.00 | docs/benchmarks/block3_truth_pack/condition_inventory_full.csv |
+| 5191529 | p7v72k_t3_co_ic_h30 | PENDING | other_active | keep | non_redundant_required | 0.00 | docs/benchmarks/block3_truth_pack/condition_inventory_full.csv |
+| 5191530 | p7v72k_t3_fu_fru_h1 | PENDING | other_active | keep | non_redundant_required | 0.00 | docs/benchmarks/block3_truth_pack/condition_inventory_full.csv |
+| 5191531 | p7v72k_t3_fu_fru_h7 | PENDING | other_active | keep | non_redundant_required | 0.00 | docs/benchmarks/block3_truth_pack/condition_inventory_full.csv |
+| 5191532 | p7v72k_t3_fu_fru_h14 | PENDING | other_active | keep | non_redundant_required | 0.00 | docs/benchmarks/block3_truth_pack/condition_inventory_full.csv |
+| 5191533 | p7v72k_t3_fu_fru_h30 | PENDING | other_active | keep | non_redundant_required | 0.00 | docs/benchmarks/block3_truth_pack/condition_inventory_full.csv |
+| 5191534 | p7v72k_t3_fu_ic_h1 | PENDING | other_active | keep | non_redundant_required | 0.00 | docs/benchmarks/block3_truth_pack/condition_inventory_full.csv |
+| 5191535 | p7v72k_t3_fu_ic_h7 | PENDING | other_active | keep | non_redundant_required | 0.00 | docs/benchmarks/block3_truth_pack/condition_inventory_full.csv |
+| 5191536 | p7v72k_t3_fu_ic_h14 | PENDING | other_active | keep | non_redundant_required | 0.00 | docs/benchmarks/block3_truth_pack/condition_inventory_full.csv |
+| 5191537 | p7v72k_t3_fu_ic_h30 | PENDING | other_active | keep | non_redundant_required | 0.00 | docs/benchmarks/block3_truth_pack/condition_inventory_full.csv |
 | 5179938 | p7xF_fdr_t1_fu | PENDING | foundation_reference | deprioritize_hold_recommended | strict_matrix_already_complete=true | 1.00 | docs/benchmarks/block3_truth_pack/condition_inventory_full.csv |
+| 5179939 | p7xF_fdr_t2_co | PENDING | foundation_reference | deprioritize_hold_recommended | strict_matrix_already_complete=true | 1.00 | docs/benchmarks/block3_truth_pack/condition_inventory_full.csv |
+| 5179940 | p7xF_fdr_t2_ct | PENDING | foundation_reference | deprioritize_hold_recommended | strict_matrix_already_complete=true | 1.00 | docs/benchmarks/block3_truth_pack/condition_inventory_full.csv |
+| 5179941 | p7xF_fdr_t2_ce | PENDING | foundation_reference | deprioritize_hold_recommended | strict_matrix_already_complete=true | 1.00 | docs/benchmarks/block3_truth_pack/condition_inventory_full.csv |
+| 5179942 | p7xF_fdr_t2_fu | PENDING | foundation_reference | deprioritize_hold_recommended | strict_matrix_already_complete=true | 1.00 | docs/benchmarks/block3_truth_pack/condition_inventory_full.csv |
+| 5179943 | p7xF_fdr_t3_co | PENDING | foundation_reference | deprioritize_hold_recommended | strict_matrix_already_complete=true | 1.00 | docs/benchmarks/block3_truth_pack/condition_inventory_full.csv |
+| 5179944 | p7xF_fdr_t3_ce | PENDING | foundation_reference | deprioritize_hold_recommended | strict_matrix_already_complete=true | 1.00 | docs/benchmarks/block3_truth_pack/condition_inventory_full.csv |
+| 5179945 | p7xF_fdr_t3_fu | PENDING | foundation_reference | deprioritize_hold_recommended | strict_matrix_already_complete=true | 1.00 | docs/benchmarks/block3_truth_pack/condition_inventory_full.csv |
 
 Note: actions are recommendation artifacts; queue mutation is not performed by this script.
 <!-- END AUTO:QUEUE_ACTIONS -->
@@ -1141,7 +1184,7 @@ Note: actions are recommendation artifacts; queue mutation is not performed by t
 ## Fairness Certification
 
 <!-- BEGIN AUTO:FAIRNESS_CERTIFICATION -->
-- generated_at_utc: **2026-02-24T00:59:38.013015+00:00**
+- generated_at_utc: **2026-02-24T13:08:01.281455+00:00**
 - status: **NOT CERTIFIED**
 
 | check | status | evidence_path | detail |
@@ -1160,9 +1203,9 @@ Note: actions are recommendation artifacts; queue mutation is not performed by t
 | metric | value | evidence_path |
 |---|---|---|
 | strict_completed_conditions | 104/104 | docs/benchmarks/block3_truth_pack/condition_inventory_full.csv |
-| v72_completed_conditions | 51/104 | docs/benchmarks/block3_truth_pack/missing_key_manifest.csv |
-| v72_missing_conditions | 53 | docs/benchmarks/block3_truth_pack/missing_key_manifest.csv |
-| queue_running_pending | 4/8 | docs/benchmarks/block3_truth_pack/execution_status_latest.json |
+| v72_completed_conditions | 66/104 | docs/benchmarks/block3_truth_pack/missing_key_manifest.csv |
+| v72_missing_conditions | 38 | docs/benchmarks/block3_truth_pack/missing_key_manifest.csv |
+| queue_running_pending | 3/50 | docs/benchmarks/block3_truth_pack/execution_status_latest.json |
 <!-- END AUTO:V72_COVERAGE_GAP_ANALYSIS -->
 
 ## Root Cause Matrix (Problem -> Evidence -> Impact -> Fix -> Gate)
@@ -1170,10 +1213,10 @@ Note: actions are recommendation artifacts; queue mutation is not performed by t
 <!-- BEGIN AUTO:ROOT_CAUSE_MATRIX -->
 | problem | evidence | impact | fix | gate |
 |---|---|---|---|---|
-| V7.2 coverage deficit | v72_completed=51/104 (strict=104/104), overlap_keys=30; `docs/benchmarks/block3_truth_pack/missing_key_manifest.csv`; `docs/benchmarks/block3_truth_pack/v72_pilot_gate_report.json` | Full-rank claim is blocked until 104/104 V7.2 keys are materialized. | Keep V72-first queue policy, prioritize missing-key controller jobs, and rerun gate after each completed shard. | Gate-P/F blocked until coverage closes. |
+| V7.2 coverage deficit | v72_completed=66/104 (strict=104/104), overlap_keys=30; `docs/benchmarks/block3_truth_pack/missing_key_manifest.csv`; `docs/benchmarks/block3_truth_pack/v72_pilot_gate_report.json` | Full-rank claim is blocked until 104/104 V7.2 keys are materialized. | Keep V72-first queue policy, prioritize missing-key controller jobs, and rerun gate after each completed shard. | Gate-P/F blocked until coverage closes. |
 | Count lane weakness (`investors_count`) | gap_reduction_pct=-2.917353146000108; catastrophic_spikes=4; `docs/benchmarks/block3_truth_pack/v72_pilot_gate_report.json`; `docs/benchmarks/block3_truth_pack/investors_count_stability_audit_latest.json`; `docs/benchmarks/block3_truth_pack/failure_taxonomy.csv` | Median gap remains large and historical explosion lineage still exists. | Keep count-safe hard guards, complete failure-pool reruns, and retune lane thresholds after new full overlap is available. | Gate-P investors_count criterion currently fails. |
 | Binary lane underperformance (`is_funded`) | Champion families remain deep/transformer; `docs/benchmarks/block3_truth_pack/top3_representative_models_by_target.csv`; `docs/benchmarks/block3_truth_pack/family_gap_by_target.csv` | AutoFit calibration/routing still behind NHITS/PatchTST in strict global benchmark. | Produce explicit binary calibration report (logloss/Brier/ECE by subtask) and retune hazard/calibration settings from full overlap. | Gate-P global-improvement criterion remains constrained. |
-| Queue bottlenecks | RUNNING=4, PENDING=8; pending reasons include `(QOSGrpNodeLimit)`; `docs/benchmarks/block3_truth_pack/execution_status_latest.json` | Delays convergence to representative full-matrix V7.2 evidence. | Apply redundancy-safe de-prioritization for non-essential residual branches under V72-first policy. | ETA uncertainty remains scheduler-dependent. |
+| Queue bottlenecks | RUNNING=3, PENDING=50; pending reasons include `(QOSGrpNodeLimit), (Priority)`; `docs/benchmarks/block3_truth_pack/execution_status_latest.json` | Delays convergence to representative full-matrix V7.2 evidence. | Apply redundancy-safe de-prioritization for non-essential residual branches under V72-first policy. | ETA uncertainty remains scheduler-dependent. |
 | Audit closure incomplete | distribution_available=True; `docs/benchmarks/block3_truth_pack/investors_count_stability_audit_latest.json` | Distribution diagnostics are available, but certification remains open due to unresolved catastrophic spike lineage. | Keep rerunning count-lane failure pool until spike count is zero, then refresh certification. | Gate-S remains not fully certified. |
 <!-- END AUTO:ROOT_CAUSE_MATRIX -->
 
@@ -1185,7 +1228,7 @@ Note: actions are recommendation artifacts; queue mutation is not performed by t
 | count-safe guards | implemented | non-negative, safe inverse, clipping, OOF guard telemetry fields are present in metrics pipeline. | `scripts/run_block3_benchmark_shard.py` |
 | hazard head and sparse routing | implemented | V7.2 route metadata and policy telemetry integrated in current benchmark outputs. | `src/narrative/block3/models/autofit_wrapper.py` |
 | champion-template anchors | implemented | Template library and anchor telemetry are materialized in truth pack outputs. | `docs/benchmarks/block3_truth_pack/champion_template_library.csv` |
-| full V7.2 104-key completion | pending | current V7.2 coverage is 51/104; missing keys remain in manifest. | `docs/benchmarks/block3_truth_pack/missing_key_manifest.csv` |
+| full V7.2 104-key completion | pending | current V7.2 coverage is 66/104; missing keys remain in manifest. | `docs/benchmarks/block3_truth_pack/missing_key_manifest.csv` |
 | Gate-S/P/F refresh on new overlap | pending | current gate report still shows overall_pass=false, global gain=1.469218479667083. | `docs/benchmarks/block3_truth_pack/v72_pilot_gate_report.json` |
 | investors_count stability certification | pending | latest audit not certified (`distribution_available` and spike checks unresolved). | `docs/benchmarks/block3_truth_pack/investors_count_stability_audit_latest.json` |
 | binary calibration deltas | pending | explicit per-subtask logloss/Brier/ECE delta report not yet generated in truth pack latest artifacts. | `docs/benchmarks/block3_truth_pack/top3_representative_models_by_target.csv` |

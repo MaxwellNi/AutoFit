@@ -1,8 +1,8 @@
 {
-  "snapshot_ts": "2026-02-24T00:59:38.010347+00:00",
+  "snapshot_ts": "2026-02-24T13:08:01.278591+00:00",
   "queue_policy": "V72-first",
-  "running_total": 4,
-  "pending_total": 8,
+  "running_total": 3,
+  "pending_total": 50,
   "strict_progress": {
     "completed": 104,
     "expected": 104,
@@ -10,35 +10,47 @@
     "bar": "[########################] 104/104 (100.0%)"
   },
   "v72_progress": {
-    "completed": 51,
+    "completed": 66,
     "expected": 104,
-    "ratio": 0.49038461538461536,
-    "bar": "[############------------] 51/104 (49.0%)",
-    "missing_keys": 53
+    "ratio": 0.6346153846153846,
+    "bar": "[###############---------] 66/104 (63.5%)",
+    "missing_keys": 38
   },
   "nested_task_tree": {
     "task1_outcome": {
       "expected_keys": 48,
       "strict_completed_keys": 48,
-      "v72_completed_keys": 30,
+      "v72_completed_keys": 42,
       "running_jobs": [
         "p7r_af1_t1_ce",
         "p7v72c_t1_fu",
         "p7v72c_t1_ce"
       ],
       "pending_jobs": [
+        "p7v72b3_t1_ce_if_h30",
+        "p7v72b3_t1_fu_if_h30",
+        "p7v72k_t1_ct_ic_h1",
+        "p7v72k_t1_ct_ic_h7",
+        "p7v72k_t1_ct_ic_h14",
+        "p7v72k_t1_ct_ic_h30",
+        "p7v72k_t1_ct_if_h1",
+        "p7v72k_t1_ct_if_h7",
+        "p7v72k_t1_ct_if_h14",
+        "p7v72k_t1_ct_if_h30",
         "p7xF_fdr_t1_fu"
       ],
       "ablations": {
         "core_edgar": {
           "expected_keys": 12,
           "strict_completed_keys": 12,
-          "v72_completed_keys": 8,
+          "v72_completed_keys": 11,
           "running_jobs": [
             "p7r_af1_t1_ce",
             "p7v72c_t1_ce"
           ],
-          "pending_jobs": [],
+          "pending_jobs": [
+            "p7v72b3_t1_ce_if_h30"
+          ],
           "targets": {
             "funding_raised_usd": {
               "expected_keys": 4,
@@ -89,19 +101,19 @@
             "is_funded": {
               "expected_keys": 4,
               "strict_completed_keys": 4,
-              "v72_completed_keys": 0,
+              "v72_completed_keys": 3,
               "horizons": {
                 "1": {
                   "strict_completed": true,
-                  "v72_completed": false
+                  "v72_completed": true
                 },
                 "7": {
                   "strict_completed": true,
-                  "v72_completed": false
+                  "v72_completed": true
                 },
                 "14": {
                   "strict_completed": true,
-                  "v72_completed": false
+                  "v72_completed": true
                 },
                 "30": {
                   "strict_completed": true,
@@ -192,9 +204,18 @@
         "core_text": {
           "expected_keys": 12,
           "strict_completed_keys": 12,
-          "v72_completed_keys": 4,
+          "v72_completed_keys": 8,
           "running_jobs": [],
-          "pending_jobs": [],
+          "pending_jobs": [
+            "p7v72k_t1_ct_ic_h1",
+            "p7v72k_t1_ct_ic_h7",
+            "p7v72k_t1_ct_ic_h14",
+            "p7v72k_t1_ct_ic_h30",
+            "p7v72k_t1_ct_if_h1",
+            "p7v72k_t1_ct_if_h7",
+            "p7v72k_t1_ct_if_h14",
+            "p7v72k_t1_ct_if_h30"
+          ],
           "targets": {
             "funding_raised_usd": {
               "expected_keys": 4,
@@ -245,23 +266,23 @@
             "is_funded": {
               "expected_keys": 4,
               "strict_completed_keys": 4,
-              "v72_completed_keys": 0,
+              "v72_completed_keys": 4,
               "horizons": {
                 "1": {
                   "strict_completed": true,
-                  "v72_completed": false
+                  "v72_completed": true
                 },
                 "7": {
                   "strict_completed": true,
-                  "v72_completed": false
+                  "v72_completed": true
                 },
                 "14": {
                   "strict_completed": true,
-                  "v72_completed": false
+                  "v72_completed": true
                 },
                 "30": {
                   "strict_completed": true,
-                  "v72_completed": false
+                  "v72_completed": true
                 }
               }
             }
@@ -270,11 +291,12 @@
         "full": {
           "expected_keys": 12,
           "strict_completed_keys": 12,
-          "v72_completed_keys": 6,
+          "v72_completed_keys": 11,
           "running_jobs": [
             "p7v72c_t1_fu"
           ],
           "pending_jobs": [
+            "p7v72b3_t1_fu_if_h30",
             "p7xF_fdr_t1_fu"
           ],
           "targets": {
@@ -304,7 +326,7 @@
             "investors_count": {
               "expected_keys": 4,
               "strict_completed_keys": 4,
-              "v72_completed_keys": 2,
+              "v72_completed_keys": 4,
               "horizons": {
                 "1": {
                   "strict_completed": true,
@@ -316,30 +338,30 @@
                 },
                 "14": {
                   "strict_completed": true,
-                  "v72_completed": false
+                  "v72_completed": true
                 },
                 "30": {
                   "strict_completed": true,
-                  "v72_completed": false
+                  "v72_completed": true
                 }
               }
             },
             "is_funded": {
               "expected_keys": 4,
               "strict_completed_keys": 4,
-              "v72_completed_keys": 0,
+              "v72_completed_keys": 3,
               "horizons": {
                 "1": {
                   "strict_completed": true,
-                  "v72_completed": false
+                  "v72_completed": true
                 },
                 "7": {
                   "strict_completed": true,
-                  "v72_completed": false
+                  "v72_completed": true
                 },
                 "14": {
                   "strict_completed": true,
-                  "v72_completed": false
+                  "v72_completed": true
                 },
                 "30": {
                   "strict_completed": true,
@@ -354,15 +376,21 @@
     "task2_forecast": {
       "expected_keys": 32,
       "strict_completed_keys": 32,
-      "v72_completed_keys": 21,
-      "running_jobs": [
-        "p7v72c_t2_fu"
-      ],
+      "v72_completed_keys": 24,
+      "running_jobs": [],
       "pending_jobs": [
-        "p7xF_fdr_t2_fu",
-        "p7xF_fdr_t2_ce",
+        "p7v72k_t2_co_ic_h1",
+        "p7v72k_t2_co_ic_h7",
+        "p7v72k_t2_co_ic_h14",
+        "p7v72k_t2_co_ic_h30",
+        "p7v72k_t2_ct_ic_h1",
+        "p7v72k_t2_ct_ic_h7",
+        "p7v72k_t2_ct_ic_h14",
+        "p7v72k_t2_ct_ic_h30",
+        "p7xF_fdr_t2_co",
         "p7xF_fdr_t2_ct",
-        "p7xF_fdr_t2_co"
+        "p7xF_fdr_t2_ce",
+        "p7xF_fdr_t2_fu"
       ],
       "ablations": {
         "core_edgar": {
@@ -428,6 +456,10 @@
           "v72_completed_keys": 4,
           "running_jobs": [],
           "pending_jobs": [
+            "p7v72k_t2_co_ic_h1",
+            "p7v72k_t2_co_ic_h7",
+            "p7v72k_t2_co_ic_h14",
+            "p7v72k_t2_co_ic_h30",
             "p7xF_fdr_t2_co"
           ],
           "targets": {
@@ -485,6 +517,10 @@
           "v72_completed_keys": 4,
           "running_jobs": [],
           "pending_jobs": [
+            "p7v72k_t2_ct_ic_h1",
+            "p7v72k_t2_ct_ic_h7",
+            "p7v72k_t2_ct_ic_h14",
+            "p7v72k_t2_ct_ic_h30",
             "p7xF_fdr_t2_ct"
           ],
           "targets": {
@@ -539,10 +575,8 @@
         "full": {
           "expected_keys": 8,
           "strict_completed_keys": 8,
-          "v72_completed_keys": 5,
-          "running_jobs": [
-            "p7v72c_t2_fu"
-          ],
+          "v72_completed_keys": 8,
+          "running_jobs": [],
           "pending_jobs": [
             "p7xF_fdr_t2_fu"
           ],
@@ -573,7 +607,7 @@
             "investors_count": {
               "expected_keys": 4,
               "strict_completed_keys": 4,
-              "v72_completed_keys": 1,
+              "v72_completed_keys": 4,
               "horizons": {
                 "1": {
                   "strict_completed": true,
@@ -581,15 +615,15 @@
                 },
                 "7": {
                   "strict_completed": true,
-                  "v72_completed": false
+                  "v72_completed": true
                 },
                 "14": {
                   "strict_completed": true,
-                  "v72_completed": false
+                  "v72_completed": true
                 },
                 "30": {
                   "strict_completed": true,
-                  "v72_completed": false
+                  "v72_completed": true
                 }
               }
             }
@@ -603,9 +637,33 @@
       "v72_completed_keys": 0,
       "running_jobs": [],
       "pending_jobs": [
-        "p7xF_fdr_t3_fu",
+        "p7v72k_t3_ce_fru_h1",
+        "p7v72k_t3_ce_fru_h7",
+        "p7v72k_t3_ce_fru_h14",
+        "p7v72k_t3_ce_fru_h30",
+        "p7v72k_t3_ce_ic_h1",
+        "p7v72k_t3_ce_ic_h7",
+        "p7v72k_t3_ce_ic_h14",
+        "p7v72k_t3_ce_ic_h30",
+        "p7v72k_t3_co_fru_h1",
+        "p7v72k_t3_co_fru_h7",
+        "p7v72k_t3_co_fru_h14",
+        "p7v72k_t3_co_fru_h30",
+        "p7v72k_t3_co_ic_h1",
+        "p7v72k_t3_co_ic_h7",
+        "p7v72k_t3_co_ic_h14",
+        "p7v72k_t3_co_ic_h30",
+        "p7v72k_t3_fu_fru_h1",
+        "p7v72k_t3_fu_fru_h7",
+        "p7v72k_t3_fu_fru_h14",
+        "p7v72k_t3_fu_fru_h30",
+        "p7v72k_t3_fu_ic_h1",
+        "p7v72k_t3_fu_ic_h7",
+        "p7v72k_t3_fu_ic_h14",
+        "p7v72k_t3_fu_ic_h30",
+        "p7xF_fdr_t3_co",
         "p7xF_fdr_t3_ce",
-        "p7xF_fdr_t3_co"
+        "p7xF_fdr_t3_fu"
       ],
       "ablations": {
         "core_edgar": {
@@ -614,6 +672,14 @@
           "v72_completed_keys": 0,
           "running_jobs": [],
           "pending_jobs": [
+            "p7v72k_t3_ce_fru_h1",
+            "p7v72k_t3_ce_fru_h7",
+            "p7v72k_t3_ce_fru_h14",
+            "p7v72k_t3_ce_fru_h30",
+            "p7v72k_t3_ce_ic_h1",
+            "p7v72k_t3_ce_ic_h7",
+            "p7v72k_t3_ce_ic_h14",
+            "p7v72k_t3_ce_ic_h30",
             "p7xF_fdr_t3_ce"
           ],
           "targets": {
@@ -671,6 +737,14 @@
           "v72_completed_keys": 0,
           "running_jobs": [],
           "pending_jobs": [
+            "p7v72k_t3_co_fru_h1",
+            "p7v72k_t3_co_fru_h7",
+            "p7v72k_t3_co_fru_h14",
+            "p7v72k_t3_co_fru_h30",
+            "p7v72k_t3_co_ic_h1",
+            "p7v72k_t3_co_ic_h7",
+            "p7v72k_t3_co_ic_h14",
+            "p7v72k_t3_co_ic_h30",
             "p7xF_fdr_t3_co"
           ],
           "targets": {
@@ -728,6 +802,14 @@
           "v72_completed_keys": 0,
           "running_jobs": [],
           "pending_jobs": [
+            "p7v72k_t3_fu_fru_h1",
+            "p7v72k_t3_fu_fru_h7",
+            "p7v72k_t3_fu_fru_h14",
+            "p7v72k_t3_fu_fru_h30",
+            "p7v72k_t3_fu_ic_h1",
+            "p7v72k_t3_fu_ic_h7",
+            "p7v72k_t3_fu_ic_h14",
+            "p7v72k_t3_fu_ic_h30",
             "p7xF_fdr_t3_fu"
           ],
           "targets": {
@@ -783,11 +865,11 @@
     }
   },
   "active_jobs_nested": {
-    "total_running": 4,
-    "total_pending": 8,
+    "total_running": 3,
+    "total_pending": 50,
     "by_group": {
       "autofit_v72_completion": {
-        "RUNNING": 3,
+        "RUNNING": 2,
         "PENDING": 0
       },
       "autofit_resubmit": {
@@ -808,24 +890,24 @@
       },
       "other_active": {
         "RUNNING": 0,
-        "PENDING": 0
+        "PENDING": 42
       }
     }
   },
   "eta_model": {
     "method": "partition_aware_heuristic_v2",
-    "optimistic_hours": 54.16,
-    "baseline_hours": 77.37,
-    "conservative_hours": 112.32,
+    "optimistic_hours": 56.86,
+    "baseline_hours": 81.23,
+    "conservative_hours": 117.72,
     "batch": {
       "partition": "batch",
       "cap": 8,
-      "running": 4,
-      "pending": 0,
-      "avg_job_hours": 60.0,
-      "running_tail_hours": 77.37,
-      "queue_clear_hours": 0.0,
-      "baseline_hours": 77.37
+      "running": 3,
+      "pending": 2,
+      "avg_job_hours": 64.0,
+      "running_tail_hours": 65.23,
+      "queue_clear_hours": 16.0,
+      "baseline_hours": 81.23
     },
     "gpu": {
       "partition": "gpu",
@@ -842,7 +924,15 @@
   "queue_bottlenecks": [
     {
       "reason": "(QOSGrpNodeLimit)",
-      "count": 8
+      "count": 47
+    },
+    {
+      "reason": "(Priority)",
+      "count": 2
+    },
+    {
+      "reason": "(Nodes required for job are DOWN, DRAINED or reserved for jobs in higher priority partitions)",
+      "count": 1
     }
   ],
   "evidence": {

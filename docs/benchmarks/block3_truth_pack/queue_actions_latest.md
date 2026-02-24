@@ -1,18 +1,59 @@
-- generated_at_utc: **2026-02-24T00:59:38.012111+00:00**
+- generated_at_utc: **2026-02-24T13:08:01.280655+00:00**
 
 | job_id | job_name | state | group | action | redundancy_check | expected_eta_delta_hours | evidence_path |
 |---|---|---|---|---|---|---:|---|
+| 5192139 | p7v72b3_t1_ce_if_h30 | PENDING | other_active | keep | non_redundant_required | 0.00 | docs/benchmarks/block3_truth_pack/condition_inventory_full.csv |
+| 5192140 | p7v72b3_t1_fu_if_h30 | PENDING | other_active | keep | non_redundant_required | 0.00 | docs/benchmarks/block3_truth_pack/condition_inventory_full.csv |
 | 5186429 | p7r_af1_t1_ce | RUNNING | autofit_resubmit | keep_priority | required_for_v72_first | 0.00 | docs/benchmarks/block3_truth_pack/missing_key_manifest.csv |
-| 5190741 | p7v72c_t2_fu | RUNNING | autofit_v72_completion | keep_priority | required_for_v72_first | 0.00 | docs/benchmarks/block3_truth_pack/missing_key_manifest.csv |
 | 5190738 | p7v72c_t1_fu | RUNNING | autofit_v72_completion | keep_priority | required_for_v72_first | 0.00 | docs/benchmarks/block3_truth_pack/missing_key_manifest.csv |
 | 5190736 | p7v72c_t1_ce | RUNNING | autofit_v72_completion | keep_priority | required_for_v72_first | 0.00 | docs/benchmarks/block3_truth_pack/missing_key_manifest.csv |
-| 5179945 | p7xF_fdr_t3_fu | PENDING | foundation_reference | deprioritize_hold_recommended | strict_matrix_already_complete=true | 1.00 | docs/benchmarks/block3_truth_pack/condition_inventory_full.csv |
-| 5179944 | p7xF_fdr_t3_ce | PENDING | foundation_reference | deprioritize_hold_recommended | strict_matrix_already_complete=true | 1.00 | docs/benchmarks/block3_truth_pack/condition_inventory_full.csv |
-| 5179943 | p7xF_fdr_t3_co | PENDING | foundation_reference | deprioritize_hold_recommended | strict_matrix_already_complete=true | 1.00 | docs/benchmarks/block3_truth_pack/condition_inventory_full.csv |
-| 5179942 | p7xF_fdr_t2_fu | PENDING | foundation_reference | deprioritize_hold_recommended | strict_matrix_already_complete=true | 1.00 | docs/benchmarks/block3_truth_pack/condition_inventory_full.csv |
-| 5179941 | p7xF_fdr_t2_ce | PENDING | foundation_reference | deprioritize_hold_recommended | strict_matrix_already_complete=true | 1.00 | docs/benchmarks/block3_truth_pack/condition_inventory_full.csv |
-| 5179940 | p7xF_fdr_t2_ct | PENDING | foundation_reference | deprioritize_hold_recommended | strict_matrix_already_complete=true | 1.00 | docs/benchmarks/block3_truth_pack/condition_inventory_full.csv |
-| 5179939 | p7xF_fdr_t2_co | PENDING | foundation_reference | deprioritize_hold_recommended | strict_matrix_already_complete=true | 1.00 | docs/benchmarks/block3_truth_pack/condition_inventory_full.csv |
+| 5191498 | p7v72k_t1_ct_ic_h1 | PENDING | other_active | keep | non_redundant_required | 0.00 | docs/benchmarks/block3_truth_pack/condition_inventory_full.csv |
+| 5191499 | p7v72k_t1_ct_ic_h7 | PENDING | other_active | keep | non_redundant_required | 0.00 | docs/benchmarks/block3_truth_pack/condition_inventory_full.csv |
+| 5191500 | p7v72k_t1_ct_ic_h14 | PENDING | other_active | keep | non_redundant_required | 0.00 | docs/benchmarks/block3_truth_pack/condition_inventory_full.csv |
+| 5191501 | p7v72k_t1_ct_ic_h30 | PENDING | other_active | keep | non_redundant_required | 0.00 | docs/benchmarks/block3_truth_pack/condition_inventory_full.csv |
+| 5191502 | p7v72k_t1_ct_if_h1 | PENDING | other_active | keep | non_redundant_required | 0.00 | docs/benchmarks/block3_truth_pack/condition_inventory_full.csv |
+| 5191503 | p7v72k_t1_ct_if_h7 | PENDING | other_active | keep | non_redundant_required | 0.00 | docs/benchmarks/block3_truth_pack/condition_inventory_full.csv |
+| 5191504 | p7v72k_t1_ct_if_h14 | PENDING | other_active | keep | non_redundant_required | 0.00 | docs/benchmarks/block3_truth_pack/condition_inventory_full.csv |
+| 5191505 | p7v72k_t1_ct_if_h30 | PENDING | other_active | keep | non_redundant_required | 0.00 | docs/benchmarks/block3_truth_pack/condition_inventory_full.csv |
+| 5191506 | p7v72k_t2_co_ic_h1 | PENDING | other_active | keep | non_redundant_required | 0.00 | docs/benchmarks/block3_truth_pack/condition_inventory_full.csv |
+| 5191507 | p7v72k_t2_co_ic_h7 | PENDING | other_active | keep | non_redundant_required | 0.00 | docs/benchmarks/block3_truth_pack/condition_inventory_full.csv |
+| 5191508 | p7v72k_t2_co_ic_h14 | PENDING | other_active | keep | non_redundant_required | 0.00 | docs/benchmarks/block3_truth_pack/condition_inventory_full.csv |
+| 5191509 | p7v72k_t2_co_ic_h30 | PENDING | other_active | keep | non_redundant_required | 0.00 | docs/benchmarks/block3_truth_pack/condition_inventory_full.csv |
+| 5191510 | p7v72k_t2_ct_ic_h1 | PENDING | other_active | keep | non_redundant_required | 0.00 | docs/benchmarks/block3_truth_pack/condition_inventory_full.csv |
+| 5191511 | p7v72k_t2_ct_ic_h7 | PENDING | other_active | keep | non_redundant_required | 0.00 | docs/benchmarks/block3_truth_pack/condition_inventory_full.csv |
+| 5191512 | p7v72k_t2_ct_ic_h14 | PENDING | other_active | keep | non_redundant_required | 0.00 | docs/benchmarks/block3_truth_pack/condition_inventory_full.csv |
+| 5191513 | p7v72k_t2_ct_ic_h30 | PENDING | other_active | keep | non_redundant_required | 0.00 | docs/benchmarks/block3_truth_pack/condition_inventory_full.csv |
+| 5191514 | p7v72k_t3_ce_fru_h1 | PENDING | other_active | keep | non_redundant_required | 0.00 | docs/benchmarks/block3_truth_pack/condition_inventory_full.csv |
+| 5191515 | p7v72k_t3_ce_fru_h7 | PENDING | other_active | keep | non_redundant_required | 0.00 | docs/benchmarks/block3_truth_pack/condition_inventory_full.csv |
+| 5191516 | p7v72k_t3_ce_fru_h14 | PENDING | other_active | keep | non_redundant_required | 0.00 | docs/benchmarks/block3_truth_pack/condition_inventory_full.csv |
+| 5191517 | p7v72k_t3_ce_fru_h30 | PENDING | other_active | keep | non_redundant_required | 0.00 | docs/benchmarks/block3_truth_pack/condition_inventory_full.csv |
+| 5191518 | p7v72k_t3_ce_ic_h1 | PENDING | other_active | keep | non_redundant_required | 0.00 | docs/benchmarks/block3_truth_pack/condition_inventory_full.csv |
+| 5191519 | p7v72k_t3_ce_ic_h7 | PENDING | other_active | keep | non_redundant_required | 0.00 | docs/benchmarks/block3_truth_pack/condition_inventory_full.csv |
+| 5191520 | p7v72k_t3_ce_ic_h14 | PENDING | other_active | keep | non_redundant_required | 0.00 | docs/benchmarks/block3_truth_pack/condition_inventory_full.csv |
+| 5191521 | p7v72k_t3_ce_ic_h30 | PENDING | other_active | keep | non_redundant_required | 0.00 | docs/benchmarks/block3_truth_pack/condition_inventory_full.csv |
+| 5191522 | p7v72k_t3_co_fru_h1 | PENDING | other_active | keep | non_redundant_required | 0.00 | docs/benchmarks/block3_truth_pack/condition_inventory_full.csv |
+| 5191523 | p7v72k_t3_co_fru_h7 | PENDING | other_active | keep | non_redundant_required | 0.00 | docs/benchmarks/block3_truth_pack/condition_inventory_full.csv |
+| 5191524 | p7v72k_t3_co_fru_h14 | PENDING | other_active | keep | non_redundant_required | 0.00 | docs/benchmarks/block3_truth_pack/condition_inventory_full.csv |
+| 5191525 | p7v72k_t3_co_fru_h30 | PENDING | other_active | keep | non_redundant_required | 0.00 | docs/benchmarks/block3_truth_pack/condition_inventory_full.csv |
+| 5191526 | p7v72k_t3_co_ic_h1 | PENDING | other_active | keep | non_redundant_required | 0.00 | docs/benchmarks/block3_truth_pack/condition_inventory_full.csv |
+| 5191527 | p7v72k_t3_co_ic_h7 | PENDING | other_active | keep | non_redundant_required | 0.00 | docs/benchmarks/block3_truth_pack/condition_inventory_full.csv |
+| 5191528 | p7v72k_t3_co_ic_h14 | PENDING | other_active | keep | non_redundant_required | 0.00 | docs/benchmarks/block3_truth_pack/condition_inventory_full.csv |
+| 5191529 | p7v72k_t3_co_ic_h30 | PENDING | other_active | keep | non_redundant_required | 0.00 | docs/benchmarks/block3_truth_pack/condition_inventory_full.csv |
+| 5191530 | p7v72k_t3_fu_fru_h1 | PENDING | other_active | keep | non_redundant_required | 0.00 | docs/benchmarks/block3_truth_pack/condition_inventory_full.csv |
+| 5191531 | p7v72k_t3_fu_fru_h7 | PENDING | other_active | keep | non_redundant_required | 0.00 | docs/benchmarks/block3_truth_pack/condition_inventory_full.csv |
+| 5191532 | p7v72k_t3_fu_fru_h14 | PENDING | other_active | keep | non_redundant_required | 0.00 | docs/benchmarks/block3_truth_pack/condition_inventory_full.csv |
+| 5191533 | p7v72k_t3_fu_fru_h30 | PENDING | other_active | keep | non_redundant_required | 0.00 | docs/benchmarks/block3_truth_pack/condition_inventory_full.csv |
+| 5191534 | p7v72k_t3_fu_ic_h1 | PENDING | other_active | keep | non_redundant_required | 0.00 | docs/benchmarks/block3_truth_pack/condition_inventory_full.csv |
+| 5191535 | p7v72k_t3_fu_ic_h7 | PENDING | other_active | keep | non_redundant_required | 0.00 | docs/benchmarks/block3_truth_pack/condition_inventory_full.csv |
+| 5191536 | p7v72k_t3_fu_ic_h14 | PENDING | other_active | keep | non_redundant_required | 0.00 | docs/benchmarks/block3_truth_pack/condition_inventory_full.csv |
+| 5191537 | p7v72k_t3_fu_ic_h30 | PENDING | other_active | keep | non_redundant_required | 0.00 | docs/benchmarks/block3_truth_pack/condition_inventory_full.csv |
 | 5179938 | p7xF_fdr_t1_fu | PENDING | foundation_reference | deprioritize_hold_recommended | strict_matrix_already_complete=true | 1.00 | docs/benchmarks/block3_truth_pack/condition_inventory_full.csv |
+| 5179939 | p7xF_fdr_t2_co | PENDING | foundation_reference | deprioritize_hold_recommended | strict_matrix_already_complete=true | 1.00 | docs/benchmarks/block3_truth_pack/condition_inventory_full.csv |
+| 5179940 | p7xF_fdr_t2_ct | PENDING | foundation_reference | deprioritize_hold_recommended | strict_matrix_already_complete=true | 1.00 | docs/benchmarks/block3_truth_pack/condition_inventory_full.csv |
+| 5179941 | p7xF_fdr_t2_ce | PENDING | foundation_reference | deprioritize_hold_recommended | strict_matrix_already_complete=true | 1.00 | docs/benchmarks/block3_truth_pack/condition_inventory_full.csv |
+| 5179942 | p7xF_fdr_t2_fu | PENDING | foundation_reference | deprioritize_hold_recommended | strict_matrix_already_complete=true | 1.00 | docs/benchmarks/block3_truth_pack/condition_inventory_full.csv |
+| 5179943 | p7xF_fdr_t3_co | PENDING | foundation_reference | deprioritize_hold_recommended | strict_matrix_already_complete=true | 1.00 | docs/benchmarks/block3_truth_pack/condition_inventory_full.csv |
+| 5179944 | p7xF_fdr_t3_ce | PENDING | foundation_reference | deprioritize_hold_recommended | strict_matrix_already_complete=true | 1.00 | docs/benchmarks/block3_truth_pack/condition_inventory_full.csv |
+| 5179945 | p7xF_fdr_t3_fu | PENDING | foundation_reference | deprioritize_hold_recommended | strict_matrix_already_complete=true | 1.00 | docs/benchmarks/block3_truth_pack/condition_inventory_full.csv |
 
 Note: actions are recommendation artifacts; queue mutation is not performed by this script.
