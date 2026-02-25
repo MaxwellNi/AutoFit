@@ -259,6 +259,69 @@ def test_best_config_and_pilot_gate_row_builders():
     assert any(r["key"] == "overall_pass" for r in gate_rows)
 
 
+def test_mainline_priority_resolution_prefers_mainline_over_external():
+    module = _load_module()
+    key = ("task1_outcome", "core_edgar", "investors_count", 7)
+    base = {
+        "task": key[0],
+        "ablation": key[1],
+        "target": key[2],
+        "horizon": key[3],
+        "category": "autofit",
+        "model_name": "AutoFitV72",
+        "_condition_key": key,
+        "_run_stage": "phase7_canonical",
+        "_source": "x/metrics.json",
+    }
+    rows = [
+        {
+            **base,
+            "_bench_dir": "block3_20260203_225620_phase7",
+            "_source_path": "runs/benchmarks/block3_20260203_225620_phase7/x/metrics.json",
+            "mae": 101.0,
+        },
+        {
+            **base,
+            "_bench_dir": "block3_20260203_225620_phase7_v72_4090_20260219_173137",
+            "_source_path": "runs/benchmarks/block3_20260203_225620_phase7_v72_4090_20260219_173137/x/metrics.json",
+            "mae": 99.0,
+        },
+    ]
+
+    selected, ledger = module._resolve_mainline_priority_records(rows)
+    assert len(selected) == 1
+    assert selected[0]["_bench_dir"] == "block3_20260203_225620_phase7"
+    assert len(ledger) == 1
+    assert ledger[0]["selected_source_class"] == "mainline_phase7"
+    assert ledger[0]["dropped_source_class"] == "external_synced"
+
+
+def test_mainline_priority_resolution_allows_external_fill_when_no_mainline():
+    module = _load_module()
+    key = ("task2_forecast", "full", "funding_raised_usd", 14)
+    rows = [
+        {
+            "task": key[0],
+            "ablation": key[1],
+            "target": key[2],
+            "horizon": key[3],
+            "category": "autofit",
+            "model_name": "AutoFitV72",
+            "_condition_key": key,
+            "_bench_dir": "block3_20260203_225620_phase7_v72_4090_20260219_173137",
+            "_run_stage": "other",
+            "_source": "x/metrics.json",
+            "_source_path": "runs/benchmarks/block3_20260203_225620_phase7_v72_4090_20260219_173137/x/metrics.json",
+            "mae": 88.0,
+        }
+    ]
+
+    selected, ledger = module._resolve_mainline_priority_records(rows)
+    assert len(selected) == 1
+    assert selected[0]["_bench_dir"].endswith("173137")
+    assert len(ledger) == 0
+
+
 def test_infer_autofit_variant_id():
     module = _load_module()
 

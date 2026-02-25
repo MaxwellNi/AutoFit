@@ -324,6 +324,157 @@ def _infer_autofit_variant_id(row: Dict[str, Any]) -> Optional[str]:
     return None
 
 
+def _extract_run_stamp(run_name: str) -> int:
+    hits = re.findall(r"(20\d{6}_\d{6})", str(run_name))
+    if not hits:
+        return 0
+    try:
+        return int(hits[-1].replace("_", ""))
+    except Exception:
+        return 0
+
+
+def _source_priority(run_name: str) -> Tuple[int, str]:
+    """Mainline-first merge policy.
+
+    Lower rank is higher priority. External synced runs are fallback-only.
+    """
+    name = str(run_name).lower()
+
+    if (
+        "phase7_v72_completion" in name
+        or "phase7_v72_batch_bypass" in name
+        or "phase7_v72_failure_pool_rerun_heavy" in name
+    ):
+        return 0, "mainline_v72"
+    if name.endswith("_phase7"):
+        return 1, "mainline_phase7"
+    if "phase7_v71extreme" in name:
+        return 2, "mainline_v71"
+    if "iris_phase7" in name:
+        return 3, "iris_phase7_partial"
+    if "iris_full" in name or "iris_phase3" in name or name.endswith("_iris"):
+        return 4, "iris_legacy"
+    if "4090" in name or "3090" in name or "dual3090" in name:
+        return 8, "external_synced"
+    return 9, "other"
+
+
+def _record_model_key(row: Dict[str, Any]) -> Optional[Tuple[str, str, str, int, str, str, str]]:
+    cond = row.get("_condition_key")
+    mae = _to_float(row.get("mae"))
+    if cond is None or mae is None:
+        return None
+    task, ablation, target, horizon = cond
+    model_name = str(row.get("model_name", ""))
+    category = str(row.get("category", ""))
+    variant = _infer_autofit_variant_id(row) or ""
+    if not model_name or not category:
+        return None
+    return (
+        str(task),
+        str(ablation),
+        str(target),
+        int(horizon),
+        category,
+        model_name,
+        variant,
+    )
+
+
+def _record_priority_tuple(row: Dict[str, Any]) -> Tuple[int, int, int, str, str]:
+    run_name = str(row.get("_bench_dir", ""))
+    source_rank, _source_label = _source_priority(run_name)
+    stage_rank = _run_stage_rank(str(row.get("_run_stage", "other")))
+    stamp = _extract_run_stamp(run_name)
+    source_path = str(row.get("_source_path", ""))
+    # Prefer: lower source rank -> lower stage rank -> newer run stamp -> deterministic path/name.
+    return (source_rank, stage_rank, -stamp, run_name, source_path)
+
+
+def _resolve_mainline_priority_records(
+    strict_records_raw: Sequence[Dict[str, Any]],
+) -> Tuple[List[Dict[str, Any]], List[Dict[str, Any]]]:
+    """Apply key-level deterministic merge: mainline first, external only fill missing."""
+    groups: Dict[Tuple[str, str, str, int, str, str, str], List[Dict[str, Any]]] = defaultdict(list)
+    for row in strict_records_raw:
+        key = _record_model_key(row)
+        if key is None:
+            continue
+        groups[key].append(row)
+
+    selected_rows: List[Dict[str, Any]] = []
+    ledger_rows: List[Dict[str, Any]] = []
+
+    for key in sorted(groups.keys()):
+        cands = sorted(groups[key], key=_record_priority_tuple)
+        chosen = cands[0]
+        selected_rows.append(chosen)
+        chosen_rank, chosen_source_class = _source_priority(str(chosen.get("_bench_dir", "")))
+        chosen_stage = _run_stage_rank(str(chosen.get("_run_stage", "other")))
+        chosen_stamp = _extract_run_stamp(str(chosen.get("_bench_dir", "")))
+        chosen_source_path = str(chosen.get("_source_path", ""))
+        chosen_mae = _to_float(chosen.get("mae"))
+
+        for dropped in cands[1:]:
+            dropped_rank, dropped_source_class = _source_priority(str(dropped.get("_bench_dir", "")))
+            dropped_stage = _run_stage_rank(str(dropped.get("_run_stage", "other")))
+            dropped_stamp = _extract_run_stamp(str(dropped.get("_bench_dir", "")))
+            dropped_source_path = str(dropped.get("_source_path", ""))
+            dropped_mae = _to_float(dropped.get("mae"))
+            ledger_rows.append(
+                {
+                    "task": key[0],
+                    "ablation": key[1],
+                    "target": key[2],
+                    "horizon": key[3],
+                    "category": key[4],
+                    "model_name": key[5],
+                    "autofit_variant_id": key[6] or None,
+                    "selected_bench_dir": chosen.get("_bench_dir"),
+                    "selected_source_path": chosen_source_path,
+                    "selected_source_class": chosen_source_class,
+                    "selected_source_rank": chosen_rank,
+                    "selected_stage_rank": chosen_stage,
+                    "selected_run_stamp": chosen_stamp,
+                    "selected_mae": chosen_mae,
+                    "dropped_bench_dir": dropped.get("_bench_dir"),
+                    "dropped_source_path": dropped_source_path,
+                    "dropped_source_class": dropped_source_class,
+                    "dropped_source_rank": dropped_rank,
+                    "dropped_stage_rank": dropped_stage,
+                    "dropped_run_stamp": dropped_stamp,
+                    "dropped_mae": dropped_mae,
+                    "resolution_rule": "mainline_priority",
+                }
+            )
+
+    selected_rows = sorted(
+        selected_rows,
+        key=lambda r: (
+            str(r.get("task", "")),
+            str(r.get("ablation", "")),
+            str(r.get("target", "")),
+            int(r.get("horizon", 0) or 0),
+            str(r.get("category", "")),
+            str(r.get("model_name", "")),
+        ),
+    )
+    ledger_rows = sorted(
+        ledger_rows,
+        key=lambda r: (
+            str(r.get("task", "")),
+            str(r.get("ablation", "")),
+            str(r.get("target", "")),
+            int(r.get("horizon", 0) or 0),
+            str(r.get("category", "")),
+            str(r.get("model_name", "")),
+            str(r.get("dropped_bench_dir", "")),
+        ),
+    )
+    return selected_rows, ledger_rows
+
+
 def _v72_priority_group(task: str, ablation: str) -> Tuple[int, str]:
     if task == "task1_outcome" and ablation in {"core_text", "full", "core_edgar"}:
         return 1, "P1_task1_core_text_full_core_edgar"
@@ -2556,9 +2707,19 @@ def _build_master_sections(
             "evidence_path": "docs/benchmarks/block3_truth_pack/truth_pack_summary.json",
         },
         {
+            "metric": "strict_records_raw",
+            "value": summary.get("strict_records_raw"),
+            "evidence_path": "docs/benchmarks/block3_truth_pack/truth_pack_summary.json",
+        },
+        {
             "metric": "legacy_unverified_records",
             "value": summary.get("legacy_unverified_records"),
             "evidence_path": "docs/benchmarks/block3_truth_pack/truth_pack_summary.json",
+        },
+        {
+            "metric": "source_resolution_rows",
+            "value": summary.get("source_resolution_rows"),
+            "evidence_path": "docs/benchmarks/block3_truth_pack/source_resolution_ledger.csv",
         },
         {
             "metric": "strict_condition_completion",
@@ -3126,6 +3287,7 @@ def _write_summary_docs(
             "|---|---:|---|",
             "| raw_records | %s | `docs/benchmarks/block3_truth_pack/truth_pack_summary.json` |" % summary.get("raw_records"),
             "| strict_records | %s | `docs/benchmarks/block3_truth_pack/truth_pack_summary.json` |" % summary.get("strict_records"),
+            "| strict_records_raw | %s | `docs/benchmarks/block3_truth_pack/truth_pack_summary.json` |" % summary.get("strict_records_raw"),
             "| legacy_unverified_records | %s | `docs/benchmarks/block3_truth_pack/truth_pack_summary.json` |" % summary.get("legacy_unverified_records"),
             "| strict_condition_completion | %s | `docs/benchmarks/block3_truth_pack/truth_pack_summary.json` |" % summary.get("strict_condition_completion"),
             "| running_total | %s | `docs/benchmarks/block3_truth_pack/slurm_snapshot.json` |" % slurm_snapshot.get("running_total"),
@@ -3151,6 +3313,7 @@ def _write_summary_docs(
             "| Metric | Value | Evidence |",
             "|---|---:|---|",
             "| strict_records | %s | `docs/benchmarks/block3_truth_pack/truth_pack_summary.json` |" % summary.get("strict_records"),
+            "| strict_records_raw | %s | `docs/benchmarks/block3_truth_pack/truth_pack_summary.json` |" % summary.get("strict_records_raw"),
             "| strict_completion_ratio | %s | `docs/benchmarks/block3_truth_pack/truth_pack_summary.json` |" % summary.get("strict_condition_completion_ratio"),
             "| v71_win_rate_vs_v7 | %s | `docs/benchmarks/block3_truth_pack/v71_vs_v7_overlap.csv` |" % summary.get("v71_win_rate_vs_v7"),
             "| v71_median_relative_gain_vs_v7_pct | %s | `docs/benchmarks/block3_truth_pack/v71_vs_v7_overlap.csv` |" % summary.get("v71_median_relative_gain_vs_v7_pct"),
@@ -3186,7 +3349,8 @@ def build_truth_pack(
         raw_records.extend(_load_metrics_records(bdir))
 
     buckets = _prepare_records(raw_records, min_coverage=min_coverage)
-    strict_records = buckets["strict_comparable"]
+    strict_records_raw = buckets["strict_comparable"]
+    strict_records, source_resolution_rows = _resolve_mainline_priority_records(strict_records_raw)
     legacy_records = buckets["legacy_unverified"]
     strict_excluded_records = buckets["strict_excluded"]
     all_valid_records = buckets["valid_all"]
@@ -3230,7 +3394,7 @@ def build_truth_pack(
     run_history_ledger_rows, run_history_obs_rows = _build_run_history_ledger(
         bench_dirs=bench_dirs,
         all_records=all_valid_records,
-        strict_records=strict_records,
+        strict_records=strict_records_raw,
         legacy_records=legacy_records,
         failure_rows=failure_rows,
         expected_conditions=expected_conditions,
@@ -3383,6 +3547,7 @@ def build_truth_pack(
     delta_path = output_dir / "autofit_step_deltas.csv"
     v72_missing_manifest_path = output_dir / "missing_key_manifest.csv"
     model_family_coverage_path = output_dir / "model_family_coverage_audit.csv"
+    source_resolution_path = output_dir / "source_resolution_ledger.csv"
     target_subtasks_path = output_dir / "subtasks_by_target_full.csv"
     top3_path = output_dir / "top3_representative_models_by_target.csv"
     family_gap_path = output_dir / "family_gap_by_target.csv"
@@ -3495,6 +3660,34 @@ def build_truth_pack(
             "condition_wins",
             "condition_win_share",
             "evidence_path",
+        ],
+    )
+    _write_csv(
+        source_resolution_path,
+        source_resolution_rows,
+        [
+            "task",
+            "ablation",
+            "target",
+            "horizon",
+            "category",
+            "model_name",
+            "autofit_variant_id",
+            "selected_bench_dir",
+            "selected_source_path",
+            "selected_source_class",
+            "selected_source_rank",
+            "selected_stage_rank",
+            "selected_run_stamp",
+            "selected_mae",
+            "dropped_bench_dir",
+            "dropped_source_path",
+            "dropped_source_class",
+            "dropped_source_rank",
+            "dropped_stage_rank",
+            "dropped_run_stamp",
+            "dropped_mae",
+            "resolution_rule",
         ],
     )
     _write_csv(
@@ -3718,9 +3911,11 @@ def build_truth_pack(
         "min_coverage": min_coverage,
         "raw_records": len(all_valid_records),
         "strict_records": len(strict_records),
+        "strict_records_raw": len(strict_records_raw),
         "legacy_unverified_records": len(legacy_records),
         "strict_excluded_records": len(strict_excluded_records),
         "filtered_records": len(strict_records),
+        "source_resolution_rows": len(source_resolution_rows),
         "expected_conditions": expected_total,
         "strict_completed_conditions": strict_completed_conditions,
         "legacy_completed_conditions": legacy_completed_conditions,
@@ -3767,6 +3962,7 @@ def build_truth_pack(
             "autofit_version_ladder": _display_path(ladder_path),
             "autofit_step_deltas": _display_path(delta_path),
             "model_family_coverage_audit": _display_path(model_family_coverage_path),
+            "source_resolution_ledger": _display_path(source_resolution_path),
             "subtasks_by_target_full": _display_path(target_subtasks_path),
             "top3_representative_models_by_target": _display_path(top3_path),
             "family_gap_by_target": _display_path(family_gap_path),
@@ -3793,9 +3989,11 @@ def build_truth_pack(
         "# Block3 Truth Pack Summary",
         "",
         "- Raw records: **%s**" % summary["raw_records"],
-        "- Strict comparable records: **%s**" % summary["strict_records"],
+        "- Strict comparable records (canonical mainline-priority): **%s**" % summary["strict_records"],
+        "- Strict comparable records (raw before merge): **%s**" % summary["strict_records_raw"],
         "- Legacy unverified records: **%s**" % summary["legacy_unverified_records"],
         "- Strict excluded records: **%s**" % summary["strict_excluded_records"],
+        "- Source resolution rows (dropped duplicates): **%s**" % summary["source_resolution_rows"],
         "- Expected condition keys: **%s**" % summary["expected_conditions"],
         "- Strict condition completion: **%s**" % summary["strict_condition_completion"],
         "- Legacy condition completion: **%s**" % summary["legacy_condition_completion"],
