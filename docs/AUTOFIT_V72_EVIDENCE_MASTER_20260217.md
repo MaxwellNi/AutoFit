@@ -32,6 +32,23 @@ Generated from strict/legacy layered truth pack outputs under `docs/benchmarks/b
 | v72_pilot_overlap_keys | 88 | docs/benchmarks/block3_truth_pack/v72_pilot_gate_report.json |
 <!-- END AUTO:EVIDENCE_SNAPSHOT -->
 
+## Full SOTA Benchmark (Strict Comparable 104/104)
+
+This section summarizes the landed strict-comparable full SOTA benchmark.
+
+| metric | value | evidence_path |
+|---|---|---|
+| strict_condition_completion | 104/104 (100.0%) | docs/benchmarks/block3_truth_pack/truth_pack_summary.json |
+| full_sota_table_rows | 104 | docs/benchmarks/block3_truth_pack/full_sota_104_table.csv |
+| champion_family_distribution | deep_classical=62, transformer_sota=36, foundation=6 | docs/benchmarks/block3_truth_pack/full_sota_104_summary.json |
+| top_champion_models | NBEATS=39, PatchTST=24, NHITS=23, KAN=7, Chronos=6, NBEATSx=4, DLinear=1 | docs/benchmarks/block3_truth_pack/full_sota_104_summary.json |
+
+Primary artifacts:
+
+1. `docs/BLOCK3_FULL_SOTA_BENCHMARK.md`
+2. `docs/benchmarks/block3_truth_pack/full_sota_104_table.csv`
+3. `docs/benchmarks/block3_truth_pack/condition_leaderboard.csv`
+
 ## Audit Gates Snapshot
 
 <!-- BEGIN AUTO:AUDIT_GATES -->

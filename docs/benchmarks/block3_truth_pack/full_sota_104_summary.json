@@ -1,0 +1,23 @@
+{
+  "generated_at_utc": "2026-02-26T17:26:24.569069+00:00",
+  "leaderboard_path": "docs/benchmarks/block3_truth_pack/condition_leaderboard.csv",
+  "table_csv_path": "docs/benchmarks/block3_truth_pack/full_sota_104_table.csv",
+  "markdown_path": "docs/BLOCK3_FULL_SOTA_BENCHMARK.md",
+  "table_rows": 104,
+  "champion_family_distribution": {
+    "deep_classical": 62,
+    "transformer_sota": 36,
+    "foundation": 6
+  },
+  "top_champion_models": {
+    "NBEATS": 39,
+    "PatchTST": 24,
+    "NHITS": 23,
+    "KAN": 7,
+    "Chronos": 6,
+    "NBEATSx": 4,
+    "DLinear": 1
+  },
+  "champion_family_distribution_str": "deep_classical=62, foundation=6, transformer_sota=36",
+  "top_champion_models_str": "NBEATS=39, PatchTST=24, NHITS=23, KAN=7, Chronos=6, NBEATSx=4, DLinear=1"
+}
