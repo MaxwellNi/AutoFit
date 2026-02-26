@@ -1,26 +1,21 @@
 # Block 3 Benchmark Results
 
-> Last Updated: 2026-02-24T13:08:01.278591+00:00
+> Last Updated: 2026-02-26T00:08:32.075104+00:00
 > Single source of truth: `docs/AUTOFIT_V72_EVIDENCE_MASTER_20260217.md`
+> V7.3 execution spec: `docs/BLOCK3_V73_RESEARCH_EXECUTION_SPEC_20260225.md`
 
-## Strict Benchmark Snapshot
+## Strict Snapshot
 
 | Metric | Value | Evidence |
 |---|---:|---|
-| strict_condition_completion | 104/104 | `docs/benchmarks/block3_truth_pack/condition_inventory_full.csv` |
-| v72_condition_completion | 66/104 | `docs/benchmarks/block3_truth_pack/missing_key_manifest.csv` |
-| champion_deep_classical | 62 | `docs/benchmarks/block3_truth_pack/condition_inventory_full.csv` |
-| champion_transformer_sota | 36 | `docs/benchmarks/block3_truth_pack/condition_inventory_full.csv` |
-| champion_foundation | 6 | `docs/benchmarks/block3_truth_pack/condition_inventory_full.csv` |
-| champion_autofit | 0 | `docs/benchmarks/block3_truth_pack/condition_inventory_full.csv` |
-| policy_training_report | available | `docs/benchmarks/block3_truth_pack/v72_policy_training_report.json` |
-| key_job_manifest | available | `docs/benchmarks/block3_truth_pack/v72_key_job_manifest.csv` |
-| memory_plan | available | `docs/benchmarks/block3_truth_pack/v72_memory_plan.json` |
-| running_total | 3 | `docs/benchmarks/block3_truth_pack/execution_status_latest.json` |
-| pending_total | 50 | `docs/benchmarks/block3_truth_pack/execution_status_latest.json` |
-| eta_baseline_hours | 81.23 | `docs/benchmarks/block3_truth_pack/execution_status_latest.json` |
+| strict_records | 3665 | `docs/benchmarks/block3_truth_pack/truth_pack_summary.json` |
+| strict_condition_completion | 104/104 | `docs/benchmarks/block3_truth_pack/truth_pack_summary.json` |
+| v72_pilot_overall_pass | False | `docs/benchmarks/block3_truth_pack/v72_pilot_gate_report.json` |
+| v72_global_improvement_pct | -0.37433548220324225 | `docs/benchmarks/block3_truth_pack/v72_pilot_gate_report.json` |
+| v72_investors_gap_reduction_pct | -2.9660362701370064 | `docs/benchmarks/block3_truth_pack/v72_pilot_gate_report.json` |
+| v73_reuse_manifest_rows | 104 | `docs/benchmarks/block3_truth_pack/v73_reuse_manifest.csv` |
 
 ## Notes
 
-1. Full nested task/subtask progress is maintained in `docs/benchmarks/block3_truth_pack/execution_status_latest.md`.
-2. Root-cause and closure matrix are maintained in the master evidence document.
+1. V7.3 aims to close remaining key coverage and lane-specific performance gaps without altering fairness rules.
+2. Reuse-first policy avoids redundant reruns of already materialized strict comparable keys.

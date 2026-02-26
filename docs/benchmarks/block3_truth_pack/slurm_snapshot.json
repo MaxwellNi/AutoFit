@@ -1,22 +1,16 @@
 {
-  "snapshot_ts": "2026-02-23T14:47:22.088014+00:00",
-  "running_total": 8,
-  "pending_total": 12,
-  "running_by_partition": {
-    "batch": 8
-  },
+  "snapshot_ts": "2026-02-26T00:08:30.948215+00:00",
+  "running_total": 0,
+  "pending_total": 20,
+  "running_by_partition": {},
   "pending_by_partition": {
-    "batch": 4,
+    "bigmem": 12,
     "gpu": 8
   },
   "pending_reason_topk": [
     {
       "reason": "(QOSGrpNodeLimit)",
-      "count": 8
-    },
-    {
-      "reason": "(QOSMaxJobsPerUserLimit)",
-      "count": 4
+      "count": 20
     }
   ],
   "qos_caps": {
@@ -33,9 +27,7 @@
   },
   "prefix_status_squeue": {
     "p7": {},
-    "p7r": {
-      "RUNNING": 3
-    },
+    "p7r": {},
     "p7x": {},
     "p7xF": {
       "PENDING": 8
@@ -50,8 +42,7 @@
     },
     "p7r": {
       "CANCELLED": 4,
-      "COMPLETED": 7,
-      "RUNNING": 3
+      "COMPLETED": 10
     },
     "p7x": {
       "COMPLETED": 88,

@@ -1,0 +1,52 @@
+{
+  "generated_at_utc": "2026-02-26T00:08:32.066343+00:00",
+  "policy_name": "v73_offline_policy_v1",
+  "policy_type": "contextual_bandit_with_safe_fallback",
+  "state_schema": [
+    "lane_family",
+    "horizon_band",
+    "ablation",
+    "missingness_bucket",
+    "nonstationarity_score",
+    "periodicity_score",
+    "heavy_tail_score",
+    "exog_strength",
+    "text_strength",
+    "edgar_strength"
+  ],
+  "action_schema": [
+    "template_id",
+    "candidate_subset_id",
+    "count_distribution_family",
+    "binary_calibration_mode",
+    "top_k"
+  ],
+  "reward": {
+    "formula": "oof_improvement - compute_penalty - guard_penalty",
+    "terms": {
+      "oof_improvement": "delta of OOF MAE/logloss versus lane baseline",
+      "compute_penalty": "normalized train_time and inference_time cost",
+      "guard_penalty": "large penalty for fairness/coverage/guard violations"
+    }
+  },
+  "constraints": {
+    "selection_data_scope": "train_val_oof_only",
+    "test_feedback_allowed": false,
+    "fairness_guard_required": true,
+    "coverage_threshold": 0.98,
+    "spike_sentinel_required_for_count": true
+  },
+  "bootstrap_context": {
+    "strict_completed_conditions": 104,
+    "expected_conditions": 104,
+    "v72_missing_keys": 16,
+    "v72_coverage_ratio": 0.8461538461538461,
+    "v72_pilot_overall_pass": false,
+    "v72_overlap_keys": 88
+  },
+  "evidence_paths": {
+    "truth_pack_summary": "docs/benchmarks/block3_truth_pack/truth_pack_summary.json",
+    "v72_pilot_gate_report": "docs/benchmarks/block3_truth_pack/v72_pilot_gate_report.json",
+    "condition_leaderboard": "docs/benchmarks/block3_truth_pack/condition_leaderboard.csv"
+  }
+}

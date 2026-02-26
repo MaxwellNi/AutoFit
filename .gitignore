@@ -18,3 +18,7 @@ DECISION.md
 recovered_files.txt
 docs/RESEARCH_PIPELINE_IMPLEMENTATION.md
 scripts/auto_backup.sh
+
+# Track V7.3 handoff CSV artifacts explicitly.
+!docs/benchmarks/block3_truth_pack/v73_reuse_manifest.csv
+!docs/benchmarks/block3_truth_pack/v73_champion_component_map.csv
