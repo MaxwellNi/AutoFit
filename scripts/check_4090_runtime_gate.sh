@@ -11,6 +11,26 @@ REPO_ROOT="${REPO_ROOT:-${REPO_ROOT_DEFAULT}}"
 REQUIRE_DUAL_GPU="${REQUIRE_DUAL_GPU:-true}"
 HOST_LABEL="${HOST_LABEL:-gpu-host}"
 
+_text_matches() {
+  local text="$1"
+  local pattern="$2"
+  if command -v rg >/dev/null 2>&1; then
+    printf '%s\n' "${text}" | rg -q "${pattern}"
+  else
+    printf '%s\n' "${text}" | grep -E -q "${pattern}"
+  fi
+}
+
+_text_count() {
+  local text="$1"
+  local pattern="$2"
+  if command -v rg >/dev/null 2>&1; then
+    printf '%s\n' "${text}" | rg -c "${pattern}" || true
+  else
+    printf '%s\n' "${text}" | grep -E -c "${pattern}" || true
+  fi
+}
+
 for arg in "$@"; do
     case "$arg" in
     --repo-root=*) REPO_ROOT="${arg#*=}" ;;
@@ -51,11 +71,11 @@ echo
 echo "=== GPU Inventory (nvidia-smi -L) ==="
 GPU_LIST_RAW="$(nvidia-smi -L 2>&1 || true)"
 echo "${GPU_LIST_RAW}"
-if echo "${GPU_LIST_RAW}" | rg -q "Unable to determine the device handle|No devices were found|Failed"; then
+if _text_matches "${GPU_LIST_RAW}" "Unable to determine the device handle|No devices were found|Failed"; then
   echo "FATAL: GPU driver/device state not healthy"
   exit 3
 fi
-GPU_COUNT="$(echo "${GPU_LIST_RAW}" | rg -c '^GPU [0-9]+:' || true)"
+GPU_COUNT="$(_text_count "${GPU_LIST_RAW}" '^GPU [0-9]+:')"
 GPU_COUNT="${GPU_COUNT:-0}"
 if [[ "${REQUIRE_DUAL_GPU}" == "true" && "${GPU_COUNT}" -lt 2 ]]; then
   echo "FATAL: dual GPU required but detected ${GPU_COUNT}"
