@@ -14,11 +14,11 @@ Block 3 modeling on the finalized WIDE2 freeze (`TRAIN_WIDE_FINAL`). The freeze 
 - Block 3 entry verified via `scripts/block3_verify_freeze.py`
 
 ### Phase 7 Benchmark — ULHPC Iris HPC (IN PROGRESS)
-- **Model Registry**: **67 models across 7 categories**
+- **Model Registry**: **76 models across 7 categories**
   - `ml_tabular` (15): LogisticRegression, Ridge, Lasso, ElasticNet, SVR, KNN, RandomForest, ExtraTrees, HistGradientBoosting, LightGBM, XGBoost, CatBoost, QuantileRegressor, SeasonalNaive, MeanPredictor
   - `statistical` (5): AutoARIMA, AutoETS, AutoTheta, MSTL, SF_SeasonalNaive
   - `deep_classical` (4): NBEATS, NHITS, TFT, DeepAR
-  - `transformer_sota` (20): PatchTST, iTransformer, TimesNet, TSMixer, Informer, Autoformer, FEDformer, VanillaTransformer, TiDE, NBEATSx, BiTCN, KAN, RMoK, SOFTS, StemGNN (shard A: 10, shard B: 10)
+  - `transformer_sota` (23): PatchTST, iTransformer, TimesNet, TSMixer, Informer, Autoformer, FEDformer, VanillaTransformer, TiDE, NBEATSx, BiTCN, KAN, RMoK, SOFTS, StemGNN, xLSTM, TimeLLM, DeepNPTS (shard A: 10, shard B: 10, shard C: 3)
   - `foundation` (11): Chronos, ChronosBolt, Chronos2, Moirai, MoiraiLarge, Moirai2, Timer, TimeMoE, MOMENT, LagLlama, TimesFM (3 shards: Chronos/Moirai/HF)
   - `irregular` (2): GRU-D, SAITS
   - `autofit` (10): V1, V2, V2E, V3, V3E, V3Max, V4, V5, V6, V7 (2 shards: af1/af2)
@@ -78,10 +78,10 @@ FreezePointer (src/narrative/data_preprocessing/block3_dataset.py)
                 ├─> Statistical (5):       AutoARIMA, AutoETS, AutoTheta, MSTL, SF_SeasonalNaive
                 ├─> ML Tabular (15):       LightGBM, XGBoost, CatBoost, RandomForest, ...
                 ├─> Deep Classical (4):    NBEATS, NHITS, TFT, DeepAR
-                ├─> Transformer SOTA (20): PatchTST, iTransformer, TimesNet, TSMixer, Informer, ...
+                ├─> Transformer SOTA (23): PatchTST, iTransformer, TimesNet, TSMixer, Informer, ...
                 ├─> Foundation (11):       Chronos, ChronosBolt, Moirai, MoiraiLarge, Timer, ...
                 ├─> Irregular (2):         GRU-D, SAITS
-                └─> AutoFit (10):          V1–V7 (ensemble model selectors)
+                └─> AutoFit (10):          V1–V7, V71–V73 (ensemble model selectors)
 ```
 
 ### Join Keys
@@ -112,6 +112,8 @@ From `scripts/block3_profile_data.py`:
 - Irregular (PyPOTS): `src/narrative/block3/models/irregular_models.py`
 - Traditional ML (sklearn): `src/narrative/block3/models/traditional_ml.py`
 - AutoFit wrapper: `src/narrative/block3/models/autofit_wrapper.py`
+- RL policy (contextual bandit): `src/narrative/block3/models/rl_policy.py`
+- Multi-agent coordination: `src/narrative/block3/models/multi_agent_ensemble.py`
 - Unified registry: `src/narrative/block3/models/registry.py`
 - Base classes: `src/narrative/block3/models/base.py`
 
@@ -143,18 +145,21 @@ From `scripts/block3_profile_data.py`:
 4. ✅ Benchmark harness with 6 baseline categories
 5. ✅ AutoFit rule-based composer
 6. ✅ Concept bottleneck for interpretability
-7. ✅ Model registry expansion: 67 models across 7 categories (Phase 4-7)
+7. ✅ Model registry expansion: 76 models across 7 categories (Phase 4-7)
 8. ✅ Panel data fix: all categories receive entity-panel kwargs
-9. ✅ Deep/Transformer models: 19 NeuralForecast models (panel-aware)
+9. ✅ Deep/Transformer models: 22 NeuralForecast models (panel-aware, +xLSTM/TimeLLM/DeepNPTS)
 10. ✅ Statistical models: entity-sampled panel via StatsForecast
 11. ✅ Foundation models: 11 models (Chronos family + Moirai family + Timer/TimeMoE/MOMENT/LagLlama/TimesFM)
 12. ✅ Irregular models: GRU-D + SAITS via PyPOTS
-13. ✅ AutoFit V1-V7: 10 ensemble selection strategies
+13. ✅ AutoFit V1-V7, V71-V73: 13 ensemble selection strategies
 14. ✅ Benchmark harness updated for all 7 categories + 4 ablations
 15. ✅ Phase 7 code fixes (5 root causes across 4 files, 57/57 tests pass)
 16. ✅ EDGAR timezone fix (merge_asof dtype mismatch)
 17. ✅ Statistical OOM fix (64G → 112G memory)
-18. ⏳ Phase 7 full benchmark run on Iris HPC — 23/121 shards done, 781 records
-19. ⏳ AutoFit model selection based on profile
-20. ⏳ TCAV-style concept importance analysis
-21. ⏳ Results leaderboard + paper tables
+18. ✅ V73 factored contextual bandit RL policy (Thompson Sampling / LinUCB)
+19. ✅ V73 multi-agent coordination (Recon/Scout/Composer/Critic blackboard protocol)
+20. ✅ V72 root cause analysis (6 root causes, GPU gate fix)
+21. ⏳ Phase 7 full benchmark run on Iris HPC — 23/121 shards done, 781 records
+22. ⏳ V73 GPU benchmark validation (104 condition keys)
+23. ⏳ TCAV-style concept importance analysis
+24. ⏳ Results leaderboard + paper tables

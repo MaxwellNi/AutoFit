@@ -1,0 +1,62 @@
+{
+  "generated_at_utc": "2026-03-01T14:50:33.749700+00:00",
+  "expected_conditions": 104,
+  "v72_ranked_conditions": 104,
+  "v72_missing_conditions": 0,
+  "rank_distribution": {
+    "11": 1,
+    "12": 7,
+    "13": 3,
+    "14": 7,
+    "15": 9,
+    "16": 5,
+    "17": 1,
+    "18": 2,
+    "19": 7,
+    "20": 3,
+    "22": 13,
+    "23": 1,
+    "24": 4,
+    "25": 1,
+    "26": 4,
+    "27": 3,
+    "29": 3,
+    "30": 1,
+    "31": 1,
+    "32": 3,
+    "33": 6,
+    "34": 2,
+    "35": 5,
+    "46": 3,
+    "47": 5,
+    "48": 1,
+    "53": 1,
+    "54": 2
+  },
+  "rank1_wins": 0,
+  "rank1_win_rate_on_ranked": 0.0,
+  "median_rank_on_ranked": 22.0,
+  "median_gap_pct_vs_best_on_ranked": 170.018388,
+  "by_target": {
+    "funding_raised_usd": {
+      "ranked": 44,
+      "missing": 0,
+      "median_rank": 16.0,
+      "median_gap_pct_vs_best": 5.7378915
+    },
+    "investors_count": {
+      "ranked": 44,
+      "missing": 0,
+      "median_rank": 26.0,
+      "median_gap_pct_vs_best": 512.6292905
+    },
+    "is_funded": {
+      "ranked": 16,
+      "missing": 0,
+      "median_rank": 22.0,
+      "median_gap_pct_vs_best": 170.018388
+    }
+  },
+  "csv_path": "docs/benchmarks/block3_truth_pack/v72_rank_104_table_latest.csv",
+  "md_path": "docs/benchmarks/block3_truth_pack/v72_rank_104_table_latest.md"
+}

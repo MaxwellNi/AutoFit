@@ -131,6 +131,10 @@ _ALL_CANDIDATES = [
     "PatchTST",              # patching + attention
     "TimeMixer",             # multi-scale mixing
     "TimeXer",               # exogenous-aware transformer
+    # -- Phase 7b SOTA (NeuralForecast 3.1.4) --
+    "xLSTM",                 # extended LSTM (ICML 2024)
+    "TimeLLM",               # LLM-reprogrammed TS (ICLR 2024)
+    "DeepNPTS",              # deep non-parametric TS (NeurIPS 2023)
     # -- Irregular (handles missing data) --
     "GRU-D",                 # decay mechanism
     "SAITS",                 # self-attention imputation
@@ -3730,21 +3734,27 @@ def _apply_lane_postprocess_with_stats(
     fill_value = float(np.median(finite)) if len(finite) > 0 else 0.0
     out = np.where(np.isfinite(out), out, fill_value)
 
+    # Track actual bound clipping separately from rounding
     lower = state.get("lower")
     upper = state.get("upper")
+    bound_clipped = np.zeros(len(out), dtype=bool)
     if lower is not None:
+        bound_clipped |= (out < float(lower))
         out = np.maximum(out, float(lower))
     if upper is not None:
+        bound_clipped |= (out > float(upper))
         out = np.minimum(out, float(upper))
 
     if bool(state.get("round_to_int", False)):
         out = np.rint(out)
 
+    # clip_rate reflects only bound violations, NOT rounding
+    clip_rate = float(bound_clipped.mean()) if len(out) else 0.0
     changed = ~np.isclose(out, raw, equal_nan=True)
-    clip_rate = float(changed.mean()) if len(out) else 0.0
     return np.asarray(out, dtype=float), {
         "n_total": float(len(out)),
         "n_changed": float(int(changed.sum())),
+        "n_bound_clipped": float(int(bound_clipped.sum())),
         "clip_rate": clip_rate,
     }
 
@@ -4207,6 +4217,131 @@ def _apply_discrete_time_hazard_head(
         pass
     h = np.clip(np.asarray(h, dtype=float), 0.0, 1.0)
     return _daily_hazard_to_cumulative(h, hz)
+
+
+# ---------------------------------------------------------------------------
+# V7.3 count two-part head helpers
+# ---------------------------------------------------------------------------
+
+def _fit_count_two_part_head(
+    blend_oof: np.ndarray,
+    y_oof: np.ndarray,
+    count_distribution_family: str = "auto",
+) -> Dict[str, Any]:
+    """Fit a lightweight two-part model on OOF residuals for count targets.
+
+    Part 1: P(y > 0) estimated from base predictions via logistic mapping.
+    Part 2: positive-value scale correction from ratio of actual/predicted positives.
+
+    Returns a state dict consumed by ``_apply_count_two_part_head``.
+    """
+    state: Dict[str, Any] = {
+        "zero_prob": 0.0,
+        "positive_scale": 1.0,
+        "family": str(count_distribution_family),
+        "diagnostics": {},
+        "fitted": False,
+    }
+    try:
+        b = np.asarray(blend_oof, dtype=float).ravel()
+        y = np.asarray(y_oof, dtype=float).ravel()
+        mask = np.isfinite(b) & np.isfinite(y)
+        b, y = b[mask], y[mask]
+        if len(b) < 30:
+            return state
+
+        # Part 1: empirical P(y == 0)
+        zero_frac = float(np.mean(y <= 0.0))
+        state["zero_prob"] = float(np.clip(zero_frac, 0.0, 1.0))
+
+        # Part 2: scale correction on positive subset
+        pos_mask = y > 0.0
+        if np.sum(pos_mask) > 10:
+            y_pos = y[pos_mask]
+            b_pos = b[pos_mask]
+            b_pos_safe = np.where(np.abs(b_pos) > 1e-8, b_pos, 1e-8)
+            ratios = y_pos / b_pos_safe
+            # Robust median ratio (winsorized)
+            ratios_clipped = np.clip(ratios, 0.1, 10.0)
+            positive_scale = float(np.median(ratios_clipped))
+            state["positive_scale"] = float(np.clip(positive_scale, 0.5, 2.0))
+
+        # Auto-select family
+        if count_distribution_family == "auto":
+            # Simple heuristic: if >30% zeros → two-part beneficial, else passthrough
+            if zero_frac > 0.30:
+                state["family"] = "two_part_active"
+            else:
+                state["family"] = "passthrough"
+
+        state["diagnostics"] = {
+            "n_samples": int(len(b)),
+            "zero_fraction": float(zero_frac),
+            "positive_scale": float(state["positive_scale"]),
+            "family_selected": str(state["family"]),
+        }
+        state["fitted"] = True
+    except Exception as e:
+        state["diagnostics"]["error"] = str(e)
+    return state
+
+
+def _apply_count_two_part_head(
+    predictions: np.ndarray,
+    two_part_state: Dict[str, Any],
+) -> np.ndarray:
+    """Apply two-part count correction to base predictions.
+
+    If the state indicates passthrough or was not fitted, returns predictions unchanged.
+    Otherwise applies: pred * positive_scale, then clips to non-negative.
+    """
+    preds = np.asarray(predictions, dtype=float).ravel()
+    if not two_part_state.get("fitted", False):
+        return preds
+    family = str(two_part_state.get("family", "passthrough"))
+    if family == "passthrough":
+        return preds
+
+    positive_scale = float(two_part_state.get("positive_scale", 1.0))
+    # Scale correction: gentle multiplicative adjustment
+    corrected = preds * positive_scale
+    # Ensure non-negative for count targets
+    corrected = np.maximum(corrected, 0.0)
+    return corrected
+
+
+def _select_binary_calibration_with_gate(
+    candidates: Dict[str, Dict[str, float]],
+    ece_threshold: float = 0.05,
+) -> str:
+    """Joint-gate calibrator selection: primary=brier, secondary=logloss, gate=ece.
+
+    Returns the name of the best calibration method.
+    """
+    if not candidates:
+        return "identity"
+
+    scored = []
+    for name, diag in candidates.items():
+        brier = float(diag.get("brier", float("inf")))
+        logloss = float(diag.get("logloss", float("inf")))
+        ece = float(diag.get("ece", float("inf")))
+        # Combined ranking score: primary brier, break ties with logloss
+        score = 0.65 * brier + 0.35 * logloss
+        scored.append((name, score, ece))
+
+    # Sort by combined score
+    scored.sort(key=lambda x: x[1])
+
+    # Gate: only select if ECE doesn't degrade beyond threshold from identity
+    identity_ece = float(candidates.get("identity", {}).get("ece", 1.0))
+    for name, score, ece in scored:
+        if name == "identity":
+            return name
+        if ece <= identity_ece + ece_threshold:
+            return name
+
+    return "identity"
 
 
 def _lane_specialist_bonus(lane: str, model_name: str, horizon_band: str) -> float:
@@ -5031,6 +5166,7 @@ class AutoFitV71Wrapper(ModelBase):
         self._regime_state: Dict[str, Any] = {"enabled": False}
         self._routing_info: Dict[str, Any] = {}
         self._anchor_set: List[str] = []
+        self._candidate_eval_timeout: int = 300  # seconds for quick screen per model
         self._policy_action_id: str = ""
         self._policy_confidence: float = 0.0
         self._guard_decisions: List[str] = []
@@ -5074,6 +5210,13 @@ class AutoFitV71Wrapper(ModelBase):
             )
         )
         self._policy_state_rules: Optional[Dict[str, Dict[str, Any]]] = None
+
+        # ── V7.3 thin-increment state ──
+        self._v73_variant_id: str = ""
+        self._reuse_decision: str = "rerun_required"
+        self._reuse_source_run: str = ""
+        self._count_two_part_state: Dict[str, Any] = {}
+        self._pinball_q90: float = 0.0
 
     def _augment_features(
         self, X: pd.DataFrame, y: Optional[pd.Series] = None, fit: bool = True
@@ -5191,6 +5334,24 @@ class AutoFitV71Wrapper(ModelBase):
         self._policy_action_id = f"{self._offline_rl_policy}|{route_key}|{tid}"
         self._guard_decisions.append(f"offline_policy_applied={tid}")
 
+        # ── V7.3 thin-increment policy extensions ──
+        if self.config.name == "AutoFitV73":
+            # Record reuse decision from policy
+            reuse = str(action.get("reuse_decision", "")).strip()
+            if reuse in {"reuse_champion", "reuse_with_recalibration", "rerun_required"}:
+                self._reuse_decision = reuse
+            src_run = str(action.get("reuse_source_run", "")).strip()
+            if src_run:
+                self._reuse_source_run = src_run
+            # Count two-part family override from policy
+            count_family = str(action.get("count_two_part_family", "")).strip().lower()
+            if count_family in {"auto", "two_part_active", "passthrough"}:
+                self._count_two_part_state["family_override"] = count_family
+            # Binary gate mode override
+            binary_gate = str(action.get("binary_gate_mode", "")).strip().lower()
+            if binary_gate in {"joint", "brier_only", "identity_force"}:
+                self._guard_decisions.append(f"v73_binary_gate={binary_gate}")
+
     def fit(self, X: pd.DataFrame, y: pd.Series, **kwargs) -> "AutoFitV71Wrapper":
         from .registry import check_model_available, get_model
 
@@ -5254,6 +5415,47 @@ class AutoFitV71Wrapper(ModelBase):
         self._sparse_moe_route = {}
         self._policy_confidence = 0.35
 
+        # ── V7.3: set variant_id from lane + horizon + ablation ──
+        if self.config.name == "AutoFitV73":
+            self._v73_variant_id = f"{self._lane}|{self._horizon_band}|{ablation}"
+            self._count_two_part_state = {}  # reset per fit
+
+            # ── V7.3 RL Policy: query adaptive hyperparameters ──
+            if self._rl_policy is not None:
+                try:
+                    from .rl_policy import PolicyDecision
+                    self._rl_decision = self._rl_policy.query(
+                        lane=self._lane,
+                        horizon_band=self._horizon_band,
+                        ablation=self._ablation,
+                        missingness="medium",  # updated after missingness computed
+                        meta_features=meta,
+                    )
+                    # Apply RL-selected hyperparameters
+                    if self._rl_decision.confidence > 0.3:
+                        self._top_k = self._rl_decision.top_k
+                        self._sparse_moe_max_experts = self._rl_decision.moe_max_experts
+                        self._sparse_moe_temperature = self._rl_decision.moe_temperature
+                        self._sparse_moe_blend_alpha = self._rl_decision.blend_alpha
+                        qs_threshold = _quick_screen_threshold_for_lane(self._lane)
+                        qs_threshold *= self._rl_decision.qs_threshold_mult
+                        self._dynamic_thresholds["quick_screen_ratio"] = qs_threshold
+                        logger.info(
+                            f"[AutoFitV73 RL] Applied adaptive params: "
+                            f"top_k={self._top_k}, moe_experts={self._sparse_moe_max_experts}, "
+                            f"temp={self._sparse_moe_temperature:.2f}, "
+                            f"qs_mult={self._rl_decision.qs_threshold_mult:.2f}, "
+                            f"source={self._rl_decision.source}, "
+                            f"confidence={self._rl_decision.confidence:.2f}"
+                        )
+                    else:
+                        logger.info(
+                            f"[AutoFitV73 RL] Low confidence ({self._rl_decision.confidence:.2f}), "
+                            f"using defaults"
+                        )
+                except Exception as e:
+                    logger.warning(f"[AutoFitV73 RL] Policy query failed: {e}")
+
         if self._lane == "count":
             y_arr = np.asarray(y, dtype=float)
             finite_mask = np.isfinite(y_arr)
@@ -5305,6 +5507,47 @@ class AutoFitV71Wrapper(ModelBase):
         candidate_pool = self._candidate_pool_for_lane(self._lane)
         lane_postprocess = lambda arr: _apply_lane_postprocess(arr, self._lane_postprocess_state)
 
+        # ── V7.3 Multi-Agent: Recon + Scout phase ──
+        if self.config.name == "AutoFitV73" and self._orchestrator is not None:
+            try:
+                import torch
+                _has_gpu = torch.cuda.is_available()
+            except Exception:
+                _has_gpu = False
+            try:
+                recon_result = self._orchestrator.run_recon_phase(
+                    X_train=X_aug,
+                    y_train=y,
+                    candidate_pool=candidate_pool,
+                    category_fn=_get_model_category,
+                    has_gpu=_has_gpu,
+                    top_k=self._top_k,
+                    moe_max_experts=self._sparse_moe_max_experts,
+                    moe_temperature=self._sparse_moe_temperature,
+                    blend_alpha=self._sparse_moe_blend_alpha,
+                    time_budget=float(self._candidate_eval_timeout * len(candidate_pool)),
+                    qs_threshold_mult=self._dynamic_thresholds.get("quick_screen_ratio", 0.90),
+                )
+                # Agent-prioritized candidate order (evaluate high-priority first)
+                agent_candidates = recon_result.get("prioritized_candidates", [])
+                if agent_candidates:
+                    # Merge: agent prioritized first, then remaining from original pool
+                    remaining = [c for c in candidate_pool if c not in agent_candidates]
+                    candidate_pool = agent_candidates + remaining
+                    logger.info(
+                        f"[AutoFitV73 Agent] Scout reordered candidates: "
+                        f"{len(agent_candidates)} prioritized, "
+                        f"{len(remaining)} supplementary, "
+                        f"risks={recon_result.get('risks', [])}"
+                    )
+                self._agent_telemetry["recon_phase"] = {
+                    "lane": recon_result.get("lane"),
+                    "risks": recon_result.get("risks", []),
+                    "budget_plan": recon_result.get("budget_plan", {}),
+                }
+            except Exception as e:
+                logger.warning(f"[AutoFitV73 Agent] Recon/Scout failed: {e}")
+
         # -- Quick screen with lane-adaptive threshold --
         qs_train_end = int(n * 0.70)
         qs_val_end = int(n * 0.85)
@@ -5327,7 +5570,7 @@ class AutoFitV71Wrapper(ModelBase):
                 val_raw_qs,
                 target,
                 horizon,
-                timeout=300,
+                timeout=self._candidate_eval_timeout,
                 target_transform=self._target_xform,
                 prediction_postprocess=lane_postprocess,
             )
@@ -5600,6 +5843,29 @@ class AutoFitV71Wrapper(ModelBase):
                         )
                     break
 
+        # ── V7.3: enhanced count anti-collapse — force-keep at least 2 count specialists ──
+        if self.config.name == "AutoFitV73" and self._lane == "count":
+            count_specialists = {"XGBoostPoisson", "LightGBMTweedie", "NegativeBinomialGLM"}
+            in_ensemble = [nm for nm in ensemble_list if nm in count_specialists]
+            if len(in_ensemble) < 2:
+                for cand, _ in sorted_by_adj:
+                    if cand not in count_specialists or cand in ensemble_list:
+                        continue
+                    trial_preds = np.mean(
+                        [oof_clean[nm] for nm in (ensemble_list + [cand])],
+                        axis=0,
+                    )
+                    trial_mae = float(np.mean(np.abs(y_oof - trial_preds)))
+                    # V7.3 uses relaxed tolerance (5% vs 2%) for count specialists
+                    if trial_mae <= current_mae * 1.05:
+                        ensemble_list.append(cand)
+                        current_mae = trial_mae
+                        logger.info(
+                            f"[AutoFitV73] Force-keep 2nd count specialist {cand} "
+                            f"under V7.3 enhanced anti-collapse (MAE={trial_mae:,.4f})"
+                        )
+                    break
+
         # Champion-template routing: enforce lane+horizon anchor coverage with bounded degradation.
         template_candidates = _champion_anchor_candidates(self._lane, int(horizon))
         template_set = set(template_candidates)
@@ -5767,17 +6033,22 @@ class AutoFitV71Wrapper(ModelBase):
                     self._guard_decisions.append(
                         f"spike_sentinel_triggered:peak={pred_peak:.6f}:scale={safe_scale:.6f}"
                     )
-            if blend_mae > best_single_raw * 1.03:
+            # V7.3.1 champion-first gate: ensemble MUST strictly beat best single
+            # V71/V72/V73: 3% tolerance; V731: 0% tolerance (champion-first philosophy)
+            _oof_guard_mult = 1.00 if self.config.name in ("AutoFitV731",) else 1.03
+            if blend_mae > best_single_raw * _oof_guard_mult:
                 self._oof_guard_triggered = True
                 if self._lane == "count":
                     self._spike_sentinel_triggered = True
                     self._lane_failure_class = "count_oof_guard_fallback"
                 self._guard_decisions.append(
-                    f"oof_guard_fallback:{blend_mae:.4f}>{best_single_raw * 1.03:.4f}"
+                    f"oof_guard_fallback:{blend_mae:.4f}>{best_single_raw * _oof_guard_mult:.4f}"
+                    f":champion_first={'yes' if self.config.name in ('AutoFitV731',) else 'no'}"
                 )
                 logger.warning(
-                    f"[AutoFitV71] OOF guard triggered: blended MAE={blend_mae:,.4f} "
-                    f"> 1.03× best_single={best_single_raw:,.4f}. Falling back to {best_single_name}"
+                    f"[{self.config.name}] OOF guard triggered: blended MAE={blend_mae:,.4f} "
+                    f"> {_oof_guard_mult:.2f}× best_single={best_single_raw:,.4f}. "
+                    f"Falling back to {best_single_name}"
                 )
                 selected_names = [best_single_name]
                 self._pred_names = selected_names
@@ -5807,6 +6078,29 @@ class AutoFitV71Wrapper(ModelBase):
                 + (0.08 if not self._oof_guard_triggered else 0.0),
             )
         )
+
+        # ── V7.3: fit count two-part head on OOF residuals ──
+        if self.config.name == "AutoFitV73" and self._lane == "count" and selected_oof:
+            try:
+                blend_for_tph = np.zeros(len(y_oof), dtype=float)
+                for nm, w in blended_weights.items():
+                    if nm in selected_oof:
+                        blend_for_tph += float(w) * selected_oof[nm]
+                family_override = self._count_two_part_state.get("family_override", "auto")
+                self._count_two_part_state = _fit_count_two_part_head(
+                    blend_for_tph, y_oof,
+                    count_distribution_family=str(family_override),
+                )
+                self._pinball_q90 = float(self._tail_pinball_q90)
+                logger.info(
+                    f"[AutoFitV73] Count two-part head fitted: "
+                    f"family={self._count_two_part_state.get('family', 'n/a')}, "
+                    f"positive_scale={self._count_two_part_state.get('positive_scale', 1.0):.4f}, "
+                    f"zero_prob={self._count_two_part_state.get('zero_prob', 0.0):.4f}"
+                )
+            except Exception as e:
+                logger.warning(f"[AutoFitV73] Count two-part head fitting failed: {e}")
+                self._count_two_part_state = {"fitted": False, "diagnostics": {"error": str(e)}}
 
         if self._lane == "binary" and selected_oof:
             try:
@@ -5887,6 +6181,43 @@ class AutoFitV71Wrapper(ModelBase):
                 self._hazard_calibration_method = f"{self._binary_hazard_mode}:identity"
                 self._time_consistency_violation_rate = 0.0
                 self._hazard_monotonic_violation_rate = 0.0
+
+        # ── V7.3: enhanced binary calibration gate (joint-gate) ──
+        if (
+            self.config.name == "AutoFitV73"
+            and self._lane == "binary"
+            and self._binary_metrics_gate_enabled
+            and self._binary_calibration_scores
+        ):
+            try:
+                # Build candidates dict for joint-gate selection
+                gate_candidates: Dict[str, Dict[str, float]] = {}
+                # Current calibrator
+                if self._binary_calibrator_name:
+                    gate_candidates[str(self._binary_calibrator_name)] = {
+                        "brier": float(self._binary_brier or 1.0),
+                        "logloss": float(self._binary_logloss or float("inf")),
+                        "ece": float(self._binary_ece or 1.0),
+                    }
+                # Identity baseline
+                gate_candidates["identity"] = {
+                    "brier": float(self._binary_calibration_scores.get("identity_brier", 1.0)),
+                    "logloss": float(self._binary_calibration_scores.get("identity_logloss", float("inf"))),
+                    "ece": float(self._binary_ece or 1.0),
+                }
+                best_cal = _select_binary_calibration_with_gate(gate_candidates)
+                if best_cal == "identity" and self._binary_calibrator_name != "identity":
+                    logger.info(
+                        f"[AutoFitV73] Joint-gate overrides calibrator "
+                        f"{self._binary_calibrator_name} → identity"
+                    )
+                    self._binary_calibrator = None
+                    self._binary_calibrator_name = "identity"
+                    self._guard_decisions.append("v73_joint_gate=identity_override")
+                else:
+                    self._guard_decisions.append(f"v73_joint_gate=confirmed:{best_cal}")
+            except Exception as e:
+                logger.warning(f"[AutoFitV73] Binary joint-gate failed: {e}")
 
         # -- Meta learners: 7-seed L1 + (Ridge vs ElasticNet) L2 --
         X_oof_full = X_aug.iloc[oof_start:]
@@ -6096,7 +6427,82 @@ class AutoFitV71Wrapper(ModelBase):
             "sparse_moe_route": dict(self._sparse_moe_route),
             "sparse_moe_blend_alpha": self._sparse_moe_blend_alpha,
             "elapsed_seconds": elapsed,
+            # ── V7.3 telemetry ──
+            "v73_variant_id": self._v73_variant_id,
+            "reuse_decision": self._reuse_decision,
+            "reuse_source_run": self._reuse_source_run,
+            "count_two_part_state": dict(self._count_two_part_state) if self._count_two_part_state else {},
+            "pinball_q90": self._pinball_q90,
         }
+
+        # ── V7.3: RL observe + Agent critique + telemetry injection ──
+        if self.config.name == "AutoFitV73":
+            # Multi-Agent Critic: post-hoc quality validation
+            if self._orchestrator is not None:
+                try:
+                    eval_results_for_critic = {}
+                    for _m_name in selected_names:
+                        eval_results_for_critic[_m_name] = {
+                            "mae": blended_weights.get(_m_name, 0.0),
+                            "adj_mae": blended_weights.get(_m_name, 0.0),
+                            "category": _get_model_category(_m_name),
+                        }
+                    compose_result = self._orchestrator.run_compose_phase(eval_results_for_critic)
+                    self._agent_telemetry["compose_phase"] = {
+                        "verdict": compose_result.get("verdict", "skip"),
+                        "guard_triggered": compose_result.get("guard_triggered", False),
+                        "suggestions": compose_result.get("suggestions", []),
+                        "n_restarts": compose_result.get("n_restarts", 0),
+                        "timing": compose_result.get("timing", {}),
+                    }
+                    # If critic rejects and we haven't already guarded
+                    if compose_result.get("guard_triggered") and not self._oof_guard_triggered:
+                        self._guard_decisions.append("agent_critic_reject")
+                        logger.info("[AutoFitV73 Agent] Critic flagged quality issue")
+                except Exception as e:
+                    logger.warning(f"[AutoFitV73 Agent] Compose/Critic phase failed: {e}")
+
+            # RL Policy: observe reward for online learning
+            if self._rl_policy is not None and self._rl_decision is not None:
+                try:
+                    from .rl_policy import compute_reward, build_replay_record
+                    _naive_mae = float(np.mean(np.abs(
+                        y.values - np.mean(y.values)
+                    ))) if hasattr(y, "values") else 1.0
+                    _reward = compute_reward(
+                        ensemble_mae=blend_mae if blend_mae is not None else best_single_raw,
+                        naive_mae=_naive_mae,
+                        best_single_mae=best_single_raw,
+                        elapsed_seconds=elapsed,
+                        max_time_budget=float(self._candidate_eval_timeout * 10),
+                    )
+                    self._rl_policy.observe(
+                        lane=self._lane,
+                        horizon_band=self._horizon_band,
+                        ablation=self._ablation,
+                        missingness=self._missingness_bucket,
+                        action=self._rl_decision.action_dict,
+                        reward=_reward,
+                        meta_features=meta,
+                    )
+                    self._rl_telemetry = {
+                        "rl_reward": float(_reward),
+                        "rl_source": self._rl_decision.source,
+                        "rl_confidence": self._rl_decision.confidence,
+                        "rl_action": dict(self._rl_decision.action_dict),
+                        "rl_bandit_diagnostics": self._rl_policy._bandit.get_diagnostics(),
+                    }
+                    logger.info(
+                        f"[AutoFitV73 RL] Observed reward={_reward:.4f}, "
+                        f"source={self._rl_decision.source}"
+                    )
+                except Exception as e:
+                    logger.warning(f"[AutoFitV73 RL] Observe failed: {e}")
+
+            # Inject RL + Agent telemetry into routing_info
+            self._routing_info["rl_policy_telemetry"] = dict(self._rl_telemetry)
+            self._routing_info["agent_telemetry"] = dict(self._agent_telemetry)
+
         self._fitted = True
         logger.info(
             f"[AutoFitV71] Fitted in {elapsed:.1f}s: "
@@ -6129,6 +6535,13 @@ class AutoFitV71Wrapper(ModelBase):
                     horizon=predict_horizon,
                     mode=self._binary_hazard_mode,
                 )
+            # ── V7.3: apply count two-part head ──
+            if (
+                self.config.name == "AutoFitV73"
+                and self._lane == "count"
+                and self._count_two_part_state.get("fitted", False)
+            ):
+                out = _apply_count_two_part_head(out, self._count_two_part_state)
             return out
 
         pred_dict: Dict[str, np.ndarray] = {}
@@ -6276,6 +6689,12 @@ class AutoFitV71Wrapper(ModelBase):
                 "sparse_moe_enabled": self._sparse_moe_enabled,
                 "sparse_moe_route": dict(self._sparse_moe_route),
                 "sparse_moe_blend_alpha": self._sparse_moe_blend_alpha,
+                # ── V7.3 telemetry ──
+                "v73_variant_id": self._v73_variant_id,
+                "reuse_decision": self._reuse_decision,
+                "reuse_source_run": self._reuse_source_run,
+                "count_two_part_state": dict(self._count_two_part_state) if self._count_two_part_state else {},
+                "pinball_q90": float(self._pinball_q90),
             }
         )
         return info
@@ -6328,6 +6747,125 @@ def get_autofit_v72(**kwargs) -> AutoFitV72Wrapper:
     return AutoFitV72Wrapper(top_k=top_k, **kwargs)
 
 
+class AutoFitV73Wrapper(AutoFitV72Wrapper):
+    """AutoFit V7.3: GPU-enabled full-spectrum ensemble with RL + multi-agent coordination.
+
+    Architectural innovations over V7.2:
+    - GPU-enabled execution: all 39 candidate models available including
+      deep_classical (NBEATS, NHITS), transformer_sota (PatchTST, KAN, xLSTM, TimeLLM),
+      and foundation (Chronos, Moirai) — previously silently dropped on CPU.
+    - Adaptive RL policy: factored Neural Contextual Bandit (LinUCB + Thompson Sampling)
+      learns optimal hyperparameters per routing condition from online experience.
+    - Multi-agent coordination: 4 specialized agents (Recon, Scout, Composer, Critic)
+      collaborate via a shared blackboard protocol for ensemble construction.
+    - Longer candidate evaluation timeout (900s vs 300s) for deep models.
+    - Larger ensemble capacity (top_k=12 vs 8) for model family diversity.
+    - Count lane: two-part head (zero-inflation correction + positive-value scale).
+    - Binary lane: multi-criteria joint-gate calibrator selection.
+    - Relaxed quick screen: retains more diverse candidates for ensemble.
+    """
+
+    def __init__(self, top_k: int = 12, **kwargs):
+        kwargs = dict(kwargs)
+        # Inherit all V7.2 defaults, override V7.3-specific ones
+        kwargs.setdefault("offline_rl_policy", "offline_policy_v73")
+        kwargs.setdefault("anchor_policy", "champion_template_soft")
+        kwargs.setdefault("count_two_part_head", True)
+        kwargs.setdefault("count_distribution_family", "auto")
+        kwargs.setdefault("binary_metrics_gate_enabled", True)
+        kwargs.setdefault("sparse_moe_enabled", True)
+        kwargs.setdefault("sparse_moe_max_experts", 5)
+        kwargs.setdefault("sparse_moe_temperature", 0.40)
+        kwargs.setdefault("min_ensemble_size_heavy_tail", 3)
+        super().__init__(top_k=top_k, **kwargs)
+        self.config.name = "AutoFitV73"
+        self.config.params["strategy"] = "v73_gpu_full_spectrum"
+        self.config.params["version"] = "7.3"
+        # GPU-aware: longer timeouts for deep/transformer/foundation models
+        self._candidate_eval_timeout = 900  # 15 minutes (vs 300s/5min default)
+
+        # ── RL Policy: Adaptive hyperparameter optimization ──
+        self._rl_policy = None
+        self._rl_decision = None
+        self._rl_telemetry: Dict[str, Any] = {}
+        try:
+            from .rl_policy import AdaptiveRLPolicy
+            self._rl_policy = AdaptiveRLPolicy(seed=42, enable_online_learning=True)
+            logger.info("[AutoFitV73] RL policy initialized (factored contextual bandit)")
+        except Exception as e:
+            logger.warning(f"[AutoFitV73] RL policy init failed (will use defaults): {e}")
+
+        # ── Multi-Agent Ensemble Coordination ──
+        self._orchestrator = None
+        self._agent_telemetry: Dict[str, Any] = {}
+        try:
+            from .multi_agent_ensemble import MultiAgentOrchestrator, OrchestratorConfig
+            self._orchestrator = MultiAgentOrchestrator(
+                config=OrchestratorConfig(
+                    max_restart_attempts=2,
+                    timeout_seconds=float(self._candidate_eval_timeout * len(_ALL_CANDIDATES)),
+                    enable_critic_restart=True,
+                )
+            )
+            logger.info("[AutoFitV73] Multi-agent orchestrator initialized (4 agents)")
+        except Exception as e:
+            logger.warning(f"[AutoFitV73] Orchestrator init failed (will use V71 pipeline): {e}")
+
+
+def get_autofit_v73(**kwargs) -> AutoFitV73Wrapper:
+    """AutoFit V7.3 GPU-enabled full-spectrum ensemble."""
+    top_k = kwargs.pop("top_k", 12)
+    return AutoFitV73Wrapper(top_k=top_k, **kwargs)
+
+
+class AutoFitV731Wrapper(AutoFitV73Wrapper):
+    """AutoFit V7.3.1: Champion-first adaptive delegation with enhanced RL + multi-agent.
+
+    Incremental improvements over V7.3:
+    - Champion-first OOF gate: 0% tolerance (ensemble must STRICTLY beat best single).
+    - Champion transfer agent: knowledge base of per-condition champion models injected
+      during recon phase to bias candidate pool toward known winners.
+    - 3-round iterative compose protocol: critic can reject and restart composition
+      with relaxed constraints up to 3 attempts before champion-first fallback.
+    - Extended RL state: 30-dim state vector (8 additional meta-features) with
+      2 new HP axes (champion_gate_tol, ensemble_diversity_min).
+    - Enhanced reward signal: incorporates champion-relative MAE when available.
+    """
+
+    def __init__(self, top_k: int = 12, **kwargs):
+        kwargs = dict(kwargs)
+        kwargs.setdefault("offline_rl_policy", "offline_policy_v731")
+        kwargs.setdefault("anchor_policy", "champion_template_adaptive")
+        kwargs.setdefault("sparse_moe_max_experts", 6)
+        kwargs.setdefault("min_ensemble_size_heavy_tail", 3)
+        super().__init__(top_k=top_k, **kwargs)
+        self.config.name = "AutoFitV731"
+        self.config.params["strategy"] = "v731_champion_first_adaptive"
+        self.config.params["version"] = "7.3.1"
+        self._champion_first_gate = True
+
+        # Override orchestrator with champion transfer enabled
+        try:
+            from .multi_agent_ensemble import MultiAgentOrchestrator, OrchestratorConfig
+            self._orchestrator = MultiAgentOrchestrator(
+                config=OrchestratorConfig(
+                    max_restart_attempts=3,
+                    timeout_seconds=float(self._candidate_eval_timeout * len(_ALL_CANDIDATES)),
+                    enable_critic_restart=True,
+                    enable_champion_transfer=True,
+                )
+            )
+            logger.info("[AutoFitV731] Multi-agent orchestrator initialized (5 agents, champion transfer)")
+        except Exception as e:
+            logger.warning(f"[AutoFitV731] Orchestrator upgrade failed (using V73 base): {e}")
+
+
+def get_autofit_v731(**kwargs) -> AutoFitV731Wrapper:
+    """AutoFit V7.3.1 champion-first adaptive delegation ensemble."""
+    top_k = kwargs.pop("top_k", 12)
+    return AutoFitV731Wrapper(top_k=top_k, **kwargs)
+
+
 AUTOFIT_MODELS = {
     "AutoFitV1": get_autofit_v1,
     "AutoFitV2": get_autofit_v2,
@@ -6341,4 +6879,6 @@ AUTOFIT_MODELS = {
     "AutoFitV7": get_autofit_v7,
     "AutoFitV71": get_autofit_v71,
     "AutoFitV72": get_autofit_v72,
+    "AutoFitV73": get_autofit_v73,
+    "AutoFitV731": get_autofit_v731,
 }

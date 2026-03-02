@@ -1,0 +1,64 @@
+{
+  "generated_at_utc": "2026-02-23T12:45:38.254068+00:00",
+  "overall_certified": false,
+  "items": [
+    {
+      "check": "temporal_split_embargo",
+      "status": true,
+      "evidence_path": "docs/benchmarks/block3_truth_pack/data_integrity_audit_latest.json",
+      "detail": {
+        "train_before_val": true,
+        "val_before_test": true,
+        "embargo_non_negative": true
+      }
+    },
+    {
+      "check": "leakage_policy_coverage",
+      "status": true,
+      "evidence_path": "docs/benchmarks/block3_truth_pack/data_integrity_audit_latest.json",
+      "detail": {
+        "all_targets_have_leak_group": true,
+        "groups_non_empty": true
+      }
+    },
+    {
+      "check": "prediction_coverage_guard",
+      "status": true,
+      "evidence_path": "docs/benchmarks/block3_truth_pack/v72_pilot_gate_report.json",
+      "detail": {
+        "fairness_pass_100": true,
+        "investors_count_gap_reduction_ge_50pct": false,
+        "global_normalized_mae_improvement_ge_8pct": false
+      }
+    },
+    {
+      "check": "catastrophic_spike_clear",
+      "status": false,
+      "evidence_path": "docs/benchmarks/block3_truth_pack/investors_count_stability_audit_latest.json",
+      "detail": {
+        "catastrophic_spikes": 4
+      }
+    },
+    {
+      "check": "calibration_stability_distribution",
+      "status": true,
+      "evidence_path": "docs/benchmarks/block3_truth_pack/investors_count_stability_audit_latest.json",
+      "detail": {
+        "distribution_available": true,
+        "ks_train_vs_test_lt_0_25": true,
+        "psi_train_vs_test_lt_0_30": true
+      }
+    },
+    {
+      "check": "parameter_governance_no_test_feedback",
+      "status": true,
+      "evidence_path": "docs/benchmarks/block3_truth_pack/hyperparam_search_ledger.csv",
+      "detail": {
+        "hyperparam_search_ledger_exists": true,
+        "best_config_exists": true,
+        "compute_cost_exists": true
+      }
+    }
+  ],
+  "label": "NOT CERTIFIED"
+}

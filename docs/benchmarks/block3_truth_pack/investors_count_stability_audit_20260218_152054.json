@@ -1,0 +1,86 @@
+{
+  "generated_at_utc": "2026-02-18T15:20:54.540707+00:00",
+  "pointer_path": "/mnt/aiongpfs/projects/eint/repo_root/docs/audits/FULL_SCALE_POINTER.yaml",
+  "config_path": "/mnt/aiongpfs/projects/eint/repo_root/configs/block3_tasks.yaml",
+  "bench_dirs": [
+    "/mnt/aiongpfs/projects/eint/runs/benchmarks/block3_20260203_225620_iris",
+    "/mnt/aiongpfs/projects/eint/runs/benchmarks/block3_20260203_225620_iris_full",
+    "/mnt/aiongpfs/projects/eint/runs/benchmarks/block3_20260203_225620_iris_phase3",
+    "/mnt/aiongpfs/projects/eint/runs/benchmarks/block3_20260203_225620_iris_phase7",
+    "/mnt/aiongpfs/projects/eint/runs/benchmarks/block3_20260203_225620_phase7",
+    "/mnt/aiongpfs/projects/eint/runs/benchmarks/block3_20260203_225620_phase7_v71extreme_20260214_032205",
+    "/mnt/aiongpfs/projects/eint/runs/benchmarks/block3_20260203_225620_phase7_v71extreme_20260214_130737"
+  ],
+  "distribution_shift": {
+    "stats": {
+      "train": {
+        "n": 0,
+        "mean": null,
+        "std": null,
+        "median": null,
+        "p95": null,
+        "p99": null,
+        "max": null
+      },
+      "val": {
+        "n": 0,
+        "mean": null,
+        "std": null,
+        "median": null,
+        "p95": null,
+        "p99": null,
+        "max": null
+      },
+      "test": {
+        "n": 0,
+        "mean": null,
+        "std": null,
+        "median": null,
+        "p95": null,
+        "p99": null,
+        "max": null
+      }
+    },
+    "pairwise": [
+      {
+        "pair": "train_vs_val",
+        "ks": null,
+        "psi": null,
+        "wasserstein": null
+      },
+      {
+        "pair": "train_vs_test",
+        "ks": null,
+        "psi": null,
+        "wasserstein": null
+      },
+      {
+        "pair": "val_vs_test",
+        "ks": null,
+        "psi": null,
+        "wasserstein": null
+      }
+    ],
+    "available": false,
+    "error": "pandas is required for panel distribution audit"
+  },
+  "strict_record_count": 1595,
+  "catastrophic_spikes": 4,
+  "repeatability_group_count": 1015,
+  "guard_telemetry": {
+    "n_rows": 88,
+    "lane_clip_rate_median": 0.0,
+    "inverse_transform_guard_hits_total": 0,
+    "oof_guard_triggered_count": 0,
+    "policy_action_id_topk": [],
+    "anchor_models_used_topk": []
+  },
+  "checks": {
+    "distribution_available": false,
+    "no_catastrophic_spike": false,
+    "strict_rows_present": true,
+    "ks_train_vs_test_lt_0_25": false,
+    "psi_train_vs_test_lt_0_30": false
+  },
+  "overall_pass": false
+}

@@ -50,6 +50,12 @@ def _utc_now():
     return datetime.now(timezone.utc).isoformat()
 
 
+def _queue_policy_label(v72_done, v72_total):
+    if int(v72_total or 0) > 0 and int(v72_done or 0) >= int(v72_total or 0):
+        return "V7.3-ready (V7.2 closed)"
+    return "V72-first"
+
+
 def _read_csv(path):
     if not path.exists():
         return []
@@ -455,10 +461,10 @@ def _group_horizons(keys):
     return grouped
 
 
-def _render_nested_md(snapshot_ts, strict_done_n, strict_total_n, v72_done_n, v72_total_n, tree, jobs, eta_model, queue_bottlenecks, missing_keys, v72_done_keys):
+def _render_nested_md(snapshot_ts, strict_done_n, strict_total_n, v72_done_n, v72_total_n, tree, jobs, eta_model, queue_bottlenecks, missing_keys, v72_done_keys, queue_policy_label):
     lines = [
         "- Snapshot UTC: **%s**" % snapshot_ts,
-        "- Queue policy: **V72-first**",
+        "- Queue policy: **%s**" % queue_policy_label,
         "- Strict matrix progress: **%s**" % _bar(strict_done_n, strict_total_n),
         "- V7.2 coverage progress: **%s**" % _bar(v72_done_n, v72_total_n),
         "",
@@ -580,21 +586,29 @@ def _render_nested_md(snapshot_ts, strict_done_n, strict_total_n, v72_done_n, v7
     for (task, ablation, target), horizons in sorted(done_grouped.items()):
         lines.append("| %s | %s | %s | %s |" % (task, ablation, target, ",".join(str(h) for h in horizons)))
 
-    lines.extend([
-        "",
-        "## V7.2 Missing Subtasks (by task/ablation/target)",
-        "",
-        "| task | ablation | target | missing_horizons |",
-        "|---|---|---|---|",
-    ])
-    for (task, ablation, target), horizons in sorted(missing_grouped.items()):
-        lines.append("| %s | %s | %s | %s |" % (task, ablation, target, ",".join(str(h) for h in horizons)))
+    if missing_grouped:
+        lines.extend([
+            "",
+            "## V7.2 Missing Subtasks (by task/ablation/target)",
+            "",
+            "| task | ablation | target | missing_horizons |",
+            "|---|---|---|---|",
+        ])
+        for (task, ablation, target), horizons in sorted(missing_grouped.items()):
+            lines.append("| %s | %s | %s | %s |" % (task, ablation, target, ",".join(str(h) for h in horizons)))
+    else:
+        lines.extend([
+            "",
+            "## V7.2 Missing Subtasks",
+            "",
+            "None. V7.2 strict coverage is complete (`104/104`).",
+        ])
 
     lines.append("")
     return "\n".join(lines)
 
 
-def _build_queue_actions(jobs):
+def _build_queue_actions(jobs, v72_complete=False):
     rows = []
     for j in jobs:
         redundancy_check = "non_redundant_required"
@@ -614,15 +628,20 @@ def _build_queue_actions(jobs):
         elif j.get("group") == "foundation_reference":
             redundancy_check = "strict_matrix_already_complete=true"
             if j.get("state") == "PENDING":
-                action = "deprioritize_hold_recommended"
-                expected_eta_delta_hours = 1.0
+                action = "defer_or_hold" if v72_complete else "deprioritize_hold_recommended"
+                expected_eta_delta_hours = 0.0 if v72_complete else 1.0
             else:
                 action = "no_action_running"
-            reason = "duplicate_reference_branch_already_covered_in_strict_matrix"
+            reason = "not_on_v73_critical_path" if v72_complete else "duplicate_reference_branch_already_covered_in_strict_matrix"
         elif j.get("group") in {"autofit_v72_completion", "autofit_resubmit", "statistical_resubmit"}:
-            action = "keep_priority"
-            redundancy_check = "required_for_v72_first"
-            reason = "contributes_to_v72_or_required_resubmit_coverage"
+            if v72_complete:
+                action = "review_not_required"
+                redundancy_check = "coverage_closed"
+                reason = "v72_coverage_already_closed"
+            else:
+                action = "keep_priority"
+                redundancy_check = "required_for_v72_first"
+                reason = "contributes_to_v72_or_required_resubmit_coverage"
             evidence_path = "docs/benchmarks/block3_truth_pack/missing_key_manifest.csv"
 
         rows.append(
@@ -643,7 +662,7 @@ def _build_queue_actions(jobs):
 
     return {
         "generated_at_utc": _utc_now(),
-        "policy": "V72-first",
+        "policy": "V7.3-ready (V7.2 closed)" if v72_complete else "V72-first",
         "actions": rows,
     }
 
@@ -798,21 +817,39 @@ def _root_cause_sections(strict_total, strict_done, v72_done, v72_total, champio
         audit_impact = "Cannot claim fully certified fair/no-leak/no-overfit closure until distribution diagnostics become available."
         audit_fix = "Rerun stability audit in insider environment with corrected import path, then refresh certification."
 
+    v72_closed = v72_done >= v72_total and v72_total > 0
+    coverage_row = (
+        "| V7.2 coverage status | v72_completed=%d/%d (strict=%d/%d), overlap_keys=%s; `docs/benchmarks/block3_truth_pack/v72_pilot_gate_report.json` | Full-rank coverage is closed and no longer blocks evaluation. | Keep V7.2 completion closed and treat V7.2 as a fixed baseline only. | Coverage gate is closed. |"
+        % (v72_done, v72_total, strict_done, strict_total, overlap)
+        if v72_closed
+        else "| V7.2 coverage deficit | v72_completed=%d/%d (strict=%d/%d), overlap_keys=%s; `docs/benchmarks/block3_truth_pack/missing_key_manifest.csv`; `docs/benchmarks/block3_truth_pack/v72_pilot_gate_report.json` | Full-rank claim is blocked until 104/104 V7.2 keys are materialized. | Keep V72-first queue policy, prioritize missing-key controller jobs, and rerun gate after each completed shard. | Gate-P/F blocked until coverage closes. |"
+        % (v72_done, v72_total, strict_done, strict_total, overlap)
+    )
+    queue_row = (
+        "| Queue bottlenecks | RUNNING=%s, PENDING=%s; pending reasons include `%s`; `docs/benchmarks/block3_truth_pack/execution_status_latest.json` | Remaining queue pressure is now outside the V7.2 critical path. | Keep reference work deprioritized and reserve new submissions for fresh V7.3 evidence. | ETA uncertainty remains scheduler-dependent. |"
+        % (
+            slurm.get("running_total"),
+            slurm.get("pending_total"),
+            ", ".join(r.get("reason", "") for r in slurm.get("pending_reason_topk", [])[:2]),
+        )
+        if v72_closed
+        else "| Queue bottlenecks | RUNNING=%s, PENDING=%s; pending reasons include `%s`; `docs/benchmarks/block3_truth_pack/execution_status_latest.json` | Delays convergence to representative full-matrix V7.2 evidence. | Apply redundancy-safe de-prioritization for non-essential residual branches under V72-first policy. | ETA uncertainty remains scheduler-dependent. |"
+        % (
+            slurm.get("running_total"),
+            slurm.get("pending_total"),
+            ", ".join(r.get("reason", "") for r in slurm.get("pending_reason_topk", [])[:2]),
+        )
+    )
+
     root_cause_md = "\n".join(
         [
             "| problem | evidence | impact | fix | gate |",
             "|---|---|---|---|---|",
-            "| V7.2 coverage deficit | v72_completed=%d/%d (strict=%d/%d), overlap_keys=%s; `docs/benchmarks/block3_truth_pack/missing_key_manifest.csv`; `docs/benchmarks/block3_truth_pack/v72_pilot_gate_report.json` | Full-rank claim is blocked until 104/104 V7.2 keys are materialized. | Keep V72-first queue policy, prioritize missing-key controller jobs, and rerun gate after each completed shard. | Gate-P/F blocked until coverage closes. |"
-            % (v72_done, v72_total, strict_done, strict_total, overlap),
+            coverage_row,
             "| Count lane weakness (`investors_count`) | gap_reduction_pct=%s; catastrophic_spikes=%s; `docs/benchmarks/block3_truth_pack/v72_pilot_gate_report.json`; `docs/benchmarks/block3_truth_pack/investors_count_stability_audit_latest.json`; `docs/benchmarks/block3_truth_pack/failure_taxonomy.csv` | Median gap remains large and historical explosion lineage still exists. | Keep count-safe hard guards, complete failure-pool reruns, and retune lane thresholds after new full overlap is available. | Gate-P investors_count criterion currently fails. |"
             % (gap_pct, cat_spikes),
             "| Binary lane underperformance (`is_funded`) | Champion families remain deep/transformer; `docs/benchmarks/block3_truth_pack/top3_representative_models_by_target.csv`; `docs/benchmarks/block3_truth_pack/family_gap_by_target.csv` | AutoFit calibration/routing still behind NHITS/PatchTST in strict global benchmark. | Produce explicit binary calibration report (logloss/Brier/ECE by subtask) and retune hazard/calibration settings from full overlap. | Gate-P global-improvement criterion remains constrained. |",
-            "| Queue bottlenecks | RUNNING=%s, PENDING=%s; pending reasons include `%s`; `docs/benchmarks/block3_truth_pack/execution_status_latest.json` | Delays convergence to representative full-matrix V7.2 evidence. | Apply redundancy-safe de-prioritization for non-essential residual branches under V72-first policy. | ETA uncertainty remains scheduler-dependent. |"
-            % (
-                slurm.get("running_total"),
-                slurm.get("pending_total"),
-                ", ".join(r.get("reason", "") for r in slurm.get("pending_reason_topk", [])[:2]),
-            ),
+            queue_row,
             "| Audit closure incomplete | distribution_available=%s; `docs/benchmarks/block3_truth_pack/investors_count_stability_audit_latest.json` | %s | %s | Gate-S remains not fully certified. |"
             % (dist_avail, audit_impact, audit_fix),
         ]
@@ -825,13 +862,14 @@ def _root_cause_sections(strict_total, strict_done, v72_done, v72_total, champio
             "| count-safe guards | implemented | non-negative, safe inverse, clipping, OOF guard telemetry fields are present in metrics pipeline. | `scripts/run_block3_benchmark_shard.py` |",
             "| hazard head and sparse routing | implemented | V7.2 route metadata and policy telemetry integrated in current benchmark outputs. | `src/narrative/block3/models/autofit_wrapper.py` |",
             "| champion-template anchors | implemented | Template library and anchor telemetry are materialized in truth pack outputs. | `docs/benchmarks/block3_truth_pack/champion_template_library.csv` |",
-            "| full V7.2 104-key completion | pending | current V7.2 coverage is %d/%d; missing keys remain in manifest. | `docs/benchmarks/block3_truth_pack/missing_key_manifest.csv` |"
-            % (v72_done, v72_total),
+            "| full V7.2 104-key completion | %s | current V7.2 coverage is %d/%d. | `docs/benchmarks/block3_truth_pack/missing_key_manifest.csv` |"
+            % ("implemented" if v72_closed else "pending", v72_done, v72_total),
             "| Gate-S/P/F refresh on new overlap | pending | current gate report still shows overall_pass=false, global gain=%s. | `docs/benchmarks/block3_truth_pack/v72_pilot_gate_report.json` |"
             % (gmae,),
             "| investors_count stability certification | pending | latest audit not certified (`distribution_available` and spike checks unresolved). | `docs/benchmarks/block3_truth_pack/investors_count_stability_audit_latest.json` |",
             "| binary calibration deltas | pending | explicit per-subtask logloss/Brier/ECE delta report not yet generated in truth pack latest artifacts. | `docs/benchmarks/block3_truth_pack/top3_representative_models_by_target.csv` |",
-            "| queue redundancy action log | implemented | recommendation ledger generated under V72-first policy with evidence-coupled actions. | `docs/benchmarks/block3_truth_pack/queue_actions_latest.json` |",
+            "| queue redundancy action log | implemented | recommendation ledger generated under %s with evidence-coupled actions. | `docs/benchmarks/block3_truth_pack/queue_actions_latest.json` |"
+            % (_queue_policy_label(v72_done, v72_total),),
             "| strict champion distribution | implemented | deep_classical=%d, transformer_sota=%d, foundation=%d, autofit=%d in strict matrix. | `docs/benchmarks/block3_truth_pack/condition_inventory_full.csv` |"
             % (
                 champion_counts.get("deep_classical", 0),
@@ -851,6 +889,7 @@ def _write_text(path, text):
 
 
 def _refresh_light_docs(status_doc_path, results_doc_path, snapshot_ts, strict_done, strict_total, v72_done, v72_total, slurm, eta_model, champion_counts, queue_actions_path):
+    queue_policy_label = _queue_policy_label(v72_done, v72_total)
     status_md = "\n".join(
         [
             "# Block 3 Model Benchmark Status",
@@ -895,7 +934,7 @@ def _refresh_light_docs(status_doc_path, results_doc_path, snapshot_ts, strict_d
         status_md += "\n| %s | %d | %d |" % (g, c.get("RUNNING", 0), c.get("PENDING", 0))
 
     status_md += "\n\n## Queue Governance\n\n"
-    status_md += "- V72-first policy ledger: `%s`\n" % queue_actions_path
+    status_md += "- %s policy ledger: `%s`\n" % (queue_policy_label, queue_actions_path)
     status_md += "- Mandatory execution contract: `docs/BLOCK3_EXECUTION_CONTRACT.md`\n"
     status_md += "- Actions are recommendation-only; this report does not mutate live queue state.\n"
 
@@ -994,10 +1033,11 @@ def main():
     strict_total_n = len(expected_keys)
     v72_done_n = len(v72_done)
     v72_total_n = len(expected_keys)
+    queue_policy_label = _queue_policy_label(v72_done_n, v72_total_n)
 
     status_payload = {
         "snapshot_ts": slurm.get("snapshot_ts", _utc_now()),
-        "queue_policy": "V72-first",
+        "queue_policy": queue_policy_label,
         "running_total": int(sum(1 for j in jobs if j.get("state") == "RUNNING")),
         "pending_total": int(sum(1 for j in jobs if j.get("state") == "PENDING")),
         "strict_progress": {
@@ -1047,9 +1087,10 @@ def main():
         queue_bottlenecks=queue_bottlenecks,
         missing_keys=missing_keys,
         v72_done_keys=v72_done,
+        queue_policy_label=queue_policy_label,
     )
 
-    queue_actions = _build_queue_actions(jobs)
+    queue_actions = _build_queue_actions(jobs, v72_complete=(v72_done_n >= v72_total_n and v72_total_n > 0))
     queue_actions_md = _render_queue_actions_md(queue_actions)
 
     cert_payload = _build_fairness_certification(truth_dir)
@@ -1100,7 +1141,7 @@ def main():
         master_text = _replace_or_append_auto_section(
             master_text,
             "QUEUE_ACTIONS",
-            "## Queue Actions (V72-first)",
+            "## Queue Actions (%s)" % queue_actions.get("policy"),
             queue_actions_md,
         )
         master_text = _replace_or_append_auto_section(

@@ -281,6 +281,12 @@ class ModelMetrics:
     inference_time_seconds: Optional[float] = None
     seed: int = GLOBAL_SEED
     git_hash: str = ""
+    # ── V7.3 telemetry fields ──
+    v73_variant_id: Optional[str] = None
+    reuse_decision: Optional[str] = None
+    reuse_source_run: Optional[str] = None
+    pinball_q90: Optional[float] = None
+    count_two_part_family: Optional[str] = None
     
     def to_dict(self) -> Dict[str, Any]:
         return asdict(self)
@@ -749,6 +755,12 @@ class BenchmarkShard:
             "time_consistency_violation_rate": None,
             "policy_action_id": None,
             "oof_guard_triggered": False,
+            # V7.3 telemetry
+            "v73_variant_id": None,
+            "reuse_decision": None,
+            "reuse_source_run": None,
+            "pinball_q90": None,
+            "count_two_part_family": None,
         }
         try:
             if hasattr(model, "get_routing_info"):
@@ -839,6 +851,22 @@ class BenchmarkShard:
                         else str(info.get("policy_action_id"))
                     )
                     signals["oof_guard_triggered"] = bool(info.get("oof_guard_triggered", False))
+                    # ── V7.3 telemetry ──
+                    v73_vid = info.get("v73_variant_id")
+                    if v73_vid is not None:
+                        signals["v73_variant_id"] = str(v73_vid)
+                    v73_reuse = info.get("reuse_decision")
+                    if v73_reuse is not None:
+                        signals["reuse_decision"] = str(v73_reuse)
+                    v73_src = info.get("reuse_source_run")
+                    if v73_src is not None:
+                        signals["reuse_source_run"] = str(v73_src)
+                    v73_pq90 = info.get("pinball_q90")
+                    if v73_pq90 is not None:
+                        signals["pinball_q90"] = float(v73_pq90)
+                    cts = info.get("count_two_part_state")
+                    if isinstance(cts, dict) and cts.get("fitted"):
+                        signals["count_two_part_family"] = str(cts.get("family", "unknown"))
         except Exception:
             pass
         return signals
@@ -988,6 +1016,12 @@ class BenchmarkShard:
                 inference_time_seconds=infer_time,
                 seed=self.seed,
                 git_hash=self.git_hash,
+                # V7.3 telemetry
+                v73_variant_id=routing_signals.get("v73_variant_id"),
+                reuse_decision=routing_signals.get("reuse_decision"),
+                reuse_source_run=routing_signals.get("reuse_source_run"),
+                pinball_q90=routing_signals.get("pinball_q90"),
+                count_two_part_family=routing_signals.get("count_two_part_family"),
                 **metrics_dict,
             )
 

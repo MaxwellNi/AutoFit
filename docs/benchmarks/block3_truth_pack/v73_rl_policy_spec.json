@@ -1,5 +1,5 @@
 {
-  "generated_at_utc": "2026-02-26T00:08:32.066343+00:00",
+  "generated_at_utc": "2026-03-01T15:12:10.458585+00:00",
   "policy_name": "v73_offline_policy_v1",
   "policy_type": "contextual_bandit_with_safe_fallback",
   "state_schema": [
@@ -39,10 +39,10 @@
   "bootstrap_context": {
     "strict_completed_conditions": 104,
     "expected_conditions": 104,
-    "v72_missing_keys": 16,
-    "v72_coverage_ratio": 0.8461538461538461,
+    "v72_missing_keys": 0,
+    "v72_coverage_ratio": 1.0,
     "v72_pilot_overall_pass": false,
-    "v72_overlap_keys": 88
+    "v72_overlap_keys": 104
   },
   "evidence_paths": {
     "truth_pack_summary": "docs/benchmarks/block3_truth_pack/truth_pack_summary.json",

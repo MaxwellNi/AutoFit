@@ -1,8 +1,8 @@
 {
-  "snapshot_ts": "2026-02-26T00:08:31.612147+00:00",
-  "queue_policy": "V72-first",
+  "snapshot_ts": "2026-03-01T15:11:42.052042+00:00",
+  "queue_policy": "V7.3-ready (V7.2 closed)",
   "running_total": 0,
-  "pending_total": 20,
+  "pending_total": 8,
   "strict_progress": {
     "completed": 104,
     "expected": 104,
@@ -10,23 +10,19 @@
     "bar": "[########################] 104/104 (100.0%)"
   },
   "v72_progress": {
-    "completed": 88,
+    "completed": 104,
     "expected": 104,
-    "ratio": 0.8461538461538461,
-    "bar": "[####################----] 88/104 (84.6%)",
-    "missing_keys": 16
+    "ratio": 1.0,
+    "bar": "[########################] 104/104 (100.0%)",
+    "missing_keys": 0
   },
   "nested_task_tree": {
     "task1_outcome": {
       "expected_keys": 48,
       "strict_completed_keys": 48,
-      "v72_completed_keys": 44,
+      "v72_completed_keys": 48,
       "running_jobs": [],
       "pending_jobs": [
-        "p7v72k_t1_ct_ic_h30",
-        "p7v72k_t1_ct_ic_h14",
-        "p7v72k_t1_ct_ic_h7",
-        "p7v72k_t1_ct_ic_h1",
         "p7xF_fdr_t1_fu"
       ],
       "ablations": {
@@ -189,14 +185,9 @@
         "core_text": {
           "expected_keys": 12,
           "strict_completed_keys": 12,
-          "v72_completed_keys": 8,
+          "v72_completed_keys": 12,
           "running_jobs": [],
-          "pending_jobs": [
-            "p7v72k_t1_ct_ic_h30",
-            "p7v72k_t1_ct_ic_h14",
-            "p7v72k_t1_ct_ic_h7",
-            "p7v72k_t1_ct_ic_h1"
-          ],
+          "pending_jobs": [],
           "targets": {
             "funding_raised_usd": {
               "expected_keys": 4,
@@ -224,23 +215,23 @@
             "investors_count": {
               "expected_keys": 4,
               "strict_completed_keys": 4,
-              "v72_completed_keys": 0,
+              "v72_completed_keys": 4,
               "horizons": {
                 "1": {
                   "strict_completed": true,
-                  "v72_completed": false
+                  "v72_completed": true
                 },
                 "7": {
                   "strict_completed": true,
-                  "v72_completed": false
+                  "v72_completed": true
                 },
                 "14": {
                   "strict_completed": true,
-                  "v72_completed": false
+                  "v72_completed": true
                 },
                 "30": {
                   "strict_completed": true,
-                  "v72_completed": false
+                  "v72_completed": true
                 }
               }
             },
@@ -354,21 +345,13 @@
     "task2_forecast": {
       "expected_keys": 32,
       "strict_completed_keys": 32,
-      "v72_completed_keys": 24,
+      "v72_completed_keys": 32,
       "running_jobs": [],
       "pending_jobs": [
-        "p7v72k_t2_ct_ic_h30",
-        "p7v72k_t2_ct_ic_h14",
-        "p7v72k_t2_ct_ic_h7",
-        "p7v72k_t2_ct_ic_h1",
-        "p7v72k_t2_co_ic_h30",
-        "p7v72k_t2_co_ic_h14",
-        "p7v72k_t2_co_ic_h7",
-        "p7v72k_t2_co_ic_h1",
-        "p7xF_fdr_t2_co",
-        "p7xF_fdr_t2_ct",
+        "p7xF_fdr_t2_fu",
         "p7xF_fdr_t2_ce",
-        "p7xF_fdr_t2_fu"
+        "p7xF_fdr_t2_ct",
+        "p7xF_fdr_t2_co"
       ],
       "ablations": {
         "core_edgar": {
@@ -431,13 +414,9 @@
         "core_only": {
           "expected_keys": 8,
           "strict_completed_keys": 8,
-          "v72_completed_keys": 4,
+          "v72_completed_keys": 8,
           "running_jobs": [],
           "pending_jobs": [
-            "p7v72k_t2_co_ic_h30",
-            "p7v72k_t2_co_ic_h14",
-            "p7v72k_t2_co_ic_h7",
-            "p7v72k_t2_co_ic_h1",
             "p7xF_fdr_t2_co"
           ],
           "targets": {
@@ -467,23 +446,23 @@
             "investors_count": {
               "expected_keys": 4,
               "strict_completed_keys": 4,
-              "v72_completed_keys": 0,
+              "v72_completed_keys": 4,
               "horizons": {
                 "1": {
                   "strict_completed": true,
-                  "v72_completed": false
+                  "v72_completed": true
                 },
                 "7": {
                   "strict_completed": true,
-                  "v72_completed": false
+                  "v72_completed": true
                 },
                 "14": {
                   "strict_completed": true,
-                  "v72_completed": false
+                  "v72_completed": true
                 },
                 "30": {
                   "strict_completed": true,
-                  "v72_completed": false
+                  "v72_completed": true
                 }
               }
             }
@@ -492,13 +471,9 @@
         "core_text": {
           "expected_keys": 8,
           "strict_completed_keys": 8,
-          "v72_completed_keys": 4,
+          "v72_completed_keys": 8,
           "running_jobs": [],
           "pending_jobs": [
-            "p7v72k_t2_ct_ic_h30",
-            "p7v72k_t2_ct_ic_h14",
-            "p7v72k_t2_ct_ic_h7",
-            "p7v72k_t2_ct_ic_h1",
             "p7xF_fdr_t2_ct"
           ],
           "targets": {
@@ -528,23 +503,23 @@
             "investors_count": {
               "expected_keys": 4,
               "strict_completed_keys": 4,
-              "v72_completed_keys": 0,
+              "v72_completed_keys": 4,
               "horizons": {
                 "1": {
                   "strict_completed": true,
-                  "v72_completed": false
+                  "v72_completed": true
                 },
                 "7": {
                   "strict_completed": true,
-                  "v72_completed": false
+                  "v72_completed": true
                 },
                 "14": {
                   "strict_completed": true,
-                  "v72_completed": false
+                  "v72_completed": true
                 },
                 "30": {
                   "strict_completed": true,
-                  "v72_completed": false
+                  "v72_completed": true
                 }
               }
             }
@@ -612,12 +587,12 @@
     "task3_risk_adjust": {
       "expected_keys": 24,
       "strict_completed_keys": 24,
-      "v72_completed_keys": 20,
+      "v72_completed_keys": 24,
       "running_jobs": [],
       "pending_jobs": [
-        "p7xF_fdr_t3_co",
+        "p7xF_fdr_t3_fu",
         "p7xF_fdr_t3_ce",
-        "p7xF_fdr_t3_fu"
+        "p7xF_fdr_t3_co"
       ],
       "ablations": {
         "core_edgar": {
@@ -680,7 +655,7 @@
         "core_only": {
           "expected_keys": 8,
           "strict_completed_keys": 8,
-          "v72_completed_keys": 4,
+          "v72_completed_keys": 8,
           "running_jobs": [],
           "pending_jobs": [
             "p7xF_fdr_t3_co"
@@ -712,23 +687,23 @@
             "investors_count": {
               "expected_keys": 4,
               "strict_completed_keys": 4,
-              "v72_completed_keys": 0,
+              "v72_completed_keys": 4,
               "horizons": {
                 "1": {
                   "strict_completed": true,
-                  "v72_completed": false
+                  "v72_completed": true
                 },
                 "7": {
                   "strict_completed": true,
-                  "v72_completed": false
+                  "v72_completed": true
                 },
                 "14": {
                   "strict_completed": true,
-                  "v72_completed": false
+                  "v72_completed": true
                 },
                 "30": {
                   "strict_completed": true,
-                  "v72_completed": false
+                  "v72_completed": true
                 }
               }
             }
@@ -796,7 +771,7 @@
   },
   "active_jobs_nested": {
     "total_running": 0,
-    "total_pending": 20,
+    "total_pending": 8,
     "by_group": {
       "autofit_v72_completion": {
         "RUNNING": 0,
@@ -820,7 +795,7 @@
       },
       "other_active": {
         "RUNNING": 0,
-        "PENDING": 12
+        "PENDING": 0
       }
     }
   },
@@ -854,7 +829,7 @@
   "queue_bottlenecks": [
     {
       "reason": "(QOSGrpNodeLimit)",
-      "count": 20
+      "count": 8
     }
   ],
   "evidence": {

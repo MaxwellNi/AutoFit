@@ -1,0 +1,64 @@
+{
+  "snapshot_ts": "2026-02-26T15:18:55.800807+00:00",
+  "running_total": 1,
+  "pending_total": 18,
+  "running_by_partition": {
+    "bigmem": 1
+  },
+  "pending_by_partition": {
+    "bigmem": 10,
+    "gpu": 8
+  },
+  "pending_reason_topk": [
+    {
+      "reason": "(QOSGrpNodeLimit)",
+      "count": 18
+    }
+  ],
+  "qos_caps": {
+    "iris-batch-long": {
+      "MaxJobsPU": "8",
+      "MaxWall": "14-00:00:00",
+      "Priority": "100"
+    },
+    "iris-gpu-long": {
+      "MaxJobsPU": "4",
+      "MaxWall": "14-00:00:00",
+      "Priority": "100"
+    }
+  },
+  "prefix_status_squeue": {
+    "p7": {},
+    "p7r": {},
+    "p7x": {},
+    "p7xF": {
+      "PENDING": 8
+    }
+  },
+  "prefix_status_sacct": {
+    "p7": {
+      "COMPLETED": 178,
+      "CANCELLED": 66,
+      "OUT_OF_ME": 4,
+      "FAILED": 12
+    },
+    "p7r": {
+      "CANCELLED": 4,
+      "COMPLETED": 10
+    },
+    "p7x": {
+      "COMPLETED": 88,
+      "CANCELLED": 33
+    },
+    "p7xF": {
+      "COMPLETED": 58,
+      "PENDING": 8,
+      "CANCELLED": 11
+    }
+  },
+  "commands": {
+    "squeue": "squeue -u $USER -h -o \"%T %j %P %R\"",
+    "sacct": "sacct -u $USER -S 2026-02-12 -n -X -o JobName,State",
+    "qos": "sacctmgr show qos iris-batch-long,iris-gpu-long format=Name,MaxJobsPU,MaxWall,Priority -P -n"
+  }
+}

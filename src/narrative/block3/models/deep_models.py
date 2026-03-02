@@ -360,11 +360,52 @@ PRODUCTION_CONFIGS: Dict[str, Dict[str, Any]] = {
         "val_check_steps": 50,
         "scaler_type": "robust",
     },
+    # ================================================================
+    # Phase 7b SOTA additions (NeuralForecast 3.1.4)
+    # ================================================================
+    "xLSTM": {
+        # Beck et al., ICML 2024 — Extended LSTM with exponential gating
+        # and matrix memory for improved long-range dependencies
+        "input_size": 60,
+        "max_steps": 1000,
+        "hidden_size": 256,
+        "batch_size": 64,
+        "learning_rate": 1e-3,
+        "early_stop_patience_steps": 10,
+        "val_check_steps": 50,
+        "scaler_type": "robust",
+    },
+    "TimeLLM": {
+        # Jin et al., ICLR 2024 — Time-LLM: reprogramming LLM for TS
+        # Patches time series into prompt tokens for frozen LLM backbone
+        "input_size": 64,
+        "max_steps": 2000,
+        "hidden_size": 128,
+        "batch_size": 32,
+        "learning_rate": 1e-4,
+        "early_stop_patience_steps": 10,
+        "val_check_steps": 100,
+        "scaler_type": "robust",
+    },
+    "DeepNPTS": {
+        # Rangapuram et al., NeurIPS 2023 — Deep Non-Parametric TS
+        # Distribution-free forecaster with mixture density output
+        "input_size": 60,
+        "max_steps": 1000,
+        "batch_size": 64,
+        "learning_rate": 1e-3,
+        "early_stop_patience_steps": 10,
+        "val_check_steps": 50,
+        "scaler_type": "robust",
+    },
 }
 
 # Models that require n_series parameter (multivariate / cross-series)
 _NEEDS_N_SERIES = {"iTransformer", "TSMixer", "TSMixerx", "RMoK", "SOFTS",
                    "StemGNN", "TimeMixer", "TimeXer"}
+
+# TimeLLM uses n_series for cross-series aware prompt construction
+_NEEDS_N_SERIES.add("TimeLLM")
 
 
 # ============================================================================
@@ -687,6 +728,7 @@ class DeepModelWrapper(ModelBase):
             Informer, Autoformer, FEDformer, VanillaTransformer,
             TiDE, NBEATSx, BiTCN, KAN, RMoK, SOFTS, StemGNN,
             DLinear, NLinear, TimeMixer, TimeXer, TSMixerx,
+            xLSTM, TimeLLM, DeepNPTS,
         )
 
         _cls = {
@@ -699,6 +741,8 @@ class DeepModelWrapper(ModelBase):
             "KAN": KAN, "RMoK": RMoK, "SOFTS": SOFTS, "StemGNN": StemGNN,
             "DLinear": DLinear, "NLinear": NLinear,
             "TimeMixer": TimeMixer, "TimeXer": TimeXer, "TSMixerx": TSMixerx,
+            # Phase 7b SOTA additions
+            "xLSTM": xLSTM, "TimeLLM": TimeLLM, "DeepNPTS": DeepNPTS,
         }
         if self.model_name not in _cls:
             raise ValueError(f"Unknown NF model: {self.model_name}")
@@ -781,8 +825,16 @@ class DeepModelWrapper(ModelBase):
                        e_layers=cfg.get("e_layers", 2),
                        d_ff=cfg.get("d_ff", 256))
 
+        # Phase 7b SOTA additions
+        if self.model_name == "TimeLLM":
+            return cls(**common, n_series=n_series,
+                       hidden_size=cfg.get("hidden_size", 128))
+
+        if self.model_name == "DeepNPTS":
+            return cls(**common)
+
         # TimesNet, Informer, Autoformer, FEDformer, VanillaTransformer,
-        # TiDE, BiTCN, KAN — all take hidden_size
+        # TiDE, BiTCN, KAN, xLSTM — all take hidden_size
         if "hidden_size" in cfg:
             return cls(**common, hidden_size=cfg["hidden_size"])
 
@@ -1582,6 +1634,11 @@ create_timemixer = _nf_factory("TimeMixer")
 create_timexer = _nf_factory("TimeXer")
 create_tsmixerx = _nf_factory("TSMixerx")
 
+# Phase 7b SOTA additions (NeuralForecast 3.1.4)
+create_xlstm = _nf_factory("xLSTM")
+create_timellm = _nf_factory("TimeLLM")
+create_deepnpts = _nf_factory("DeepNPTS", prob=True)
+
 # foundation
 create_chronos = _fm_factory("Chronos", "chronos")
 create_chronos_bolt = _fm_factory("ChronosBolt", "chronos")
@@ -1630,6 +1687,10 @@ TRANSFORMER_MODELS = {
     "DLinear": create_dlinear, "NLinear": create_nlinear,
     "TimeMixer": create_timemixer, "TimeXer": create_timexer,
     "TSMixerx": create_tsmixerx,
+    # Phase 7b SOTA additions
+    "xLSTM": create_xlstm,
+    "TimeLLM": create_timellm,
+    "DeepNPTS": create_deepnpts,
 }
 
 FOUNDATION_MODELS = {

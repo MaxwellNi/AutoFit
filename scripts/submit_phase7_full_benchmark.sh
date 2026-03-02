@@ -14,7 +14,7 @@
 #   ml_tabular (15):     batch — CPU-only sklearn/LightGBM, needs RAM for 5.7M rows
 #   statistical (5):     batch — CPU-only StatsForecast, modest compute
 #   deep_classical (4):  gpu — NeuralForecast, moderate VRAM
-#   transformer_sota (20): gpu — NeuralForecast, split into 2-3 shards for parallelism
+#   transformer_sota (23): gpu — NeuralForecast, split into 3 shards for parallelism
 #   foundation (11):     gpu — Chronos/Moirai/HF models, split by family
 #   irregular (2):       gpu — PyPOTS GRU-D/SAITS, light GPU
 #   autofit (11):        batch — mostly tree-based CV, heavy CPU
@@ -425,6 +425,7 @@ done
 # ============================================================================
 TSOTA_A="PatchTST,iTransformer,TimesNet,TSMixer,Informer,Autoformer,FEDformer,VanillaTransformer,TiDE,NBEATSx"
 TSOTA_B="BiTCN,KAN,RMoK,SOFTS,StemGNN,DLinear,NLinear,TimeMixer,TimeXer,TSMixerx"
+TSOTA_C="xLSTM,TimeLLM,DeepNPTS"
 
 echo ""
 echo "--- transformer_sota shard A (10 models, gpu 1×V100 14c 320GB) ---"
@@ -444,6 +445,16 @@ for ta in "${ALL_TASKS_ABLATIONS[@]}"; do
         "p7_tsB_$(task_abbrev $TASK)_$(abl_abbrev $ABL)" \
         "gpu" "iris-gpu-long" "2-00:00:00" "320G" "14" "gpu:volta:1" \
         "$TASK" "transformer_sota" "$ABL" "$TSOTA_B" ""
+done
+
+echo ""
+echo "--- transformer_sota shard C (3 new models, gpu 1×V100 14c 320GB) ---"
+for ta in "${ALL_TASKS_ABLATIONS[@]}"; do
+    IFS=':' read -r TASK ABL <<< "$ta"
+    submit_job \
+        "p7_tsC_$(task_abbrev $TASK)_$(abl_abbrev $ABL)" \
+        "gpu" "iris-gpu-long" "2-00:00:00" "320G" "14" "gpu:volta:1" \
+        "$TASK" "transformer_sota" "$ABL" "$TSOTA_C" ""
 done
 
 # ============================================================================
@@ -552,7 +563,7 @@ echo "Job breakdown:"
 echo "  ml_tabular:       11 jobs (batch 28c 112GB, 2d)"
 echo "  statistical:      11 jobs (batch 14c 64GB, 2d)"
 echo "  deep_classical:   11 jobs (gpu 1×V100 14c 256GB, 2d)"
-echo "  transformer_sota: 22 jobs (gpu 1×V100 14c 320GB, 2d) [2 shards]"
+echo "  transformer_sota: 33 jobs (gpu 1×V100 14c 320GB, 2d) [3 shards: A(10)+B(10)+C(3)]"
 echo "  foundation:       33 jobs (gpu 1×V100 14c 256GB, 2d) [3 shards]"
 echo "  irregular:        11 jobs (gpu 1×V100 7c 128GB, 1d)"
 echo "  autofit:          22 jobs (batch 28c 112GB, 2d) [2 shards]"

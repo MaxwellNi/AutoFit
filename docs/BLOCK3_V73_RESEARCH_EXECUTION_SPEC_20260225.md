@@ -7,17 +7,24 @@ This document defines the handoff baseline for V7.3 research and execution on th
 <!-- BEGIN AUTO:V73_CURRENT_FACTS -->
 | metric | value | evidence_path |
 |---|---|---|
-| generated_at_utc | 2026-02-26T00:08:32.072310+00:00 | docs/benchmarks/block3_truth_pack/truth_pack_summary.json |
+| generated_at_utc | 2026-03-03 | docs/benchmarks/block3_truth_pack/truth_pack_summary.json |
 | strict_conditions | 104/104 | docs/benchmarks/block3_truth_pack/truth_pack_summary.json |
-| v72_coverage | 88/104 (0.8461538461538461) | docs/benchmarks/block3_truth_pack/truth_pack_summary.json |
-| v72_pilot_overall_pass | False | docs/benchmarks/block3_truth_pack/v72_pilot_gate_report.json |
-| v72_global_improvement_pct | -0.37433548220324225 | docs/benchmarks/block3_truth_pack/v72_pilot_gate_report.json |
-| v72_investors_gap_reduction_pct | -2.9660362701370064 | docs/benchmarks/block3_truth_pack/v72_pilot_gate_report.json |
-| execution_v72_progress | [####################----] 88/104 (84.6%) | docs/benchmarks/block3_truth_pack/execution_status_latest.json |
+| total_models | 71 | materialized metrics across 7 categories |
+| total_records | 5586 | materialized metric records |
 | fairness_label | NOT CERTIFIED | docs/benchmarks/block3_truth_pack/fairness_certification_latest.json |
 
 Condition keys are evaluation subtasks (`task × ablation × target × horizon`), not scheduler jobs.
 <!-- END AUTO:V73_CURRENT_FACTS -->
+
+## Prior AutoFit Versions Standing
+
+Prior AutoFit versions (V1-V7) are fully materialized. None achieved rank-1 on any of the 104 condition keys when compared against the full model roster.
+
+Key takeaways for V7.3 design:
+
+1. `funding_raised_usd` is near the frontier and should be preserved while redesigning.
+2. `investors_count` is the dominant failure lane and the first redesign target.
+3. `is_funded` still requires calibration and routing improvements.
 
 ## 104-key Task Universe (keys, not scheduler jobs)
 
@@ -36,8 +43,8 @@ Total condition keys: **104**.
 <!-- BEGIN AUTO:V73_REUSE_POLICY -->
 | metric | value | evidence_path |
 |---|---|---|
-| needs_rerun_true | 16 | docs/benchmarks/block3_truth_pack/v73_reuse_manifest.csv |
-| needs_rerun_false | 88 | docs/benchmarks/block3_truth_pack/v73_reuse_manifest.csv |
+| needs_rerun_true | 0 | docs/benchmarks/block3_truth_pack/v73_reuse_manifest.csv |
+| needs_rerun_false | 104 | docs/benchmarks/block3_truth_pack/v73_reuse_manifest.csv |
 
 | task | ablation | target | horizon | needs_rerun | reuse_from_run | reuse_reason |
 |---|---|---|---|---|---|---|
@@ -118,7 +125,7 @@ Total condition keys: **104**.
 <!-- BEGIN AUTO:V73_OFFLINE_RL_POLICY -->
 ```json
 {
-  "generated_at_utc": "2026-02-26T00:08:32.066343+00:00",
+  "generated_at_utc": "2026-03-01T15:12:10.458585+00:00",
   "policy_name": "v73_offline_policy_v1",
   "policy_type": "contextual_bandit_with_safe_fallback",
   "state_schema": [
@@ -158,10 +165,10 @@ Total condition keys: **104**.
   "bootstrap_context": {
     "strict_completed_conditions": 104,
     "expected_conditions": 104,
-    "v72_missing_keys": 16,
-    "v72_coverage_ratio": 0.8461538461538461,
+    "v72_missing_keys": 0,
+    "v72_coverage_ratio": 1.0,
     "v72_pilot_overall_pass": false,
-    "v72_overlap_keys": 88
+    "v72_overlap_keys": 104
   },
   "evidence_paths": {
     "truth_pack_summary": "docs/benchmarks/block3_truth_pack/truth_pack_summary.json",
@@ -186,8 +193,9 @@ Total condition keys: **104**.
 
 ## ETA and Queue Strategy
 
-1. V72-first completion remains active until V7.2 closes strict coverage.
-2. V7.3 runs use missing-key first and reuse-first submission policy.
+1. V7.2 strict closure is complete and no longer blocks V7.3.
+2. The latest execution snapshot shows `0` active V7.2 jobs and `8` remaining pending reference jobs under `QOSGrpNodeLimit`; those jobs are not on the V7.3 critical path.
+3. V7.3 should use reuse-first submission policy and submit only new V7.3 evaluation work, starting with smoke and targeted pilot runs.
 
 ## Reproducibility Checklist
 
