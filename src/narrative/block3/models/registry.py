@@ -14,7 +14,7 @@ Unified interface for all 76 models across 7 categories:
   - foundation      (11): Chronos, ChronosBolt, Chronos2, Moirai, MoiraiLarge,
                            Moirai2, Timer, TimeMoE, MOMENT, LagLlama, TimesFM
   - irregular        (2): GRU-D, SAITS
-  - autofit         (14): V1, V2, V2E, V3, V3E, V3Max, V4, V5, V6, V7, V71, V72, V73, V731
+  - autofit         (15): V1, V2, V2E, V3, V3E, V3Max, V4, V5, V6, V7, V71, V72, V73, V731, V732
 """
 from __future__ import annotations
 
