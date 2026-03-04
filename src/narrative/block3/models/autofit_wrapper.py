@@ -7582,6 +7582,26 @@ def get_fused_champion(**kwargs):
     return FusedChampionWrapper(**kwargs)
 
 
+def get_autofit_v733(**kwargs):
+    """AutoFit V7.3.3 — NF-Native Adaptive Champion.
+
+    Data-driven oracle + NeuralForecast native training pipeline.
+    Fixes all 8 root causes of V7.3.2 failure (see docs/BLOCK3_V733_ROOT_CAUSE_AND_DESIGN.md).
+    """
+    from .nf_adaptive_champion import NFAdaptiveChampionWrapper
+    stack_k = kwargs.pop("stack_k", 1)
+    kwargs.pop("top_k", None)
+    return NFAdaptiveChampionWrapper(stack_k=stack_k, **kwargs)
+
+
+def get_nf_adaptive_champion(**kwargs):
+    """Alias for V7.3.3 with stacking mode (top-3 ensemble)."""
+    from .nf_adaptive_champion import NFAdaptiveChampionWrapper
+    stack_k = kwargs.pop("stack_k", 3)
+    kwargs.pop("top_k", None)
+    return NFAdaptiveChampionWrapper(stack_k=stack_k, **kwargs)
+
+
 AUTOFIT_MODELS = {
     "AutoFitV1": get_autofit_v1,
     "AutoFitV2": get_autofit_v2,
@@ -7599,4 +7619,6 @@ AUTOFIT_MODELS = {
     "AutoFitV731": get_autofit_v731,
     "AutoFitV732": get_autofit_v732,
     "FusedChampion": get_fused_champion,
+    "AutoFitV733": get_autofit_v733,
+    "NFAdaptiveChampion": get_nf_adaptive_champion,
 }

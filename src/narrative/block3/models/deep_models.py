@@ -398,6 +398,73 @@ PRODUCTION_CONFIGS: Dict[str, Dict[str, Any]] = {
         "val_check_steps": 50,
         "scaler_type": "robust",
     },
+    # ================================================================
+    # Phase 7c: Additional NF 3.1.4 baselines
+    # ================================================================
+    "GRU": {
+        # Cho et al., 2014 — Gated Recurrent Unit
+        "input_size": 60,
+        "max_steps": 1000,
+        "encoder_hidden_size": 200,
+        "decoder_hidden_size": 128,
+        "batch_size": 128,
+        "learning_rate": 1e-3,
+        "num_lr_decays": 3,
+        "early_stop_patience_steps": 10,
+        "val_check_steps": 50,
+        "scaler_type": "robust",
+    },
+    "LSTM": {
+        # Hochreiter & Schmidhuber, 1997 — Long Short-Term Memory
+        "input_size": 60,
+        "max_steps": 1000,
+        "encoder_hidden_size": 128,
+        "decoder_hidden_size": 128,
+        "batch_size": 128,
+        "learning_rate": 1e-3,
+        "num_lr_decays": 3,
+        "early_stop_patience_steps": 10,
+        "val_check_steps": 50,
+        "scaler_type": "robust",
+    },
+    "TCN": {
+        # Bai et al., 2018 — Temporal Convolutional Network
+        "input_size": 60,
+        "max_steps": 1000,
+        "encoder_hidden_size": 128,
+        "decoder_hidden_size": 128,
+        "batch_size": 128,
+        "learning_rate": 1e-3,
+        "num_lr_decays": 3,
+        "early_stop_patience_steps": 10,
+        "val_check_steps": 50,
+        "scaler_type": "robust",
+    },
+    "MLP": {
+        # Simple multi-layer perceptron baseline
+        "input_size": 60,
+        "max_steps": 1000,
+        "hidden_size": 1024,
+        "batch_size": 128,
+        "learning_rate": 1e-3,
+        "num_lr_decays": 3,
+        "early_stop_patience_steps": 10,
+        "val_check_steps": 50,
+        "scaler_type": "robust",
+    },
+    "DilatedRNN": {
+        # Chang et al., NeurIPS 2017 — Dilated Recurrent Neural Network
+        "input_size": 60,
+        "max_steps": 1000,
+        "encoder_hidden_size": 128,
+        "decoder_hidden_size": 128,
+        "batch_size": 128,
+        "learning_rate": 1e-3,
+        "num_lr_decays": 3,
+        "early_stop_patience_steps": 10,
+        "val_check_steps": 50,
+        "scaler_type": "robust",
+    },
 }
 
 # Models that require n_series parameter (multivariate / cross-series)
@@ -729,6 +796,7 @@ class DeepModelWrapper(ModelBase):
             TiDE, NBEATSx, BiTCN, KAN, RMoK, SOFTS, StemGNN,
             DLinear, NLinear, TimeMixer, TimeXer, TSMixerx,
             xLSTM, TimeLLM, DeepNPTS,
+            GRU, LSTM, TCN, MLP, DilatedRNN,
         )
 
         _cls = {
@@ -743,6 +811,9 @@ class DeepModelWrapper(ModelBase):
             "TimeMixer": TimeMixer, "TimeXer": TimeXer, "TSMixerx": TSMixerx,
             # Phase 7b SOTA additions
             "xLSTM": xLSTM, "TimeLLM": TimeLLM, "DeepNPTS": DeepNPTS,
+            # Phase 7c: additional NF 3.1.4 baselines
+            "GRU": GRU, "LSTM": LSTM, "TCN": TCN, "MLP": MLP,
+            "DilatedRNN": DilatedRNN,
         }
         if self.model_name not in _cls:
             raise ValueError(f"Unknown NF model: {self.model_name}")
@@ -833,8 +904,14 @@ class DeepModelWrapper(ModelBase):
         if self.model_name == "DeepNPTS":
             return cls(**common)
 
+        # GRU, LSTM, TCN, DilatedRNN — use encoder/decoder hidden size
+        if self.model_name in ("GRU", "LSTM", "TCN", "DilatedRNN"):
+            return cls(**common,
+                       encoder_hidden_size=cfg["encoder_hidden_size"],
+                       decoder_hidden_size=cfg["decoder_hidden_size"])
+
         # TimesNet, Informer, Autoformer, FEDformer, VanillaTransformer,
-        # TiDE, BiTCN, KAN, xLSTM — all take hidden_size
+        # TiDE, BiTCN, KAN, xLSTM, MLP — all take hidden_size
         if "hidden_size" in cfg:
             return cls(**common, hidden_size=cfg["hidden_size"])
 
@@ -1639,6 +1716,13 @@ create_xlstm = _nf_factory("xLSTM")
 create_timellm = _nf_factory("TimeLLM")
 create_deepnpts = _nf_factory("DeepNPTS", prob=True)
 
+# Phase 7c: Additional NF 3.1.4 models for full benchmark coverage
+create_gru = _nf_factory("GRU")
+create_lstm = _nf_factory("LSTM")
+create_tcn = _nf_factory("TCN")
+create_mlp = _nf_factory("MLP")
+create_dilatedrnn = _nf_factory("DilatedRNN")
+
 # foundation
 create_chronos = _fm_factory("Chronos", "chronos")
 create_chronos_bolt = _fm_factory("ChronosBolt", "chronos")
@@ -1672,6 +1756,10 @@ create_timesfm = _hf_fm_factory("TimesFM", "docker")
 DEEP_MODELS = {
     "NBEATS": create_nbeats, "NHITS": create_nhits,
     "TFT": create_tft, "DeepAR": create_deepar,
+    # Phase 7c: additional NF 3.1.4 baselines
+    "GRU": create_gru, "LSTM": create_lstm,
+    "TCN": create_tcn, "MLP": create_mlp,
+    "DilatedRNN": create_dilatedrnn,
 }
 
 TRANSFORMER_MODELS = {
