@@ -7571,6 +7571,17 @@ def get_autofit_v732(**kwargs) -> AutoFitV732Wrapper:
     return AutoFitV732Wrapper(top_k=top_k, **kwargs)
 
 
+def get_fused_champion(**kwargs):
+    """AutoFit V7.3.2 FusedChampion — Standalone PyTorch expert backend.
+
+    Same oracle routing as V7.3.2, but uses standalone PyTorch expert
+    modules extracted from NeuralForecast (no NF/PL runtime dependency).
+    """
+    from .fused_champion import FusedChampionWrapper
+    kwargs.pop("top_k", None)
+    return FusedChampionWrapper(**kwargs)
+
+
 AUTOFIT_MODELS = {
     "AutoFitV1": get_autofit_v1,
     "AutoFitV2": get_autofit_v2,
@@ -7587,4 +7598,5 @@ AUTOFIT_MODELS = {
     "AutoFitV73": get_autofit_v73,
     "AutoFitV731": get_autofit_v731,
     "AutoFitV732": get_autofit_v732,
+    "FusedChampion": get_fused_champion,
 }
