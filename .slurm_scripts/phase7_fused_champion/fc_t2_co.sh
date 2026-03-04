@@ -4,7 +4,7 @@
 #SBATCH --partition=l40s
 #SBATCH --qos=iris-snt
 #SBATCH --time=1-00:00:00
-#SBATCH --mem=64G
+#SBATCH --mem=128G
 #SBATCH --cpus-per-task=8
 #SBATCH --gres=gpu:1
 #SBATCH --output=/work/projects/eint/logs/phase7_fused_champion/fc_t2_co_%j.out
