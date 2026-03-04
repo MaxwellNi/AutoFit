@@ -837,22 +837,37 @@ class FusedChampionNet(nn.Module):
 def _robust_scale_batch(
     x: torch.Tensor,
 ) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
-    """Per-sample robust scaling: (x - median) / IQR.
+    """Per-sample robust scaling: (x - median) / scale.
 
     Matches NeuralForecast's 'robust' scaler type which is used by all
     champion model production configs.
+
+    Uses a fallback chain for zero-IQR windows (constant-value series):
+      IQR  →  std  →  1% of |median|  →  1.0
+    This prevents catastrophic loss explosion for sparse targets
+    (e.g. funding_raised_usd) where many entity windows are constant.
 
     Args:
         x: [B, L] input batch
 
     Returns:
-        x_scaled, median, iqr — all broadcastable with x
+        x_scaled, median, scale — all broadcastable with x
     """
     median = x.median(dim=-1, keepdim=True).values
     q1 = torch.quantile(x.float(), 0.25, dim=-1, keepdim=True)
     q3 = torch.quantile(x.float(), 0.75, dim=-1, keepdim=True)
-    iqr = (q3 - q1).clamp(min=1e-8)
-    return (x - median) / iqr, median, iqr
+    iqr = q3 - q1
+
+    # Fallback chain for zero-IQR (constant or near-constant windows):
+    #   1) Use sample std if IQR ≈ 0
+    #   2) Use 1% of |median| if std ≈ 0 (constant window with non-zero level)
+    #   3) Use 1.0 as absolute floor (zero-valued constant window)
+    std = x.float().std(dim=-1, keepdim=True)
+    scale = torch.where(iqr > 1e-10, iqr, std)
+    adaptive_min = torch.clamp(median.abs() * 0.01, min=1.0)
+    scale = torch.where(scale > 1e-10, scale, adaptive_min)
+
+    return (x - median) / scale, median, scale
 
 
 def _robust_descale(
