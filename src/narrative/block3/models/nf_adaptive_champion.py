@@ -81,11 +81,15 @@ ORACLE_TABLE: Dict[Tuple[str, int, str], List[str]] = {
 }
 
 # Models that use the foundation model path (zero-shot, no NF training)
-_FOUNDATION_MODELS = {
+# Split into Chronos-family (FoundationModelWrapper) and HF-family (HFFoundationModelWrapper)
+_CHRONOS_FOUNDATION_MODELS = {
     "Chronos", "ChronosBolt", "Chronos2",
     "Moirai", "MoiraiLarge", "Moirai2",
+}
+_HF_FOUNDATION_MODELS = {
     "Timer", "TimeMoE", "MOMENT", "LagLlama", "TimesFM",
 }
+_FOUNDATION_MODELS = _CHRONOS_FOUNDATION_MODELS | _HF_FOUNDATION_MODELS
 
 
 class NFAdaptiveChampionWrapper(ModelBase):
@@ -162,17 +166,27 @@ class NFAdaptiveChampionWrapper(ModelBase):
             FOUNDATION_MODELS,
             DeepModelWrapper,
             FoundationModelWrapper,
+            HFFoundationModelWrapper,
             PRODUCTION_CONFIGS,
         )
 
-        # Foundation models use a separate wrapper
-        if model_name in _FOUNDATION_MODELS:
+        # Chronos-family foundation models (Chronos, Moirai, etc.)
+        if model_name in _CHRONOS_FOUNDATION_MODELS:
             config = ModelConfig(
                 name=model_name,
                 model_type="regression",
                 params={"model_name": model_name},
             )
             return FoundationModelWrapper(config, model_name)
+
+        # HF foundation models (Timer, TimeMoE, MOMENT, LagLlama, TimesFM)
+        if model_name in _HF_FOUNDATION_MODELS:
+            config = ModelConfig(
+                name=model_name,
+                model_type="regression",
+                params={"model_name": model_name},
+            )
+            return HFFoundationModelWrapper(config, model_name)
 
         # All NF models use DeepModelWrapper
         if model_name in PRODUCTION_CONFIGS:
@@ -291,7 +305,9 @@ class NFAdaptiveChampionWrapper(ModelBase):
             f"trained in {elapsed:.1f}s"
         )
 
-        self._fitted = True
+        self._fitted = len(self._trained_models) > 0
+        if not self._fitted:
+            logger.error("[V7.3.3] TOTAL FAILURE: no models trained, predict() will raise")
         return self
 
     # ──────────────────────────────────────────────────────────────────
@@ -812,13 +828,14 @@ class NFAdaptiveChampionV735(NFAdaptiveChampionWrapper):
             gc.collect()
 
         elapsed = time.monotonic() - t0
+        actual_trained = [name for name, _ in self._trained_models]
         self._routing_info = {
             "path": "nf_native_adaptive",
             "version": "7.3.5",
             "oracle_key": str(oracle_key),
             "oracle_model": model_name,
-            "champion_template": model_name,  # for metrics telemetry
-            "trained_models": [name for name, _ in self._trained_models],
+            "champion_template": actual_trained[0] if actual_trained else f"{model_name}_FAILED",
+            "trained_models": actual_trained,
             "ensemble_weights": self._ensemble_weights,
             "elapsed_seconds": round(elapsed, 1),
         }
@@ -829,5 +846,10 @@ class NFAdaptiveChampionV735(NFAdaptiveChampionWrapper):
             f"trained in {elapsed:.1f}s"
         )
 
-        self._fitted = True
+        self._fitted = len(self._trained_models) > 0
+        if not self._fitted:
+            logger.error(
+                f"[V7.3.5] TOTAL FAILURE: no models trained for "
+                f"{oracle_key}, predict() will raise"
+            )
         return self

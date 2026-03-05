@@ -961,6 +961,18 @@ class DeepModelWrapper(ModelBase):
             f"scaler={cfg.get('scaler_type','?')}"
         )
         try:
+            # ── Deterministic seeding for reproducible NF training ──
+            # V735 "exact oracle" requires identical predictions to standalone
+            # baselines. Without seeding, NN weight init + SGD sampling are
+            # nondeterministic → different MAE each run.
+            import torch as _torch
+            _torch.manual_seed(42)
+            np.random.seed(42)
+            if _torch.cuda.is_available():
+                _torch.cuda.manual_seed_all(42)
+                _torch.backends.cudnn.deterministic = True
+                _torch.backends.cudnn.benchmark = False
+
             model = self._get_model(h_nf, n_series=n_series)
             # val_size=h_nf → last h_nf timesteps of each series used for validation
             # This enables proper early stopping via the patience parameter.
