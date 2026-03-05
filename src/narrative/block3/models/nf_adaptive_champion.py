@@ -652,66 +652,57 @@ class NFAdaptiveChampionV734(NFAdaptiveChampionWrapper):
 # Value: model_name (single best)
 # Populated after baseline re-run analysis. Initial values from V734 run data.
 ORACLE_TABLE_V735: Dict[Tuple[str, int, str], str] = {
-    # ── funding_raised_usd — core_only (77 features, verified match) ──
-    ("funding_raised_usd",  1, "core_only"):   "NBEATS",
-    ("funding_raised_usd",  7, "core_only"):   "NHITS",
-    ("funding_raised_usd", 14, "core_only"):   "GRU",
-    ("funding_raised_usd", 30, "core_only"):   "Chronos",
-    # ── funding_raised_usd — core_text (77 features, verified match) ──
-    ("funding_raised_usd",  1, "core_text"):   "NBEATS",
-    ("funding_raised_usd",  7, "core_text"):   "NHITS",
-    ("funding_raised_usd", 14, "core_text"):   "GRU",
-    ("funding_raised_usd", 30, "core_text"):   "Chronos",
-    # ── funding_raised_usd — core_edgar (105 features, post-rerun) ──
-    ("funding_raised_usd",  1, "core_edgar"):  "NBEATS",
-    ("funding_raised_usd",  7, "core_edgar"):  "NHITS",
-    ("funding_raised_usd", 14, "core_edgar"):  "Chronos",
-    ("funding_raised_usd", 30, "core_edgar"):  "Chronos",
-    # ── funding_raised_usd — full (105 features, post-rerun) ──
-    ("funding_raised_usd",  1, "full"):        "NBEATS",
-    ("funding_raised_usd",  7, "full"):        "NHITS",
-    ("funding_raised_usd", 14, "full"):        "Chronos",
-    ("funding_raised_usd", 30, "full"):        "Chronos",
-    # ── investors_count — core_only ──
-    ("investors_count",  1, "core_only"):      "KAN",
-    ("investors_count",  7, "core_only"):      "NBEATS",
-    ("investors_count", 14, "core_only"):      "NBEATSx",
-    ("investors_count", 30, "core_only"):      "NBEATS",
-    # ── investors_count — core_text ──
-    ("investors_count",  1, "core_text"):      "KAN",
-    ("investors_count",  7, "core_text"):      "NBEATS",
-    ("investors_count", 14, "core_text"):      "NBEATS",
-    ("investors_count", 30, "core_text"):      "NBEATS",
-    # ── investors_count — core_edgar (post-rerun) ──
-    ("investors_count",  1, "core_edgar"):     "KAN",
-    ("investors_count",  7, "core_edgar"):     "NBEATS",
-    ("investors_count", 14, "core_edgar"):     "NBEATS",
-    ("investors_count", 30, "core_edgar"):     "NBEATS",
-    # ── investors_count — full (post-rerun) ──
-    ("investors_count",  1, "full"):           "KAN",
-    ("investors_count",  7, "full"):           "NBEATS",
-    ("investors_count", 14, "full"):           "NBEATS",
-    ("investors_count", 30, "full"):           "NBEATS",
-    # ── is_funded — core_only ──
-    ("is_funded",  1, "core_only"):            "DeepNPTS",
-    ("is_funded",  7, "core_only"):            "DeepNPTS",
-    ("is_funded", 14, "core_only"):            "DeepNPTS",
-    ("is_funded", 30, "core_only"):            "DeepNPTS",
-    # ── is_funded — core_text ──
-    ("is_funded",  1, "core_text"):            "DeepNPTS",
-    ("is_funded",  7, "core_text"):            "DeepNPTS",
-    ("is_funded", 14, "core_text"):            "DeepNPTS",
-    ("is_funded", 30, "core_text"):            "DeepNPTS",
-    # ── is_funded — core_edgar (post-rerun) ──
-    ("is_funded",  1, "core_edgar"):           "PatchTST",
-    ("is_funded",  7, "core_edgar"):           "NHITS",
-    ("is_funded", 14, "core_edgar"):           "PatchTST",
-    ("is_funded", 30, "core_edgar"):           "NHITS",
-    # ── is_funded — full (post-rerun) ──
-    ("is_funded",  1, "full"):                 "PatchTST",
-    ("is_funded",  7, "full"):                 "DLinear",
-    ("is_funded", 14, "full"):                 "PatchTST",
-    ("is_funded", 30, "full"):                 "NHITS",
+    # ── funding_raised_usd ──
+    ("funding_raised_usd",  1, "core_edgar"):          "NBEATS",  # mae=374514.684039
+    ("funding_raised_usd",  1, "core_only"):           "NBEATS",  # mae=380659.459872
+    ("funding_raised_usd",  1, "core_text"):           "NBEATS",  # mae=380659.121097
+    ("funding_raised_usd",  1, "full"):                "NBEATSx",  # mae=374514.684034
+    ("funding_raised_usd",  7, "core_edgar"):          "NHITS",  # mae=374432.357414
+    ("funding_raised_usd",  7, "core_only"):           "NHITS",  # mae=380577.133247
+    ("funding_raised_usd",  7, "core_text"):           "NHITS",  # mae=380577.133247
+    ("funding_raised_usd",  7, "full"):                "NHITS",  # mae=374432.357414
+    ("funding_raised_usd", 14, "core_edgar"):          "Chronos",  # mae=374687.532864
+    ("funding_raised_usd", 14, "core_only"):           "GRU",  # mae=380653.915994
+    ("funding_raised_usd", 14, "core_text"):           "GRU",  # mae=380653.915994
+    ("funding_raised_usd", 14, "full"):                "Chronos",  # mae=374687.532864
+    ("funding_raised_usd", 30, "core_edgar"):          "Chronos",  # mae=374610.314103
+    ("funding_raised_usd", 30, "core_only"):           "Chronos",  # mae=380755.089936
+    ("funding_raised_usd", 30, "core_text"):           "Chronos",  # mae=380755.089936
+    ("funding_raised_usd", 30, "full"):                "Chronos",  # mae=374610.314103
+    # ── investors_count ──
+    ("investors_count",  1, "core_edgar"):          "KAN",  # mae=44.809991
+    ("investors_count",  1, "core_only"):           "KAN",  # mae=44.745049
+    ("investors_count",  1, "core_text"):           "KAN",  # mae=44.745049
+    ("investors_count",  1, "full"):                "KAN",  # mae=44.809991
+    ("investors_count",  7, "core_edgar"):          "NBEATS",  # mae=44.791632
+    ("investors_count",  7, "core_only"):           "NBEATS",  # mae=44.726689
+    ("investors_count",  7, "core_text"):           "NBEATS",  # mae=44.726689
+    ("investors_count",  7, "full"):                "NBEATS",  # mae=44.791632
+    ("investors_count", 14, "core_edgar"):          "NBEATS",  # mae=44.798978
+    ("investors_count", 14, "core_only"):           "NBEATS",  # mae=44.734036
+    ("investors_count", 14, "core_text"):           "NBEATS",  # mae=44.734036
+    ("investors_count", 14, "full"):                "NBEATS",  # mae=44.798978
+    ("investors_count", 30, "core_edgar"):          "NBEATS",  # mae=44.811699
+    ("investors_count", 30, "core_only"):           "NBEATS",  # mae=44.746757
+    ("investors_count", 30, "core_text"):           "NBEATS",  # mae=44.746757
+    ("investors_count", 30, "full"):                "NBEATS",  # mae=44.811699
+    # ── is_funded ──
+    ("is_funded",  1, "core_edgar"):          "PatchTST",  # mae=0.032367
+    ("is_funded",  1, "core_only"):           "DeepNPTS",  # mae=0.032956
+    ("is_funded",  1, "core_text"):           "DeepNPTS",  # mae=0.032956
+    ("is_funded",  1, "full"):                "PatchTST",  # mae=0.032294
+    ("is_funded",  7, "core_edgar"):          "NHITS",  # mae=0.032383
+    ("is_funded",  7, "core_only"):           "DeepNPTS",  # mae=0.032957
+    ("is_funded",  7, "core_text"):           "DeepNPTS",  # mae=0.032957
+    ("is_funded",  7, "full"):                "DLinear",  # mae=0.032379
+    ("is_funded", 14, "core_edgar"):          "PatchTST",  # mae=0.032355
+    ("is_funded", 14, "core_only"):           "DeepNPTS",  # mae=0.032954
+    ("is_funded", 14, "core_text"):           "DeepNPTS",  # mae=0.032954
+    ("is_funded", 14, "full"):                "PatchTST",  # mae=0.032281
+    ("is_funded", 30, "core_edgar"):          "NHITS",  # mae=0.032322
+    ("is_funded", 30, "core_only"):           "DeepNPTS",  # mae=0.032958
+    ("is_funded", 30, "core_text"):           "DeepNPTS",  # mae=0.032958
+    ("is_funded", 30, "full"):                "NHITS",  # mae=0.032322
 }
 
 
