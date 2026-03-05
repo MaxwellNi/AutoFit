@@ -7615,6 +7615,20 @@ def get_autofit_v734(**kwargs):
     return NFAdaptiveChampionV734(stack_k=stack_k, **kwargs)
 
 
+def get_autofit_v735(**kwargs):
+    """AutoFit V7.3.5 — Exact Condition-Level Oracle.
+
+    Uses exact (target, horizon, ablation) oracle keys instead of
+    coarse (target_type, horizon, ablation_class). Single model
+    selection for deterministic predictions. Designed for post-baseline-rerun
+    where all models use aligned feature pipelines.
+    """
+    from .nf_adaptive_champion import NFAdaptiveChampionV735
+    stack_k = kwargs.pop("stack_k", 1)
+    kwargs.pop("top_k", None)
+    return NFAdaptiveChampionV735(stack_k=stack_k, **kwargs)
+
+
 AUTOFIT_MODELS = {
     "AutoFitV1": get_autofit_v1,
     "AutoFitV2": get_autofit_v2,
@@ -7635,4 +7649,5 @@ AUTOFIT_MODELS = {
     "AutoFitV733": get_autofit_v733,
     "NFAdaptiveChampion": get_nf_adaptive_champion,
     "AutoFitV734": get_autofit_v734,
+    "AutoFitV735": get_autofit_v735,
 }
