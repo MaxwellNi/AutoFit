@@ -95,6 +95,10 @@ TSLIB_CONFIGS: Dict[str, Dict[str, Any]] = {
         "d_model": 128, "d_ff": 256, "n_heads": 8, "e_layers": 2,
         "dropout": 0.1, "top_k": 5, "activation": "gelu",
         "factor": 1,
+        # MSGNet-specific graph convolution params
+        "conv_channel": 32, "skip_channel": 32, "gcn_depth": 2,
+        "propalpha": 0.05, "node_dim": 40, "individual": 0,
+        "subgraph_size": 20,
     },
     "PAttn": {
         "venue": "NeurIPS 2024",
@@ -121,6 +125,7 @@ TSLIB_CONFIGS: Dict[str, Dict[str, Any]] = {
         "d_model": 128, "d_ff": 256, "n_heads": 8, "e_layers": 2,
         "dropout": 0.1, "activation": "gelu",
         "factor": 1,
+        "channel_independence": 1,  # FreTS: 1=channel-independent
     },
     "Crossformer": {
         "venue": "ICLR 2023",
@@ -153,6 +158,7 @@ TSLIB_CONFIGS: Dict[str, Dict[str, Any]] = {
         "d_model": 128, "d_ff": 256, "n_heads": 8, "e_layers": 2,
         "d_layers": 1, "dropout": 0.1, "modes1": 32, "mode_type": 0,
         "activation": "gelu", "factor": 1,
+        "ratio": 0.5,  # FiLM: Legendre projection ratio
     },
     "SCINet": {
         "venue": "NeurIPS 2022",
@@ -211,10 +217,37 @@ class TSLibModelWrapper(ModelBase):
         self._target_mean: float = 0.0
         self._target_std: float = 1.0
 
+    # Time feature dimension per TSLib frequency code (from layers/Embed.py)
+    _FREQ_FEAT_DIM = {
+        "h": 4, "t": 5, "s": 6, "m": 1, "a": 1, "w": 2, "d": 3, "b": 3,
+    }
+
     def _build_configs(self, seq_len: int, pred_len: int, enc_in: int) -> SimpleNamespace:
         """Build a TSLib-compatible configs namespace."""
         model_key = _MODEL_FILE_MAP.get(self._tslib_model_name, self._tslib_model_name)
         defaults = TSLIB_CONFIGS.get(model_key, {})
+
+        # For models with seg_len, align pred_len to be >= seg_len and a multiple
+        seg_len = defaults.get("seg_len", None)
+        if seg_len is not None and pred_len < seg_len:
+            pred_len = seg_len
+        if seg_len is not None and pred_len % seg_len != 0:
+            pred_len = ((pred_len // seg_len) + 1) * seg_len
+
+        # For TimeFilter: patch_len must divide enc_in * seq_len
+        raw_patch_len = defaults.get("patch_len", 16)
+        if model_key == "TimeFilter":
+            total = enc_in * seq_len
+            # Find largest divisor of total that's <= raw_patch_len
+            patch_len = raw_patch_len
+            while patch_len > 1 and total % patch_len != 0:
+                patch_len -= 1
+            logger.info(
+                f"[TSLib-TimeFilter] patch_len adjusted: {raw_patch_len} → {patch_len} "
+                f"(enc_in={enc_in}, seq_len={seq_len}, total={total})"
+            )
+        else:
+            patch_len = raw_patch_len
 
         cfg = SimpleNamespace(
             # Core temporal dimensions
@@ -237,14 +270,20 @@ class TSLibModelWrapper(ModelBase):
             # Task
             task_name="long_term_forecast",
             output_attention=False,
-            # Embedding
+            # Embedding (freq='d' for daily → 3 time features)
             embed="timeF",
-            freq="d",  # daily frequency
+            freq="d",
             # Common extras
             top_k=defaults.get("top_k", 5),
             num_kernels=defaults.get("num_kernels", 6),
             moving_avg=25,
             distil=True,
+            # Universal attributes needed by many models
+            num_class=0,  # not used in forecasting but many models reference it
+            batch_size=self._batch_size,  # WPMixer needs this
+            device=str(self._device),  # WPMixer needs this
+            use_amp=False,  # WPMixer needs this
+            patch_len=patch_len,  # TimeFilter, PAttn, WPMixer (adjusted above)
         )
 
         # Copy all model-specific params from defaults
@@ -365,10 +404,12 @@ class TSLibModelWrapper(ModelBase):
         numeric_cols = X.select_dtypes(include=[np.number]).columns.tolist()
         enc_in = len(numeric_cols)
 
-        # Build TSLib configs
+        # Build TSLib configs (may adjust pred_len for seg_len alignment)
         configs = self._build_configs(seq_len, pred_len, enc_in)
         self._configs = configs
         self._seq_len = seq_len
+        # Use configs.pred_len which may have been aligned to seg_len
+        pred_len = configs.pred_len
         self._pred_len = pred_len
         self._n_features = enc_in
 
@@ -421,6 +462,9 @@ class TSLibModelWrapper(ModelBase):
         patience_counter = 0
         t0 = time.monotonic()
 
+        # Time feature dimension must match TSLib's freq map (freq='d' → 3)
+        time_feat_dim = self._FREQ_FEAT_DIM.get(configs.freq, 4)
+
         for epoch in range(self._max_epochs):
             # Train
             self._model.train()
@@ -431,8 +475,8 @@ class TSLibModelWrapper(ModelBase):
                 by = by.to(self._device)
 
                 # TSLib forward: (x_enc, x_mark_enc, x_dec, x_mark_dec)
-                # We pass zeros for mark (no temporal encoding)
-                x_mark = torch.zeros(bx.shape[0], bx.shape[1], 4, device=self._device)
+                # Time marks dimension must match freq (daily=3)
+                x_mark = torch.zeros(bx.shape[0], bx.shape[1], time_feat_dim, device=self._device)
                 # Decoder input: last label_len of encoder + zeros for prediction
                 dec_inp = torch.zeros(
                     bx.shape[0], configs.label_len + pred_len, bx.shape[2],
@@ -440,7 +484,7 @@ class TSLibModelWrapper(ModelBase):
                 )
                 dec_inp[:, :configs.label_len, :] = bx[:, -configs.label_len:, :]
                 dec_mark = torch.zeros(
-                    bx.shape[0], configs.label_len + pred_len, 4,
+                    bx.shape[0], configs.label_len + pred_len, time_feat_dim,
                     device=self._device,
                 )
 
@@ -478,14 +522,14 @@ class TSLibModelWrapper(ModelBase):
                     bx = bx.to(self._device)
                     by = by.to(self._device)
 
-                    x_mark = torch.zeros(bx.shape[0], bx.shape[1], 4, device=self._device)
+                    x_mark = torch.zeros(bx.shape[0], bx.shape[1], time_feat_dim, device=self._device)
                     dec_inp = torch.zeros(
                         bx.shape[0], configs.label_len + pred_len, bx.shape[2],
                         device=self._device,
                     )
                     dec_inp[:, :configs.label_len, :] = bx[:, -configs.label_len:, :]
                     dec_mark = torch.zeros(
-                        bx.shape[0], configs.label_len + pred_len, 4,
+                        bx.shape[0], configs.label_len + pred_len, time_feat_dim,
                         device=self._device,
                     )
 
@@ -575,7 +619,10 @@ class TSLibModelWrapper(ModelBase):
 
         # Convert to tensor
         x_enc = torch.tensor(x_input, dtype=torch.float32).unsqueeze(0).to(self._device)
-        x_mark = torch.zeros(1, seq_len, 4, device=self._device)
+
+        # Time feature dimension must match freq (daily=3)
+        time_feat_dim = self._FREQ_FEAT_DIM.get(self._configs.freq, 4)
+        x_mark = torch.zeros(1, seq_len, time_feat_dim, device=self._device)
 
         configs = self._configs
         dec_inp = torch.zeros(
@@ -584,7 +631,7 @@ class TSLibModelWrapper(ModelBase):
         )
         dec_inp[:, :configs.label_len, :] = x_enc[:, -configs.label_len:, :]
         dec_mark = torch.zeros(
-            1, configs.label_len + self._pred_len, 4,
+            1, configs.label_len + self._pred_len, time_feat_dim,
             device=self._device,
         )
 
