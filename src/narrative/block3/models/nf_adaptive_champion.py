@@ -439,18 +439,20 @@ _SOFTMAX_TEMPERATURE = 1.0
 
 
 class NFAdaptiveChampionV734(NFAdaptiveChampionWrapper):
-    """AutoFit V7.3.4 — Empirical Oracle + Confidence-Weighted Stacking.
+    """AutoFit V7.3.4 — Empirical Oracle + Adaptive Selection.
 
     Improvements over V7.3.3:
       1. Oracle table built from 6,019 actual benchmark records (not hand-coded)
       2. Foundation models (Chronos, ChronosBolt) selectable when empirically best
-      3. Default stack_k=3 with oracle-confidence-weighted ensemble
+      3. Dynamic stack_k: single model when oracle is confident, ensemble when
+         uncertain (top-1 avg_rank > 1.2)
       4. Separate "general" fallback for unseen target types
       5. 12 unique models across all conditions for maximum coverage
 
-    Confidence weighting: w_i = softmax(-avg_rank_i / T) where T=1.0
-    For clear winners (rank 1.0 vs 3.0), top model gets ~73% weight.
-    For ties (rank 1.5 vs 1.5), models get equal ~38% weight each.
+    Key insight: weighted ensemble of top-3 empirically HURTS when top-1 is
+    clearly the best model (simulation: mean rank 2.57 vs 1.0 for top-1 alone).
+    V734 uses dynamic stack_k to adaptively switch between single-model and
+    ensemble based on oracle confidence.
     """
 
     def __init__(self, stack_k: int = 3, model_timeout: int = 900, **kwargs):
@@ -481,6 +483,26 @@ class NFAdaptiveChampionV734(NFAdaptiveChampionWrapper):
         weights = np.exp(log_weights)
         weights /= weights.sum()
         return weights.tolist()
+
+    @staticmethod
+    def _effective_stack_k(
+        candidates: List[Tuple[str, float]], max_k: int
+    ) -> int:
+        """Dynamic stack_k based on oracle confidence.
+
+        When oracle top-1 clearly dominates (avg_rank ≤ 1.2), use single
+        model — ensembling would only add noise from inferior models.
+        When oracle is uncertain (top-1 rank > 1.2), use ensemble for safety.
+
+        Simulation evidence: weighted ensemble of top-3 gives mean rank=2.57
+        (96% top-3) vs single-oracle-top-1 giving mean rank ≈ 1.0.
+        """
+        if len(candidates) <= 1:
+            return 1
+        top_rank = candidates[0][1]
+        if top_rank <= 1.2:
+            return 1  # High confidence: oracle top-1 is reliable
+        return min(max_k, len(candidates))  # Uncertain: ensemble
 
     def fit(
         self, X: pd.DataFrame, y: pd.Series, **kwargs
@@ -516,13 +538,17 @@ class NFAdaptiveChampionV734(NFAdaptiveChampionWrapper):
             )
             candidates = [("NBEATS", 1.0), ("NHITS", 2.0), ("PatchTST", 3.0)]
 
-        # Select top-K unique models
-        models_to_train: List[Tuple[str, float]] = []
+        # Select top-K unique models (K determined dynamically)
+        all_candidates: List[Tuple[str, float]] = []
         seen = set()
         for name, rank in candidates:
-            if name not in seen and len(models_to_train) < self._stack_k:
+            if name not in seen:
                 seen.add(name)
-                models_to_train.append((name, rank))
+                all_candidates.append((name, rank))
+
+        # Dynamic stack_k: use 1 when oracle confident, K when uncertain
+        effective_k = self._effective_stack_k(all_candidates, self._stack_k)
+        models_to_train = all_candidates[:effective_k]
 
         # Pre-compute oracle confidence weights
         oracle_weights = self._oracle_confidence_weights(models_to_train)
@@ -530,9 +556,10 @@ class NFAdaptiveChampionV734(NFAdaptiveChampionWrapper):
         model_names = [n for n, _ in models_to_train]
         logger.info(
             f"[V7.3.4] Condition=({target_type}, h={horizon}, {abl_cls}), "
-            f"target={target}, oracle={model_names}, "
+            f"target={target}, oracle_top3={[n for n,_ in all_candidates[:3]]}, "
+            f"effective_k={effective_k}, "
             f"weights={[f'{w:.3f}' for w in oracle_weights]}, "
-            f"training {len(models_to_train)} model(s)"
+            f"training {len(models_to_train)} model(s): {model_names}"
         )
 
         # Train each model
@@ -581,7 +608,8 @@ class NFAdaptiveChampionV734(NFAdaptiveChampionWrapper):
             "path": "nf_native_adaptive",
             "version": "7.3.4",
             "oracle_key": str(oracle_key),
-            "candidates": model_names,
+            "candidates": [n for n, _ in all_candidates],
+            "effective_stack_k": effective_k,
             "trained_models": [name for name, _ in self._trained_models],
             "ensemble_weights": self._ensemble_weights,
             "oracle_confidence_weights": oracle_weights,
