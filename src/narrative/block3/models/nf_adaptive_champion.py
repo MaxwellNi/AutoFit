@@ -675,8 +675,8 @@ ORACLE_TABLE_V735: Dict[Tuple[str, int, str], str] = {
     ("investors_count",  1, "core_text"):           "KAN",  # mae=44.745049
     ("investors_count",  1, "full"):                "KAN",  # mae=44.809991
     ("investors_count",  7, "core_edgar"):          "NBEATS",  # mae=44.791632
-    ("investors_count",  7, "core_only"):           "NBEATS",  # mae=44.726689
-    ("investors_count",  7, "core_text"):           "NBEATS",  # mae=44.726689
+    ("investors_count",  7, "core_only"):           "KAN",  # mae=44.692755
+    ("investors_count",  7, "core_text"):           "KAN",  # mae=44.692755
     ("investors_count",  7, "full"):                "NBEATS",  # mae=44.791632
     ("investors_count", 14, "core_edgar"):          "NBEATS",  # mae=44.798978
     ("investors_count", 14, "core_only"):           "NBEATS",  # mae=44.734036
@@ -694,7 +694,7 @@ ORACLE_TABLE_V735: Dict[Tuple[str, int, str], str] = {
     ("is_funded",  7, "core_edgar"):          "NHITS",  # mae=0.032383
     ("is_funded",  7, "core_only"):           "DeepNPTS",  # mae=0.032957
     ("is_funded",  7, "core_text"):           "DeepNPTS",  # mae=0.032957
-    ("is_funded",  7, "full"):                "DLinear",  # mae=0.032379
+    ("is_funded",  7, "full"):                "NHITS",  # mae=0.032309
     ("is_funded", 14, "core_edgar"):          "PatchTST",  # mae=0.032355
     ("is_funded", 14, "core_only"):           "DeepNPTS",  # mae=0.032954
     ("is_funded", 14, "core_text"):           "DeepNPTS",  # mae=0.032954
@@ -817,6 +817,7 @@ class NFAdaptiveChampionV735(NFAdaptiveChampionWrapper):
             "version": "7.3.5",
             "oracle_key": str(oracle_key),
             "oracle_model": model_name,
+            "champion_template": model_name,  # for metrics telemetry
             "trained_models": [name for name, _ in self._trained_models],
             "ensemble_weights": self._ensemble_weights,
             "elapsed_seconds": round(elapsed, 1),
