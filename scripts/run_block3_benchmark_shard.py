@@ -7,7 +7,7 @@ Designed for parallel execution across SLURM jobs.
 
 CLI Options:
     --task {task1_outcome,task2_forecast,task3_risk_adjust}
-    --category {statistical,ml_tabular,deep_classical,transformer_sota,foundation,irregular}
+    --category {statistical,ml_tabular,deep_classical,transformer_sota,foundation,irregular,tslib_sota}
     --models comma-separated allowlist (default: all in category)
     --model-kwargs-json / --model-kwargs-file for per-model hyperparameter overrides
     --ablation {core_only,core_text,core_edgar,full}
@@ -114,7 +114,7 @@ logger = logging.getLogger(__name__)
 
 GLOBAL_SEED = 42
 TASK_NAMES = ["task1_outcome", "task2_forecast", "task3_risk_adjust"]
-CATEGORY_NAMES = ["statistical", "ml_tabular", "deep_classical", "transformer_sota", "foundation", "irregular", "autofit"]
+CATEGORY_NAMES = ["statistical", "ml_tabular", "deep_classical", "transformer_sota", "foundation", "irregular", "tslib_sota", "autofit"]
 ABLATION_NAMES = ["core_only", "core_text", "core_edgar", "full"]
 PRESET_NAMES = ["smoke", "quick", "standard", "full"]
 
@@ -919,7 +919,7 @@ class BenchmarkShard:
             train_start = time.time()
             fit_kwargs = {}
             if self.category in ("deep_classical", "transformer_sota", "foundation",
-                                 "statistical", "irregular", "autofit"):
+                                 "statistical", "irregular", "tslib_sota", "autofit"):
                 fit_kwargs["train_raw"] = train
                 fit_kwargs["target"] = target
                 fit_kwargs["horizon"] = horizon
@@ -931,7 +931,7 @@ class BenchmarkShard:
             infer_start = time.time()
             predict_kwargs = {}
             if self.category in ("deep_classical", "transformer_sota", "foundation",
-                                 "statistical", "irregular", "autofit"):
+                                 "statistical", "irregular", "tslib_sota", "autofit"):
                 predict_kwargs["test_raw"] = test
                 predict_kwargs["target"] = target
                 predict_kwargs["horizon"] = horizon

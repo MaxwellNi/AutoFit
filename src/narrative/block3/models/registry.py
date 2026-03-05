@@ -2,7 +2,7 @@
 """
 Model Registry for Block 3 KDD'26 Benchmark.
 
-Unified interface for all 83 models across 7 categories:
+Unified interface for all 97 models across 8 categories:
   - ml_tabular      (15): LogisticRegression … MeanPredictor
   - statistical      (5): AutoARIMA, AutoETS, AutoTheta, MSTL, SF_SeasonalNaive
   - deep_classical   (9): NBEATS, NHITS, TFT, DeepAR, GRU, LSTM, TCN, MLP, DilatedRNN
@@ -14,6 +14,12 @@ Unified interface for all 83 models across 7 categories:
   - foundation      (11): Chronos, ChronosBolt, Chronos2, Moirai, MoiraiLarge,
                            Moirai2, Timer, TimeMoE, MOMENT, LagLlama, TimesFM
   - irregular        (2): GRU-D, SAITS
+  - tslib_sota      (14): TimeFilter (ICML'25), WPMixer (AAAI'25),
+                           MultiPatchFormer, MSGNet (AAAI'24), PAttn (NeurIPS'24),
+                           MambaSimple, Koopa (NeurIPS'23), FreTS (NeurIPS'23),
+                           Crossformer (ICLR'23), MICN (ICLR'23), SegRNN,
+                           NonstationaryTransformer (NeurIPS'22), FiLM (NeurIPS'22),
+                           SCINet (NeurIPS'22)
   - autofit         (17): V1, V2, V2E, V3, V3E, V3Max, V4, V5, V6, V7, V71, V72, V73, V731, V732, V733, NFAdaptiveChampion
 """
 from __future__ import annotations
@@ -31,6 +37,7 @@ from .deep_models import (
 )
 from .irregular_models import IRREGULAR_MODELS, get_irregular_model
 from .autofit_wrapper import AUTOFIT_MODELS
+from .tslib_models import TSLIB_MODELS
 
 
 # ============================================================================
@@ -44,6 +51,7 @@ MODEL_CATEGORIES: Dict[str, List[str]] = {
     "transformer_sota": list(TRANSFORMER_MODELS.keys()),
     "foundation":       list(FOUNDATION_MODELS.keys()),
     "irregular":        list(IRREGULAR_MODELS.keys()),
+    "tslib_sota":       list(TSLIB_MODELS.keys()),
     "autofit":          list(AUTOFIT_MODELS.keys()),
 }
 
@@ -55,6 +63,7 @@ _ALL_MODELS.update(DEEP_MODELS)
 _ALL_MODELS.update(TRANSFORMER_MODELS)
 _ALL_MODELS.update(FOUNDATION_MODELS)
 _ALL_MODELS.update(IRREGULAR_MODELS)
+_ALL_MODELS.update(TSLIB_MODELS)
 _ALL_MODELS.update(AUTOFIT_MODELS)
 
 
