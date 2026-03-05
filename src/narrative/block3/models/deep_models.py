@@ -640,7 +640,7 @@ class _RobustFallback:
                 n_estimators=300, learning_rate=0.05, max_depth=6,
                 num_leaves=31, min_child_samples=20, subsample=0.8,
                 colsample_bytree=0.8, reg_alpha=0.1, reg_lambda=1.0,
-                n_jobs=-1, verbose=-1, random_state=42,
+                n_jobs=1, verbose=-1, random_state=42,
             )
             self._model.fit(
                 X_fb.iloc[:split_idx], y_transformed[:split_idx],
@@ -1231,6 +1231,9 @@ class FoundationModelWrapper(ModelBase):
                 batch = ctxs[i : i + 32]
                 try:
                     tensors = [torch.tensor(c[-128:]).float() for c in batch]
+                    # Fix: deterministic seed before each batch to ensure
+                    # reproducible probabilistic sampling across SLURM jobs
+                    torch.manual_seed(42 + i)
                     out = self._model.predict(tensors, 7)
                     med = out.median(dim=1).values.mean(dim=1)
                     preds_all.extend(med.cpu().numpy().tolist())
@@ -1246,8 +1249,9 @@ class FoundationModelWrapper(ModelBase):
             import torch
             from uni2ts.model.moirai import MoiraiForecast
             preds_all = []
-            for ctx in ctxs[:50]:
+            for i_ctx, ctx in enumerate(ctxs[:50]):
                 try:
+                    torch.manual_seed(42 + i_ctx)  # deterministic sampling
                     ts = pd.DataFrame(
                         {"target": ctx},
                         index=pd.date_range("2020-01-01", periods=len(ctx), freq="D"),
@@ -1277,8 +1281,9 @@ class FoundationModelWrapper(ModelBase):
             import torch
             from uni2ts.model.moirai_moe import MoiraiMoEForecast
             preds_all = []
-            for ctx in ctxs[:50]:
+            for i_ctx, ctx in enumerate(ctxs[:50]):
                 try:
+                    torch.manual_seed(42 + i_ctx)  # deterministic sampling
                     ts = pd.DataFrame(
                         {"target": ctx},
                         index=pd.date_range("2020-01-01", periods=len(ctx), freq="D"),
