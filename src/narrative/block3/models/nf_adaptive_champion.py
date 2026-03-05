@@ -500,7 +500,7 @@ class NFAdaptiveChampionV734(NFAdaptiveChampionWrapper):
         if len(candidates) <= 1:
             return 1
         top_rank = candidates[0][1]
-        if top_rank <= 1.2:
+        if top_rank <= 1.5:
             return 1  # High confidence: oracle top-1 is reliable
         return min(max_k, len(candidates))  # Uncertain: ensemble
 
