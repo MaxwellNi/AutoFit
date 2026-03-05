@@ -1,7 +1,7 @@
 # Block 3 Operational SOP (Mandatory)
 
-Last updated: 2026-02-18
-Scope: Block 3 benchmark, AutoFit V7/V7.1/V7.2 preparation
+Last updated: 2026-03-05
+Scope: Block 3 benchmark, AutoFit V7/V7.1/V7.2/V7.3 preparation
 
 ## Mandatory Contract
 
@@ -56,7 +56,99 @@ Known repo roots by host:
 
 - 3090 server: `/home/pni/project/repo_root`
 - 4090 server: `/home/pni/projects/repo_root`
-- Iris: `/home/users/npin/repo_root`
+- Iris (npin): `/home/users/npin/repo_root`
+- Iris (cfisch): shared GPFS at `/mnt/aiongpfs/projects/eint/repo_root`
+
+## Secondary Account: cfisch (Iris HPC)
+
+The project uses a secondary account (`cfisch`) for parallel job scheduling on
+Iris HPC. Both accounts share the same GPFS workspace and conda environment.
+
+### Access
+
+```bash
+ssh iris-cf    # SSH alias for cfisch@iris-cluster
+```
+
+The SSH alias `iris-cf` must be configured in `~/.ssh/config` on the access node.
+
+### Prerequisites (one-time setup, already completed)
+
+1. **Git safe directory** — the repo is owned by `npin`; `cfisch` must mark it
+   safe to allow git operations inside SLURM jobs:
+
+   ```bash
+   ssh iris-cf 'git config --global --add safe.directory /mnt/aiongpfs/projects/eint/repo_root'
+   ```
+
+2. **Conda environment permissions** — the `insider` conda env was created by
+   `npin` with `0755` permissions on Python binaries. Group execute bits must be
+   set for the `eint` group so cfisch can run them:
+
+   ```bash
+   chmod -R g+rX /mnt/aiongpfs/projects/eint/envs/.micromamba/envs/insider/bin/
+   chmod -R g+rX /mnt/aiongpfs/projects/eint/envs/.micromamba/envs/insider/lib/
+   ```
+
+3. **Output directory permissions** — benchmark result directories must be
+   group-writable. The `runs/benchmarks/` tree uses `rwxrwsrwx` (setgid),
+   which propagates group ownership automatically. The contract audit output
+   file also needs group-write:
+
+   ```bash
+   chmod -R g+w docs/benchmarks/block3_truth_pack/
+   ```
+
+### Job submission from cfisch
+
+cfisch does not have SSH keys for the GitHub remote. The `git pull` step in
+SLURM scripts will fail, but scripts use `|| echo "WARN: git pull failed"` to
+prevent job abort. The shared GPFS means any code pushed by npin is immediately
+visible to cfisch without pulling.
+
+To submit jobs as cfisch:
+
+```bash
+ssh iris-cf "cd /mnt/aiongpfs/projects/eint/repo_root/.slurm_scripts/cfisch_batch2 && sbatch --parsable <script>.sh"
+```
+
+Script directories for cfisch:
+- `.slurm_scripts/cfisch_batch2/` — GPU-partition jobs (baselines + V735 co/ct)
+- `.slurm_scripts/cfisch_bigmem/` — bigmem-partition jobs (ML tabular + statistical ce/fu)
+
+### QOS limits (shared across ALL users in each QOS)
+
+| QOS | GrpNodes | MaxJobsPU | RAM/Node | GPU | Notes |
+|---|---:|---:|---:|---|---|
+| iris-gpu-long | 6 | 4 | 756G | 4x V100 32GB | GrpNodes is QOS-wide, not per-user |
+| iris-bigmem-long | 2 | 4 | 3024G | none | For CPU-only ML/statistical tasks |
+| iris-batch-long | 24 | 8 | 112G | none | Too small for most benchmark tasks |
+
+`GrpNodes` is the total node count available to the entire QOS across all users,
+not a per-account limit. When all 6 GPU nodes are occupied (by any user in the
+QOS), new jobs queue with reason `QOSGrpNodeLimit`. `MaxJobsPU` is per-user.
+
+Because both `npin` and `cfisch` submit under `--account=christian.fisch`, their
+jobs draw from the same QOS pool. This means the two accounts do not double the
+available nodes — they share the same 6-node GPU cap, but each gets its own
+4-job-per-user limit.
+
+### Memory allocation by ablation (observed)
+
+| Ablation | Peak RSS | Recommended `--mem` |
+|---|---:|---:|
+| core_only | ~113G | 200G |
+| core_text | ~282G | 350G |
+| core_edgar | ~163G | 200G |
+| full | ~337G | 400G |
+
+### Partitioning strategy
+
+- **GPU partition**: deep_classical, foundation, transformer_sota, autofit, irregular
+- **bigmem partition**: ml_tabular, statistical (CPU-only; no GPU needed)
+
+Migrating ML/statistical tasks to bigmem frees GPU QOS slots for models that
+need GPU acceleration.
 
 If freeze assets are stored outside `repo_root/runs`, set:
 
