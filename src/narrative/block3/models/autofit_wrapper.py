@@ -7602,6 +7602,19 @@ def get_nf_adaptive_champion(**kwargs):
     return NFAdaptiveChampionWrapper(stack_k=stack_k, **kwargs)
 
 
+def get_autofit_v734(**kwargs):
+    """AutoFit V7.3.4 — Empirical Oracle + Confidence-Weighted Stacking.
+
+    Uses benchmark-derived oracle table (6,019 records) with softmax
+    confidence weighting. Foundation models (Chronos, ChronosBolt)
+    included when empirically best. Default stack_k=3.
+    """
+    from .nf_adaptive_champion import NFAdaptiveChampionV734
+    stack_k = kwargs.pop("stack_k", 3)
+    kwargs.pop("top_k", None)
+    return NFAdaptiveChampionV734(stack_k=stack_k, **kwargs)
+
+
 AUTOFIT_MODELS = {
     "AutoFitV1": get_autofit_v1,
     "AutoFitV2": get_autofit_v2,
@@ -7621,4 +7634,5 @@ AUTOFIT_MODELS = {
     "FusedChampion": get_fused_champion,
     "AutoFitV733": get_autofit_v733,
     "NFAdaptiveChampion": get_nf_adaptive_champion,
+    "AutoFitV734": get_autofit_v734,
 }
