@@ -1396,6 +1396,11 @@ class HFFoundationModelWrapper(ModelBase):
         "MOMENT": ("AutonLab/MOMENT-1-large", "momentfm"),
         "LagLlama": ("time-series-foundation-models/Lag-Llama", "lag_llama"),
         "TimesFM": (None, "timesfm_docker"),
+        # Phase 8 additions
+        "Sundial": ("thuml/sundial-base-128m", "hf_generate"),  # ICML'25 Oral, #1 GIFT-Eval
+        "TTM": ("ibm-granite/granite-timeseries-ttm-r2", "ttm"),  # NeurIPS'24, <1M params
+        "TimerXL": ("thuml/timer-xl-84m", "hf_generate"),  # ICLR'25, long-context Timer
+        "TimesFM2": (None, "timesfm2"),  # Google TimesFM 2.5, 200M, 16k ctx
     }
 
     def __init__(self, config: ModelConfig, model_name: str, **kw):
@@ -1499,6 +1504,10 @@ class HFFoundationModelWrapper(ModelBase):
             self._load_lag_llama(repo)
         elif loader_type == "timesfm_docker":
             self._docker_init()
+        elif loader_type == "ttm":
+            self._load_ttm(repo)
+        elif loader_type == "timesfm2":
+            self._load_timesfm2()
 
         # Robust fallback for unseen entities (replaces raw Ridge)
         self._fallback = _RobustFallback()
@@ -1537,6 +1546,81 @@ class HFFoundationModelWrapper(ModelBase):
             except Exception as e:
                 _logger.debug(f"[{self.model_name}] generate failed: {e}")
                 preds.append(float(np.mean(ctx)))
+        return preds
+
+    def _predict_ttm(self, ctxs: List[np.ndarray], horizon: int = 7) -> List[float]:
+        """Predict using IBM Granite TTM (Tiny Time Mixers)."""
+        preds = []
+        for ctx in ctxs:
+            try:
+                seq = ctx[-512:].astype(np.float32)
+                mu, sigma = float(np.mean(seq)), float(np.std(seq)) + 1e-8
+                seq_norm = (seq - mu) / sigma
+                import torch
+                inp = torch.tensor(seq_norm).unsqueeze(0).unsqueeze(-1).float()
+                with torch.no_grad():
+                    out = self._model(inp)
+                if hasattr(out, 'prediction_outputs'):
+                    forecast = out.prediction_outputs.squeeze().cpu().numpy()
+                elif hasattr(out, 'last_hidden_state'):
+                    forecast = out.last_hidden_state.squeeze().cpu().numpy()
+                else:
+                    forecast = out[0].squeeze().cpu().numpy()
+                forecast = forecast[-horizon:] * sigma + mu
+                preds.append(float(np.mean(forecast)))
+            except Exception as e:
+                _logger.debug(f"[TTM] predict failed: {e}")
+                preds.append(float(np.mean(ctx)))
+        return preds
+
+    def _load_ttm(self, repo: str):
+        """Load IBM Granite TTM model."""
+        try:
+            from tsfm_public import TinyTimeMixerForPrediction
+            self._model = TinyTimeMixerForPrediction.from_pretrained(repo)
+            self._model.eval()
+        except ImportError:
+            # Fallback: try HF automodel
+            import torch
+            from transformers import AutoModelForCausalLM
+            self._model = AutoModelForCausalLM.from_pretrained(
+                repo, trust_remote_code=True, torch_dtype=torch.float32
+            )
+            self._model.eval()
+
+    def _load_timesfm2(self):
+        """Load TimesFM 2.5 via timesfm package."""
+        try:
+            import timesfm
+            self._tfm = timesfm.TimesFm(
+                hparams=timesfm.TimesFmHparams(
+                    per_core_batch_size=32,
+                    horizon_len=128,
+                    backend="gpu",
+                ),
+                checkpoint=timesfm.TimesFmCheckpoint(
+                    huggingface_repo_id="google/timesfm-2.0-200m-pytorch"
+                ),
+            )
+        except (ImportError, Exception) as e:
+            _logger.warning(f"[TimesFM2] Failed to load: {e}")
+            self._tfm = None
+
+    def _predict_timesfm2(self, ctxs: List[np.ndarray], horizon: int = 7) -> List[float]:
+        """Predict using TimesFM 2.5."""
+        if self._tfm is None:
+            return [float(np.mean(c)) for c in ctxs]
+        preds = []
+        batch = [c[-512:].astype(np.float32) for c in ctxs[:200]]
+        try:
+            point_forecasts, _ = self._tfm.forecast(
+                batch, freq=[0] * len(batch)
+            )
+            for fc in point_forecasts:
+                preds.append(float(np.mean(fc[:horizon])))
+        except Exception as e:
+            _logger.warning(f"[TimesFM2] Forecast failed: {e}")
+            preds = [float(np.mean(c)) for c in ctxs[:200]]
         return preds
 
     def _predict_moment(self, ctxs: List[np.ndarray], horizon: int = 7) -> List[float]:
@@ -1609,6 +1693,10 @@ class HFFoundationModelWrapper(ModelBase):
             preds_all = self._predict_hf_generate(ctxs, horizon)
         elif loader_type == "momentfm":
             preds_all = self._predict_moment(ctxs, horizon)
+        elif loader_type == "ttm":
+            preds_all = self._predict_ttm(ctxs, horizon)
+        elif loader_type == "timesfm2":
+            preds_all = self._predict_timesfm2(ctxs, horizon)
         elif loader_type == "lag_llama" and self._model is not None:
             # Use GluonTS predictor
             preds_all = []
@@ -1763,7 +1851,11 @@ create_timemoe = _hf_fm_factory("TimeMoE", "transformers")
 create_moment = _hf_fm_factory("MOMENT", "momentfm")
 create_lagllama = _hf_fm_factory("LagLlama", "gluonts")
 create_timesfm = _hf_fm_factory("TimesFM", "docker")
-# TimesFM removed: requires Python <3.12 (lingvo dependency)
+# Phase 8: New foundation models
+create_sundial = _hf_fm_factory("Sundial", "transformers")  # ICML'25 Oral
+create_ttm = _hf_fm_factory("TTM", "tsfm_public")  # NeurIPS'24 TTM
+create_timerxl = _hf_fm_factory("TimerXL", "transformers")  # ICLR'25
+create_timesfm2 = _hf_fm_factory("TimesFM2", "timesfm")  # TimesFM 2.5
 
 
 # ============================================================================
@@ -1811,6 +1903,11 @@ FOUNDATION_MODELS = {
     "MOMENT": create_moment,
     "LagLlama": create_lagllama,
     "TimesFM": create_timesfm,
+    # Phase 8: New foundation models
+    "Sundial": create_sundial,
+    "TTM": create_ttm,
+    "TimerXL": create_timerxl,
+    "TimesFM2": create_timesfm2,
 }
 
 

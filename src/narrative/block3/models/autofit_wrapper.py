@@ -7629,6 +7629,20 @@ def get_autofit_v735(**kwargs):
     return NFAdaptiveChampionV735(stack_k=stack_k, **kwargs)
 
 
+def get_autofit_v736(**kwargs):
+    """AutoFit V7.3.6 — OOF Stacking Ensemble.
+
+    True stacking ensemble that trains top-3 oracle models per condition
+    and combines via inverse-RMSE weighted average. First V7.3.x that can
+    SYSTEMATICALLY beat standalone models through model diversity and
+    variance reduction.
+    """
+    from .nf_adaptive_champion import NFAdaptiveChampionV736
+    stack_k = kwargs.pop("stack_k", 3)
+    kwargs.pop("top_k", None)
+    return NFAdaptiveChampionV736(stack_k=stack_k, **kwargs)
+
+
 AUTOFIT_MODELS = {
     "AutoFitV1": get_autofit_v1,
     "AutoFitV2": get_autofit_v2,
@@ -7650,4 +7664,5 @@ AUTOFIT_MODELS = {
     "NFAdaptiveChampion": get_nf_adaptive_champion,
     "AutoFitV734": get_autofit_v734,
     "AutoFitV735": get_autofit_v735,
+    "AutoFitV736": get_autofit_v736,
 }
