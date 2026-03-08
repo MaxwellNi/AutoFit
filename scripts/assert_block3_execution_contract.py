@@ -15,7 +15,7 @@ from typing import Dict, List, Tuple
 
 
 POLICY_TEXT = (
-    "ONE-LINER TS AGENT PROMPT: Build time-series models ONLY with provable "
+    "Build time-series models ONLY with provable "
     "zero-leakage (feature availability-time ≤ t_obs_end, correct label alignment to "
     "t_target, no centered/forward ops, train-only fit for any "
     "stats/preprocess/feature-select/PCA/outlier rules, as-of snapshots for revisable "

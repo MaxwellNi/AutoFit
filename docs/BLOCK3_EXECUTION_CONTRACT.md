@@ -1,9 +1,10 @@
-ONE-LINER TS AGENT PROMPT: Build time-series models ONLY with provable zero-leakage (feature availability-time ≤ t_obs_end, correct label alignment to t_target, no centered/forward ops, train-only fit for any stats/preprocess/feature-select/PCA/outlier rules, as-of snapshots for revisable data, no entity/event/near-duplicate split leakage), strict train==infer parity (same pipeline + cache keyed by data_version/split/preproc_hash, eval in deployed inference mode rolling/recursive, correct train/eval modes incl. dropout/BN, past-only padding/interpolation, toy unit tests for window indexing), and deployment-real evaluation evidence (overall + sliced metrics with worst-slice, tail+business metrics, calibration/coverage if probabilistic, drift monitor + retrain/rollback plan) with full reproducibility logs (seeds/env/hashes/commit, leakage+split audits, reproducible run command); if any requirement can’t be met, STOP and report the exact blocker.
 
 # Block3 Execution Contract
 
+Build time-series models ONLY with provable zero-leakage (feature availability-time ≤ t_obs_end, correct label alignment to t_target, no centered/forward ops, train-only fit for any stats/preprocess/feature-select/PCA/outlier rules, as-of snapshots for revisable data, no entity/event/near-duplicate split leakage), strict train==infer parity (same pipeline + cache keyed by data_version/split/preproc_hash, eval in deployed inference mode rolling/recursive, correct train/eval modes incl. dropout/BN, past-only padding/interpolation, toy unit tests for window indexing), and deployment-real evaluation evidence (overall + sliced metrics with worst-slice, tail+business metrics, calibration/coverage if probabilistic, drift monitor + retrain/rollback plan) with full reproducibility logs (seeds/env/hashes/commit, leakage+split audits, reproducible run command); if any requirement can’t be met, STOP and report the exact blocker.
+
 - Contract-Version: `2026-02-24`
-- Policy-Hash-SHA256: `cae333137aa152bc12f534269c39ca096cf7bfefe129445b113b2df852047bbf`
+- Policy-Hash-SHA256: `5448396c60e3dfa9e902f664203859bf05db86c6a79a42e89cf75556a2121825`
 
 ## Scope
 
