@@ -5,71 +5,50 @@ This file records the current handoff baseline for Block 3 benchmarking and mode
 ## Scope
 
 1. Data freeze: `TRAIN_WIDE_FINAL` with pointer `docs/audits/FULL_SCALE_POINTER.yaml`.
-2. Benchmark scope: strict-comparable condition lattice (`104/104` completed).
-3. Current iteration scope: V7.3 design and validation against the fixed strict baseline.
+2. Benchmark scope: Phase 9 fair benchmark — 100 models across 104 conditions.
+3. Active AutoFit versions: V734, V735, V736 only (all prior versions dropped).
+4. Canonical results directory: `runs/benchmarks/block3_phase9_fair/`.
 
 ## End-to-End Chronology
 
 1. The WIDE2 freeze was sealed and verified. All five freeze gates passed, and Block 3 now reads only through `FreezePointer`.
-2. The full strict benchmark was completed and consolidated into a single canonical ledger (`104/104` conditions).
-3. The full SOTA table was rebuilt as the canonical reference:
-   - `docs/BLOCK3_FULL_SOTA_BENCHMARK.md`
-   - `docs/benchmarks/block3_truth_pack/full_sota_104_table.csv`
-   - `docs/benchmarks/block3_truth_pack/full_sota_104_summary.json`
-4. AutoFit V7.2 was completed across the full strict lattice (`104/104` materialized).
-5. V7.2 rank tables, truth-pack summaries, and the V7.3 handoff pack were refreshed against the latest materialized metrics.
+2. Phase 7 benchmark completed with 91 models and 6,670 records.
+3. Phase 8 extended the benchmark to 99 models and 7,478 records.
+4. Four critical bugs were discovered that invalidated all Phase 7/8 results:
+   - TSLib per-entity prediction (all entities received identical forecasts)
+   - Foundation model hardcoded `prediction_length=7`
+   - Moirai/Moirai2 50-entity cap (unfair vs Chronos which processed all)
+   - ml_tabular single-horizon restriction
+5. Phase 9 re-benchmark initiated with all bug fixes applied. 5,083 valid records from 50 models copied to clean directory.
+6. AutoFit V1-V733 and FusedChampion dropped. Only V734/V735/V736 retained.
 
 ## Current Status
 
-1. Full SOTA strict benchmark is complete (`104/104`).
-2. AutoFit V7.2 strict coverage is complete (`104/104`, missing keys `0`).
-3. The latest execution snapshot shows no active V7.2 work:
-   - `running_total = 0`
-   - `pending_total = 8`
-   - all remaining pending jobs are queue-limited reference jobs, not V7.2 completion blockers
-   - evidence: `docs/benchmarks/block3_truth_pack/execution_status_latest.json`
-4. V7.2 is fully ranked but not competitive on the fixed benchmark:
-   - `rank1 wins = 0`
-   - `median rank = 22`
-   - `median gap vs best = 170.018388%`
-   - `win rate vs V7 = 42.307692%`
-   - evidence: `docs/benchmarks/block3_truth_pack/v72_rank_104_summary_latest.json`
-5. Target-level V7.2 standing:
-   - `funding_raised_usd`: materially close to the frontier (`median rank 16`, `median gap 5.7378915%`)
-   - `investors_count`: dominant failure lane (`median rank 26`, `median gap 512.6292905%`)
-   - `is_funded`: still weak (`median rank 22`, `median gap 170.018388%`)
+1. Phase 9 fair benchmark in progress — 5,083 valid records, 50 models materialized.
+2. 66 SLURM scripts prepared in `.slurm_scripts/phase9/` for remaining models.
+3. NF training configs use their original committed values (no equalization applied).
+4. All Phase 7/8 results marked deprecated in `runs/benchmarks/block3_20260203_225620_phase7/DEPRECATED.md`.
 
 ## Canonical References
 
-1. Full benchmark view:
-   - `docs/BLOCK3_FULL_SOTA_BENCHMARK.md`
-   - `docs/benchmarks/block3_truth_pack/full_sota_104_table.csv`
-2. Current results summaries:
+1. Results summaries:
    - `docs/BLOCK3_RESULTS.md`
    - `docs/BLOCK3_MODEL_STATUS.md`
-   - `docs/AUTOFIT_V72_EVIDENCE_MASTER_20260217.md`
-3. Current status and rank evidence:
-   - `docs/benchmarks/block3_truth_pack/execution_status_latest.json`
-   - `docs/benchmarks/block3_truth_pack/truth_pack_summary.json`
-   - `docs/benchmarks/block3_truth_pack/v72_pilot_gate_report.json`
-   - `docs/benchmarks/block3_truth_pack/v72_rank_104_table_latest.csv`
-   - `docs/benchmarks/block3_truth_pack/v72_rank_104_summary_latest.json`
-4. V7.3 handoff package:
-   - `docs/BLOCK3_V73_RESEARCH_EXECUTION_SPEC_20260225.md`
-   - `docs/benchmarks/block3_truth_pack/v73_reuse_manifest.csv`
-   - `docs/benchmarks/block3_truth_pack/v73_champion_component_map.csv`
-   - `docs/benchmarks/block3_truth_pack/v73_rl_policy_spec.json`
+2. Phase 9 plan:
+   - `docs/PHASE9_ULTIMATE_PLAN.md`
+3. Execution contract:
+   - `docs/BLOCK3_EXECUTION_CONTRACT.md`
 
 ## Constraints
 
 1. Freeze assets under `runs/*_20260203_225620/` are read-only.
-2. No benchmark conclusion may use non-strict rows.
-3. Evaluation, routing, and policy updates must remain train/validation/OOF only.
-4. No rerun is required to establish the current SOTA baseline or the current V7.2 standing.
+2. Only V734/V735/V736 are active AutoFit versions.
+3. Canonical output directory: `runs/benchmarks/block3_phase9_fair/`.
+4. NF configs must match their committed (production) values.
 
 ## Immediate Next Work
 
-1. Keep the strict benchmark fixed and reuse-first.
-2. Treat V7.2 as a completed baseline, not an active completion project.
-3. Prioritize V7.3 redesign on the count lane first (`investors_count`), then binary calibration/routing.
-4. Run V7.3 in the sequence: smoke, targeted pilot, full 104-key closure.
+1. Submit Phase 9 SLURM scripts for remaining ~50 models.
+2. Aggregate results once Phase 9 re-runs complete.
+3. Rebuild leaderboard and paper tables from Phase 9 clean data.
+4. TCAV-style concept importance analysis.

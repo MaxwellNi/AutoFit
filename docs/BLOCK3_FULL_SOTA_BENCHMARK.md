@@ -1,5 +1,10 @@
 # Block 3 Full SOTA Benchmark (Strict Comparable)
 
+> **DEPRECATED**: This table was generated from Phase 7 data (2026-03-02) which is
+> invalidated by 4 critical bug fixes. AutoFit V1-V7 referenced here are all dropped.
+> See `docs/BLOCK3_RESULTS.md` for current Phase 9 results.
+> Canonical results dir: `runs/benchmarks/block3_phase9_fair/`
+
 > Generated UTC: 2026-03-02T23:11:37.007139+00:00
 > Strict comparable completion: `[########################] 104/104 (100.0%)`
 

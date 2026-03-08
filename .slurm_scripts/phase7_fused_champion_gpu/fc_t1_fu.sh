@@ -4,14 +4,26 @@
 #SBATCH --partition=gpu
 #SBATCH --qos=iris-gpu-long
 #SBATCH --time=2-00:00:00
-#SBATCH --mem=192G
-#SBATCH --cpus-per-task=8
+#SBATCH --mem=384G
+#SBATCH --cpus-per-task=16
 #SBATCH --gres=gpu:volta:1
 #SBATCH --output=/work/projects/eint/logs/phase7_fused_champion/fc_t1_fu_%j.out
 #SBATCH --error=/work/projects/eint/logs/phase7_fused_champion/fc_t1_fu_%j.err
 #SBATCH --export=ALL
+#SBATCH --requeue
+#SBATCH --signal=USR1@120
 
 set -e
+
+# ── Preemption handler (断点续跑) ──
+handle_preempt() {
+    echo "PREEMPT: SIGUSR1 received at $(date -Iseconds) — saving partial results"
+    wait "$HARNESS_PID" 2>/dev/null || true
+    echo "PREEMPT: Requeue count: ${SLURM_RESTART_COUNT:-0}"
+    echo "PREEMPT: Job will be automatically requeued by SLURM --requeue"
+    exit 0
+}
+trap handle_preempt USR1
 
 export CONDA_PREFIX="/mnt/aiongpfs/projects/eint/envs/.micromamba/envs/insider"
 export PATH="${CONDA_PREFIX}/bin:${PATH}"
@@ -53,6 +65,9 @@ echo "============================================================"
     --output-dir runs/benchmarks/block3_20260203_225620_phase7/task1_outcome/autofit/full \
     --seed 42 \
     --no-verify-first \
-    --models FusedChampion
+    --models FusedChampion &
+
+HARNESS_PID=$!
+wait "$HARNESS_PID"
 
 echo "Done: $(date -Iseconds)"

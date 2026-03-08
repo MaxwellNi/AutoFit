@@ -3,7 +3,7 @@
 ## Mission
 Block 3 modeling on the finalized WIDE2 freeze (`TRAIN_WIDE_FINAL`). The freeze is complete with all gates PASS. No feature backfilling is required.
 
-## Current State (as of 2026-02-13)
+## Current State (as of 2026-03-08)
 - **WIDE2 Freeze: COMPLETE** (stamp `20260203_225620`)
 - All 5 gates PASS:
   - `pointer_valid`: PASS
@@ -13,32 +13,27 @@ Block 3 modeling on the finalized WIDE2 freeze (`TRAIN_WIDE_FINAL`). The freeze 
   - `offer_day_coverage_exact`: PASS
 - Block 3 entry verified via `scripts/block3_verify_freeze.py`
 
-### Phase 7 Benchmark — ULHPC Iris HPC (IN PROGRESS)
-- **Model Registry**: **76 models across 7 categories**
-  - `ml_tabular` (15): LogisticRegression, Ridge, Lasso, ElasticNet, SVR, KNN, RandomForest, ExtraTrees, HistGradientBoosting, LightGBM, XGBoost, CatBoost, QuantileRegressor, SeasonalNaive, MeanPredictor
-  - `statistical` (5): AutoARIMA, AutoETS, AutoTheta, MSTL, SF_SeasonalNaive
-  - `deep_classical` (4): NBEATS, NHITS, TFT, DeepAR
-  - `transformer_sota` (23): PatchTST, iTransformer, TimesNet, TSMixer, Informer, Autoformer, FEDformer, VanillaTransformer, TiDE, NBEATSx, BiTCN, KAN, RMoK, SOFTS, StemGNN, xLSTM, TimeLLM, DeepNPTS (shard A: 10, shard B: 10, shard C: 3)
-  - `foundation` (11): Chronos, ChronosBolt, Chronos2, Moirai, MoiraiLarge, Moirai2, Timer, TimeMoE, MOMENT, LagLlama, TimesFM (3 shards: Chronos/Moirai/HF)
-  - `irregular` (2): GRU-D, SAITS
-  - `autofit` (10): V1, V2, V2E, V3, V3E, V3Max, V4, V5, V6, V7 (2 shards: af1/af2)
-- **Platform**: ULHPC Iris — GPU (4×V100 32GB, 756GB), Batch (28c, 112GB), QOS `iris-*-long` (14-day wall)
-- **Ablations**: 4 per task — `core_only`, `core_text`, `core_edgar`, `full`
-- **Tasks**: `task1_outcome` (3 targets), `task2_forecast` (2 targets, 4 horizons), `task3_risk_adjust` (2 targets)
-- **Output Dir**: `runs/benchmarks/block3_20260203_225620_phase7/`
-- **Progress**: 23/121 shards complete, 781 metric records
-  - 12 RUNNING, 96 PENDING
-  - ml_tabular: 10/12 done (all task1+task2 ablations complete, task3 ce/fu pending)
-  - statistical: 2/11 done (core_only: t2, t3 complete; t1_co RUNNING; ct/ce/fu 8 tasks pending with OOM fix applied)
-  - deep_classical: 6/12 done (t1: co/ct/ce done, t2: co/ct done, t3: co done; fu pending)
-  - transformer_sota A: 4/12 done (t1: co/ct running+done; t2: co/ct running; ce/fu pending)
-  - transformer_sota B, foundation×3, irregular: all core_only done in Phase 1; Phase 7 ce/fu pending
-  - autofit shard 1: 3/12 done (t1-t3 co done; t1-t3 ct RUNNING; ce/fu pending)
-  - autofit shard 2: 0/12 done (t1 co/ct just started RUNNING)
-- **Issues Fixed**:
-  - EDGAR timezone bug (merge_asof dtype mismatch) — fixed in `ae9626b`
-  - Statistical OOM 64G→112G — 6 PENDING jobs cancelled, 8 scripts updated, resubmitted
-  - 4 OOM failures (sta_t1_ct, sta_t1_fu, sta_t2_ct, sta_t2_fu) resolved
+### Phase 9 Fair Benchmark — ULHPC Iris HPC (IN PROGRESS)
+
+Phase 9 is a complete re-benchmark after fixing 4 critical experimental bugs
+(TSLib per-entity prediction, foundation prediction_length, Moirai entity cap,
+ml_tabular single-horizon). All prior Phase 7/8 results are **DEPRECATED**.
+
+- **Target Model Count**: 100 models across 8 categories
+  - `ml_tabular` (15): multi-horizon, NaN passthrough for tree models
+  - `statistical` (15): original 5 + 10 new (Croston, Holt, AutoCES, etc.)
+  - `deep_classical` (9): NBEATS/NHITS/TFT/DeepAR + GRU/LSTM/TCN/MLP/DilatedRNN
+  - `transformer_sota` (23): PatchTST, iTransformer, TimesNet, TSMixer, etc.
+  - `foundation` (11): Chronos, ChronosBolt, Chronos2, Moirai, etc.
+  - `irregular` (4): GRU-D, SAITS, BRITS, CSDI
+  - `tslib_sota` (20): TimeFilter, WPMixer, MSGNet, Crossformer, SCINet, etc.
+  - `autofit` (3): V734, V735, V736 (older versions dropped)
+- **Platform**: ULHPC Iris — GPU (V100 32GB, ~756GB RAM), bigmem (3TB, 112 CPUs), QOS `normal` (2-day wall)
+- **Ablations**: 4 per task — `core_only`, `core_text`, `core_edgar`, `full` (task3: 3, no core_text)
+- **Tasks**: `task1_outcome`, `task2_forecast`, `task3_risk_adjust`
+- **Canonical Output Dir**: `runs/benchmarks/block3_phase9_fair/`
+- **Validated Progress**: 66 metrics.json files, 5,083 valid records, 50 models materialized
+- **SLURM Scripts**: `.slurm_scripts/phase9/` (66 scripts + submission helper)
 - **Live Results**: See [docs/BLOCK3_RESULTS.md](docs/BLOCK3_RESULTS.md)
 - **Full Status**: See [docs/BLOCK3_MODEL_STATUS.md](docs/BLOCK3_MODEL_STATUS.md)
 
@@ -77,11 +72,12 @@ FreezePointer (src/narrative/data_preprocessing/block3_dataset.py)
                 │
                 ├─> Statistical (5):       AutoARIMA, AutoETS, AutoTheta, MSTL, SF_SeasonalNaive
                 ├─> ML Tabular (15):       LightGBM, XGBoost, CatBoost, RandomForest, ...
-                ├─> Deep Classical (4):    NBEATS, NHITS, TFT, DeepAR
+                ├─> Deep Classical (9):    NBEATS, NHITS, TFT, DeepAR, GRU, LSTM, TCN, MLP, DilatedRNN
                 ├─> Transformer SOTA (23): PatchTST, iTransformer, TimesNet, TSMixer, Informer, ...
                 ├─> Foundation (11):       Chronos, ChronosBolt, Moirai, MoiraiLarge, Timer, ...
-                ├─> Irregular (2):         GRU-D, SAITS
-                └─> AutoFit (10):          V1–V7, V71–V73 (ensemble model selectors)
+                ├─> Irregular (4):         GRU-D, SAITS, BRITS, CSDI
+                ├─> TSLib SOTA (20):       TimeFilter, WPMixer, MSGNet, Crossformer, SCINet, ...
+                └─> AutoFit (3):           V734, V735, V736
 ```
 
 ### Join Keys
@@ -98,7 +94,7 @@ From `scripts/block3_profile_data.py`:
 - Freeze verification: `scripts/block3_verify_freeze.py`
 - Data profiling: `scripts/block3_profile_data.py`
 - Benchmark harness (shard): `scripts/run_block3_benchmark_shard.py`
-- SLURM submission (master): `scripts/submit_phase7_full_benchmark.sh`
+- SLURM submission (Phase 9): `.slurm_scripts/phase9/submit_all_phase9.sh`
 - Results aggregator: `scripts/aggregate_block3_results.py`
 - Results consolidator: `scripts/consolidate_block3_results.py`
 - Paper tables: `scripts/make_paper_tables_v2.py`
@@ -145,21 +141,22 @@ From `scripts/block3_profile_data.py`:
 4. ✅ Benchmark harness with 6 baseline categories
 5. ✅ AutoFit rule-based composer
 6. ✅ Concept bottleneck for interpretability
-7. ✅ Model registry expansion: 76 models across 7 categories (Phase 4-7)
+7. ✅ Model registry expansion: 127 models across 8 categories (Phase 4-8)
 8. ✅ Panel data fix: all categories receive entity-panel kwargs
 9. ✅ Deep/Transformer models: 22 NeuralForecast models (panel-aware, +xLSTM/TimeLLM/DeepNPTS)
 10. ✅ Statistical models: entity-sampled panel via StatsForecast
 11. ✅ Foundation models: 11 models (Chronos family + Moirai family + Timer/TimeMoE/MOMENT/LagLlama/TimesFM)
-12. ✅ Irregular models: GRU-D + SAITS via PyPOTS
-13. ✅ AutoFit V1-V7, V71-V73: 13 ensemble selection strategies
-14. ✅ Benchmark harness updated for all 7 categories + 4 ablations
+12. ✅ Irregular models: GRU-D, SAITS, BRITS, CSDI via PyPOTS
+13. ✅ AutoFit V734/V735/V736 (older versions dropped)
+14. ✅ Benchmark harness updated for all 8 categories + 4 ablations
 15. ✅ Phase 7 code fixes (5 root causes across 4 files, 57/57 tests pass)
 16. ✅ EDGAR timezone fix (merge_asof dtype mismatch)
 17. ✅ Statistical OOM fix (64G → 112G memory)
 18. ✅ V73 factored contextual bandit RL policy (Thompson Sampling / LinUCB)
 19. ✅ V73 multi-agent coordination (Recon/Scout/Composer/Critic blackboard protocol)
 20. ✅ V72 root cause analysis (6 root causes, GPU gate fix)
-21. ⏳ Phase 7 full benchmark run on Iris HPC — 23/121 shards done, 781 records
-22. ⏳ V73 GPU benchmark validation (104 condition keys)
-23. ⏳ TCAV-style concept importance analysis
-24. ⏳ Results leaderboard + paper tables
+21. ✅ Phase 7/8 benchmark — deprecated (4 critical bugs found)
+22. ✅ Phase 9 clean results: 5,083 valid records, 50 models in `block3_phase9_fair/`
+23. ⏳ Phase 9 re-runs: 66 SLURM scripts ready, targeting 100 models × 104 conditions
+24. ⏳ TCAV-style concept importance analysis
+25. ⏳ Final leaderboard + paper tables (after Phase 9 completes)

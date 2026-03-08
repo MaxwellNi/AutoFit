@@ -16,7 +16,7 @@ CONDA_PREFIX="/mnt/aiongpfs/projects/eint/envs/.micromamba/envs/insider"
 PARTITION="gpu"
 QOS="iris-gpu-long"
 WALL="3-00:00:00"
-MEM="192G"
+MEM="384G"
 CPUS=8
 
 mkdir -p "${LOG_DIR}"

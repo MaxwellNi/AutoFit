@@ -169,6 +169,44 @@ TSLIB_CONFIGS: Dict[str, Dict[str, Any]] = {
         "single_step_output_One": 0, "RIN": False,
         "activation": "gelu", "factor": 1,
     },
+    # ── Phase 9 additions: models available in vendored TSLib ──
+    "ETSformer": {
+        "venue": "ICML 2023",
+        "d_model": 128, "d_ff": 256, "n_heads": 8, "e_layers": 2,
+        "d_layers": 2, "dropout": 0.1, "activation": "gelu",
+        "factor": 1, "K": 3, "std": 0.2,
+    },
+    "LightTS": {
+        "venue": "arXiv 2022",
+        "d_model": 128, "d_ff": 256, "dropout": 0.1,
+        "activation": "gelu", "factor": 1,
+        "chunk_size": 12,
+    },
+    "Pyraformer": {
+        "venue": "ICLR 2022",
+        "d_model": 128, "d_ff": 256, "n_heads": 4, "e_layers": 2,
+        "d_layers": 1, "dropout": 0.1, "activation": "gelu",
+        "factor": 1, "window_size": [4, 4],
+        "inner_size": 3,
+    },
+    "Reformer": {
+        "venue": "ICLR 2020",
+        "d_model": 128, "d_ff": 256, "n_heads": 8, "e_layers": 2,
+        "d_layers": 1, "dropout": 0.1, "activation": "gelu",
+        "factor": 1, "bucket_size": 4, "n_hashes": 4,
+    },
+    "TiRex": {
+        "venue": "ICLR 2025",
+        "d_model": 128, "d_ff": 256, "n_heads": 8, "e_layers": 2,
+        "dropout": 0.1, "patch_len": 16, "activation": "gelu",
+        "factor": 1,
+    },
+    "Mamba": {
+        "venue": "ICLR 2024",
+        "d_model": 128, "d_ff": 16, "d_conv": 4, "expand": 2,
+        "dropout": 0.1, "e_layers": 4,
+        "activation": "gelu", "factor": 1,
+    },
 }
 
 # Map model names to their TSLib file names (most are identical)
@@ -199,10 +237,10 @@ class TSLibModelWrapper(ModelBase):
         self,
         config: ModelConfig,
         tslib_model_name: str,
-        max_epochs: int = 50,
+        max_epochs: int = 100,
         learning_rate: float = 1e-3,
         batch_size: int = 64,
-        patience: int = 7,
+        patience: int = 15,
         **kwargs,
     ):
         super().__init__(config)
@@ -216,6 +254,8 @@ class TSLibModelWrapper(ModelBase):
         self._device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
         self._target_mean: float = 0.0
         self._target_std: float = 1.0
+        self._train_feat_mean: Optional[np.ndarray] = None
+        self._train_feat_std: Optional[np.ndarray] = None
 
     # Time feature dimension per TSLib frequency code (from layers/Embed.py)
     _FREQ_FEAT_DIM = {
@@ -404,6 +444,14 @@ class TSLibModelWrapper(ModelBase):
         numeric_cols = X.select_dtypes(include=[np.number]).columns.tolist()
         enc_in = len(numeric_cols)
 
+        # Save training normalization statistics for predict-time reuse
+        # (prevents test-time data leakage)
+        X_arr = X[numeric_cols].values.astype(np.float32)
+        X_arr = np.nan_to_num(X_arr, nan=0.0)
+        self._train_feat_mean = np.mean(X_arr, axis=0, keepdims=True)
+        self._train_feat_std = np.std(X_arr, axis=0, keepdims=True)
+        self._train_feat_std[self._train_feat_std < 1e-8] = 1.0
+
         # Build TSLib configs (may adjust pred_len for seg_len alignment)
         configs = self._build_configs(seq_len, pred_len, enc_in)
         self._configs = configs
@@ -587,26 +635,167 @@ class TSLibModelWrapper(ModelBase):
         if torch.cuda.is_available():
             torch.cuda.empty_cache()
 
+        # ---- Save per-entity context windows for per-entity predict() ----
+        self._entity_contexts: dict = {}
+        if "entity_id" in X.columns:
+            X_arr_ectx = X[numeric_cols].values.astype(np.float32)
+            X_arr_ectx = np.nan_to_num(X_arr_ectx, nan=0.0)
+            X_ectx_norm = (X_arr_ectx - self._train_feat_mean) / self._train_feat_std
+
+            for eid, grp in X.groupby("entity_id"):
+                positions = [X.index.get_loc(i) for i in grp.index]
+                entity_feats = X_ectx_norm[positions]
+                if len(entity_feats) >= seq_len:
+                    ctx = entity_feats[-seq_len:]
+                else:
+                    ctx = np.zeros((seq_len, enc_in), dtype=np.float32)
+                    ctx[-len(entity_feats):] = entity_feats
+                self._entity_contexts[eid] = torch.tensor(ctx, dtype=torch.float32)
+
+            logger.info(
+                f"[TSLib-{self._tslib_model_name}] Saved {len(self._entity_contexts)} "
+                f"entity contexts for per-entity inference"
+            )
+
         self._fitted = True
         return self
 
     def predict(self, X: pd.DataFrame, **kwargs) -> np.ndarray:
-        """Generate predictions using trained TSLib model."""
+        """Generate per-entity predictions using trained TSLib model.
+
+        When entity contexts are available (saved during fit), runs batched
+        forward passes per-entity to produce unique predictions for each
+        entity — eliminating the single-window broadcast bug.
+        """
         if not self._fitted or self._model is None:
             raise RuntimeError(f"TSLib model {self._tslib_model_name} not fitted")
 
         horizon = int(kwargs.get("horizon", self._pred_len))
         h = len(X)
+        test_raw = kwargs.get("test_raw")
 
-        # Get numeric features
+        # ---- PER-ENTITY PREDICTION (correct panel inference) ----
+        if (test_raw is not None
+                and "entity_id" in test_raw.columns
+                and getattr(self, "_entity_contexts", None)):
+            target = kwargs.get("target")
+            if target and target in test_raw.columns:
+                valid_mask = test_raw[target].notna()
+                test_entities = test_raw.loc[valid_mask, "entity_id"].values
+            else:
+                test_entities = test_raw["entity_id"].values
+
+            if len(test_entities) == h:
+                return self._predict_per_entity(test_entities, h, horizon)
+
+        # ---- FALLBACK: single-window prediction (legacy) ----
+        return self._predict_single_window(X, h, horizon)
+
+    def _predict_per_entity(
+        self, test_entities: np.ndarray, h: int, horizon: int
+    ) -> np.ndarray:
+        """Batched per-entity forward pass through TSLib model."""
+        unique_eids = list(dict.fromkeys(test_entities))  # preserve order, dedupe
+        entity_preds: dict = {}
+
+        # Collect entities with saved contexts
+        batch_inputs = []
+        batch_eids = []
+        for eid in unique_eids:
+            if eid in self._entity_contexts:
+                batch_inputs.append(self._entity_contexts[eid])
+                batch_eids.append(eid)
+
+        time_feat_dim = self._FREQ_FEAT_DIM.get(self._configs.freq, 4)
+        sub_batch = min(256, max(1, len(batch_inputs)))
+
+        if batch_inputs:
+            self._model.eval()
+            with torch.no_grad():
+                for bs in range(0, len(batch_inputs), sub_batch):
+                    be = min(bs + sub_batch, len(batch_inputs))
+                    x_batch = torch.stack(batch_inputs[bs:be]).to(self._device)
+                    B = x_batch.shape[0]
+
+                    x_mark = torch.zeros(
+                        B, self._seq_len, time_feat_dim, device=self._device
+                    )
+                    dec_inp = torch.zeros(
+                        B, self._configs.label_len + self._pred_len,
+                        x_batch.shape[2], device=self._device,
+                    )
+                    dec_inp[:, :self._configs.label_len, :] = \
+                        x_batch[:, -self._configs.label_len:, :]
+                    dec_mark = torch.zeros(
+                        B, self._configs.label_len + self._pred_len,
+                        time_feat_dim, device=self._device,
+                    )
+
+                    try:
+                        out = self._model(x_batch, x_mark, dec_inp, dec_mark)
+                        if isinstance(out, tuple):
+                            out = out[0]
+                        if out.dim() == 3:
+                            preds = out[:, -self._pred_len:, 0].cpu().numpy()
+                        elif out.dim() == 2:
+                            preds = out[:, -self._pred_len:].cpu().numpy()
+                        else:
+                            preds = out.cpu().numpy().reshape(B, -1)
+
+                        # Denormalize
+                        preds = preds * self._target_std + self._target_mean
+
+                        # Use horizon-step-ahead prediction (or mean if horizon > pred_len)
+                        for i, eid in enumerate(batch_eids[bs:be]):
+                            pred_vec = preds[i]
+                            if horizon <= len(pred_vec):
+                                entity_preds[eid] = float(pred_vec[horizon - 1])
+                            else:
+                                entity_preds[eid] = float(np.mean(pred_vec))
+
+                    except Exception as e:
+                        logger.warning(
+                            f"[TSLib-{self._tslib_model_name}] Batch predict error: {e}"
+                        )
+                        for eid in batch_eids[bs:be]:
+                            entity_preds[eid] = self._target_mean
+
+        # Map predictions to test rows
+        fallback = self._target_mean
+        y_pred = np.empty(h, dtype=np.float64)
+        n_matched = 0
+        for i, eid in enumerate(test_entities):
+            if eid in entity_preds:
+                y_pred[i] = entity_preds[eid]
+                n_matched += 1
+            else:
+                y_pred[i] = fallback
+
+        logger.info(
+            f"[TSLib-{self._tslib_model_name}] Per-entity predict: "
+            f"{len(entity_preds)}/{len(set(test_entities))} entities matched, "
+            f"{n_matched}/{h} rows covered, "
+            f"unique_preds={len(np.unique(np.round(y_pred, 4)))}"
+        )
+        return y_pred
+
+    def _predict_single_window(
+        self, X: pd.DataFrame, h: int, horizon: int
+    ) -> np.ndarray:
+        """Fallback: single-window prediction (used when no entity contexts)."""
         numeric_cols = X.select_dtypes(include=[np.number]).columns.tolist()
         X_arr = X[numeric_cols].values.astype(np.float32)
 
-        # Normalize features (same normalization as training)
+        # Use TRAINING normalization statistics (saved during fit) to avoid
+        # test-time data leakage. Fall back to test stats if unavailable.
         X_arr = np.nan_to_num(X_arr, nan=0.0)
-        feat_mean = np.mean(X_arr, axis=0, keepdims=True)
-        feat_std = np.std(X_arr, axis=0, keepdims=True)
-        feat_std[feat_std < 1e-8] = 1.0
+        if self._train_feat_mean is not None and self._train_feat_std is not None:
+            feat_mean = self._train_feat_mean
+            feat_std = self._train_feat_std
+        else:
+            feat_mean = np.mean(X_arr, axis=0, keepdims=True)
+            feat_std = np.std(X_arr, axis=0, keepdims=True)
+            feat_std[feat_std < 1e-8] = 1.0
         X_norm = (X_arr - feat_mean) / feat_std
 
         # Pad or truncate to seq_len
@@ -716,6 +905,14 @@ create_nonstationary_transformer = _tslib_factory(
 create_film = _tslib_factory("FiLM")
 create_scinet = _tslib_factory("SCINet")
 
+# Phase 9 additions
+create_etsformer = _tslib_factory("ETSformer")
+create_lightts = _tslib_factory("LightTS")
+create_pyraformer = _tslib_factory("Pyraformer")
+create_reformer = _tslib_factory("Reformer")
+create_tirex = _tslib_factory("TiRex")
+create_mamba = _tslib_factory("Mamba")
+
 
 # ============================================================================
 # Registry (imported by registry.py)
@@ -726,20 +923,26 @@ TSLIB_MODELS = {
     "TimeFilter": create_timefilter,
     "WPMixer": create_wpmixer,
     "MultiPatchFormer": create_multipatchformer,
+    "TiRex": create_tirex,
     # 2024
     "MSGNet": create_msgnet,
     "PAttn": create_pattn,
     "MambaSimple": create_mambasimple,
+    "Mamba": create_mamba,
     # 2023
     "Koopa": create_koopa,
     "FreTS": create_frets,
     "Crossformer": create_crossformer,
     "MICN": create_micn,
     "SegRNN": create_segrnn,
+    "ETSformer": create_etsformer,
     # 2022
     "NonstationaryTransformer": create_nonstationary_transformer,
     "FiLM": create_film,
     "SCINet": create_scinet,
+    "LightTS": create_lightts,
+    "Pyraformer": create_pyraformer,
+    "Reformer": create_reformer,
 }
 
 

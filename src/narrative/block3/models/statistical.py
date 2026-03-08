@@ -35,6 +35,24 @@ class StatsForecastWrapper(ModelBase):
             AutoARIMA, AutoETS, AutoTheta, MSTL, SeasonalNaive,
             Naive, HistoricAverage, WindowAverage,
         )
+        # Additional models for Phase 9 saturation
+        try:
+            from statsforecast.models import (
+                CrostonClassic, CrostonOptimized, CrostonSBA,
+                DynamicOptimizedTheta, AutoCES, Holt, HoltWinters,
+            )
+            extra_registry = {
+                "CrostonClassic": CrostonClassic,
+                "CrostonOptimized": CrostonOptimized,
+                "CrostonSBA": CrostonSBA,
+                "DynamicOptimizedTheta": DynamicOptimizedTheta,
+                "AutoCES": AutoCES,
+                "Holt": Holt,
+                "HoltWinters": HoltWinters,
+            }
+        except ImportError:
+            extra_registry = {}
+
         registry = {
             "AutoARIMA": AutoARIMA,
             "AutoETS": AutoETS,
@@ -44,6 +62,7 @@ class StatsForecastWrapper(ModelBase):
             "Naive": Naive,
             "HistoricAverage": HistoricAverage,
             "WindowAverage": WindowAverage,
+            **extra_registry,
         }
         if self.model_name not in registry:
             raise ValueError(f"Unknown SF model: {self.model_name}")
@@ -55,6 +74,13 @@ class StatsForecastWrapper(ModelBase):
             return cls(season_length=self.model_kwargs.get("season_length", [7, 30]))
         if self.model_name == "WindowAverage":
             return cls(window_size=self.model_kwargs.get("window_size", 7))
+        if self.model_name == "HoltWinters":
+            return cls(
+                season_length=self.model_kwargs.get("season_length", 7),
+                error_type=self.model_kwargs.get("error_type", "A"),
+            )
+        if self.model_name == "Holt":
+            return cls()
         return cls()
 
     def fit(self, X: pd.DataFrame, y: pd.Series, **kwargs) -> "StatsForecastWrapper":
@@ -207,6 +233,17 @@ create_auto_ets = _sf_factory("AutoETS")
 create_auto_theta = _sf_factory("AutoTheta")
 create_mstl = _sf_factory("MSTL")
 create_sf_seasonal_naive = _sf_factory("SF_SeasonalNaive")
+# Phase 9 additions
+create_croston_classic = _sf_factory("CrostonClassic")
+create_croston_optimized = _sf_factory("CrostonOptimized")
+create_croston_sba = _sf_factory("CrostonSBA")
+create_dynamic_opt_theta = _sf_factory("DynamicOptimizedTheta")
+create_auto_ces = _sf_factory("AutoCES")
+create_holt = _sf_factory("Holt")
+create_holt_winters = _sf_factory("HoltWinters")
+create_naive = _sf_factory("Naive")
+create_historic_average = _sf_factory("HistoricAverage")
+create_window_average = _sf_factory("WindowAverage")
 
 
 STATISTICAL_MODELS = {
@@ -215,6 +252,17 @@ STATISTICAL_MODELS = {
     "AutoTheta": create_auto_theta,
     "MSTL": create_mstl,
     "SF_SeasonalNaive": create_sf_seasonal_naive,
+    # Phase 9 additions
+    "CrostonClassic": create_croston_classic,
+    "CrostonOptimized": create_croston_optimized,
+    "CrostonSBA": create_croston_sba,
+    "DynamicOptimizedTheta": create_dynamic_opt_theta,
+    "AutoCES": create_auto_ces,
+    "Holt": create_holt,
+    "HoltWinters": create_holt_winters,
+    "Naive": create_naive,
+    "HistoricAverage": create_historic_average,
+    "WindowAverage": create_window_average,
 }
 
 

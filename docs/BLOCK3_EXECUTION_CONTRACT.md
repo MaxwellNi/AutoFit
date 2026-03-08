@@ -11,7 +11,7 @@ This contract is mandatory for every Block3 run path:
 
 - Iris Slurm submit and preflight scripts
 - Local 3090/4090 production runners
-- Any benchmark or completion controller scripts for AutoFit V7/V7.1/V7.2
+- Any benchmark or completion controller scripts for AutoFit V734/V735/V736
 
 ## Non-Negotiable Controls
 

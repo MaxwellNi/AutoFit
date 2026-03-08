@@ -1,0 +1,78 @@
+digraph AutoFitMechanismBipanel {
+  graph [
+    rankdir=TB,
+    fontsize=12,
+    fontname="Helvetica",
+    labelloc="t",
+    label="Methodology Two-Panel Figure: AutoFit v1 vs AutoFit v2/v2E",
+    bgcolor="white",
+    nodesep=0.6,
+    ranksep=0.56,
+    pad=0.06,
+    splines=polyline,
+    concentrate=true
+  ];
+
+  node [
+    shape=box,
+    style="rounded,filled",
+    fontname="Helvetica",
+    fontsize=10.5,
+    color="#2B2B2B",
+    penwidth=1.0,
+    margin="0.11,0.08"
+  ];
+
+  edge [
+    color="#4A4A4A",
+    penwidth=1.2,
+    arrowsize=0.68
+  ];
+
+  a1 [
+    label="(a) AutoFit v1\nrule diagnostics m_v1\nif/else thresholds -> (B,F,L,Omega)",
+    fillcolor="#E9F8F6",
+    color="#72B7B2"
+  ];
+  b1 [
+    label="(b) AutoFit v2/v2E\nmeta-features m, expert scores s_k,\nsoftmax gate π_k (top-1 or top-K)",
+    fillcolor="#FFF3E6",
+    color="#F29E4C"
+  ];
+
+  a2 [
+    label="(a) Output policy\nsingle-route model",
+    fillcolor="#E9F8F6",
+    color="#72B7B2"
+  ];
+  b2 [
+    label="(b) Output policy\nselected/weighted experts\n(+ optional ASHA refinement)",
+    fillcolor="#FFEACF",
+    color="#F29E4C"
+  ];
+
+  { rank=same; a1; b1; }
+  { rank=same; a2; b2; }
+
+  a1 -> a2;
+  b1 -> b2;
+
+  shared [
+    label="Shared temporal constraints and evaluation\nstrict split + leakage guards + MAE/RMSE/sMAPE/MAPE + CI",
+    fillcolor="#EAF2FF",
+    color="#6C8EBF"
+  ];
+
+  fallback [
+    label="Contingency fallback\nrobust tabular baseline",
+    fillcolor="#FDECEC",
+    color="#C0392B",
+    fontcolor="#8A1F11"
+  ];
+
+  a2 -> shared;
+  b2 -> shared;
+  a2 -> fallback [style=dashed, color="#C0392B"];
+  b2 -> fallback [style=dashed, color="#C0392B"];
+  fallback -> shared [style=dashed, color="#C0392B"];
+}

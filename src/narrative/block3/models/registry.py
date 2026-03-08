@@ -1,26 +1,37 @@
 #!/usr/bin/env python3
 """
-Model Registry for Block 3 KDD'26 Benchmark.
+Model Registry for Block 3 KDD'26 Benchmark — Phase 9 Saturated.
 
-Unified interface for all 97 models across 8 categories:
-  - ml_tabular      (15): LogisticRegression … MeanPredictor
-  - statistical      (5): AutoARIMA, AutoETS, AutoTheta, MSTL, SF_SeasonalNaive
-  - deep_classical   (9): NBEATS, NHITS, TFT, DeepAR, GRU, LSTM, TCN, MLP, DilatedRNN
-  - transformer_sota(23): PatchTST, iTransformer, TimesNet, TSMixer,
-                           Informer, Autoformer, FEDformer, VanillaTransformer,
-                           TiDE, NBEATSx, BiTCN, KAN, RMoK, SOFTS, StemGNN,
-                           DLinear, NLinear, TimeMixer, TimeXer, TSMixerx,
-                           xLSTM, TimeLLM, DeepNPTS
-  - foundation      (11): Chronos, ChronosBolt, Chronos2, Moirai, MoiraiLarge,
-                           Moirai2, Timer, TimeMoE, MOMENT, LagLlama, TimesFM
-  - irregular        (2): GRU-D, SAITS
-  - tslib_sota      (14): TimeFilter (ICML'25), WPMixer (AAAI'25),
-                           MultiPatchFormer, MSGNet (AAAI'24), PAttn (NeurIPS'24),
-                           MambaSimple, Koopa (NeurIPS'23), FreTS (NeurIPS'23),
-                           Crossformer (ICLR'23), MICN (ICLR'23), SegRNN,
-                           NonstationaryTransformer (NeurIPS'22), FiLM (NeurIPS'22),
-                           SCINet (NeurIPS'22)
-  - autofit         (17): V1, V2, V2E, V3, V3E, V3Max, V4, V5, V6, V7, V71, V72, V73, V731, V732, V733, NFAdaptiveChampion
+Unified interface for all 127 registered models across 8 categories
+(Phase 9 targets 100 active models; 50 with valid results so far):
+  - ml_tabular      (20): LogisticRegression, Ridge, Lasso, ElasticNet, SVR,
+                           KNN, RandomForest, ExtraTrees, HistGradientBoosting,
+                           LightGBM, XGBoost, CatBoost, XGBoostPoisson,
+                           LightGBMTweedie, NegativeBinomialGLM, TabPFNRegressor,
+                           TabPFNClassifier, QuantileRegressor, SeasonalNaive,
+                           MeanPredictor
+  - statistical     (15): AutoARIMA, AutoETS, AutoTheta, MSTL, SF_SeasonalNaive,
+                           CrostonClassic, CrostonOptimized, CrostonSBA,
+                           DynamicOptimizedTheta, AutoCES, Holt, HoltWinters,
+                           Naive, HistoricAverage, WindowAverage
+  - deep_classical   (9): NBEATS, NHITS, TFT, DeepAR, GRU, LSTM, TCN, MLP,
+                           DilatedRNN
+  - transformer_sota(23): PatchTST, iTransformer, TimesNet, TSMixer, Informer,
+                           Autoformer, FEDformer, VanillaTransformer, TiDE,
+                           NBEATSx, BiTCN, KAN, RMoK, SOFTS, StemGNN, DLinear,
+                           NLinear, TimeMixer, TimeXer, TSMixerx, xLSTM,
+                           TimeLLM, DeepNPTS
+  - foundation      (15): Chronos, ChronosBolt, Chronos2, Moirai, MoiraiLarge,
+                           Moirai2, Timer, TimeMoE, MOMENT, LagLlama, TimesFM,
+                           Sundial, TTM, TimerXL, TimesFM2
+  - irregular        (4): GRU-D, SAITS, BRITS, CSDI
+  - tslib_sota      (20): TimeFilter, WPMixer, MultiPatchFormer, TiRex,
+                           MSGNet, PAttn, MambaSimple, Mamba, Koopa, FreTS,
+                           Crossformer, MICN, SegRNN, ETSformer,
+                           NonstationaryTransformer, FiLM, SCINet, LightTS,
+                           Pyraformer, Reformer
+  - autofit         (21): V1–V7, V71–V73, V731–V733, V734, V735, V736,
+                           FusedChampion, NFAdaptiveChampion
 """
 from __future__ import annotations
 

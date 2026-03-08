@@ -581,7 +581,13 @@ class BenchmarkShard:
                     f"co-determined cols for target={target}: {actually_present}"
                 )
 
-        X = df_clean[feature_cols].fillna(0)
+        # Tree-native models (XGBoost, LightGBM, CatBoost) handle NaN natively.
+        # For other models fillna(0) is a pragmatic compromise.
+        _NATIVE_NAN_CATEGORIES = {"ml_tabular"}
+        if hasattr(self, 'category') and self.category in _NATIVE_NAN_CATEGORIES:
+            X = df_clean[feature_cols].copy()
+        else:
+            X = df_clean[feature_cols].fillna(0)
         y = df_clean[target]
 
         return X, y
@@ -959,11 +965,12 @@ class BenchmarkShard:
             routing_signals = self._extract_routing_signals(model)
 
             # ---- CONSTANT-PREDICTION GUARD ----
-            if len(y_pred) > 1 and np.std(y_pred) == 0.0:
+            constant_prediction = len(y_pred) > 1 and np.std(y_pred) == 0.0
+            if constant_prediction:
                 logger.warning(
                     f"  ⚠ CONSTANT-PREDICTION detected for {model_name} "
                     f"(target={target}, h={horizon}): all {len(y_pred)} "
-                    f"predictions = {y_pred[0]:.4f}"
+                    f"predictions = {y_pred[0]:.4f} — fairness_pass=False"
                 )
 
             # Compute metrics
@@ -984,7 +991,7 @@ class BenchmarkShard:
                 prediction_coverage_ratio=prediction_coverage_ratio,
                 n_missing_predictions=n_missing_predictions,
                 fallback_fraction=fallback_fraction,
-                fairness_pass=True,
+                fairness_pass=(not constant_prediction),
                 lane_clip_rate=float(routing_signals["lane_clip_rate"]),
                 inverse_transform_guard_hits=int(routing_signals["inverse_transform_guard_hits"]),
                 anchor_models_used=list(routing_signals["anchor_models_used"]),
@@ -1050,8 +1057,13 @@ class BenchmarkShard:
 
         except Exception as e:
             if isinstance(e, RuntimeError) and str(e).startswith("[FAIRNESS GUARD]"):
-                # Hard fail to keep benchmark comparisons fair.
-                raise
+                # Log and skip — do NOT re-raise, which would kill the entire shard
+                # and prevent other models from running.
+                logger.error(
+                    f"  [FAIRNESS GUARD] {model_name} failed fairness check: {e}. "
+                    f"Skipping this model (shard continues)."
+                )
+                return None
             logger.error(f"Error running {model_name}: {e}")
             logger.debug(traceback.format_exc())
             return None
@@ -1137,16 +1149,12 @@ class BenchmarkShard:
             # Run each combination
             dedup_skips_runtime = 0
             for target in targets:  # ALL targets for KDD'26 full paper
-                # Cross-sectional models produce identical results for all
-                # horizons (features are horizon-independent).  Run only the
-                # first horizon to avoid wasted SLURM compute.
+                # All categories now run all horizons for fair comparison
+                # across the full 104-condition grid. ML tabular models may
+                # produce similar results across horizons (features are
+                # horizon-independent) but must still be evaluated on each
+                # horizon to maintain condition parity with other categories.
                 run_horizons = horizons
-                if self.category == "ml_tabular":
-                    run_horizons = [horizons[0]]
-                    logger.info(
-                        f"  Cross-sectional category {self.category}: "
-                        f"single horizon {run_horizons[0]} (feature-independent)"
-                    )
 
                 for horizon in run_horizons:
                     logger.info(f"\nTarget: {target}, Horizon: {horizon}")

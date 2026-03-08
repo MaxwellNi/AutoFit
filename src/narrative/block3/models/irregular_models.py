@@ -415,6 +415,318 @@ class SAITSWrapper(ModelBase):
 # ============================================================================
 
 
+# ============================================================================
+# BRITS via PyPOTS — Bidirectional RNN Imputation for Time Series
+# ============================================================================
+
+
+class BRITSWrapper(ModelBase):
+    """BRITS: Bidirectional Recurrent Imputation for Time Series (NeurIPS'18).
+
+    Production configuration:
+    - rnn_hidden_size=128, epochs=50, patience=10
+    - device=cuda (auto-detect)
+    - Uses imputed series tail statistics as prediction (same as GRU-D)
+    """
+
+    def __init__(self, config: ModelConfig, **kw):
+        super().__init__(config)
+        self.kw = kw
+        self._model = None
+        self._fallback_val = 0.0
+        self._use_fallback = False
+        self._entity_pred_map: dict = {}
+
+    def fit(self, X: pd.DataFrame, y: pd.Series, **kwargs) -> "BRITSWrapper":
+        self._fallback_val = float(y.mean())
+        self._use_fallback = False
+
+        train_raw = kwargs.get("train_raw")
+        target = kwargs.get("target")
+
+        if train_raw is None or target is None:
+            self._use_fallback = True
+            self._fitted = True
+            return self
+
+        X_arr, mask, y_arr, entity_ids = _build_irregular_features(
+            train_raw, target, max_entities=5000, max_seq_len=120,
+        )
+        if X_arr is None:
+            self._use_fallback = True
+            self._fitted = True
+            return self
+
+        # Robust fallback for unseen entities
+        self._robust_fallback = None
+        try:
+            from .deep_models import _RobustFallback
+            self._robust_fallback = _RobustFallback()
+            self._robust_fallback.fit(X, y)
+        except Exception:
+            pass
+
+        try:
+            from pypots.imputation import BRITS
+
+            n_steps = X_arr.shape[1]
+            n_features = X_arr.shape[2]
+
+            self._model = BRITS(
+                n_steps=n_steps,
+                n_features=n_features,
+                rnn_hidden_size=self.kw.get("rnn_hidden_size", 128),
+                epochs=self.kw.get("epochs", 50),
+                batch_size=self.kw.get("batch_size", 64),
+                patience=self.kw.get("patience", 10),
+                device=_DEVICE,
+            )
+
+            _logger.info(
+                f"  [BRITS] PRODUCTION training on {X_arr.shape[0]} series, "
+                f"seq_len={n_steps}, features={n_features}, "
+                f"epochs=50, device={_DEVICE}"
+            )
+            train_dict = {"X": X_arr}
+            self._model.fit(train_dict)
+
+            result = self._model.predict({"X": X_arr})
+            imputed = result["imputation"]  # (N, T, F)
+
+            tail_means = []
+            eids = list(entity_ids) if entity_ids is not None else []
+            for i in range(imputed.shape[0]):
+                tail = imputed[i, -7:, 0]
+                tail_means.append(float(np.nanmean(tail)))
+
+            self._entity_pred_map = {}
+            for eid, tm in zip(eids, tail_means):
+                self._entity_pred_map[eid] = tm
+
+            self._fallback_val = float(np.mean(tail_means))
+            self._fitted = True
+            _logger.info(
+                f"  [BRITS] Fitted ✓, "
+                f"imputed tail mean={self._fallback_val:.2f}"
+            )
+
+        except ImportError as exc:
+            raise ImportError(
+                "[BRITS] PyPOTS >= 0.4 is required. "
+                "Install with: pip install 'pypots>=0.4'"
+            ) from exc
+        except Exception as e:
+            _logger.warning(f"  [BRITS] Training failed: {e}, fallback")
+            self._use_fallback = True
+            self._fitted = True
+
+        return self
+
+    def predict(self, X: pd.DataFrame, **kwargs) -> np.ndarray:
+        if not self._fitted:
+            raise ValueError("Not fitted")
+        h = len(X)
+
+        if self._use_fallback or not self._entity_pred_map:
+            return np.full(h, self._fallback_val)
+
+        test_raw = kwargs.get("test_raw")
+        target = kwargs.get("target")
+        if test_raw is not None and "entity_id" in test_raw.columns:
+            if target and target in test_raw.columns:
+                valid_mask = test_raw[target].notna()
+                test_entities = test_raw.loc[valid_mask, "entity_id"].values
+            else:
+                test_entities = test_raw["entity_id"].values
+
+            if len(test_entities) == h:
+                rb = getattr(self, '_robust_fallback', None)
+                rb_preds = None
+                if rb is not None and rb._fitted:
+                    rb_preds = rb.predict(X)
+
+                y_pred = np.empty(h, dtype=np.float64)
+                for i, eid in enumerate(test_entities):
+                    if eid in self._entity_pred_map:
+                        y_pred[i] = self._entity_pred_map[eid]
+                    elif rb_preds is not None:
+                        y_pred[i] = rb_preds[i]
+                    else:
+                        y_pred[i] = self._fallback_val
+
+                n_covered = sum(1 for eid in test_entities if eid in self._entity_pred_map)
+                _logger.info(
+                    f"  [BRITS] Per-entity HYBRID predict: "
+                    f"{len(self._entity_pred_map)} entities, "
+                    f"{n_covered}/{len(set(test_entities))} matched"
+                )
+                return y_pred
+
+        return np.full(h, self._fallback_val)
+
+
+# ============================================================================
+# CSDI via PyPOTS — Conditional Score-based Diffusion Imputation
+# ============================================================================
+
+
+class CSDIWrapper(ModelBase):
+    """CSDI: Conditional Score-based Diffusion for Imputation (NeurIPS'21).
+
+    Production configuration:
+    - n_layers=4, n_heads=4, n_channels=64, d_time_embedding=128
+    - n_diffusion_steps=50, epochs=50, patience=10
+    - device=cuda (auto-detect)
+    - Uses imputed series tail statistics as prediction
+    """
+
+    def __init__(self, config: ModelConfig, **kw):
+        super().__init__(config)
+        self.kw = kw
+        self._model = None
+        self._fallback_val = 0.0
+        self._use_fallback = False
+        self._entity_pred_map: dict = {}
+
+    def fit(self, X: pd.DataFrame, y: pd.Series, **kwargs) -> "CSDIWrapper":
+        self._fallback_val = float(y.mean())
+        self._use_fallback = False
+
+        train_raw = kwargs.get("train_raw")
+        target = kwargs.get("target")
+
+        if train_raw is None or target is None:
+            self._use_fallback = True
+            self._fitted = True
+            return self
+
+        X_arr, mask, y_arr, entity_ids = _build_irregular_features(
+            train_raw, target, max_entities=5000, max_seq_len=120,
+        )
+        if X_arr is None:
+            self._use_fallback = True
+            self._fitted = True
+            return self
+
+        # Robust fallback for unseen entities
+        self._robust_fallback = None
+        try:
+            from .deep_models import _RobustFallback
+            self._robust_fallback = _RobustFallback()
+            self._robust_fallback.fit(X, y)
+        except Exception:
+            pass
+
+        try:
+            from pypots.imputation import CSDI
+
+            n_steps = X_arr.shape[1]
+            n_features = X_arr.shape[2]
+
+            self._model = CSDI(
+                n_steps=n_steps,
+                n_features=n_features,
+                n_layers=self.kw.get("n_layers", 4),
+                n_heads=self.kw.get("n_heads", 4),
+                n_channels=self.kw.get("n_channels", 64),
+                d_time_embedding=self.kw.get("d_time_embedding", 128),
+                d_feature_embedding=self.kw.get("d_feature_embedding", 16),
+                d_diffusion_embedding=self.kw.get("d_diffusion_embedding", 128),
+                n_diffusion_steps=self.kw.get("n_diffusion_steps", 50),
+                epochs=self.kw.get("epochs", 50),
+                batch_size=self.kw.get("batch_size", 64),
+                patience=self.kw.get("patience", 10),
+                device=_DEVICE,
+            )
+
+            _logger.info(
+                f"  [CSDI] PRODUCTION training on {X_arr.shape[0]} series, "
+                f"seq_len={n_steps}, features={n_features}, "
+                f"n_layers=4, n_diffusion_steps=50, epochs=50, device={_DEVICE}"
+            )
+            train_dict = {"X": X_arr}
+            self._model.fit(train_dict)
+
+            result = self._model.predict({"X": X_arr})
+            imputed = result["imputation"]  # (N, T, F)
+
+            tail_means = []
+            eids = list(entity_ids) if entity_ids is not None else []
+            for i in range(imputed.shape[0]):
+                tail = imputed[i, -7:, 0]
+                tail_means.append(float(np.nanmean(tail)))
+
+            self._entity_pred_map = {}
+            for eid, tm in zip(eids, tail_means):
+                self._entity_pred_map[eid] = tm
+
+            self._fallback_val = float(np.mean(tail_means))
+            self._fitted = True
+            _logger.info(
+                f"  [CSDI] Fitted ✓, "
+                f"imputed tail mean={self._fallback_val:.2f}"
+            )
+
+        except ImportError as exc:
+            raise ImportError(
+                "[CSDI] PyPOTS >= 0.4 is required. "
+                "Install with: pip install 'pypots>=0.4'"
+            ) from exc
+        except Exception as e:
+            _logger.warning(f"  [CSDI] Training failed: {e}, fallback")
+            self._use_fallback = True
+            self._fitted = True
+
+        return self
+
+    def predict(self, X: pd.DataFrame, **kwargs) -> np.ndarray:
+        if not self._fitted:
+            raise ValueError("Not fitted")
+        h = len(X)
+
+        if self._use_fallback or not self._entity_pred_map:
+            return np.full(h, self._fallback_val)
+
+        test_raw = kwargs.get("test_raw")
+        target = kwargs.get("target")
+        if test_raw is not None and "entity_id" in test_raw.columns:
+            if target and target in test_raw.columns:
+                valid_mask = test_raw[target].notna()
+                test_entities = test_raw.loc[valid_mask, "entity_id"].values
+            else:
+                test_entities = test_raw["entity_id"].values
+
+            if len(test_entities) == h:
+                rb = getattr(self, '_robust_fallback', None)
+                rb_preds = None
+                if rb is not None and rb._fitted:
+                    rb_preds = rb.predict(X)
+
+                y_pred = np.empty(h, dtype=np.float64)
+                for i, eid in enumerate(test_entities):
+                    if eid in self._entity_pred_map:
+                        y_pred[i] = self._entity_pred_map[eid]
+                    elif rb_preds is not None:
+                        y_pred[i] = rb_preds[i]
+                    else:
+                        y_pred[i] = self._fallback_val
+
+                n_covered = sum(1 for eid in test_entities if eid in self._entity_pred_map)
+                _logger.info(
+                    f"  [CSDI] Per-entity HYBRID predict: "
+                    f"{len(self._entity_pred_map)} entities, "
+                    f"{n_covered}/{len(set(test_entities))} matched"
+                )
+                return y_pred
+
+        return np.full(h, self._fallback_val)
+
+
+# ============================================================================
+# Registry
+# ============================================================================
+
+
 def create_gru_d(**kw):
     cfg = ModelConfig(
         name="GRU-D", model_type="irregular",
@@ -431,9 +743,27 @@ def create_saits(**kw):
     return SAITSWrapper(cfg, **kw)
 
 
+def create_brits(**kw):
+    cfg = ModelConfig(
+        name="BRITS", model_type="irregular",
+        params=kw, optional_dependency="pypots",
+    )
+    return BRITSWrapper(cfg, **kw)
+
+
+def create_csdi(**kw):
+    cfg = ModelConfig(
+        name="CSDI", model_type="irregular",
+        params=kw, optional_dependency="pypots",
+    )
+    return CSDIWrapper(cfg, **kw)
+
+
 IRREGULAR_MODELS = {
     "GRU-D": create_gru_d,
     "SAITS": create_saits,
+    "BRITS": create_brits,
+    "CSDI": create_csdi,
 }
 
 

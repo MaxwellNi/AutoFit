@@ -58,15 +58,14 @@ Verification: `scripts/block3_verify_freeze.py`
 - [x] Phase 6: AutoFitV6 stacked generalization
 - [x] Phase 7: +2 models (67 total), AutoFitV7, full code audit + 5 root-cause fixes
 
-### Phase F: Full Benchmark on ULHPC Iris (IN PROGRESS)
-- [x] SLURM submission infrastructure (`scripts/submit_phase7_full_benchmark.sh`)
-- [x] 121 SLURM jobs submitted across 11 shards × 3 tasks × ~4 ablations
+### Phase F: Full Benchmark on ULHPC Iris (Phase 9 Fair Benchmark)
+- [x] SLURM submission infrastructure
 - [x] Phase 7 code fixes (5 root causes, 57/57 tests pass) — commit `444f376`
 - [x] EDGAR timezone fix (merge_asof dtype mismatch) — commit `ae9626b`
-- [x] Statistical OOM fix (64G → 112G memory) — 8 scripts updated, resubmitted
-- [ ] **Full benchmark completion** — 23/121 shards done (19%), 781 metric records
-  - 12 RUNNING, 96 PENDING, 23 COMPLETED
-  - Est. completion: 2-3 days (queue depth dependent)
+- [x] Statistical OOM fix (64G → 112G memory)
+- [x] Phase 7/8 deprecated (4 critical bugs found)
+- [x] Phase 9 clean results: 5,083 valid records, 50 models in `block3_phase9_fair/`
+- [ ] **Phase 9 re-runs** — 66 SLURM scripts targeting ~50 remaining models
 - [ ] Results consolidation + leaderboard
 - [ ] Paper tables (LaTeX)
 
@@ -157,7 +156,7 @@ All paths resolved via `docs/audits/FULL_SCALE_POINTER.yaml`:
 ### Block 3 Outputs
 - Verification: `runs/orchestrator/.../block3_${stamp}/verify/`
 - Profile: `runs/orchestrator/.../block3_${stamp}/profile/`
-- Benchmark Phase 7: `runs/benchmarks/block3_20260203_225620_phase7/`
+- Benchmark Phase 9: `runs/benchmarks/block3_phase9_fair/`
 
 ---
 

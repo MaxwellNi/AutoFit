@@ -1,7 +1,7 @@
 # Block 3 Operational SOP (Mandatory)
 
-Last updated: 2026-03-05
-Scope: Block 3 benchmark, AutoFit V7/V7.1/V7.2/V7.3 preparation
+Last updated: 2026-03-08
+Scope: Block 3 benchmark, Phase 9 fair re-benchmark, AutoFit V734/V735/V736
 
 ## Mandatory Contract
 
@@ -22,9 +22,9 @@ If the assertion fails, stop immediately and fix blockers before scheduling.
 Every code change that can affect benchmark behavior must pass the following gate **before** any pilot/full submission:
 
 1. Freeze pointer verification
-2. Phase-7 fix verification
-3. Targeted V7.1 tests (no-leakage, coverage guard, objective switch, reproducibility)
-4. Synthetic smoke fit/predict with AutoFitV71 and strict coverage/routing audit
+2. Phase 9 code fix verification
+3. SLURM script validation (correct output directory, account, partition)
+4. Contract assertion pass
 
 Canonical command:
 

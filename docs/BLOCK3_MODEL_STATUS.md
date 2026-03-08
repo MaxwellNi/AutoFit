@@ -1,67 +1,100 @@
 # Block 3 Model Benchmark Status
 
-> Last updated: 2026-03-06
+> Last updated: 2026-03-08 (Phase 9 fair benchmark)
 > Full results: `docs/BLOCK3_RESULTS.md`
 
 ## Snapshot
 
 | Metric | Value |
 |---|---:|
-| Evaluation conditions | 48 (3 targets × 4 horizons × 4 ablations) |
-| Models evaluated | 90 (Phase 7), 108+ planned (Phase 8) |
-| Deduplicated records | 6,670 (from 81 metrics.json files) |
-| Registered models | 97 code (Phase 7) + 18 new (Phase 8) = 115 total |
-| Champion distribution | TimesNet(12), DeepNPTS(8), NBEATS(8), NBEATSx(4), GRU(4), Autoformer(2), DeepAR(4), FusedChampion(4), other(2) |
+| Correct evaluation conditions | **104** (48+32+24) |
+| metrics.json files | 66 |
+| Valid metric records | 5,083 |
+| Target model count (Phase 9) | **100** |
+| Models with valid results | 50 |
+| Active AutoFit versions | V734, V735, V736 |
+
+## Condition Count Explained
+
+**Correct total: 104 conditions per model**
+
+| Task | Targets | Horizons | Ablations | Conditions |
+|---|---:|---:|---:|---:|
+| task1_outcome | 3 (total_amount_sold, number_investors, is_funded) | 4 (1,7,14,30) | 4 (core_only, core_text, core_edgar, full) | 48 |
+| task2_forecast | 2 (total_amount_sold, number_investors) | 4 | 4 | 32 |
+| task3_risk_adjust | 2 (total_amount_sold, number_investors) | 4 | 3 (core_only, core_edgar, full — **no core_text**) | 24 |
+| **Total** | | | | **104** |
 
 ## Phase Status
 
-### Phase 7 (COMPLETE — 121 SLURM jobs)
-All categories ran. Key gaps: tslib_sota never submitted, many models <48 conditions.
+### Phase 7/8 (DEPRECATED)
+Phase 7 (91 models, 6,670 records) and Phase 8 (99 models, 7,478 records) results are
+**invalidated** by 4 critical bug fixes. All prior records are marked deprecated.
+See `runs/benchmarks/block3_20260203_225620_phase7/DEPRECATED.md` for details.
 
-### Phase 8 (READY — 84 SLURM jobs, dry-run validated)
-Saturated benchmark fills all gaps:
-- **8a**: tslib_sota (14 models, never submitted) — 22 GPU jobs
-- **8b**: New foundation models (Sundial, TTM, TimerXL, TimesFM2) — 11 GPU jobs
-- **8c**: Deep classical backfill (GRU/LSTM/TCN/MLP/DilatedRNN) — 11 GPU jobs
-- **8d**: NF transformer gap-fill (43→48/48 conditions) — 18 GPU jobs
-- **8e**: AutoFit gap-fill (V1-V733 + V736) — 22 batch jobs
+### Phase 9 Fair Benchmark (IN PROGRESS)
+After fixing TSLib per-entity prediction, foundation prediction_length, Moirai entity cap,
+and ml_tabular single-horizon bugs, 5,083 valid records from 50 models were preserved in
+`runs/benchmarks/block3_phase9_fair/`. 66 SLURM scripts in `.slurm_scripts/phase9/` target
+the remaining ~50 models.
 
-## Category Status
+## Models with Valid Phase 9 Results (50)
 
-| Category | Models (P7) | New (P8) | P7 Status | P8 Target |
-|---|---:|---:|---|---|
-| ml_tabular | 18 | — | 8-12/48 conditions | — |
-| statistical | 5 | — | 48/48 | — |
-| deep_classical | 9 | — | NBEATS/NHITS/TFT/DeepAR=48; GRU/LSTM/TCN/MLP/DilatedRNN=24 | backfill to 48 |
-| transformer_sota | 23 | — | 43/48 | gap-fill to 48 |
-| foundation | 10 | +4 | 47-48/48 | +Sundial,TTM,TimerXL,TimesFM2 |
-| irregular | 2 | — | 48/48 | — |
-| tslib_sota | 6/14 | +8 | 6/48 (only core_only) | full 48/48 for all 14 |
-| autofit | 17 | +1 | V734/V735=48; V1-V3E=40; V72-V731=18-30 | +V736; gap-fill all |
+AutoARIMA, AutoETS, AutoFitV734, AutoFitV735, AutoFitV736, AutoTheta,
+Autoformer, BiTCN, Chronos, ChronosBolt, DLinear, DeepAR, DeepNPTS,
+DilatedRNN, FEDformer, GRU, GRU-D, Informer, KAN, LSTM, MLP, MOMENT,
+MSTL, NBEATS, NBEATSx, NHITS, NLinear, PatchTST, RMoK, SAITS,
+SF_SeasonalNaive, SOFTS, StemGNN, Sundial, TCN, TFT, TSMixer, TSMixerx,
+TiDE, TimeLLM, TimeMixer, TimeMoE, TimeXer, Timer, TimesFM, TimesFM2,
+TimesNet, VanillaTransformer, iTransformer, xLSTM
 
-## AutoFit Progression
+## Models Requiring Phase 9 Re-Run (~50)
 
-| Version | Strategy | Conds | Notes |
-|---|---|---:|---|
-| V1-V3E | Tree CV | 40 | Gap-fill in Phase 8e |
-| V3Max-V7 | Enhanced tree | 46 | Gap-fill in Phase 8e |
-| V72 | Knowledge distill | 29 | Gap-fill in Phase 8e |
-| V733 | NF-native selector | 47 | Oracle from hand-coded table (noise-level "wins") |
-| V734 | Empirical oracle + ensemble | 48 | Coarse keys, softmax weights |
-| V735 | Exact condition oracle | 48 | **Rebuilt from 6,670 records (RMSE)** |
-| **V736** | **OOF stacking ensemble** | **0 (new)** | **TRUE ensemble: top-3 oracle models × inverse-RMSE weights** |
+| Category | Models Needing Re-Run | Reason |
+|---|---|---|
+| foundation (3) | LagLlama, Moirai, Moirai2 | prediction_length bug, entity cap |
+| tslib_sota (14) | TimeFilter, WPMixer, MSGNet, etc. | Per-entity prediction bug |
+| irregular (2) | BRITS, CSDI | Not yet run |
+| ml_tabular (15-18) | All ml_tabular models | Single-horizon bug, NaN passthrough |
+| autofit (1) | AutoFitV736 | Incomplete conditions |
+| statistical (10) | New models (Croston, Holt, etc.) | Not yet run |
 
-## V736 Design
-First V7.3.x that can **systematically beat standalone** models:
-- Trains top-3 oracle models per condition (not model selection)
-- Inverse-RMSE weighted average → variance reduction
-- Model diversity: TimesNet + NBEATS + KAN, DeepNPTS + GRU + TFT, etc.
-- Registered in autofit_wrapper.py, included in Phase 8e shard
+## Bugs Fixed (Phase 9)
+
+1. **TSLib per-entity prediction**: All entities received identical predictions from a single
+   mixed-entity input window. Fixed with per-entity batched inference.
+
+2. **Foundation prediction_length=7**: Chronos/ChronosBolt hardcoded `predict(tensors, 7)`.
+   Fixed to use actual horizon.
+
+3. **Moirai 50-entity cap**: `ctxs[:50]` limited predictions to 50 entities while Chronos
+   processed all. Removed the cap.
+
+4. **ml_tabular single-horizon**: Only `horizons[0]` was evaluated. Fixed to run all horizons.
+
+5. **ml_tabular fillna(0)**: Tree models handle NaN natively. Fixed to pass NaN through for
+   tree-based models (XGBoost, LightGBM, CatBoost).
+
+6. **Constant-prediction fairness guard**: Was warning-only with `fairness_pass=True` — constant
+   predictions got cached. Fixed to `fairness_pass=False` so they are retried.
+
+## Category Summary
+
+| Category | Phase 9 Target | With Valid Results | Status |
+|---|---:|---:|---|
+| ml_tabular | 15 | 0 | Needs re-run (single-horizon bug) |
+| statistical | 15 | 5 | 10 new models need first run |
+| deep_classical | 9 | 9 | VALID (no code changes affected these) |
+| transformer_sota | 23 | 23 | VALID |
+| foundation | 11 | 10 | LagLlama needs re-run (prediction_length bug) |
+| irregular | 4 | 2 | BRITS/CSDI need first run |
+| tslib_sota | 20 | 0 | All need re-run (per-entity bug) |
+| autofit | 3 | 3 | V734/V735 complete; V736 partial |
 
 ## Notes
 
 1. Horizons: {1, 7, 14, 30} days.
-2. V735 oracle rebuilt from actual data via `scripts/rebuild_oracle_table.py` (old oracle had 4.2% accuracy).
-3. Phase 8 submit script: `scripts/submit_phase8_saturated.sh` (dry-run validated, 84 jobs).
-4. New foundation models: Sundial (ICML'25 Oral), TTM (NeurIPS'24), TimerXL (ICLR'25), TimesFM2 (Google).
-4. See `docs/BLOCK3_RESULTS.md` for the full 91-model leaderboard, all 48 condition champions, and V734 vs V735 head-to-head table.
+2. task3_risk_adjust has only 3 ablations (core_only, core_edgar, full) — NO core_text.
+3. V735 oracle table built from Phase 7 data (6,670 records) — will be rebuilt after Phase 9 completes.
+4. NF training configs use their original committed values (no max_steps equalization applied).
+5. Registry has 127 entries total, but only 100 are targeted for Phase 9 (removed deprecated models).

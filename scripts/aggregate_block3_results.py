@@ -21,7 +21,7 @@ from datetime import datetime
 import pandas as pd
 
 ROOT = Path(__file__).resolve().parent.parent
-DEFAULT_BENCH = ROOT / "runs" / "benchmarks" / "block3_20260203_225620_4090_final"
+DEFAULT_BENCH = ROOT / "runs" / "benchmarks" / "block3_phase9_fair"
 DEFAULT_MD = ROOT / "docs" / "BLOCK3_RESULTS.md"
 
 

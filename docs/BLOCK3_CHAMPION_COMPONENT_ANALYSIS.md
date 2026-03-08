@@ -159,7 +159,7 @@
 **Architecture**: Divides input into overlapping patches and processes with Transformer encoder.
 
 **Config** (`PRODUCTION_CONFIGS["PatchTST"]`):
-- `input_size=64`, `max_steps=3000`, `hidden_size=128`
+- `input_size=64`, `max_steps=5000`, `hidden_size=128`
 - `n_heads=16`, `patch_len=16`, `stride=8`
 - `batch_size=64`, `lr=1e-4`, `scaler_type="robust"`
 
@@ -171,7 +171,7 @@
 
 3. **Channel Independence**: Each entity is processed independently — no cross-entity interference. Essential for heterogeneous financial entities.
 
-4. **3× Training Budget (max_steps=3000)**: PatchTST trains 3x longer than other models. This allows the Transformer to learn complex patch-level relationships without underfitting.
+4. **Extended Training Budget (max_steps=5000)**: PatchTST trains with a higher step budget than most models, allowing the Transformer to learn complex patch-level relationships without underfitting.
 
 5. **Lower Learning Rate (1e-4)**: 10× slower than NBEATS (1e-3). Prevents catastrophic forgetting during the longer training and provides more stable optimization of attention weights.
 

@@ -668,6 +668,7 @@ class NFAdaptiveChampionV734(NFAdaptiveChampionWrapper):
 # Key: (target, horizon, ablation) — EXACT per-condition
 # Value: model_name (single best)
 # Rebuilt from 6,670 records using scripts/rebuild_oracle_table.py (RMSE metric)
+# NOTE: Will be rebuilt from Phase 9 clean data (5,083+ records) after re-runs complete
 # 48 conditions, 17 unique champion models (AutoFit excluded)
 ORACLE_TABLE_V735: Dict[Tuple[str, int, str], str] = {
     # ── funding_raised_usd ──
@@ -729,6 +730,7 @@ ORACLE_TABLE_V735: Dict[Tuple[str, int, str], str] = {
 # Key: (target, horizon, ablation) — EXACT per-condition
 # Value: [(model_name, rmse), ...] — top-3 ordered by RMSE
 # Rebuilt from 6,670 records (AutoFit excluded)
+# NOTE: Will be rebuilt from Phase 9 clean data after re-runs complete
 ORACLE_TABLE_TOP3: Dict[Tuple[str, int, str], List[Tuple[str, float]]] = {
     # ── funding_raised_usd ──
     ("funding_raised_usd",  1, "core_edgar"): [("DeepNPTS", 1631889.07), ("MLP", 1659493.05), ("GRU", 1659581.40)],

@@ -1231,6 +1231,7 @@ class FoundationModelWrapper(ModelBase):
         if not self._fitted:
             raise ValueError("Not fitted")
         h = len(X)
+        pred_horizon = max(kwargs.get("horizon", 7), 1)
         ctxs = self._entity_contexts or [self._context]
 
         # Build per-entity predictions
@@ -1246,7 +1247,8 @@ class FoundationModelWrapper(ModelBase):
                     # Fix: deterministic seed before each batch to ensure
                     # reproducible probabilistic sampling across SLURM jobs
                     torch.manual_seed(42 + i)
-                    out = self._model.predict(tensors, 7)
+                    # Use actual requested horizon instead of hardcoded 7
+                    out = self._model.predict(tensors, pred_horizon)
                     med = out.median(dim=1).values.mean(dim=1)
                     preds_all.extend(med.cpu().numpy().tolist())
                 except Exception:
@@ -1261,7 +1263,8 @@ class FoundationModelWrapper(ModelBase):
             import torch
             from uni2ts.model.moirai import MoiraiForecast
             preds_all = []
-            for i_ctx, ctx in enumerate(ctxs[:50]):
+            # Process ALL entities (no arbitrary cap) for fair comparison
+            for i_ctx, ctx in enumerate(ctxs):
                 try:
                     torch.manual_seed(42 + i_ctx)  # deterministic sampling
                     ts = pd.DataFrame(
@@ -1270,7 +1273,7 @@ class FoundationModelWrapper(ModelBase):
                     )
                     fm = MoiraiForecast(
                         module=self._moirai_module,
-                        prediction_length=7,
+                        prediction_length=pred_horizon,
                         context_length=min(128, len(ctx)),
                         patch_size="auto",
                         num_samples=20,
@@ -1283,7 +1286,7 @@ class FoundationModelWrapper(ModelBase):
                 except Exception:
                     preds_all.append(float(np.mean(ctx)))
             # Map entity_id -> forecast
-            eid_list = self._entity_ids[:50] if self._entity_ids else []
+            eid_list = self._entity_ids if self._entity_ids else []
             if eid_list and len(preds_all) == len(eid_list):
                 entity_preds = dict(zip(eid_list, preds_all))
             elif preds_all:
@@ -1293,7 +1296,8 @@ class FoundationModelWrapper(ModelBase):
             import torch
             from uni2ts.model.moirai_moe import MoiraiMoEForecast
             preds_all = []
-            for i_ctx, ctx in enumerate(ctxs[:50]):
+            # Process ALL entities (no arbitrary cap) for fair comparison
+            for i_ctx, ctx in enumerate(ctxs):
                 try:
                     torch.manual_seed(42 + i_ctx)  # deterministic sampling
                     ts = pd.DataFrame(
@@ -1302,7 +1306,7 @@ class FoundationModelWrapper(ModelBase):
                     )
                     fm = MoiraiMoEForecast(
                         module=self._moirai_module,
-                        prediction_length=7,
+                        prediction_length=pred_horizon,
                         context_length=min(128, len(ctx)),
                         patch_size="auto",
                         num_samples=20,
@@ -1314,7 +1318,7 @@ class FoundationModelWrapper(ModelBase):
                         preds_all.append(float(np.median(entry.samples.mean(axis=1))))
                 except Exception:
                     preds_all.append(float(np.mean(ctx)))
-            eid_list = self._entity_ids[:50] if self._entity_ids else []
+            eid_list = self._entity_ids if self._entity_ids else []
             if eid_list and len(preds_all) == len(eid_list):
                 entity_preds = dict(zip(eid_list, preds_all))
             elif preds_all:
@@ -1443,10 +1447,14 @@ class HFFoundationModelWrapper(ModelBase):
         from huggingface_hub import hf_hub_download
         ckpt = hf_hub_download(repo_id=repo, filename="lag-llama.ckpt")
         # Lag-Llama uses a custom LightningModule
+        # prediction_length will be overridden at predict() time via pred_horizon
         try:
             from lag_llama.gluon.estimator import LagLlamaEstimator
+            self._lag_llama_ckpt = ckpt
+            self._lag_llama_loaded = True
+            # Create default estimator (prediction_length overridden at predict time)
             self._estimator = LagLlamaEstimator(
-                prediction_length=7, context_length=128,
+                prediction_length=30, context_length=128,
                 input_size=1, n_layer=8, n_embd_per_head=32,
                 n_head=4, ckpt_path=ckpt,
                 device=torch.device("cuda" if torch.cuda.is_available() else "cpu"),
@@ -1455,6 +1463,7 @@ class HFFoundationModelWrapper(ModelBase):
         except ImportError:
             # Fallback: load via torch directly
             self._model = None
+            self._lag_llama_loaded = False
             _logger.warning("lag_llama package not installed, using mean fallback")
 
     def fit(self, X: pd.DataFrame, y: pd.Series, **kwargs) -> "HFFoundationModelWrapper":
@@ -1698,17 +1707,18 @@ class HFFoundationModelWrapper(ModelBase):
         elif loader_type == "timesfm2":
             preds_all = self._predict_timesfm2(ctxs, horizon)
         elif loader_type == "lag_llama" and self._model is not None:
-            # Use GluonTS predictor
+            # Use GluonTS predictor — ALL entities, actual horizon
             preds_all = []
-            for ctx in ctxs[:50]:
+            for ctx in ctxs:
                 try:
                     from gluonts.dataset.common import ListDataset
                     ds = ListDataset(
-                        [{"target": ctx, "start": pd.Timestamp("2020-01-01")}],
+                        [{"target": ctx[-128:], "start": pd.Timestamp("2020-01-01")}],
                         freq="D",
                     )
                     for entry in self._model.predict(ds):
-                        preds_all.append(float(np.mean(entry.mean)))
+                        fc = entry.mean[:horizon] if len(entry.mean) >= horizon else entry.mean
+                        preds_all.append(float(np.mean(fc)))
                 except Exception:
                     preds_all.append(float(np.mean(ctx)))
         elif loader_type == "timesfm_docker":

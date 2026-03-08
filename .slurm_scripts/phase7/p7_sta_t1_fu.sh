@@ -4,8 +4,8 @@
 #SBATCH --partition=batch
 #SBATCH --qos=iris-batch-long
 #SBATCH --time=2-00:00:00
-#SBATCH --mem=112G
-#SBATCH --cpus-per-task=28
+#SBATCH --mem=64G
+#SBATCH --cpus-per-task=14
 
 #SBATCH --output=/work/projects/eint/logs/phase7/p7_sta_t1_fu_%j.out
 #SBATCH --error=/work/projects/eint/logs/phase7/p7_sta_t1_fu_%j.err

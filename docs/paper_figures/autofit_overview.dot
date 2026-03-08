@@ -1,0 +1,51 @@
+digraph AutoFitOverview {
+  graph [
+    rankdir=TB,
+    fontsize=12,
+    fontname="Helvetica",
+    labelloc="t",
+    label="AutoFit Overview",
+    bgcolor="white",
+    nodesep=0.46,
+    ranksep=0.56,
+    pad=0.06,
+    splines=polyline,
+    concentrate=true
+  ];
+
+  node [
+    shape=box,
+    style="rounded,filled",
+    fontname="Helvetica",
+    fontsize=10.5,
+    color="#2B2B2B",
+    penwidth=1.0,
+    margin="0.11,0.08"
+  ];
+
+  edge [
+    color="#4A4A4A",
+    penwidth=1.2,
+    arrowsize=0.66
+  ];
+
+  n1 [label="Leakage-safe protocol\nfreeze alignment + strict temporal split + embargo", fillcolor="#ECF1FF", color="#8AA4FF"];
+  n2 [label="Regime embedding\nm = φ(D_train)", fillcolor="#F6F8FA"];
+
+  v1 [label="AutoFit v1\ndeterministic rule composition", fillcolor="#E9F8F6", color="#72B7B2"];
+  v2 [label="AutoFit v2/v2E\nsparse expert gating", fillcolor="#FFF3E6", color="#F29E4C"];
+
+  n3 [label="Execution + evaluation\nselected model(s), metrics, confidence intervals, artifacts", fillcolor="#EAF2FF", color="#6C8EBF"];
+
+  n1 -> n2;
+  n2 -> v1;
+  n2 -> v2;
+  { rank=same; v1; v2; }
+  v1 -> n3;
+  v2 -> n3;
+
+  fb [label="Contingency fallback\nrobust tabular baseline", fillcolor="#FDECEC", color="#C0392B", fontcolor="#8A1F11"];
+  v1 -> fb [style=dashed, color="#C0392B"];
+  v2 -> fb [style=dashed, color="#C0392B"];
+  fb -> n3 [style=dashed, color="#C0392B"];
+}

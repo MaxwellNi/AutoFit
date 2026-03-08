@@ -36,7 +36,7 @@ class TestModelRegistry:
         models = list_models()
         expected_categories = [
             "statistical", "ml_tabular", "deep_classical",
-            "transformer_sota", "foundation", "irregular_aware"
+            "transformer_sota", "foundation", "irregular", "autofit",
         ]
         for cat in expected_categories:
             assert cat in models, f"Missing category: {cat}"

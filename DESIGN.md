@@ -81,17 +81,19 @@ BenchmarkHarness (scripts/run_block3_benchmark_shard.py)
         │
         ├─> Train/Val/Test split by time (walk-forward or temporal)
         │
-        └─> Model Categories (67 models total):
-                ├─> Statistical (5):       AutoARIMA, AutoETS, AutoTheta, MSTL, SF_SeasonalNaive
+        └─> Model Categories (100 models, Phase 9):
+                ├─> Statistical (15):      AutoARIMA, AutoETS, AutoTheta, MSTL, SF_SeasonalNaive,
+                │                          CrostonClassic, CrostonOptimized, CrostonSBA, ...
                 ├─> ML Tabular (15):       LightGBM, XGBoost, CatBoost, RandomForest, Ridge, ...
-                ├─> Deep Classical (4):    NBEATS, NHITS, TFT, DeepAR
-                ├─> Transformer SOTA (20): PatchTST, iTransformer, TimesNet, TSMixer, Informer,
+                ├─> Deep Classical (9):    NBEATS, NHITS, TFT, DeepAR, GRU, LSTM, TCN, MLP, DilatedRNN
+                ├─> Transformer SOTA (23): PatchTST, iTransformer, TimesNet, TSMixer, Informer,
                 │                          Autoformer, FEDformer, VanillaTransformer, TiDE,
-                │                          NBEATSx, BiTCN, KAN, RMoK, SOFTS, StemGNN
+                │                          NBEATSx, BiTCN, KAN, RMoK, SOFTS, StemGNN, ...
                 ├─> Foundation (11):       Chronos, ChronosBolt, Chronos2, Moirai, MoiraiLarge,
                 │                          Moirai2, Timer, TimeMoE, MOMENT, LagLlama, TimesFM
-                ├─> Irregular (2):         GRU-D, SAITS
-                └─> AutoFit (10):          V1, V2, V2E, V3, V3E, V3Max, V4, V5, V6, V7
+                ├─> Irregular (4):         GRU-D, SAITS, BRITS, CSDI
+                ├─> TSLib SOTA (20):       TimeFilter, WPMixer, MSGNet, Crossformer, SCINet, ...
+                └─> AutoFit (3):           V734, V735, V736
 ```
 
 ### AutoFit Meta-Features
@@ -148,13 +150,14 @@ All 19 NeuralForecast models receive entity-sampled panel data:
 - `n_series` is computed dynamically as `panel["unique_id"].nunique()`
 - RobustFallback: Ridge regression fallback for unseen test entities
 
-### Benchmark Execution Design (Phase 7 — ULHPC Iris HPC)
-Master SLURM submission via `scripts/submit_phase7_full_benchmark.sh`:
-- 121 total SLURM jobs across 11 shards × 3 tasks × ~4 ablations
-- GPU partition: deep_classical, transformer_sota, foundation (V100 32GB)
-- Batch partition: ml_tabular, statistical, autofit (28c, 112GB)
+### Benchmark Execution Design (Phase 9 — ULHPC Iris HPC)
+Phase 9 SLURM submission via `.slurm_scripts/phase9/submit_all_phase9.sh`:
+- 66 SLURM scripts across 6 job groups
+- GPU partition: deep_classical, transformer_sota, foundation, irregular, tslib_sota (V100 32GB)
+- Batch/bigmem partition: ml_tabular, statistical, autofit
 - 4 ablations: `core_only`, `core_text`, `core_edgar`, `full`
-- QOS: `iris-*-long` (14-day wall times)
+- QOS: `normal` (2-day wall times)
+- Canonical output: `runs/benchmarks/block3_phase9_fair/`
 - Results aggregated via `scripts/aggregate_block3_results.py`
 - Paper tables via `scripts/make_paper_tables_v2.py`
 
@@ -245,42 +248,34 @@ Audit PASS gates:
 
 ---
 
-## Phase 7 Benchmark 进度与状态（2026-02-13）
+## Phase 9 Fair Benchmark Status (2026-03-08)
 
-### 任务状态表
-| 状态 | 数量 |
-|------|------|
-| 已完成 (COMPLETED) | 33 shards |
-| 运行中 (RUNNING) | 12 jobs |
-| 排队中 (PENDING) | 70 jobs |
-| 总计 | 115 jobs |
+Phase 9 is a complete re-benchmark after fixing 4 critical experimental bugs:
+1. TSLib per-entity prediction (all entities received identical forecasts)
+2. Foundation model hardcoded prediction_length=7
+3. Moirai/Moirai2 50-entity cap (unfair comparison)
+4. ml_tabular single-horizon restriction
 
-### 详细进度矩阵
-| Category | t1_co | t1_ct | t1_ce | t1_fu | t2_co | t2_ct | t2_ce | t2_fu | t3_co | t3_ct | t3_ce | t3_fu |
-|----------|-------|-------|-------|-------|-------|-------|-------|-------|-------|-------|-------|-------|
-| autofit | ✅30 | ✅30 | - | - | ✅40 | ✅30 | - | - | ✅30 | - | - | - |
-| deep_classical | ✅48 | ✅48 | - | - | ✅32 | ✅32 | - | - | ✅32 | - | - | - |
-| foundation | ✅120 | ✅120 | - | - | ✅80 | ✅80 | - | - | ✅80 | - | - | - |
-| irregular | ✅24 | ✅12 | - | - | ✅12 | ✅10 | - | - | ✅6 | - | - | - |
-| ml_tabular | ✅38 | ✅38 | - | - | ✅28 | ✅28 | - | - | ✅28 | - | - | - |
-| statistical | ✅60 | - | - | - | ✅40 | - | - | - | ✅40 | - | - | - |
-| transformer_sota | ✅200 | ✅230 | - | - | ✅160 | ✅160 | - | - | ✅160 | - | - | - |
+All Phase 7/8 results are **DEPRECATED**.
 
-- ✅ 表示已完成，- 表示未完成。
+### Current State
+- Valid records: 5,083 from 50 models in `runs/benchmarks/block3_phase9_fair/`
+- Target: 100 models across 104 conditions = 10,400 expected records
+- 66 SLURM scripts prepared in `.slurm_scripts/phase9/`
+- Active AutoFit versions: V734, V735, V736 only
 
-### 运行健康状态
-- 所有运行中任务日志无报错，进度正常。
-- 之前OOM故障已修复，统计类任务已全部调整为112G内存。
-
-### 主要问题与修复
-| # | 问题 | 根因 | 修复 | 状态 |
-|---|------|------|------|------|
-| 1 | 实体覆盖率过低 | 只采样200实体 | max_entities=2000, Ridge回退 | 已修复 |
-| 2 | RobustFallback失效 | 异常未捕获 | 全异常捕获+Ridge回退 | 已修复 |
-| 3 | 未见实体回退 | 无特征回归 | Ridge回归 | 已修复 |
-| 4 | EDGAR特征未传递 | exog未传递 | futr_exog_list传递 | 已修复 |
-| 5 | AutoFit目标变换缺失 | 回归目标偏态 | 自动log1p/expm1 | 已修复 |
-| 6 | EDGAR时区类型不匹配 | datetime64[ns,UTC] | tz_convert(None) | 已修复 |
-| 7 | 统计类OOM | 内存不足 | 112G+28CPU | 已修复 |
+### Key Fixes Applied
+| # | Issue | Root Cause | Fix | Status |
+|---|-------|-----------|-----|--------|
+| 1 | Entity coverage too low | Only 200 entities sampled | max_entities=2000, Ridge fallback | Fixed |
+| 2 | RobustFallback failure | Uncaught exceptions | Catch-all + Ridge fallback | Fixed |
+| 3 | EDGAR features not passed | exog not forwarded | futr_exog_list passed | Fixed |
+| 4 | AutoFit target transform | Skewed regression target | Auto log1p/expm1 | Fixed |
+| 5 | EDGAR timezone mismatch | datetime64[ns,UTC] | tz_convert(None) | Fixed |
+| 6 | Statistical OOM | Insufficient memory | 112G + 28 CPUs | Fixed |
+| 7 | TSLib single-window prediction | Mixed entities in one window | Per-entity batched inference | Fixed |
+| 8 | Foundation prediction_length=7 | Hardcoded value | Use actual horizon | Fixed |
+| 9 | Moirai 50-entity cap | ctxs[:50] | Process all entities | Fixed |
+| 10 | ml_tabular single-horizon | horizons[0] only | All horizons | Fixed |
 
 ---

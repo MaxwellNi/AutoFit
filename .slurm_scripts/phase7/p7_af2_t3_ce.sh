@@ -29,7 +29,7 @@ echo "GPU:    $(nvidia-smi --query-gpu=name --format=csv,noheader 2>/dev/null ||
 echo "============================================================"
 
 echo "Task: task3_risk_adjust | Category: autofit | Ablation: core_edgar"
-echo "Models: AutoFitV3Max,AutoFitV4,AutoFitV5,AutoFitV6,AutoFitV7"
+echo "Models: AutoFitV3Max,AutoFitV4,AutoFitV5,AutoFitV6,AutoFitV7,AutoFitV71"
 echo "Preset: full | Seed: 42"
 echo "Output: runs/benchmarks/block3_20260203_225620_phase7/task3_risk_adjust/autofit/core_edgar"
 echo "============================================================"
@@ -42,6 +42,6 @@ python3 scripts/run_block3_benchmark_shard.py \
     --output-dir runs/benchmarks/block3_20260203_225620_phase7/task3_risk_adjust/autofit/core_edgar \
     --seed 42 \
     --no-verify-first \
-    --models AutoFitV3Max,AutoFitV4,AutoFitV5,AutoFitV6,AutoFitV7
+    --models AutoFitV3Max,AutoFitV4,AutoFitV5,AutoFitV6,AutoFitV7,AutoFitV71
 
 echo "Done: $(date -Iseconds)"
