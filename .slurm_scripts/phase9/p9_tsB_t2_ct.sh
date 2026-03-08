@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 #SBATCH --job-name=p9_tsB_t2_ct
-#SBATCH --account=cfisch
+#SBATCH --account=npin
 #SBATCH --partition=gpu
 #SBATCH --qos=normal
 #SBATCH --time=2-00:00:00
