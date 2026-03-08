@@ -368,15 +368,27 @@ class NFAdaptiveChampionWrapper(ModelBase):
         if len(all_preds) == 1:
             return all_preds[0]
 
-        # Weighted average
+        # Weighted average — NaN-aware: skip NaN positions per-model,
+        # redistribute weight to models that produced finite values.
         total_weight = sum(valid_weights)
         weights = [w / total_weight for w in valid_weights]
 
-        ensemble = np.zeros(h, dtype=np.float64)
-        for preds, w in zip(all_preds, weights):
-            # Replace NaN with 0 for ensembling
-            clean = np.where(np.isfinite(preds), preds, 0.0)
-            ensemble += w * clean
+        stacked = np.column_stack(all_preds)  # (h, n_models)
+        w_arr = np.array(weights)  # (n_models,)
+
+        # Mask: True where finite
+        finite_mask = np.isfinite(stacked)  # (h, n_models)
+        # Zero out non-finite values for weighted sum
+        clean = np.where(finite_mask, stacked, 0.0)
+        # Per-position weight sum (only for finite predictions)
+        w_sum = (finite_mask * w_arr[np.newaxis, :]).sum(axis=1)  # (h,)
+        # Weighted sum
+        ensemble = (clean * w_arr[np.newaxis, :]).sum(axis=1)  # (h,)
+        # Normalize by actual weight sum (handles partial NaN)
+        safe_w_sum = np.where(w_sum > 0, w_sum, 1.0)
+        ensemble = ensemble / safe_w_sum
+        # If ALL models produced NaN at a position, use 0
+        ensemble = np.where(w_sum > 0, ensemble, 0.0)
 
         return ensemble
 
@@ -405,50 +417,51 @@ class NFAdaptiveChampionWrapper(ModelBase):
 # Key: (target_type, horizon, ablation_class)
 # Value: [(model_name, avg_rank), ...] — top-3 from benchmark data
 # avg_rank used for confidence weighting: w_i = softmax(-rank_i / T)
+# Key: (target_type, horizon, ablation_class)
+# Value: [(model_name, avg_rank), ...] — top-3 from benchmark data
+# avg_rank used for confidence weighting: w_i = softmax(-rank_i / T)
+# Rebuilt from Phase 9 clean data: 4,564 records, 44 trainable models
+# No FusedChampion references. Generated: 2026-03-08
 ORACLE_TABLE_V734: Dict[Tuple[str, int, str], List[Tuple[str, float]]] = {
     # ── binary (is_funded) — temporal ablations ──
-    # DeepNPTS dominates binary/temporal across all horizons (rank 1.0)
-    ("binary",  1, "temporal"):   [("DeepNPTS",     1.00), ("PatchTST",     2.00), ("DLinear",      2.50)],
-    ("binary",  7, "temporal"):   [("DeepNPTS",     1.00), ("DLinear",      2.00), ("NHITS",        3.00)],
-    ("binary", 14, "temporal"):   [("DeepNPTS",     1.00), ("PatchTST",     2.00), ("DLinear",      2.50)],
-    ("binary", 30, "temporal"):   [("DeepNPTS",     1.00), ("NHITS",        2.00), ("DLinear",      3.00)],
+    ("binary",  1, "temporal"):   [("NBEATSx",     1.00), ("MLP",          2.00), ("DeepNPTS",     3.00)],
+    ("binary",  7, "temporal"):   [("DeepNPTS",     1.00), ("MLP",          2.00), ("NBEATSx",      3.00)],
+    ("binary", 14, "temporal"):   [("DeepNPTS",     1.00), ("NBEATSx",      2.00), ("PatchTST",     3.00)],
+    ("binary", 30, "temporal"):   [("NBEATSx",      1.00), ("DeepNPTS",     2.00), ("PatchTST",     3.00)],
     # ── binary — exogenous ablations ──
-    # PatchTST/DLinear/NHITS dominate binary/exogenous
-    ("binary",  1, "exogenous"):  [("PatchTST",     1.00), ("DLinear",      2.00), ("NHITS",        2.50)],
-    ("binary",  7, "exogenous"):  [("DLinear",      1.00), ("NHITS",        2.00), ("PatchTST",     2.00)],
-    ("binary", 14, "exogenous"):  [("PatchTST",     1.00), ("DLinear",      2.00), ("NHITS",        2.50)],
-    ("binary", 30, "exogenous"):  [("NHITS",        1.00), ("PatchTST",     2.00), ("DLinear",      3.00)],
+    ("binary",  1, "exogenous"):  [("NBEATSx",      1.00), ("NBEATS",       2.00), ("PatchTST",     3.00)],
+    ("binary",  7, "exogenous"):  [("NBEATSx",      1.00), ("PatchTST",     2.00), ("NBEATS",       3.00)],
+    ("binary", 14, "exogenous"):  [("NBEATSx",      1.00), ("PatchTST",     2.00), ("NBEATS",       3.00)],
+    ("binary", 30, "exogenous"):  [("NBEATSx",      1.00), ("PatchTST",     2.00), ("NBEATS",       3.00)],
     # ── count (investors_count) — temporal ──
-    # KAN best at h=1, NBEATS dominates h>=7
-    ("count",  1, "temporal"):    [("KAN",          1.00), ("NHITS",        2.00), ("NBEATS",       3.00)],
-    ("count",  7, "temporal"):    [("NBEATS",       1.00), ("NBEATSx",      2.00), ("NHITS",        3.00)],
-    ("count", 14, "temporal"):    [("NBEATS",       1.00), ("NBEATSx",      2.00), ("NHITS",        3.00)],
-    ("count", 30, "temporal"):    [("NBEATS",       1.00), ("NBEATSx",      2.00), ("NHITS",        3.00)],
+    ("count",  1, "temporal"):    [("TimesNet",      1.00), ("TCN",          2.00), ("KAN",          3.00)],
+    ("count",  7, "temporal"):    [("TimesNet",      1.00), ("TCN",          2.00), ("KAN",          3.00)],
+    ("count", 14, "temporal"):    [("TimesNet",      1.00), ("TCN",          2.00), ("KAN",          3.00)],
+    ("count", 30, "temporal"):    [("NBEATS",        1.00), ("NBEATSx",      2.00), ("TimesNet",     3.00)],
     # ── count — exogenous ──
-    ("count",  1, "exogenous"):   [("KAN",          1.00), ("NHITS",        1.83), ("NBEATS",       2.83)],
-    ("count",  7, "exogenous"):   [("NBEATS",       1.00), ("NBEATSx",      2.00), ("NHITS",        2.83)],
-    ("count", 14, "exogenous"):   [("NBEATS",       1.00), ("NBEATSx",      2.00), ("NHITS",        2.83)],
-    ("count", 30, "exogenous"):   [("NBEATS",       1.00), ("NBEATSx",      2.00), ("NHITS",        2.67)],
+    ("count",  1, "exogenous"):   [("TimesNet",      1.00), ("PatchTST",     2.00), ("NBEATS",       3.00)],
+    ("count",  7, "exogenous"):   [("TimesNet",      1.00), ("NBEATS",       2.00), ("NHITS",        3.00)],
+    ("count", 14, "exogenous"):   [("TimesNet",      1.00), ("NHITS",        2.00), ("NBEATS",       3.00)],
+    ("count", 30, "exogenous"):   [("NBEATS",        1.00), ("ChronosBolt",  2.00), ("Chronos",      3.00)],
     # ── heavy_tail (funding_raised_usd) — temporal ──
-    # NBEATS/NBEATSx at short horizons; Chronos/ChronosBolt at long horizons
-    ("heavy_tail",  1, "temporal"):  [("NBEATS",    1.00), ("NBEATSx",      2.00), ("PatchTST",     3.00)],
-    ("heavy_tail",  7, "temporal"):  [("NHITS",     1.00), ("PatchTST",     2.00), ("TFT",          3.00)],
-    ("heavy_tail", 14, "temporal"):  [("GRU",       1.00), ("Chronos",      1.80), ("ChronosBolt",  2.80)],
-    ("heavy_tail", 30, "temporal"):  [("Chronos",   1.00), ("ChronosBolt",  2.00), ("PatchTST",     3.00)],
+    ("heavy_tail",  1, "temporal"):  [("Autoformer",  1.00), ("MLP",         2.00), ("PatchTST",     3.00)],
+    ("heavy_tail",  7, "temporal"):  [("DeepAR",      1.00), ("NHITS",       2.00), ("MLP",          3.00)],
+    ("heavy_tail", 14, "temporal"):  [("GRU",         1.00), ("LSTM",        2.00), ("TFT",          3.00)],
+    ("heavy_tail", 30, "temporal"):  [("DeepAR",      1.00), ("MLP",         2.00), ("NBEATSx",      3.00)],
     # ── heavy_tail — exogenous ──
-    ("heavy_tail",  1, "exogenous"): [("NBEATS",    1.50), ("NBEATSx",      1.50), ("PatchTST",     3.00)],
-    ("heavy_tail",  7, "exogenous"): [("NHITS",     1.00), ("PatchTST",     2.00), ("TFT",          3.00)],
-    ("heavy_tail", 14, "exogenous"): [("Chronos",   1.00), ("ChronosBolt",  2.00), ("PatchTST",     3.00)],
-    ("heavy_tail", 30, "exogenous"): [("Chronos",   1.00), ("ChronosBolt",  2.00), ("PatchTST",     3.17)],
+    ("heavy_tail",  1, "exogenous"): [("DeepNPTS",    1.00), ("MLP",         2.00), ("GRU",          3.00)],
+    ("heavy_tail",  7, "exogenous"): [("DeepNPTS",    1.00), ("MLP",         2.00), ("GRU",          3.00)],
+    ("heavy_tail", 14, "exogenous"): [("DeepNPTS",    1.00), ("GRU",         2.00), ("LSTM",         3.00)],
+    ("heavy_tail", 30, "exogenous"): [("DeepNPTS",    1.00), ("MLP",         2.00), ("GRU",          3.00)],
     # ── general fallback ── (for target types not matching binary/count/heavy_tail)
-    ("general",  1, "temporal"):     [("NBEATS",    1.00), ("NHITS",        2.00), ("PatchTST",     3.00)],
-    ("general",  7, "temporal"):     [("NBEATS",    1.00), ("NHITS",        2.00), ("PatchTST",     3.00)],
-    ("general", 14, "temporal"):     [("NBEATS",    1.00), ("NHITS",        2.00), ("Chronos",      3.00)],
-    ("general", 30, "temporal"):     [("NBEATS",    1.00), ("NHITS",        2.00), ("Chronos",      3.00)],
-    ("general",  1, "exogenous"):    [("NBEATS",    1.00), ("NHITS",        2.00), ("PatchTST",     3.00)],
-    ("general",  7, "exogenous"):    [("NBEATS",    1.00), ("NHITS",        2.00), ("PatchTST",     3.00)],
-    ("general", 14, "exogenous"):    [("NBEATS",    1.00), ("NHITS",        2.00), ("Chronos",      3.00)],
-    ("general", 30, "exogenous"):    [("NBEATS",    1.00), ("NHITS",        2.00), ("Chronos",      3.00)],
+    ("general",  1, "temporal"):     [("NBEATS",      1.00), ("NHITS",       2.00), ("PatchTST",     3.00)],
+    ("general",  7, "temporal"):     [("NBEATS",      1.00), ("NHITS",       2.00), ("PatchTST",     3.00)],
+    ("general", 14, "temporal"):     [("NBEATS",      1.00), ("NHITS",       2.00), ("GRU",          3.00)],
+    ("general", 30, "temporal"):     [("NBEATS",      1.00), ("NHITS",       2.00), ("DeepAR",       3.00)],
+    ("general",  1, "exogenous"):    [("NBEATS",      1.00), ("NHITS",       2.00), ("PatchTST",     3.00)],
+    ("general",  7, "exogenous"):    [("NBEATS",      1.00), ("NHITS",       2.00), ("PatchTST",     3.00)],
+    ("general", 14, "exogenous"):    [("NBEATS",      1.00), ("NHITS",       2.00), ("GRU",          3.00)],
+    ("general", 30, "exogenous"):    [("NBEATS",      1.00), ("NHITS",       2.00), ("DeepAR",       3.00)],
 }
 
 # Default temperature for softmax confidence weighting
@@ -517,9 +530,12 @@ class NFAdaptiveChampionV734(NFAdaptiveChampionWrapper):
         if len(candidates) <= 1:
             return 1
         top_rank = candidates[0][1]
-        if top_rank <= 1.5:
-            return 1  # High confidence: oracle top-1 is reliable
-        return min(max_k, len(candidates))  # Uncertain: ensemble
+        # With Phase 9 oracle, all ranks are integer (1.0, 2.0, 3.0).
+        # Only use single model when oracle rank is exactly 1.0 AND
+        # max_k is 1 (explicit single-model mode). Otherwise ensemble.
+        if max_k <= 1:
+            return 1  # Explicit single-model mode
+        return min(max_k, len(candidates))  # Ensemble: use all K models
 
     def fit(
         self, X: pd.DataFrame, y: pd.Series, **kwargs
@@ -667,24 +683,24 @@ class NFAdaptiveChampionV734(NFAdaptiveChampionWrapper):
 
 # Key: (target, horizon, ablation) — EXACT per-condition
 # Value: model_name (single best)
-# Rebuilt from 6,670 records using scripts/rebuild_oracle_table.py (RMSE metric)
-# NOTE: Will be rebuilt from Phase 9 clean data (5,083+ records) after re-runs complete
-# 48 conditions, 17 unique champion models (AutoFit excluded)
+# Rebuilt from Phase 9 clean data: 4,564 records, 44 trainable models, 48 conditions
+# No FusedChampion references (excluded from oracle as meta-model)
+# Generated: 2026-03-08
 ORACLE_TABLE_V735: Dict[Tuple[str, int, str], str] = {
     # ── funding_raised_usd ──
     ("funding_raised_usd",  1, "core_edgar"): "DeepNPTS",       # rmse=1631889.07
     ("funding_raised_usd",  1, "core_only"):  "Autoformer",     # rmse=1617629.91
     ("funding_raised_usd",  1, "core_text"):  "Autoformer",     # rmse=1617629.91
-    ("funding_raised_usd",  1, "full"):       "DeepNPTS",       # rmse=1631889.05
+    ("funding_raised_usd",  1, "full"):       "DeepNPTS",       # rmse=1631889.07
     ("funding_raised_usd",  7, "core_edgar"): "DeepNPTS",       # rmse=1628891.20
     ("funding_raised_usd",  7, "core_only"):  "DeepAR",         # rmse=1617548.66
     ("funding_raised_usd",  7, "core_text"):  "DeepAR",         # rmse=1617548.66
     ("funding_raised_usd",  7, "full"):       "DeepNPTS",       # rmse=1628891.20
-    ("funding_raised_usd", 14, "core_edgar"): "FusedChampion",  # rmse=1619532.00
+    ("funding_raised_usd", 14, "core_edgar"): "DeepNPTS",       # rmse=1631325.19
     ("funding_raised_usd", 14, "core_only"):  "GRU",            # rmse=1616746.80
     ("funding_raised_usd", 14, "core_text"):  "GRU",            # rmse=1616746.80
     ("funding_raised_usd", 14, "full"):       "DeepNPTS",       # rmse=1631325.19
-    ("funding_raised_usd", 30, "core_edgar"): "FusedChampion",  # rmse=1619460.34
+    ("funding_raised_usd", 30, "core_edgar"): "DeepNPTS",       # rmse=1642969.57
     ("funding_raised_usd", 30, "core_only"):  "DeepAR",         # rmse=1616269.92
     ("funding_raised_usd", 30, "core_text"):  "DeepAR",         # rmse=1616269.92
     ("funding_raised_usd", 30, "full"):       "DeepNPTS",       # rmse=1642969.57
@@ -693,11 +709,11 @@ ORACLE_TABLE_V735: Dict[Tuple[str, int, str], str] = {
     ("investors_count",  1, "core_only"):     "TimesNet",        # rmse=1082.53
     ("investors_count",  1, "core_text"):     "TimesNet",        # rmse=1082.53
     ("investors_count",  1, "full"):          "TimesNet",        # rmse=1082.31
-    ("investors_count",  7, "core_edgar"):    "TimesNet",        # rmse=1082.30
+    ("investors_count",  7, "core_edgar"):    "NBEATS",          # rmse=1082.38
     ("investors_count",  7, "core_only"):     "TimesNet",        # rmse=1082.51
     ("investors_count",  7, "core_text"):     "TimesNet",        # rmse=1082.51
     ("investors_count",  7, "full"):          "TimesNet",        # rmse=1082.30
-    ("investors_count", 14, "core_edgar"):    "TimesNet",        # rmse=1082.26
+    ("investors_count", 14, "core_edgar"):    "NHITS",           # rmse=1082.40
     ("investors_count", 14, "core_only"):     "TimesNet",        # rmse=1082.48
     ("investors_count", 14, "core_text"):     "TimesNet",        # rmse=1082.48
     ("investors_count", 14, "full"):          "TimesNet",        # rmse=1082.26
@@ -706,22 +722,22 @@ ORACLE_TABLE_V735: Dict[Tuple[str, int, str], str] = {
     ("investors_count", 30, "core_text"):     "NBEATS",          # rmse=1082.52
     ("investors_count", 30, "full"):          "NBEATS",          # rmse=1082.30
     # ── is_funded ──
-    ("is_funded",  1, "core_edgar"):          "NBEATS",          # rmse=0.149818
-    ("is_funded",  1, "core_only"):           "DeepNPTS",        # rmse=0.152705
-    ("is_funded",  1, "core_text"):           "DeepNPTS",        # rmse=0.152705
-    ("is_funded",  1, "full"):                "NBEATSx",         # rmse=0.149720
-    ("is_funded",  7, "core_edgar"):          "NBEATS",          # rmse=0.149868
-    ("is_funded",  7, "core_only"):           "DeepNPTS",        # rmse=0.152705
-    ("is_funded",  7, "core_text"):           "DeepNPTS",        # rmse=0.152705
-    ("is_funded",  7, "full"):                "NBEATSx",         # rmse=0.149770
-    ("is_funded", 14, "core_edgar"):          "NBEATS",          # rmse=0.149861
-    ("is_funded", 14, "core_only"):           "DeepNPTS",        # rmse=0.152705
-    ("is_funded", 14, "core_text"):           "DeepNPTS",        # rmse=0.152705
-    ("is_funded", 14, "full"):                "NBEATSx",         # rmse=0.149762
-    ("is_funded", 30, "core_edgar"):          "NBEATS",          # rmse=0.149857
-    ("is_funded", 30, "core_only"):           "DeepNPTS",        # rmse=0.152705
-    ("is_funded", 30, "core_text"):           "DeepNPTS",        # rmse=0.152705
-    ("is_funded", 30, "full"):                "NBEATSx",         # rmse=0.149759
+    ("is_funded",  1, "core_edgar"):          "NBEATS",          # rmse=0.1498
+    ("is_funded",  1, "core_only"):           "NBEATSx",         # rmse=0.1526
+    ("is_funded",  1, "core_text"):           "MLP",             # rmse=0.1527
+    ("is_funded",  1, "full"):                "NBEATSx",         # rmse=0.1497
+    ("is_funded",  7, "core_edgar"):          "NBEATS",          # rmse=0.1499
+    ("is_funded",  7, "core_only"):           "NBEATSx",         # rmse=0.1527
+    ("is_funded",  7, "core_text"):           "DeepNPTS",        # rmse=0.1527
+    ("is_funded",  7, "full"):                "NBEATSx",         # rmse=0.1498
+    ("is_funded", 14, "core_edgar"):          "NBEATS",          # rmse=0.1499
+    ("is_funded", 14, "core_only"):           "NBEATSx",         # rmse=0.1527
+    ("is_funded", 14, "core_text"):           "DeepNPTS",        # rmse=0.1527
+    ("is_funded", 14, "full"):                "NBEATSx",         # rmse=0.1498
+    ("is_funded", 30, "core_edgar"):          "NBEATS",          # rmse=0.1499
+    ("is_funded", 30, "core_only"):           "NBEATSx",         # rmse=0.1527
+    ("is_funded", 30, "core_text"):           "NBEATSx",         # rmse=0.1527
+    ("is_funded", 30, "full"):                "NBEATSx",         # rmse=0.1498
 }
 
 # ============================================================================
@@ -729,60 +745,61 @@ ORACLE_TABLE_V735: Dict[Tuple[str, int, str], str] = {
 # ============================================================================
 # Key: (target, horizon, ablation) — EXACT per-condition
 # Value: [(model_name, rmse), ...] — top-3 ordered by RMSE
-# Rebuilt from 6,670 records (AutoFit excluded)
-# NOTE: Will be rebuilt from Phase 9 clean data after re-runs complete
+# Rebuilt from Phase 9 clean data: 4,564 records, 44 trainable models
+# All 48 conditions have 3 UNIQUE models (zero FusedChampion)
+# Generated: 2026-03-08
 ORACLE_TABLE_TOP3: Dict[Tuple[str, int, str], List[Tuple[str, float]]] = {
     # ── funding_raised_usd ──
-    ("funding_raised_usd",  1, "core_edgar"): [("DeepNPTS", 1631889.07), ("MLP", 1659493.05), ("GRU", 1659581.40)],
-    ("funding_raised_usd",  1, "core_only"):  [("Autoformer", 1617629.91), ("PatchTST", 1618396.63), ("NHITS", 1618431.36)],
-    ("funding_raised_usd",  1, "core_text"):  [("Autoformer", 1617629.91), ("PatchTST", 1618396.63), ("NHITS", 1618431.36)],
-    ("funding_raised_usd",  1, "full"):       [("DeepNPTS", 1631889.05), ("MLP", 1659493.05), ("GRU", 1659581.40)],
-    ("funding_raised_usd",  7, "core_edgar"): [("DeepNPTS", 1628891.20), ("MLP", 1659178.59), ("GRU", 1659632.29)],
-    ("funding_raised_usd",  7, "core_only"):  [("DeepAR", 1617548.66), ("NHITS", 1618050.26), ("PatchTST", 1618384.71)],
-    ("funding_raised_usd",  7, "core_text"):  [("DeepAR", 1617548.66), ("NHITS", 1618050.26), ("PatchTST", 1618384.71)],
-    ("funding_raised_usd",  7, "full"):       [("DeepNPTS", 1628891.20), ("MLP", 1659178.59), ("GRU", 1659632.29)],
-    ("funding_raised_usd", 14, "core_edgar"): [("FusedChampion", 1619532.00), ("DeepNPTS", 1631325.19), ("GRU", 1657886.23)],
-    ("funding_raised_usd", 14, "core_only"):  [("GRU", 1616746.80), ("TFT", 1617303.69), ("Informer", 1617484.21)],
-    ("funding_raised_usd", 14, "core_text"):  [("GRU", 1616746.80), ("TFT", 1617303.69), ("Informer", 1617484.21)],
-    ("funding_raised_usd", 14, "full"):       [("DeepNPTS", 1631325.19), ("GRU", 1657886.23), ("MLP", 1658507.40)],
-    ("funding_raised_usd", 30, "core_edgar"): [("FusedChampion", 1619460.34), ("DeepNPTS", 1642969.57), ("MLP", 1658507.40)],
-    ("funding_raised_usd", 30, "core_only"):  [("DeepAR", 1616269.92), ("NBEATSx", 1617524.36), ("NBEATS", 1617524.37)],
-    ("funding_raised_usd", 30, "core_text"):  [("DeepAR", 1616269.92), ("NBEATSx", 1617524.36), ("NBEATS", 1617524.37)],
-    ("funding_raised_usd", 30, "full"):       [("DeepNPTS", 1642969.57), ("MLP", 1658507.40), ("GRU", 1659632.29)],
+    ("funding_raised_usd",  1, "core_edgar"): [("DeepNPTS", 1631889.0720), ("MLP", 1659493.0523), ("GRU", 1659581.4017)],
+    ("funding_raised_usd",  1, "core_only"):  [("Autoformer", 1617629.9076), ("MLP", 1618394.4682), ("PatchTST", 1618396.6309)],
+    ("funding_raised_usd",  1, "core_text"):  [("Autoformer", 1617629.9076), ("MLP", 1618394.4682), ("PatchTST", 1618396.6309)],
+    ("funding_raised_usd",  1, "full"):       [("DeepNPTS", 1631889.0658), ("MLP", 1659493.0523), ("GRU", 1659581.4017)],
+    ("funding_raised_usd",  7, "core_edgar"): [("DeepNPTS", 1628891.1999), ("MLP", 1659178.5902), ("GRU", 1659632.2897)],
+    ("funding_raised_usd",  7, "core_only"):  [("DeepAR", 1617548.6635), ("NHITS", 1618050.2591), ("MLP", 1618072.0188)],
+    ("funding_raised_usd",  7, "core_text"):  [("DeepAR", 1617548.6635), ("NHITS", 1618050.2591), ("MLP", 1618072.0188)],
+    ("funding_raised_usd",  7, "full"):       [("DeepNPTS", 1628891.1999), ("MLP", 1659178.5902), ("GRU", 1659632.2897)],
+    ("funding_raised_usd", 14, "core_edgar"): [("DeepNPTS", 1631325.1878), ("GRU", 1657886.2312), ("LSTM", 1657993.4889)],
+    ("funding_raised_usd", 14, "core_only"):  [("GRU", 1616746.8014), ("LSTM", 1616856.7881), ("TFT", 1617303.6883)],
+    ("funding_raised_usd", 14, "core_text"):  [("GRU", 1616746.8014), ("LSTM", 1616856.7881), ("TFT", 1617303.6883)],
+    ("funding_raised_usd", 14, "full"):       [("DeepNPTS", 1631325.1878), ("GRU", 1657886.2312), ("LSTM", 1657993.4889)],
+    ("funding_raised_usd", 30, "core_edgar"): [("DeepNPTS", 1642969.5737), ("MLP", 1658507.3954), ("GRU", 1659351.1319)],
+    ("funding_raised_usd", 30, "core_only"):  [("DeepAR", 1616269.9187), ("MLP", 1617383.7654), ("NBEATSx", 1617524.3679)],
+    ("funding_raised_usd", 30, "core_text"):  [("DeepAR", 1616269.9187), ("MLP", 1617383.7654), ("NBEATS", 1617524.3742)],
+    ("funding_raised_usd", 30, "full"):       [("DeepNPTS", 1642969.5737), ("MLP", 1658507.3954), ("GRU", 1659351.1319)],
     # ── investors_count ──
-    ("investors_count",  1, "core_edgar"): [("TimesNet", 1082.31), ("KAN", 1082.33), ("NLinear", 1082.38)],
-    ("investors_count",  1, "core_only"):  [("TimesNet", 1082.53), ("KAN", 1082.55), ("NLinear", 1082.60)],
-    ("investors_count",  1, "core_text"):  [("TimesNet", 1082.53), ("KAN", 1082.55), ("NLinear", 1082.60)],
-    ("investors_count",  1, "full"):       [("TimesNet", 1082.31), ("KAN", 1082.33), ("NLinear", 1082.38)],
-    ("investors_count",  7, "core_edgar"): [("TimesNet", 1082.30), ("KAN", 1082.33), ("NBEATS", 1082.38)],
-    ("investors_count",  7, "core_only"):  [("TimesNet", 1082.51), ("KAN", 1082.55), ("NBEATS", 1082.60)],
-    ("investors_count",  7, "core_text"):  [("TimesNet", 1082.51), ("KAN", 1082.55), ("NBEATS", 1082.60)],
-    ("investors_count",  7, "full"):       [("TimesNet", 1082.30), ("KAN", 1082.33), ("NBEATS", 1082.38)],
-    ("investors_count", 14, "core_edgar"): [("TimesNet", 1082.26), ("KAN", 1082.35), ("PatchTST", 1082.40)],
-    ("investors_count", 14, "core_only"):  [("TimesNet", 1082.48), ("KAN", 1082.57), ("DeepNPTS", 1082.58)],
-    ("investors_count", 14, "core_text"):  [("TimesNet", 1082.48), ("KAN", 1082.57), ("DeepNPTS", 1082.58)],
-    ("investors_count", 14, "full"):       [("TimesNet", 1082.26), ("KAN", 1082.35), ("PatchTST", 1082.40)],
-    ("investors_count", 30, "core_edgar"): [("NBEATS", 1082.30), ("NBEATSx", 1082.30), ("TimesNet", 1082.31)],
-    ("investors_count", 30, "core_only"):  [("NBEATS", 1082.52), ("NBEATSx", 1082.52), ("TimesNet", 1082.53)],
-    ("investors_count", 30, "core_text"):  [("NBEATS", 1082.52), ("NBEATSx", 1082.52), ("TimesNet", 1082.53)],
-    ("investors_count", 30, "full"):       [("NBEATS", 1082.30), ("NBEATSx", 1082.30), ("TimesNet", 1082.31)],
+    ("investors_count",  1, "core_edgar"): [("TimesNet", 1082.3083), ("PatchTST", 1082.3968), ("NBEATS", 1082.3984)],
+    ("investors_count",  1, "core_only"):  [("TimesNet", 1082.5271), ("TCN", 1082.5271), ("KAN", 1082.5511)],
+    ("investors_count",  1, "core_text"):  [("TimesNet", 1082.5271), ("TCN", 1082.5271), ("KAN", 1082.5511)],
+    ("investors_count",  1, "full"):       [("TimesNet", 1082.3083), ("KAN", 1082.3323), ("NLinear", 1082.3840)],
+    ("investors_count",  7, "core_edgar"): [("NBEATS", 1082.3837), ("NHITS", 1082.3954), ("ChronosBolt", 1082.4010)],
+    ("investors_count",  7, "core_only"):  [("TimesNet", 1082.5147), ("TCN", 1082.5295), ("KAN", 1082.5505)],
+    ("investors_count",  7, "core_text"):  [("TimesNet", 1082.5147), ("TCN", 1082.5295), ("KAN", 1082.5505)],
+    ("investors_count",  7, "full"):       [("TimesNet", 1082.2959), ("KAN", 1082.3317), ("NBEATS", 1082.3837)],
+    ("investors_count", 14, "core_edgar"): [("NHITS", 1082.3984), ("TimesNet", 1082.3995), ("NBEATS", 1082.4010)],
+    ("investors_count", 14, "core_only"):  [("TimesNet", 1082.4800), ("TCN", 1082.5640), ("KAN", 1082.5652)],
+    ("investors_count", 14, "core_text"):  [("TimesNet", 1082.4800), ("TCN", 1082.5640), ("KAN", 1082.5652)],
+    ("investors_count", 14, "full"):       [("TimesNet", 1082.2612), ("KAN", 1082.3464), ("PatchTST", 1082.3977)],
+    ("investors_count", 30, "core_edgar"): [("NBEATS", 1082.3003), ("ChronosBolt", 1082.4010), ("Chronos", 1082.4218)],
+    ("investors_count", 30, "core_only"):  [("NBEATS", 1082.5191), ("NBEATSx", 1082.5191), ("TimesNet", 1082.5310)],
+    ("investors_count", 30, "core_text"):  [("NBEATS", 1082.5191), ("NBEATSx", 1082.5191), ("TimesNet", 1082.5310)],
+    ("investors_count", 30, "full"):       [("NBEATS", 1082.3003), ("NBEATSx", 1082.3003), ("TimesNet", 1082.3123)],
     # ── is_funded ──
-    ("is_funded",  1, "core_edgar"): [("NBEATS", 0.149818), ("NBEATSx", 0.149820), ("PatchTST", 0.149900)],
-    ("is_funded",  1, "core_only"):  [("DeepNPTS", 0.152705), ("NBEATS", 0.152800), ("NBEATSx", 0.152810)],
-    ("is_funded",  1, "core_text"):  [("DeepNPTS", 0.152705), ("NBEATS", 0.152800), ("NBEATSx", 0.152810)],
-    ("is_funded",  1, "full"):       [("NBEATSx", 0.149720), ("NBEATS", 0.149818), ("PatchTST", 0.149900)],
-    ("is_funded",  7, "core_edgar"): [("NBEATS", 0.149868), ("PatchTST", 0.149900), ("NBEATSx", 0.149910)],
-    ("is_funded",  7, "core_only"):  [("DeepNPTS", 0.152705), ("NBEATSx", 0.152800), ("NBEATS", 0.152810)],
-    ("is_funded",  7, "core_text"):  [("DeepNPTS", 0.152705), ("NBEATSx", 0.152800), ("NBEATS", 0.152810)],
-    ("is_funded",  7, "full"):       [("NBEATSx", 0.149770), ("NBEATS", 0.149868), ("PatchTST", 0.149900)],
-    ("is_funded", 14, "core_edgar"): [("NBEATS", 0.149861), ("NBEATSx", 0.149870), ("PatchTST", 0.149910)],
-    ("is_funded", 14, "core_only"):  [("DeepNPTS", 0.152705), ("NLinear", 0.152800), ("NBEATS", 0.152810)],
-    ("is_funded", 14, "core_text"):  [("DeepNPTS", 0.152705), ("NLinear", 0.152800), ("NBEATS", 0.152810)],
-    ("is_funded", 14, "full"):       [("NBEATSx", 0.149762), ("NBEATS", 0.149861), ("PatchTST", 0.149910)],
-    ("is_funded", 30, "core_edgar"): [("NBEATS", 0.149857), ("NBEATSx", 0.149860), ("PatchTST", 0.149900)],
-    ("is_funded", 30, "core_only"):  [("DeepNPTS", 0.152705), ("NBEATS", 0.152800), ("DLinear", 0.152810)],
-    ("is_funded", 30, "core_text"):  [("DeepNPTS", 0.152705), ("NBEATS", 0.152800), ("DLinear", 0.152810)],
-    ("is_funded", 30, "full"):       [("NBEATSx", 0.149759), ("NBEATS", 0.149857), ("PatchTST", 0.149900)],
+    ("is_funded",  1, "core_edgar"): [("NBEATS", 0.1498), ("NBEATSx", 0.1498), ("PatchTST", 0.1499)],
+    ("is_funded",  1, "core_only"):  [("NBEATSx", 0.1526), ("MLP", 0.1527), ("DeepNPTS", 0.1527)],
+    ("is_funded",  1, "core_text"):  [("MLP", 0.1527), ("DeepNPTS", 0.1527), ("NBEATS", 0.1527)],
+    ("is_funded",  1, "full"):       [("NBEATSx", 0.1497), ("PatchTST", 0.1498), ("NBEATS", 0.1498)],
+    ("is_funded",  7, "core_edgar"): [("NBEATS", 0.1499), ("NBEATSx", 0.1499), ("NHITS", 0.1499)],
+    ("is_funded",  7, "core_only"):  [("NBEATSx", 0.1527), ("PatchTST", 0.1527), ("DeepNPTS", 0.1527)],
+    ("is_funded",  7, "core_text"):  [("DeepNPTS", 0.1527), ("MLP", 0.1527), ("NBEATS", 0.1528)],
+    ("is_funded",  7, "full"):       [("NBEATSx", 0.1498), ("PatchTST", 0.1498), ("NBEATS", 0.1499)],
+    ("is_funded", 14, "core_edgar"): [("NBEATS", 0.1499), ("NBEATSx", 0.1499), ("NHITS", 0.1499)],
+    ("is_funded", 14, "core_only"):  [("NBEATSx", 0.1527), ("DeepNPTS", 0.1527), ("PatchTST", 0.1527)],
+    ("is_funded", 14, "core_text"):  [("DeepNPTS", 0.1527), ("NBEATS", 0.1528), ("MLP", 0.1528)],
+    ("is_funded", 14, "full"):       [("NBEATSx", 0.1498), ("PatchTST", 0.1498), ("NLinear", 0.1498)],
+    ("is_funded", 30, "core_edgar"): [("NBEATS", 0.1499), ("NBEATSx", 0.1499), ("NHITS", 0.1499)],
+    ("is_funded", 30, "core_only"):  [("NBEATSx", 0.1527), ("DeepNPTS", 0.1527), ("PatchTST", 0.1527)],
+    ("is_funded", 30, "core_text"):  [("NBEATSx", 0.1527), ("DeepNPTS", 0.1527), ("PatchTST", 0.1527)],
+    ("is_funded", 30, "full"):       [("NBEATSx", 0.1498), ("PatchTST", 0.1498), ("NBEATS", 0.1499)],
 }
 
 
