@@ -382,7 +382,7 @@ class TSLibModelWrapper(ModelBase):
             # Universal attributes needed by many models
             num_class=0,  # not used in forecasting but many models reference it
             batch_size=self._batch_size,  # WPMixer needs this
-            device=str(self._device),  # WPMixer needs this
+            device=self._device,  # WPMixer needs torch.device (DWT_Decomposition calls .type)
             use_amp=False,  # WPMixer needs this
             patch_len=patch_len,  # TimeFilter, PAttn, WPMixer (adjusted above)
         )
