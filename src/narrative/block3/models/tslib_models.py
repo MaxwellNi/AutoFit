@@ -207,6 +207,61 @@ TSLIB_CONFIGS: Dict[str, Dict[str, Any]] = {
         "dropout": 0.1, "e_layers": 4,
         "activation": "gelu", "factor": 1,
     },
+    # ── Phase 10 additions ──
+    "KANAD": {
+        "venue": "arXiv 2024",
+        "d_model": 8, "d_ff": 256, "dropout": 0.1,
+        "activation": "gelu", "factor": 1,
+    },
+    "FITS": {
+        "venue": "ICLR 2024",
+        "cut_freq": 30, "individual": False,
+        "dropout": 0.0,
+    },
+    "SparseTSF": {
+        "venue": "ICML 2024",
+        "d_model": 128, "period_len": 7, "model_type": "None",
+        "dropout": 0.0,
+    },
+    "CATS": {
+        "venue": "ICLR 2025",
+        "d_model": 128, "d_ff": 256, "n_heads": 16,
+        "d_layers": 3, "dropout": 0.1, "patch_len": 24,
+        "stride": 24, "padding_patch": "end",
+        "QAM_start": 0.1, "QAM_end": 0.5,
+        "query_independence": True, "store_attn": False,
+    },
+    "Fredformer": {
+        "venue": "KDD 2024",
+        "d_model": 128, "d_ff": 256, "n_heads": 8, "e_layers": 2,
+        "dropout": 0.1, "patch_len": 16, "stride": 8,
+        "padding_patch": "end", "revin": 1, "affine": 0,
+        "subtract_last": 0, "individual": 0,
+        "fc_dropout": 0.1, "head_dropout": 0.0,
+        "cf_dim": 48, "cf_depth": 1, "cf_heads": 4,
+        "cf_head_dim": 32, "cf_drop": 0.0, "cf_mlp": 256,
+        "mlp_hidden": 256, "mlp_drop": 0.1, "use_nys": 0,
+        "ablation": 0, "output": 0,
+    },
+    "CycleNet": {
+        "venue": "NeurIPS 2024",
+        "d_model": 512, "cycle": 7, "model_type": "linear",
+        "use_revin": True,
+    },
+    "xPatch": {
+        "venue": "arXiv 2024",
+        "patch_len": 16, "stride": 8,
+        "padding_patch": "end", "revin": 1,
+        "alpha": 0.0, "beta": 0.0, "ma_type": "ema",
+    },
+    "FilterTS": {
+        "venue": "arXiv 2024",
+        "d_model": 128, "e_layers": 2,
+        "dropout": 0.1, "filter_type": "freq",
+        "bandwidth": 0.1, "quantile": 0.5,
+        "top_K_static_freqs": 5, "use_norm": True,
+        "embedding": "timeF",
+    },
 }
 
 # Map model names to their TSLib file names (most are identical)
@@ -288,6 +343,12 @@ class TSLibModelWrapper(ModelBase):
             )
         else:
             patch_len = raw_patch_len
+
+        # FITS: cut_freq defaults to half the sequence length
+        if model_key == "FITS":
+            if "cut_freq" not in defaults or defaults["cut_freq"] > seq_len // 2:
+                defaults = dict(defaults)
+                defaults["cut_freq"] = max(1, seq_len // 2)
 
         cfg = SimpleNamespace(
             # Core temporal dimensions
@@ -913,6 +974,16 @@ create_reformer = _tslib_factory("Reformer")
 create_tirex = _tslib_factory("TiRex")
 create_mamba = _tslib_factory("Mamba")
 
+# Phase 10
+create_kanad = _tslib_factory("KANAD")
+create_fits = _tslib_factory("FITS")
+create_sparsetsf = _tslib_factory("SparseTSF")
+create_cats = _tslib_factory("CATS")
+create_fredformer = _tslib_factory("Fredformer")
+create_cyclenet = _tslib_factory("CycleNet")
+create_xpatch = _tslib_factory("xPatch")
+create_filterts = _tslib_factory("FilterTS")
+
 
 # ============================================================================
 # Registry (imported by registry.py)
@@ -943,6 +1014,15 @@ TSLIB_MODELS = {
     "LightTS": create_lightts,
     "Pyraformer": create_pyraformer,
     "Reformer": create_reformer,
+    # Phase 10
+    "KANAD": create_kanad,
+    "FITS": create_fits,
+    "SparseTSF": create_sparsetsf,
+    "CATS": create_cats,
+    "Fredformer": create_fredformer,
+    "CycleNet": create_cyclenet,
+    "xPatch": create_xpatch,
+    "FilterTS": create_filterts,
 }
 
 
