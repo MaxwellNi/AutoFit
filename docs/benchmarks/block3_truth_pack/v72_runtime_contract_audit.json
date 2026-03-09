@@ -1,9 +1,9 @@
 {
-  "generated_at_utc": "2026-03-06T13:06:35.327364+00:00",
-  "entrypoint": "slurm:p8_af7_t3_co",
+  "generated_at_utc": "2026-03-08T02:01:14.468222+00:00",
+  "entrypoint": "scripts/run_block3_benchmark_shard.py",
   "contract_path": "/mnt/aiongpfs/projects/eint/repo_root/docs/BLOCK3_EXECUTION_CONTRACT.md",
   "contract_version": "2026-02-24",
-  "policy_hash": "cae333137aa152bc12f534269c39ca096cf7bfefe129445b113b2df852047bbf",
+  "policy_hash": "5448396c60e3dfa9e902f664203859bf05db86c6a79a42e89cf75556a2121825",
   "contract_version_match": true,
   "policy_hash_match": true,
   "policy_text_present": true,

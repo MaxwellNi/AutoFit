@@ -1,26 +1,123 @@
 # Block 3 Benchmark Results
 
-> Last updated: 2026-03-08 (Phase 9 fair benchmark)
+> Last updated: 2026-03-09 (Phase 9 fair benchmark — verified audit, normalized rankings added)
 > Canonical results dir: `runs/benchmarks/block3_phase9_fair/`
 > Phase 7/8 results are **DEPRECATED** (4 critical bugs fixed)
+> **Data integrity audit**: VERIFIED via `/tmp/verify_audit.py` — 2 earlier claims corrected
 
-**Generated**: 2026-03-08 02:20:13
+**Generated**: 2026-03-09
 **Benchmark Dir**: `block3_phase9_fair`
-**Total Records (post-filter)**: 4847
+**Total Records**: 8198
+**Complete Models (104/104 conditions)**: 76
+**Partial Models**: 17
 
 ## Overview
 
 | Metric | Value |
 |--------|-------|
-| Raw records | 5083 |
-| Filtered records | 4847 |
-| Comparability filter | fairness_only=True, min_coverage=0.98 |
-| Models evaluated | 50 |
-| Categories | autofit, deep_classical, foundation, irregular, statistical, transformer_sota |
+| Raw records | 8198 |
+| Complete models (104/104) | 76 |
+| Partial models (<104) | 17 |
+| Categories | autofit, deep_classical, foundation, irregular, ml_tabular, statistical, transformer_sota, tslib_sota |
 | Tasks | task1_outcome, task2_forecast, task3_risk_adjust |
-| Total evaluations | 4847 |
-| Real results | 4835 |
-| Fallback (mean) | 12 |
+
+## Full Leaderboard (76 complete models, ranked by average MAE)
+
+| Rank | Model | Category | Avg MAE | Integrity |
+|-----:|-------|----------|--------:|-----------|
+| 1 | Chronos | foundation | 159,732 | ✅ genuine |
+| 2 | PatchTST | transformer_sota | 159,829 | ✅ genuine |
+| 3 | ChronosBolt | foundation | 159,873 | ✅ genuine |
+| 4 | NHITS | deep_classical | 159,983 | ✅ genuine |
+| 5 | TFT | deep_classical | 160,056 | ✅ genuine |
+| 6 | NBEATS | deep_classical | 160,176 | ✅ genuine |
+| 7 | NBEATSx | transformer_sota | 160,176 | ⚠️ near-duplicate of NBEATS (73.1% identical) |
+| 8 | DeepAR | deep_classical | 160,218 | ✅ genuine |
+| 9 | TimesNet | transformer_sota | 160,396 | ✅ genuine |
+| 10 | Informer | transformer_sota | 160,400 | ✅ genuine |
+| 11 | KAN | transformer_sota | 160,663 | ✅ genuine |
+| 12 | TimeMixer | transformer_sota | 160,691 | ✅ genuine |
+| 13 | BiTCN | transformer_sota | 160,758 | ✅ genuine |
+| 14 | RMoK | transformer_sota | 160,926 | ✅ genuine |
+| 15 | NLinear | transformer_sota | 161,032 | ✅ genuine |
+| 16 | FEDformer | transformer_sota | 161,649 | ✅ genuine |
+| 17 | TiDE | transformer_sota | 161,729 | ✅ genuine |
+| 18 | DLinear | transformer_sota | 161,856 | ✅ genuine |
+| 19 | GRU | deep_classical | 162,046 | ✅ genuine |
+| 20 | TSMixer | transformer_sota | 162,064 | ✅ genuine |
+| 21 | LSTM | deep_classical | 162,114 | ✅ genuine |
+| 22 | iTransformer | transformer_sota | 162,189 | ✅ genuine |
+| 23 | MLP | deep_classical | 162,387 | ✅ genuine |
+| 24 | TCN | deep_classical | 162,412 | ✅ genuine |
+| 25 | DilatedRNN | deep_classical | 162,594 | ✅ genuine |
+| 26 | SOFTS | transformer_sota | 162,891 | ✅ genuine |
+| **27** | **AutoFitV736** | **autofit** | **163,465** | **✅ genuine** |
+| 28 | TimeMoE | foundation | 163,486 | ⚠️ 98-99% identical to Timer/MOMENT |
+| 29 | Timer | foundation | 163,486 | ⚠️ 98-99% identical to TimeMoE/MOMENT |
+| 30 | MOMENT | foundation | 163,486 | ⚠️ 98-99% identical to Timer/TimeMoE |
+| **31** | **AutoFitV734** | **autofit** | **165,162** | **✅ genuine** |
+| 32 | LightGBMTweedie | ml_tabular | 165,728 | ✅ genuine (4/26 horizon-invariant — VARIES by horizon) |
+| 33 | Sundial | foundation | 165,729 | ❌ silent context-mean fallback |
+| 34 | TimesFM2 | foundation | 165,729 | ❌ silent context-mean fallback |
+| 35 | LagLlama | foundation | 165,729 | ❌ silent context-mean fallback |
+| 36 | Moirai | foundation | 165,729 | ❌ silent context-mean fallback |
+| 37 | MoiraiLarge | foundation | 165,729 | ❌ silent context-mean fallback |
+| 38 | Moirai2 | foundation | 165,729 | ❌ silent context-mean fallback |
+| 39 | Autoformer | transformer_sota | 166,652 | ✅ genuine |
+| **40** | **AutoFitV735** | **autofit** | **167,038** | **✅ genuine** |
+| 41 | DeepNPTS | transformer_sota | 167,862 | ✅ genuine |
+| 42 | RandomForest | ml_tabular | 173,229 | ✅ genuine (horizon-invariant by design) |
+| 43 | XGBoostPoisson | ml_tabular | 178,934 | ✅ genuine (horizon-invariant by design) |
+| 44 | TSMixerx | transformer_sota | 185,554 | ✅ genuine |
+| 45 | TimesFM | foundation | 189,242 | ⚠️ horizon-invariant (23/26) |
+| 46 | LightGBM | ml_tabular | 196,848 | ✅ genuine (5/26 horizon-invariant — VARIES by horizon) |
+| 47 | XGBoost | ml_tabular | 201,999 | ✅ genuine (horizon-invariant by design) |
+| 48 | ExtraTrees | ml_tabular | 206,963 | ✅ genuine (horizon-invariant by design) |
+| 49 | HistGradientBoosting | ml_tabular | 208,779 | ✅ genuine (horizon-invariant by design) |
+| 50 | CatBoost | ml_tabular | 242,324 | ✅ genuine (horizon-invariant by design) |
+| 51 | VanillaTransformer | transformer_sota | 260,812 | ✅ genuine |
+| 52 | BRITS | irregular | 343,295 | ✅ genuine (horizon-invariant) |
+| 53 | GRU-D | irregular | 343,728 | ✅ genuine (horizon-invariant) |
+| 54 | SAITS | irregular | 343,739 | ✅ genuine (horizon-invariant) |
+| 55 | HistoricAverage | statistical | 640,493 | ✅ baseline |
+| 56 | CSDI | irregular | 902,624 | ⚠️ 44/104 fallback |
+| 57 | xLSTM | transformer_sota | 902,705 | ❌ 100% fallback (training crash) |
+| 58 | TimeLLM | transformer_sota | 902,705 | ❌ 100% fallback (training crash) |
+| 59 | AutoCES | statistical | 902,705 | ❌ 100% fallback (training crash) |
+| 60 | MeanPredictor | ml_tabular | 902,705 | ✅ baseline (mean by design) |
+| 61 | StemGNN | transformer_sota | 902,705 | ❌ 40/104 fallback (training crash) |
+| 62 | TimeXer | transformer_sota | 902,705 | ❌ 40/104 fallback (training crash) |
+| 63-76 | *(statistical models)* | statistical | 1.58M-13.1M | ✅ genuine |
+
+### AutoFit Rankings Summary
+
+| Variant | Overall | task1 | task2 | task3 |
+|---------|---------|-------|-------|-------|
+| **V736** | **#27/76** (163,465) | #26 (128,663) | #27 (192,994) | #30 (193,694) |
+| V734 | #31/76 (165,162) | #31 (129,913) | #31 (194,869) | #31 (196,053) |
+| V735 | #40/76 (167,038) | #39 (131,293) | #39 (196,940) | #41 (198,656) |
+
+### Partial Models (still running)
+
+| Model | Records | Category |
+|-------|--------:|----------|
+| TimeFilter | 32/104 | tslib_sota |
+| MultiPatchFormer | 32/104 | tslib_sota |
+| MSGNet | 32/104 | tslib_sota |
+| PAttn | 32/104 | tslib_sota |
+| MambaSimple | 32/104 | tslib_sota |
+| Crossformer | 32/104 | tslib_sota |
+| ETSformer | 20/104 | tslib_sota |
+| LightTS | 20/104 | tslib_sota |
+| Pyraformer | 20/104 | tslib_sota |
+| Reformer | 20/104 | tslib_sota |
+| NegativeBinomialGLM | 16/104 | ml_tabular |
+| FreTS | 1/104 | tslib_sota |
+| MICN | 1/104 | tslib_sota |
+| SegRNN | 1/104 | tslib_sota |
+| NonstationaryTransformer | 1/104 | tslib_sota |
+| FiLM | 1/104 | tslib_sota |
+| SCINet | 1/104 | tslib_sota |
 
 ## task1_outcome
 
@@ -389,4 +486,133 @@ Shows which task/category/ablation combinations have results.
 | task3_risk_adjust | transformer_sota | full | 23 |
 
 ---
+
+## Data Integrity Audit (2026-03-09) — VERIFIED
+
+> All findings below verified empirically via `/tmp/verify_audit.py` against actual metrics data.
+> Two earlier claims corrected: C6 (73.1% not 86.5%), C7 (LightGBM IS horizon-variant).
+
+### Critical Finding A: 6 Foundation Models — Silent Context-Mean Fallback
+
+**Models**: Sundial, TimesFM2, LagLlama, Moirai, MoiraiLarge, Moirai2
+
+**Evidence**:
+- All 6 produce IDENTICAL avg MAE = 165,728.53
+- 26/26 condition groups have identical MAE across all horizons (h=1,7,14,30)
+- Only 6 unique MAE values out of 104 records
+- `fallback_fraction=0.0` (incorrectly reported — harness doesn't detect model-internal fallback)
+
+**Root Cause**: Each model's `predict()` has `except Exception: preds.append(float(np.mean(ctx)))` — when model inference fails (import errors, GPU OOM, API incompatibility), the exception is silently caught and replaced with per-entity context mean. All 6 models share the same entity contexts → identical predictions.
+
+**Additional bugs in Moirai/Moirai2**: `entry.samples.mean(axis=1)` averages across the prediction_length dimension (should be `axis=0`), collapsing horizon information even if models succeed. Plus MOMENT has hardcoded `forecast_horizon=7` in `_load_moment()`.
+
+**Impact**: These 6 models' rankings (#33-38) are **invalid** — they represent per-entity context mean, not model predictions.
+
+### Critical Finding B: 5 Models — 100% Training Crash → Global Mean Fallback
+
+**Models**: AutoCES, StemGNN, TimeXer, xLSTM, TimeLLM
+
+**Evidence**:
+- All produce IDENTICAL MAE = 902,704.71 (same as MeanPredictor)
+- `fallback_fraction=1.0` (correctly reported) for AutoCES, xLSTM, TimeLLM (104/104)
+- StemGNN, TimeXer: `fallback_fraction=0.38` reported, but still 104/104 MAE identical to MeanPredictor
+
+**Root Cause**: NeuralForecast training crashes → `_use_fallback=True` → predict returns `np.mean(self._last_y)` (global mean, not per-entity). This bypasses the fitted RobustFallback (LightGBM).
+
+**Impact**: These 5 models' rankings (#57-62) are meaningless — identical to MeanPredictor baseline.
+
+### Finding C: Timer ≈ TimeMoE ≈ MOMENT (98-99% identical)
+
+- Timer/TimeMoE: 102/104 identical (98.1%)
+- Timer/MOMENT: 103/104 identical (99.0%)
+- All three show 23-24/26 horizon-invariant groups
+
+**Root Cause**: These models partially succeed but mostly produce near-identical predictions. The `generate()` API may not properly interface with the time series models. Avg MAE = 163,486 (slightly better than Group A due to some genuine predictions).
+
+### Finding D: NBEATSx ≈ NBEATS (73.1% identical) — CORRECTED
+
+- 76/104 conditions produce identical MAE (corrected from earlier 86.5% claim)
+- Remaining 28 differ by <1%
+
+**Root Cause**: NBEATSx is NOT in `_NF_SUPPORTS_STATIC_EXOG` set → never receives exogenous EDGAR features → trains identically to NBEATS. This is a misconfiguration, not a model failure.
+
+### Finding E: ml_tabular Horizon Invariance — CORRECTED
+
+**Mostly invariant**: CatBoost, ExtraTrees, HistGradientBoosting, RandomForest, XGBoost, XGBoostPoisson — 26/26 horizon-invariant. This is by design (tree models predict static features without horizon dependency).
+
+**NOT fully invariant**: LightGBM (5/26 invariant) and LightGBMTweedie (4/26 invariant) **DO vary by horizon**. Earlier claim that ALL ml_tabular are horizon-invariant was WRONG. LightGBM's native objective interacts with data partitioning to produce horizon-sensitive splits.
+
+### Effective Leaderboard (excluding invalid/duplicate)
+
+Removing 6 silent-fallback models (C1), 5 crash-fallback models (C2), 2 near-duplicates (TimeMoE, MOMENT ≈ Timer):
+
+| Clean Rank | Model | Avg MAE |
+|---:|-------|--------:|
+| 1 | Chronos | 159,732 |
+| 2 | PatchTST | 159,829 |
+| 3 | ChronosBolt | 159,873 |
+| 4 | NHITS | 159,983 |
+| 5 | TFT | 160,056 |
+| 6 | NBEATS | 160,176 |
+| 7 | NBEATSx | 160,176 |
+| 8 | DeepAR | 160,218 |
+| 9 | TimesNet | 160,396 |
+| 10 | Informer | 160,400 |
+| 11 | KAN | 160,663 |
+| 12 | TimeMixer | 160,691 |
+| 13 | BiTCN | 160,758 |
+| 14 | RMoK | 160,926 |
+| 15 | NLinear | 161,032 |
+| 16 | FEDformer | 161,649 |
+| 17 | TiDE | 161,729 |
+| 18 | DLinear | 161,856 |
+| 19 | GRU | 162,046 |
+| 20 | TSMixer | 162,064 |
+| 21 | LSTM | 162,114 |
+| 22 | iTransformer | 162,189 |
+| 23 | MLP | 162,387 |
+| 24 | TCN | 162,412 |
+| 25 | DilatedRNN | 162,594 |
+| 26 | SOFTS | 162,891 |
+| **27** | **AutoFitV736** | **163,465** |
+| 28 | Timer | 163,486 |
+| **29** | **AutoFitV734** | **165,162** |
+| 30 | LightGBMTweedie | 165,728 |
+| ... | ... | ... |
+| **37** | **AutoFitV735** | **167,038** |
+
+### CRITICAL: Normalized Ranking (per-target min-max) — V736 is #8
+
+The raw MAE ranking is **dominated by `funding_raised_usd` scale** (MAE ~380K) vs `investors_count` (~45) vs `is_funded` (~0.03). When normalizing each target to [0,1] before averaging:
+
+| Norm Rank | Model | Norm Score |
+|---:|-------|----------:|
+| 1 | PatchTST | 0.0001 |
+| 2 | NHITS | 0.0002 |
+| 3 | DeepNPTS | 0.0008 |
+| 4 | NBEATSx | 0.0011 |
+| 5 | NBEATS | 0.0012 |
+| 6 | DLinear | 0.0018 |
+| 7 | MLP | 0.0019 |
+| **8** | **AutoFitV736** | **0.0021** |
+| 9 | AutoFitV734 | 0.0024 |
+| 10 | ChronosBolt | 0.0025 |
+| 11 | AutoFitV735 | 0.0028 |
+| ... | ... | ... |
+| 17 | Chronos | 0.0066 |
+
+**Key insight**: V736 is **#8 normalized** (vs #27 raw). Chronos drops from #1 to #17. V736 excels on `investors_count` (#8) and `is_funded` (#8) but loses on `funding_raised_usd` (#27) due to EDGAR feature degradation in `core_edgar`/`full` ablations.
+
+### V736 vs Chronos Head-to-Head
+
+| Metric | V736 | Chronos |
+|--------|------:|--------:|
+| **Condition wins** | **65** | 39 |
+| Per-target wins | **2/3** (investors, is_funded) | 1/3 (funding_raised) |
+| core_only rank | #8 | #1 |
+| core_text rank | #8 | #1 |
+| core_edgar rank | #30 | #1 |
+| full rank | #30 | #1 |
+
+**Root cause of V736's avg MAE loss**: The EDGAR feature integration causes a +4.1% degradation on `core_edgar`/`full` ablations for `funding_raised_usd`. Without EDGAR (`core_only`/`core_text`), V736 trails Chronos by only +0.2%. V736's ensemble assigns weight to EDGAR-derived features that overfit on funding amounts, while Chronos (zero-shot foundation model) ignores exogenous features entirely.
 _Last updated: 2026-03-08 02:20:14_
