@@ -1221,10 +1221,24 @@ class BenchmarkShard:
         if not partial:
             logger.info(f"Saved manifest to {manifest_path}")
         
-        # Save metrics
+        # Save metrics (merge with other jobs' results to avoid overwriting)
         if self.metrics:
             metrics_records = [m.to_dict() for m in self.metrics]
             metrics_path = self.output_dir / "metrics.json"
+            # Re-read file to merge with records written by other concurrent jobs
+            my_keys = {(r["model_name"], r.get("target",""), r.get("horizon",0))
+                       for r in metrics_records}
+            if metrics_path.exists():
+                try:
+                    on_disk = json.loads(metrics_path.read_text())
+                    if isinstance(on_disk, list):
+                        # Keep records from other models not in our batch
+                        for rec in on_disk:
+                            key = (rec.get("model_name",""), rec.get("target",""), rec.get("horizon",0))
+                            if key not in my_keys:
+                                metrics_records.append(rec)
+                except Exception:
+                    pass  # if file is corrupt, just save our records
             metrics_path.write_text(
                 json.dumps(metrics_records, indent=2),
                 encoding="utf-8",
