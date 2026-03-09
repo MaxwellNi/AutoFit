@@ -1144,7 +1144,7 @@ class FoundationModelWrapper(ModelBase):
     def _load_chronos2(self):
         from chronos import Chronos2Pipeline
         self._model = Chronos2Pipeline.from_pretrained(
-            "amazon/chronos2-small", device_map="auto",
+            "amazon/chronos-2", device_map="auto",
         )
 
     def _load_moirai(self):
