@@ -1257,9 +1257,9 @@ class NFAdaptiveChampionV737(NFAdaptiveChampionV736):
         preds = super().predict(X_clean, **kwargs)
 
         if self._target_transform == "asinh":
+            # Clip in asinh space BEFORE sinh to prevent overflow
+            # sinh(25) ≈ 3.6e10, sinh(30) ≈ 5.3e12 — safe for float64
+            preds = np.clip(preds, -25, 25)
             preds = np.sinh(preds)
-            # Clamp extreme values to prevent overflow
-            max_val = 1e12
-            preds = np.clip(preds, -max_val, max_val)
 
         return preds
