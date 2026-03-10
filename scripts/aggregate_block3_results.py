@@ -24,6 +24,34 @@ ROOT = Path(__file__).resolve().parent.parent
 DEFAULT_BENCH = ROOT / "runs" / "benchmarks" / "block3_phase9_fair"
 DEFAULT_MD = ROOT / "docs" / "BLOCK3_RESULTS.md"
 
+# -----------------------------------------------------------------------
+# Audit-validated exclusion list (Phase 9 deep re-audit, commit 3b9cab7)
+# Models that MUST be excluded from leaderboard / paper tables due to
+# verified experimental bugs.  Downstream tools MUST filter these out.
+# -----------------------------------------------------------------------
+AUDIT_EXCLUDED_MODELS: dict[str, str] = {
+    # Finding A — silent context-mean fallback (foundation models)
+    "Sundial": "silent context-mean fallback (Finding A)",
+    "TimesFM2": "silent context-mean fallback (Finding A)",
+    "LagLlama": "silent context-mean fallback (Finding A)",
+    "Moirai": "silent context-mean fallback (Finding A)",
+    "MoiraiLarge": "silent context-mean fallback (Finding A)",
+    "Moirai2": "silent context-mean fallback (Finding A)",
+    # Finding B — training crash → global mean fallback
+    "AutoCES": "100% training crash fallback (Finding B)",
+    "xLSTM": "100% training crash fallback (Finding B)",
+    "TimeLLM": "100% training crash fallback (Finding B)",
+    "StemGNN": "40/104 training crash fallback (Finding B)",
+    "TimeXer": "40/104 training crash fallback (Finding B)",
+    # Finding C — near-duplicates (share identity with Timer)
+    "TimeMoE": "98% identical to Timer (Finding C)",
+    "MOMENT": "99% identical to Timer (Finding C)",
+    # Finding G — 100% constant predictions (TSLib)
+    "MICN": "100% constant predictions (Finding G)",
+    "MultiPatchFormer": "100% constant predictions (Finding G)",
+    "TimeFilter": "100% constant predictions (Finding G)",
+}
+
 
 def collect_metrics(bench_dir: Path) -> pd.DataFrame:
     """Recursively find all metrics.json and concatenate."""
@@ -48,14 +76,33 @@ def apply_comparability_filter(
     min_coverage: float = 0.98,
     fairness_only: bool = True,
 ) -> pd.DataFrame:
-    """Filter records to keep only fair and comparable evaluations."""
+    """Filter records to keep only fair and comparable evaluations.
+
+    Three-layer filter:
+      1. Audit exclusion — hardcoded list of models with verified bugs
+      2. Fairness pass — constant-prediction guard from harness
+      3. Coverage — minimum prediction coverage ratio
+    """
     if df.empty:
         return df
 
     out = df.copy()
+
+    # Layer 1: Audit-validated exclusions
+    if "model_name" in out.columns:
+        excluded_mask = out["model_name"].isin(AUDIT_EXCLUDED_MODELS)
+        n_excluded = excluded_mask.sum()
+        if n_excluded > 0:
+            excluded_models = out.loc[excluded_mask, "model_name"].unique()
+            print(f"  Audit exclusion: dropped {n_excluded} records from "
+                  f"{len(excluded_models)} models: {list(excluded_models)}")
+        out = out[~excluded_mask]
+
+    # Layer 2: Fairness pass (constant-prediction guard)
     if fairness_only and "fairness_pass" in out.columns:
         out = out[out["fairness_pass"] == True]  # noqa: E712
 
+    # Layer 3: Coverage
     if "prediction_coverage_ratio" in out.columns:
         cov = pd.to_numeric(out["prediction_coverage_ratio"], errors="coerce")
         out = out[cov >= float(min_coverage)]

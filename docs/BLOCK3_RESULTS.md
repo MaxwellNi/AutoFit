@@ -705,3 +705,110 @@ The paper should use **Normalized Mean Rank** (standard in TSLib/Monash/M4 bench
 V736 at Normalized Rank #10 is **competitive but not oral-level** (needs #1-3). Key improvement area: funding_raised_usd target (+2.34% gap to Chronos).
 
 _Last updated: 2026-03-10_
+
+---
+
+## Text Embedding Research & Decision (2026-03-11)
+
+### BUG-1 Root Cause Recap
+
+The text ablation (`core_text`, `full`) is **completely broken**: `_prepare_features()` at L572 uses
+`select_dtypes(include=[np.number])` which silently drops all 15 text string columns from
+`offers_text.parquet`. Result: `core_text` and `core_only` produce **identical** feature matrices.
+All Phase 9 text ablation results are meaningless.
+
+### Decision: GTE-Qwen2-1.5B-instruct (LLM-native embedding)
+
+After exhaustive survey of the 2024-2025 SOTA embedding landscape, the chosen model is
+**Alibaba-NLP/gte-Qwen2-1.5B-instruct** — an LLM-native decoder embedding model built on Qwen2
+with bidirectional attention and instruction tuning.
+
+### Embedding Model Survey Results
+
+| Model | Params | Dim | MTEB (EN) | VRAM (FP16) | License | HF Free API |
+|-------|-------:|----:|----------:|-------------|---------|-------------|
+| **NV-Embed-v2** (NVIDIA) | 8B | 4096 | **72.31** | ~16GB | CC-BY-NC-4.0 ❌ | No |
+| **GTE-Qwen2-7B** (Alibaba) | 7B | 3584 | 70.24 | ~14GB | Apache-2.0 ✅ | No |
+| **GTE-Qwen2-1.5B** (Alibaba) | 1.5B | 1536 | 67.16 | ~3.3GB | Apache-2.0 ✅ | No |
+| **Jina-embeddings-v3** (Jina) | 0.6B | 1024 | ~65 | ~1.2GB | CC-BY-NC-4.0 ❌ | No |
+| **Snowflake Arctic-L-v2** | 0.6B | 1024 | ~55 | ~1.2GB | Apache-2.0 ✅ | **Yes** |
+| E5-Mistral-7B (Microsoft) | 7B | 4096 | 66.63 | ~14GB | MIT ✅ | No |
+
+### Why GTE-Qwen2-1.5B-instruct
+
+1. **LLM-native architecture** (Qwen2 backbone) — NOT encoder-only like BERT/RoBERTa
+2. **MTEB 67.16** — top-tier quality for 1.5B parameter class
+3. **Apache-2.0** — fully open, no commercial restrictions (NV-Embed-v2 and Jina-v3 are NC-only)
+4. **3.3GB VRAM** at FP16 → fits on ANY GPU (V100/H100/L40S) with massive batch headroom
+5. **1536-dim** → PCA to 64 dims for downstream ML (captures >95% variance)
+6. **Already-installed env**: transformers 4.57.6 + safetensors + einops — all compatible
+7. **Throughput**: ~200 texts/sec on V100 at batch_size=64 → ~45min for all unique texts
+
+### HPC Compute Capacity (ULHPC Iris)
+
+| Partition | Nodes | GPU | VRAM/GPU | RAM | GTE-1.5B Fit? |
+|-----------|------:|-----|----------|-----|---------------|
+| `gpu` | 24 | V100 ×4 | 32GB | 756GB | ✅ Easy (3.3GB) |
+| `hopper` | 1 | H100 ×4 | 80GB | 2TB | ✅ Easy |
+| `l40s` | 2 | L40S ×4 | 48GB | 515GB | ✅ Easy |
+| `bigmem` | 4 | None | — | 3TB | CPU-only (slow) |
+
+### Text Data Profile
+
+| Property | Value |
+|----------|-------|
+| Total rows | 5,774,931 |
+| Unique entities | 22,569 |
+| Text columns | 15 (11 used for embedding) |
+| `headline` coverage | 85.1% (avg 125 chars) |
+| `description_text` coverage | 78.4% (avg 1,704 chars) |
+| `company_description` coverage | 14.2% (avg 1,043 chars) |
+| Estimated unique texts (deduped) | ~200-500K |
+| Estimated GPU time | 30-60 min (V100, batch=64) |
+
+### Pipeline Architecture
+
+```
+offers_text.parquet (5.77M rows, 15 string cols)
+    │
+    ├─ combine_text_fields() → concatenate 11 key fields per row
+    ├─ deduplicate_texts() → hash-based dedup → ~200-500K unique
+    ├─ encode_texts() → GTE-Qwen2-1.5B @ FP16 → 1536-dim vectors
+    ├─ apply_pca() → 1536 → 64 dims (PCA, >95% variance)
+    └─ save → text_embeddings.parquet (entity_id, crawled_date_day, emb_0..63)
+        │
+        ▼
+BenchmarkShard._join_text_embeddings()
+    LEFT JOIN on (entity_id, crawled_date_day)
+    → text_emb_0..63 appear as NUMERIC columns
+    → pass through select_dtypes(include=[np.number]) ✅
+```
+
+### Models Rejected
+
+- **NV-Embed-v2**: MTEB #1 (72.31) but **CC-BY-NC-4.0** — non-commercial only
+- **Jina-embeddings-v3**: Good quality but **CC-BY-NC-4.0** — non-commercial only
+- **GTE-Qwen2-7B**: Higher quality but 4× VRAM/compute for +3 MTEB points not justified
+- **TF-IDF / BERT / one-hot**: Old methods, inferior to LLM-native embeddings
+- **GPT-5.4 / Claude Opus 4.6 / Gemini 3.1 Pro API**: Zero-cost constraint violated
+- **DeepSeek V3.2 / Qwen3.5 / GLM-5**: No dedicated embedding models; base LLMs too large (685B+)
+- **HF Free Inference API**: Only Snowflake Arctic available; MTEB 55 (too low for paper)
+
+### Implementation Files
+
+- Embedding generator: `scripts/generate_text_embeddings.py`
+- SLURM job: `.slurm_scripts/generate_text_embeddings.sh`
+- Harness integration: `scripts/run_block3_benchmark_shard.py` → `_join_text_embeddings()`
+
+### Audit Exclusion List (16 models)
+
+Added to `scripts/aggregate_block3_results.py` → `AUDIT_EXCLUDED_MODELS`:
+
+| Finding | Models Excluded | Reason |
+|---------|-----------------|--------|
+| A (6) | Sundial, TimesFM2, LagLlama, Moirai, MoiraiLarge, Moirai2 | Context-mean fallback |
+| B (5) | AutoCES, xLSTM, TimeLLM, StemGNN, TimeXer | Training crash fallback |
+| C (2) | TimeMoE, MOMENT | Near-duplicate of Timer |
+| G (3) | MICN, MultiPatchFormer, TimeFilter | 100% constant predictions |
+
+_Last updated: 2026-03-11_
