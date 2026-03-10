@@ -1235,33 +1235,17 @@ class NFAdaptiveChampionV737(NFAdaptiveChampionV736):
         self._fit_edgar_pca(X)
         X_clean = self._transform_edgar(X)
 
-        # Step 2: Target-adaptive transform
-        if target in self._HEAVY_TAIL_TARGETS:
-            y_transformed = pd.Series(
-                np.arcsinh(y.values), index=y.index, name=y.name
-            )
-            self._target_transform = "asinh"
-            logger.info(
-                f"[V7.3.7] Applied asinh transform to target={target} "
-                f"(range: [{y.min():.0f}, {y.max():.0f}] → "
-                f"[{y_transformed.min():.2f}, {y_transformed.max():.2f}])"
-            )
-        else:
-            y_transformed = y
-            self._target_transform = None
+        # Step 2: Skip outer asinh — incompatible with NF panel.
+        # _build_panel_df reads train_raw[target] (original) not transformed y.
+        # Applying sinh() inverse on original-scale NF predictions is catastrophic.
+        y_transformed = y
+        self._target_transform = None
 
         return super().fit(X_clean, y_transformed, **kwargs)
 
     def predict(self, X: pd.DataFrame, **kwargs) -> np.ndarray:
         X_clean = self._transform_edgar(X)
         preds = super().predict(X_clean, **kwargs)
-
-        if self._target_transform == "asinh":
-            # Clip in asinh space BEFORE sinh to prevent overflow
-            # sinh(25) ≈ 3.6e10, sinh(30) ≈ 5.3e12 — safe for float64
-            preds = np.clip(preds, -25, 25)
-            preds = np.sinh(preds)
-
         return preds
 
 
