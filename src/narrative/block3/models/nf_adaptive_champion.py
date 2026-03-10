@@ -1441,18 +1441,15 @@ class NFAdaptiveChampionV738(NFAdaptiveChampionV737):
         self._fit_edgar_pca(X)
         X_clean = self._transform_edgar(X)
 
-        # Step 2: Target-adaptive transform (inherited from V737)
-        if target in self._HEAVY_TAIL_TARGETS:
-            y_work = pd.Series(
-                np.arcsinh(y.values), index=y.index, name=y.name
-            )
-            self._target_transform = "asinh"
-            logger.info(
-                f"[V7.3.8] Applied asinh transform to target={target}"
-            )
-        else:
-            y_work = y
-            self._target_transform = None
+        # Step 2: Skip outer asinh transform — incompatible with NF panel.
+        # NF wrapper's _build_panel_df reads targets from train_raw[target]
+        # (original scale), ignoring any transform applied here.  Applying
+        # sinh() inverse in predict() on original-scale NF predictions
+        # causes catastrophic errors (sinh(380K) → 36B, MAE 15B vs 380K).
+        # RobustFallback already has its own adaptive asinh for fallback
+        # entities, and NF models use robust scaler internally.
+        y_work = y
+        self._target_transform = None
 
         # Step 3: Oracle lookup from MAE-based table
         top5 = ORACLE_TABLE_V738.get(oracle_key)
@@ -1659,9 +1656,7 @@ class NFAdaptiveChampionV738(NFAdaptiveChampionV737):
                 preds = preds / safe_w_sum
                 preds = np.where(w_sum > 0, preds, 0.0)
 
-        # Inverse target transform
-        if self._target_transform == "asinh":
-            preds = np.clip(preds, -25, 25)
-            preds = np.sinh(preds)
+        # No inverse transform needed — predictions are already in original
+        # scale (NF panel trains on original target values from train_raw).
 
         return preds
