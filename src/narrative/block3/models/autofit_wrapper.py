@@ -7643,6 +7643,22 @@ def get_autofit_v736(**kwargs):
     return NFAdaptiveChampionV736(stack_k=stack_k, **kwargs)
 
 
+def get_autofit_v737(**kwargs):
+    """AutoFit V7.3.7 — EDGAR-Aware Stacking Ensemble.
+
+    V736 + EDGAR feature preprocessing (variance filter + PCA) +
+    asinh target transform for heavy-tailed targets.
+    Root-cause fixes for V736's +1.76% EDGAR degradation.
+    """
+    from .nf_adaptive_champion import NFAdaptiveChampionV737
+    stack_k = kwargs.pop("stack_k", 3)
+    kwargs.pop("top_k", None)
+    pca_components = kwargs.pop("pca_components", 5)
+    return NFAdaptiveChampionV737(
+        stack_k=stack_k, pca_components=pca_components, **kwargs
+    )
+
+
 AUTOFIT_MODELS = {
     "AutoFitV1": get_autofit_v1,
     "AutoFitV2": get_autofit_v2,
@@ -7665,4 +7681,5 @@ AUTOFIT_MODELS = {
     "AutoFitV734": get_autofit_v734,
     "AutoFitV735": get_autofit_v735,
     "AutoFitV736": get_autofit_v736,
+    "AutoFitV737": get_autofit_v737,
 }

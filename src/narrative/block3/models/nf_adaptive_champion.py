@@ -1116,3 +1116,150 @@ class NFAdaptiveChampionV736(NFAdaptiveChampionWrapper):
                 f"[V7.3.6] TOTAL FAILURE: no models trained for {oracle_key}"
             )
         return self
+
+
+# ============================================================================
+# V7.3.7: EDGAR-AWARE STACKING ENSEMBLE + TARGET-ADAPTIVE TRANSFORM
+# ============================================================================
+# Root-cause fixes from V736 post-mortem analysis:
+#   1. EDGAR features (41 cols, ~60-70% NaN→0) cause +1.76% degradation via
+#      overfitting in _RobustFallback LightGBM and deep models.
+#      Fix: variance filter + PCA on EDGAR columns before passing to models.
+#   2. funding_raised_usd heavy-tail distribution poorly handled by MSE loss.
+#      Fix: asinh target transform — reduces outlier influence while preserving
+#      sign and magnitude ordering (Bellemare & Wichman, 2020).
+#   3. core_text ≡ core_only (text features dead until embedding pipeline
+#      completes). No code change — awaiting text_embeddings output.
+# ============================================================================
+
+
+class NFAdaptiveChampionV737(NFAdaptiveChampionV736):
+    """AutoFit V7.3.7 — EDGAR-Aware Stacking Ensemble.
+
+    Inherits V736's top-3 oracle stacking architecture and adds:
+      1. EDGAR feature preprocessing: variance filter + PCA → 5 components
+      2. asinh target transform for heavy-tailed targets
+      3. Same stacking/weighting as V736 — only input preprocessing changes
+
+    Expected improvement: -1.5% to -3% on core_edgar/full ablations
+    (reverting the +1.76% EDGAR degradation observed in V736).
+    """
+
+    _EDGAR_PREFIXES = ("last_", "mean_", "ema_", "edgar_")
+    _HEAVY_TAIL_TARGETS = {"funding_raised_usd", "funding_goal_usd"}
+
+    def __init__(self, *, pca_components: int = 5, **kwargs):
+        super().__init__(**kwargs)
+        self.config = ModelConfig(
+            name="AutoFitV737",
+            model_type="regression",
+            params={
+                "strategy": "edgar_aware_stacking_ensemble",
+                "version": "7.3.7",
+                "stack_k": self._stack_k,
+                "pca_components": pca_components,
+            },
+        )
+        self._pca_components = pca_components
+        self._edgar_pca = None
+        self._edgar_keep: List[str] = []
+        self._edgar_cols: List[str] = []
+        self._non_edgar_cols: List[str] = []
+        self._target_transform: Optional[str] = None
+
+    def _detect_edgar_cols(self, X: pd.DataFrame) -> List[str]:
+        return [c for c in X.columns
+                if any(c.startswith(p) for p in self._EDGAR_PREFIXES)]
+
+    def _fit_edgar_pca(self, X: pd.DataFrame) -> None:
+        """Fit PCA on EDGAR columns after variance filter."""
+        self._edgar_cols = self._detect_edgar_cols(X)
+        self._non_edgar_cols = [c for c in X.columns if c not in self._edgar_cols]
+
+        if not self._edgar_cols:
+            return
+
+        edgar_data = X[self._edgar_cols].fillna(0)
+
+        # Variance filter: keep EDGAR cols where ≥20% of values are non-zero
+        nonzero_frac = (edgar_data != 0).mean()
+        self._edgar_keep = nonzero_frac[nonzero_frac >= 0.2].index.tolist()
+
+        n_keep = len(self._edgar_keep)
+        logger.info(
+            f"[V7.3.7] EDGAR feature filter: {len(self._edgar_cols)} total → "
+            f"{n_keep} survived variance filter (≥20% non-zero)"
+        )
+
+        if n_keep >= 3:
+            from sklearn.decomposition import PCA
+            n_comp = min(self._pca_components, n_keep)
+            self._edgar_pca = PCA(n_components=n_comp, random_state=42)
+            self._edgar_pca.fit(edgar_data[self._edgar_keep])
+            explained = self._edgar_pca.explained_variance_ratio_.sum()
+            logger.info(
+                f"[V7.3.7] EDGAR PCA: {n_keep} → {n_comp} components "
+                f"({explained:.1%} variance explained)"
+            )
+        else:
+            self._edgar_pca = None
+
+    def _transform_edgar(self, X: pd.DataFrame) -> pd.DataFrame:
+        """Apply fitted EDGAR PCA or pass through."""
+        if not self._edgar_cols:
+            return X
+
+        X_non_edgar = X[self._non_edgar_cols]
+
+        if self._edgar_pca is not None:
+            edgar_data = X[self._edgar_keep].fillna(0)
+            pca_vals = self._edgar_pca.transform(edgar_data)
+            pca_df = pd.DataFrame(
+                pca_vals,
+                columns=[f"edgar_pca_{i}" for i in range(pca_vals.shape[1])],
+                index=X.index,
+            )
+            return pd.concat([X_non_edgar, pca_df], axis=1)
+
+        if self._edgar_keep:
+            return X[self._non_edgar_cols + self._edgar_keep]
+
+        return X_non_edgar
+
+    def fit(
+        self, X: pd.DataFrame, y: pd.Series, **kwargs
+    ) -> "NFAdaptiveChampionV737":
+        target = str(kwargs.get("target", y.name or "funding_raised_usd"))
+
+        # Step 1: EDGAR preprocessing
+        self._fit_edgar_pca(X)
+        X_clean = self._transform_edgar(X)
+
+        # Step 2: Target-adaptive transform
+        if target in self._HEAVY_TAIL_TARGETS:
+            y_transformed = pd.Series(
+                np.arcsinh(y.values), index=y.index, name=y.name
+            )
+            self._target_transform = "asinh"
+            logger.info(
+                f"[V7.3.7] Applied asinh transform to target={target} "
+                f"(range: [{y.min():.0f}, {y.max():.0f}] → "
+                f"[{y_transformed.min():.2f}, {y_transformed.max():.2f}])"
+            )
+        else:
+            y_transformed = y
+            self._target_transform = None
+
+        return super().fit(X_clean, y_transformed, **kwargs)
+
+    def predict(self, X: pd.DataFrame, **kwargs) -> np.ndarray:
+        X_clean = self._transform_edgar(X)
+        preds = super().predict(X_clean, **kwargs)
+
+        if self._target_transform == "asinh":
+            preds = np.sinh(preds)
+            # Clamp extreme values to prevent overflow
+            max_val = 1e12
+            preds = np.clip(preds, -max_val, max_val)
+
+        return preds

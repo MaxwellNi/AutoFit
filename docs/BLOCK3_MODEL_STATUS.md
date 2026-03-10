@@ -1,6 +1,6 @@
 # Block 3 Model Benchmark Status
 
-> Last updated: 2026-03-08 (Phase 9 fair benchmark)
+> Last updated: 2026-03-10 (Phase 9 + Phase 10 V737)
 > Full results: `docs/BLOCK3_RESULTS.md`
 
 ## Snapshot
@@ -12,7 +12,7 @@
 | Valid metric records | 5,083 |
 | Target model count (Phase 9) | **100** |
 | Models with valid results | 50 |
-| Active AutoFit versions | V734, V735, V736 |
+| Active AutoFit versions | V734, V735, V736, **V737** |
 
 ## Condition Count Explained
 
@@ -97,4 +97,30 @@ TimesNet, VanillaTransformer, iTransformer, xLSTM
 2. task3_risk_adjust has only 3 ablations (core_only, core_edgar, full) — NO core_text.
 3. V735 oracle table built from Phase 7 data (6,670 records) — will be rebuilt after Phase 9 completes.
 4. NF training configs use their original committed values (no max_steps equalization applied).
-5. Registry has 127 entries total, but only 100 are targeted for Phase 9 (removed deprecated models).
+5. Registry has 128 entries total (V737 added), 101 targeted for Phase 9/10.
+
+## V736 Post-Mortem Analysis (2026-03-10)
+
+V736 NormRank #9/85, raw MAE #27/93. Root causes:
+
+| Root Cause | Impact | Fix (V737) |
+|---|---|---|
+| EDGAR overfitting | +1.76% avg MAE (core_edgar/full) | Variance filter + PCA → 5 components |
+| core_text ≡ core_only | Text ablation dead | Text embeddings pipeline (Job 5225807) |
+| funding_raised_usd heavy tail | #27/84 on this target | asinh target transform |
+
+### EDGAR Impact Across AutoFit Versions
+| Version | EDGAR Delta (avg MAE) |
+|---|---:|
+| V734 | +2.47% |
+| V735 | +3.12% |
+| V736 | +1.76% |
+| V737 (expected) | -0.5% to +0.5% |
+
+## Phase 10: V737 EDGAR-Aware Stacking Ensemble
+
+AutoFitV737 = V736 + 2 root-cause fixes:
+1. **EDGAR PCA**: 41 raw EDGAR cols → variance filter (≥20% non-zero) → PCA(5)
+2. **asinh transform**: `funding_raised_usd` / `funding_goal_usd` heavy tail → `np.arcsinh(y)`
+
+11 SLURM scripts in `.slurm_scripts/phase10/p10_v737_*.sh`
