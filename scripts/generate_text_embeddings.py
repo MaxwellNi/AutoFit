@@ -103,12 +103,17 @@ def combine_text_fields(df: pd.DataFrame, max_chars: int = 2048) -> pd.Series:
     Strategy: Concatenate primary fields first (most informative),
     then secondary fields, with section headers for structure.
     Truncate to max_chars to respect model context limits.
+
+    NOTE: Uses object dtype (Python str) to avoid pandas Arrow backend
+    OOM on .loc[] assignment with long strings (155K+ chars in raw data
+    causes 2.55 TiB allocation via ArrowStringArray → numpy).
     """
+    per_field_limit = max(200, max_chars // max(1, len(ALL_TEXT_COLS)))
     parts = []
     for col in ALL_TEXT_COLS:
         if col in df.columns:
-            clean = df[col].fillna("").astype(str)
-            # Add section header for non-empty fields (memory-safe mask)
+            # Force object dtype to avoid Arrow string backend OOM
+            clean = df[col].fillna("").astype("object").str[:per_field_limit]
             mask = clean != ""
             label = col.replace("_", " ").title()
             labeled = clean.copy()
@@ -117,7 +122,6 @@ def combine_text_fields(df: pd.DataFrame, max_chars: int = 2048) -> pd.Series:
 
     combined = parts[0].copy()
     for p in parts[1:]:
-        # Only add separator where the part is non-empty
         non_empty = p != ""
         combined.loc[non_empty] = combined.loc[non_empty] + " | " + p.loc[non_empty]
 
