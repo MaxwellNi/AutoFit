@@ -1,9 +1,9 @@
 # Block 3 Benchmark Results
 
-> Last updated: 2026-03-09 (Phase 9 fair benchmark — verified audit, normalized rankings added)
+> Last updated: 2026-03-10 (Phase 9 — deep re-audit, 4 new bugs found, V736 ranking analysis)
 > Canonical results dir: `runs/benchmarks/block3_phase9_fair/`
 > Phase 7/8 results are **DEPRECATED** (4 critical bugs fixed)
-> **Data integrity audit**: VERIFIED via `/tmp/verify_audit.py` — 2 earlier claims corrected
+> **Data integrity audit**: RE-AUDITED 2026-03-10 — 4 new critical findings (see §Deep Audit below)
 
 **Generated**: 2026-03-09
 **Benchmark Dir**: `block3_phase9_fair`
@@ -615,4 +615,93 @@ The raw MAE ranking is **dominated by `funding_raised_usd` scale** (MAE ~380K) v
 | full rank | #30 | #1 |
 
 **Root cause of V736's avg MAE loss**: The EDGAR feature integration causes a +4.1% degradation on `core_edgar`/`full` ablations for `funding_raised_usd`. Without EDGAR (`core_only`/`core_text`), V736 trails Chronos by only +0.2%. V736's ensemble assigns weight to EDGAR-derived features that overfit on funding amounts, while Chronos (zero-shot foundation model) ignores exogenous features entirely.
-_Last updated: 2026-03-08 02:20:14_
+
+---
+
+## Deep Re-Audit (2026-03-10) — 4 NEW CRITICAL FINDINGS
+
+### NEW Finding F: Text Ablation Completely Broken 🔴
+
+**Severity**: CRITICAL — invalidates entire ablation study
+
+**Root Cause**: `offers_text.parquet` contains 19 columns that are ALL `string` dtype (headline, title, description_text, company_description, etc.). The `_prepare_features()` function at L572 of `run_block3_benchmark_shard.py` uses:
+```python
+numeric_cols = df_clean.select_dtypes(include=[np.number]).columns
+```
+This **silently drops ALL text string columns**. The join works correctly (`join_core_with_text()` adds 15 text columns), but they are removed before reaching any model.
+
+**Impact**:
+- `core_text ≡ core_only` for **ALL** models (0 numeric difference)
+- `full ≡ core_edgar` for **ALL** models (in terms of feature matrix)
+- 50% of benchmark compute was wasted on redundant ablations (core_text and full)
+- Paper ablation study showing "text contribution" is completely invalid
+
+**Fix Required**: Text→embedding pipeline before `_prepare_features()`:
+- Option A: `sentence-transformers/all-MiniLM-L6-v2` → 384-dim embeddings per text column
+- Option B: TF-IDF (top-1000) + PCA (→50-dim) — lightweight version
+
+### NEW Finding G: 3 TSLib Models = 100% Constant Predictions 🔴
+
+| Model | Conditions | fairness_pass=False | Status |
+|-------|-----------|---------------------|--------|
+| MICN | 15/15 | 100% | Must exclude |
+| MultiPatchFormer | 31/31 | 100% | Must exclude |
+| TimeFilter | 31/31 | 100% | Must exclude |
+
+These models produce identical predictions for ALL test samples, making their MAE meaningless.
+
+### NEW Finding H: NF Model Training Non-Determinism 🟡
+
+8 NF models (BiTCN, DLinear, KAN, NLinear, RMoK, SOFTS, TimeMixer, TSMixerx) show ~1388 MAE units difference between `core_edgar` and `full` ablations, despite having IDENTICAL feature matrices (text columns dropped). Verified:
+- Text join keys are unique (0 duplicates in 5.77M text rows)
+- All 8 models produce DIFFERENT predictions (8 distinct MAE values)
+- Difference is from GPU non-deterministic training in separate SLURM jobs
+
+**Recommendation**: Run 3 random seeds and report mean ± std for NF models.
+
+### NEW Finding I: Foundation Model Ablation Contaminated by RobustFallback 🟡
+
+Foundation models (Chronos, ChronosBolt, Moirai, etc.) show MAE differences across ablations despite being univariate zero-shot models. Root cause: the `_RobustFallback` LightGBM handles entities with <10 training observations. This fallback model IS feature-dependent:
+- `core_only`: LightGBM trained on core numeric features only
+- `core_edgar`: LightGBM trained on core + EDGAR features → better fallback → lower MAE
+
+Example: Chronos funding_raised_usd drops -1.61% from core_only to core_edgar — this is the fallback effect, NOT Chronos itself.
+
+**Impact**: Foundation model ablation results reflect the RobustFallback sensitivity, not the foundation model's sensitivity to features.
+
+---
+
+## V736 Ranking Analysis (2026-03-10) — Definitive
+
+### Multiple Ranking Standards Compared
+
+| Standard | V736 Rank | Best at this standard |
+|----------|-----------|----------------------|
+| Raw MAE (avg across all conditions) | **#27/71** | Chronos (159,732) |
+| Normalized Mean Rank (per-condition rank avg) | **#10/71** | NHITS (11.47) |
+| investors_count (per-target MAE) | **#8/71** | NBEATS (44.78) |
+| is_funded (per-target MAE) | **#8/71** | PatchTST (0.0327) |
+| funding_raised_usd (per-target MAE) | **#27/71** | Chronos (377,504) |
+
+### V736 vs Top Models (Head-to-Head)
+
+| Rival | V736 Wins | Win Rate | Avg Gap |
+|-------|-----------|----------|---------|
+| Chronos | 153/264 | **58.0%** | +1.18% |
+| TFT | 157/264 | **59.5%** | -0.08% |
+| KAN | 127/264 | 48.1% | +0.56% |
+| TimesNet | 119/264 | 45.1% | +0.57% |
+| ChronosBolt | 73/264 | 27.7% | +1.16% |
+| NBEATS | 73/264 | 27.7% | +1.35% |
+| PatchTST | 68/264 | 25.8% | +1.42% |
+| NHITS | 56/264 | 21.2% | +1.47% |
+
+**Chronos granularity**: V736 beats Chronos on investors_count (124/124, 100%) and is_funded (16/16, 100%), but loses on funding_raised_usd (13/124, 10.5%).
+
+### NeurIPS 2026 Standard Recommendation
+
+The paper should use **Normalized Mean Rank** (standard in TSLib/Monash/M4 benchmarks) as the primary metric, with per-target MAE tables and condition-level win-rates as secondary evidence. Raw MAE average is misleading for multi-scale targets.
+
+V736 at Normalized Rank #10 is **competitive but not oral-level** (needs #1-3). Key improvement area: funding_raised_usd target (+2.34% gap to Chronos).
+
+_Last updated: 2026-03-10_
