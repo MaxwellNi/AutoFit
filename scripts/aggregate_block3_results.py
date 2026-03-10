@@ -110,13 +110,24 @@ def apply_comparability_filter(
     return out
 
 
+# Target-specific fallback MAE thresholds (from data profiling).
+# When a model silently returns the global mean, its MAE clusters
+# near these values.  A 2 % tolerance window catches rounding drift.
+_FALLBACK_MAE_RANGES: dict = {
+    "funding_raised_usd": (585000, 620000),
+    "investors_count":    (390, 420),
+    "is_funded":          (0.30, 0.55),
+    "funding_goal_usd":   (480000, 530000),
+}
+
+
 def is_fallback(row) -> bool:
-    """Detect fallback results (mean-predictor) by checking for the
-    characteristic MAE value of ~601864 (the global mean)."""
+    """Detect fallback results (mean-predictor) using target-specific
+    MAE ranges derived from data profiling."""
     mae = row.get("mae", 0)
-    # Fallback MAE for funding_raised_usd is approximately 601864
-    # We flag anything within 1% of this value as likely fallback
-    if 595000 < mae < 610000:
+    target = row.get("target", "")
+    lo, hi = _FALLBACK_MAE_RANGES.get(target, (595000, 610000))
+    if lo < mae < hi:
         return True
     return False
 

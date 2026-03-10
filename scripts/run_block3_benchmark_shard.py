@@ -618,7 +618,13 @@ class BenchmarkShard:
             return pd.DataFrame(), pd.Series(dtype=np.float64)
 
         # --- 2. Build leakage-safe drop set ---
-        leak_group = self._TARGET_LEAK_GROUPS.get(target, {target})
+        leak_group = self._TARGET_LEAK_GROUPS.get(target, None)
+        if leak_group is None:
+            logger.warning(
+                f"  [LEAKAGE GUARD] Target '{target}' has NO explicit leak group! "
+                f"Only dropping target column itself — potential leakage risk."
+            )
+            leak_group = {target}
         drop_cols = self._ALWAYS_DROP | leak_group
 
         numeric_cols = df_clean.select_dtypes(include=[np.number]).columns
@@ -1017,7 +1023,7 @@ class BenchmarkShard:
             routing_signals = self._extract_routing_signals(model)
 
             # ---- CONSTANT-PREDICTION GUARD ----
-            constant_prediction = len(y_pred) > 1 and np.std(y_pred) == 0.0
+            constant_prediction = len(y_pred) > 1 and float(np.std(y_pred)) < 1e-8
             if constant_prediction:
                 logger.warning(
                     f"  ⚠ CONSTANT-PREDICTION detected for {model_name} "

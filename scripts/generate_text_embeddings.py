@@ -107,14 +107,19 @@ def combine_text_fields(df: pd.DataFrame, max_chars: int = 2048) -> pd.Series:
     parts = []
     for col in ALL_TEXT_COLS:
         if col in df.columns:
-            clean = df[col].fillna("")
-            # Add section header for non-empty fields
-            labeled = clean.where(clean == "", col.replace("_", " ").title() + ": " + clean)
+            clean = df[col].fillna("").astype(str)
+            # Add section header for non-empty fields (memory-safe mask)
+            mask = clean != ""
+            label = col.replace("_", " ").title()
+            labeled = clean.copy()
+            labeled.loc[mask] = label + ": " + clean.loc[mask]
             parts.append(labeled)
 
-    combined = parts[0]
+    combined = parts[0].copy()
     for p in parts[1:]:
-        combined = combined + " | " + p
+        # Only add separator where the part is non-empty
+        non_empty = p != ""
+        combined.loc[non_empty] = combined.loc[non_empty] + " | " + p.loc[non_empty]
 
     # Remove excessive whitespace and truncate
     combined = combined.str.replace(r"\s+", " ", regex=True).str.strip()

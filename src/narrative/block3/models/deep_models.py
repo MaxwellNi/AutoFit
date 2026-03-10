@@ -538,7 +538,9 @@ def _synthetic_panel(y: pd.Series, max_entities: int = 200, min_obs: int = 20):
     for i in range(n_series):
         chunk = y.values[i * obs : (i + 1) * obs]
         uids.extend([f"s_{i}"] * len(chunk))
-        ds_list.extend(pd.date_range("2020-01-01", periods=len(chunk), freq="D"))
+        # Offset dates per entity to preserve temporal ordering
+        start = pd.Timestamp("2020-01-01") + pd.Timedelta(days=i * obs)
+        ds_list.extend(pd.date_range(start, periods=len(chunk), freq="D"))
         ys.extend(chunk)
     return pd.DataFrame(
         {"unique_id": uids, "ds": ds_list, "y": np.array(ys, dtype=np.float32)}
@@ -666,7 +668,10 @@ class _RobustFallback:
     def predict(self, X: pd.DataFrame) -> Optional[np.ndarray]:
         """Predict on original scale (inverse-transformed)."""
         if self._model is None or not self._feature_cols:
-            return None
+            # No model trained — return training median as constant prediction
+            n = len(X)
+            fill = getattr(self, '_train_mean', self._safe_fill)
+            return np.full(n, fill)
         try:
             X_fb = X.reindex(columns=self._feature_cols, fill_value=0).fillna(0)
             preds_transformed = np.asarray(self._model.predict(X_fb), dtype=float)
@@ -994,7 +999,10 @@ class DeepModelWrapper(ModelBase):
         try:
             self._fallback.fit(X, y)
         except Exception as _exc:
-            _logger.debug(f"  [{self.model_name}] Robust fallback failed: {_exc}")
+            _logger.warning(f"  [{self.model_name}] Robust fallback fit failed: {_exc}")
+            # Store training mean so predict never returns NaN
+            self._fallback._train_mean = float(np.nanmean(y.values) if hasattr(y, 'values') else np.nanmean(y))
+            self._fallback._fitted = True
 
         # --- Static exogenous features for NF models with covariate support ---
         # Enables EDGAR features to actually affect model predictions.

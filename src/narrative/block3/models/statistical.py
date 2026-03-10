@@ -165,6 +165,7 @@ class StatsForecastWrapper(ModelBase):
                     f"  [{self.model_name}] All SF predict attempts failed, "
                     f"returning training mean fallback"
                 )
+                self._use_fallback = True
                 return np.full(n_test, float(np.mean(self._last_y)) if len(self._last_y) else 0)
 
             pred_col = fcs.columns[-1]
@@ -206,12 +207,14 @@ class StatsForecastWrapper(ModelBase):
                     )
                     return y_pred
 
+            self._use_fallback = True
             return np.full(n_test, global_mean)
         except Exception as exc:
             _logger.warning(
                 f"  [{self.model_name}] predict failed: {exc}, "
                 f"returning training mean fallback"
             )
+            self._use_fallback = True
             return np.full(n_test, float(np.mean(self._last_y)) if len(self._last_y) else 0)
 
 
