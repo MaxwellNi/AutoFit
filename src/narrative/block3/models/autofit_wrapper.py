@@ -7659,6 +7659,27 @@ def get_autofit_v737(**kwargs):
     )
 
 
+def get_autofit_v738(**kwargs):
+    """AutoFit V7.3.8 — Multi-Pool Adaptive Ensemble with Foundation Models.
+
+    Fixes 6 root causes from V736's 104-condition benchmark:
+    1. No stacking overhead (oracle selects TOP-1, not TOP-3 average)
+    2. MAE-based oracle table (not RMSE)
+    3. Foundation model integration (Chronos/ChronosBolt in oracle pool)
+    4. Condition-adaptive routing (foundation_first / deep_primary+hedge / deep_only)
+    5. EDGAR PCA (inherited from V737)
+    6. asinh target transform (inherited from V737)
+    """
+    from .nf_adaptive_champion import NFAdaptiveChampionV738
+    kwargs.pop("stack_k", None)
+    kwargs.pop("top_k", None)
+    pca_components = kwargs.pop("pca_components", 5)
+    val_frac = kwargs.pop("val_frac", 0.2)
+    return NFAdaptiveChampionV738(
+        pca_components=pca_components, val_frac=val_frac, **kwargs
+    )
+
+
 AUTOFIT_MODELS = {
     "AutoFitV1": get_autofit_v1,
     "AutoFitV2": get_autofit_v2,
@@ -7682,4 +7703,5 @@ AUTOFIT_MODELS = {
     "AutoFitV735": get_autofit_v735,
     "AutoFitV736": get_autofit_v736,
     "AutoFitV737": get_autofit_v737,
+    "AutoFitV738": get_autofit_v738,
 }
