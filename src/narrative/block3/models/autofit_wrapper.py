@@ -7680,6 +7680,25 @@ def get_autofit_v738(**kwargs):
     )
 
 
+def get_autofit_v739(**kwargs):
+    """AutoFit V7.3.9 — Validation-Based Adaptive Champion (No Oracle).
+
+    Root-cause fix for V737/V738's test-set oracle leakage.
+    Uses genuine temporal validation for model selection instead of
+    oracle tables built from test-set metrics.
+    """
+    from .nf_adaptive_champion import NFAdaptiveChampionV739
+    kwargs.pop("stack_k", None)
+    kwargs.pop("top_k", None)
+    pca_components = kwargs.pop("pca_components", 5)
+    val_frac = kwargs.pop("val_frac", 0.2)
+    model_timeout = kwargs.pop("model_timeout", 600)
+    return NFAdaptiveChampionV739(
+        pca_components=pca_components, val_frac=val_frac,
+        model_timeout=model_timeout, **kwargs
+    )
+
+
 AUTOFIT_MODELS = {
     "AutoFitV1": get_autofit_v1,
     "AutoFitV2": get_autofit_v2,
@@ -7704,4 +7723,5 @@ AUTOFIT_MODELS = {
     "AutoFitV736": get_autofit_v736,
     "AutoFitV737": get_autofit_v737,
     "AutoFitV738": get_autofit_v738,
+    "AutoFitV739": get_autofit_v739,
 }

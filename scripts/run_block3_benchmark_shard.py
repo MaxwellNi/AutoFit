@@ -988,6 +988,8 @@ class BenchmarkShard:
                 fit_kwargs["target"] = target
                 fit_kwargs["horizon"] = horizon
                 fit_kwargs["ablation"] = self.ablation
+            if self.category == "autofit":
+                fit_kwargs["val_raw"] = val
             model.fit(X_train, y_train, **fit_kwargs)
             train_time = time.time() - train_start
 
