@@ -19,15 +19,15 @@ Phase 9 is a complete re-benchmark after fixing 4 critical experimental bugs
 (TSLib per-entity prediction, foundation prediction_length, Moirai entity cap,
 ml_tabular single-horizon). All prior Phase 7/8 results are **DEPRECATED**.
 
-- **Target Model Count**: 100 models across 8 categories
+- **Target Model Count**: 114 models across 8 categories
   - `ml_tabular` (15): multi-horizon, NaN passthrough for tree models
   - `statistical` (15): original 5 + 10 new (Croston, Holt, AutoCES, etc.)
   - `deep_classical` (9): NBEATS/NHITS/TFT/DeepAR + GRU/LSTM/TCN/MLP/DilatedRNN
   - `transformer_sota` (23): PatchTST, iTransformer, TimesNet, TSMixer, etc.
   - `foundation` (11): Chronos, ChronosBolt, Chronos2, Moirai, etc.
   - `irregular` (4): GRU-D, SAITS, BRITS, CSDI
-  - `tslib_sota` (20): TimeFilter, WPMixer, MSGNet, Crossformer, SCINet, etc.
-  - `autofit` (3): V734, V735, V736 (older versions dropped)
+  - `tslib_sota` (34): TimeFilter, WPMixer, MSGNet, Crossformer, SCINet, CFPT, DeformableTST, ModernTCN, PathFormer, SEMPO, TimePerceiver, TimeBridge, TQNet, PIR, CARD, PDF, TimeRecipe, DUET, SRSNet, etc.
+  - `autofit` (4): V734, V735, V736, V739 (validation-based)
 - **Platform**: ULHPC Iris — GPU (V100 32GB, ~756GB RAM), bigmem (3TB, 112 CPUs), QOS `normal` (2-day wall)
 - **Ablations**: 4 per task — `core_only`, `core_text`, `core_edgar`, `full` (task3: 3, no core_text)
 - **Tasks**: `task1_outcome`, `task2_forecast`, `task3_risk_adjust`

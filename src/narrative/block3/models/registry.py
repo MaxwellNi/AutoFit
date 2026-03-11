@@ -1,9 +1,8 @@
 #!/usr/bin/env python3
 """
-Model Registry for Block 3 KDD'26 Benchmark — Phase 9 Saturated.
+Model Registry for Block 3 KDD'26 Benchmark — Phase 11 (14 new SOTA models).
 
-Unified interface for all 127 registered models across 8 categories
-(Phase 9 targets 100 active models; 50 with valid results so far):
+Unified interface for all 141+ registered models across 8 categories:
   - ml_tabular      (20): LogisticRegression, Ridge, Lasso, ElasticNet, SVR,
                            KNN, RandomForest, ExtraTrees, HistGradientBoosting,
                            LightGBM, XGBoost, CatBoost, XGBoostPoisson,
@@ -25,12 +24,16 @@ Unified interface for all 127 registered models across 8 categories
                            Moirai2, Timer, TimeMoE, MOMENT, LagLlama, TimesFM,
                            Sundial, TTM, TimerXL, TimesFM2
   - irregular        (4): GRU-D, SAITS, BRITS, CSDI
-  - tslib_sota      (20): TimeFilter, WPMixer, MultiPatchFormer, TiRex,
+  - tslib_sota      (42): TimeFilter, WPMixer, MultiPatchFormer, TiRex,
                            MSGNet, PAttn, MambaSimple, Mamba, Koopa, FreTS,
                            Crossformer, MICN, SegRNN, ETSformer,
                            NonstationaryTransformer, FiLM, SCINet, LightTS,
-                           Pyraformer, Reformer
-  - autofit         (21): V1–V7, V71–V73, V731–V733, V734, V735, V736,
+                           Pyraformer, Reformer, KANAD, FITS, SparseTSF, CATS,
+                           Fredformer, CycleNet, xPatch, FilterTS,
+                           CFPT, DeformableTST, ModernTCN, PathFormer, SEMPO,
+                           TimePerceiver, TimeBridge, TQNet, PIR, CARD, PDF,
+                           TimeRecipe, DUET, SRSNet
+  - autofit         (22): V1–V7, V71–V73, V731–V733, V734, V735, V736, V739,
                            FusedChampion, NFAdaptiveChampion
 """
 from __future__ import annotations

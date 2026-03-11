@@ -262,6 +262,124 @@ TSLIB_CONFIGS: Dict[str, Dict[str, Any]] = {
         "top_K_static_freqs": 5, "use_norm": True,
         "embedding": "timeF",
     },
+    # ── Phase 11: Section C SOTA models ──
+    "CFPT": {
+        "venue": "ICLR 2025",
+        "d_model": 64, "e_layers": 2, "dropout": 0.1,
+        "beta": 0.5, "rda": 2, "rdb": 2, "ksize": 3, "period": 7,
+        "time_feature_types": ["dayofweek", "dayofmonth", "dayofyear"],
+    },
+    "DeformableTST": {
+        "venue": "ICLR 2025",
+        "dims": [128, 256], "depths": [2, 2], "heads": [4, 8],
+        "n_groups": [2, 4], "stage_spec": [["L", "D"], ["L", "D"]],
+        "window_size": 7, "dropout": 0.1, "drop_path_rate": 0.1,
+        "head_dropout": 0.0, "revin": True, "revin_affine": True,
+        "revin_subtract_last": False, "ksize": 5, "stride": 1,
+        "nat_ksize": 7, "stem_ratio": 1.0, "down_ratio": 1.0,
+        "fmap_size": [7, 7], "head_type": "flatten",
+        "use_pe": True, "dwc_pe": True, "fixed_pe": False,
+        "no_off": False, "offset_range_factor": 2,
+        "use_dwc_mlp": True, "use_lpu": True, "local_kernel_size": 5,
+        "expansion": 4, "attn_drop": 0.0, "drop": 0.0,
+        "proj_drop": 0.0, "log_cpb": False, "use_head_norm": True,
+        "layer_scale_value": -1,
+    },
+    "ModernTCN": {
+        "venue": "ICLR 2024",
+        "dims": [64, 64, 64], "dw_dims": [256, 256, 256],
+        "large_size": [51, 51, 51], "small_size": [5, 5, 5],
+        "kernel_size": 51, "num_blocks": 3, "dropout": 0.1,
+        "patch_size": 8, "patch_stride": 4, "stem_ratio": 1.0,
+        "downsample_ratio": 2, "ffn_ratio": 2,
+        "small_kernel_merged": False, "use_multi_scale": False,
+        "revin": True, "affine": True, "subtract_last": False,
+        "individual": False, "head_dropout": 0.0, "decomposition": False,
+    },
+    "PathFormer": {
+        "venue": "ICLR 2024",
+        "d_model": 128, "d_ff": 256, "dropout": 0.1,
+        "num_nodes": 1, "num_experts_list": [4, 4],
+        "patch_size_list": [16, 12, 8], "layer_nums": 2,
+        "k": 2, "residual_connection": True, "revin": True,
+        "batch_norm": True,
+    },
+    "SEMPO": {
+        "venue": "ICML 2024",
+        "d_model": 64, "e_layers": 2, "d_layers": 1,
+        "dropout": 0.1, "patch_len": 16, "stride": 8,
+        "c_in": 1, "head_type": "flatten",
+        "domain_len": 128, "horizon_lengths": [7, 14, 30, 60],
+        "setting": "long_term_forecast", "data": "custom",
+    },
+    "TimePerceiver": {
+        "venue": "arXiv 2024",
+        "d_model": 128, "d_ff": 256, "n_heads": 8,
+        "dropout": 0.1, "patch_len": 16,
+        "latent_dim": 64, "latent_d_ff": 128,
+        "num_latents": 32, "num_latent_blocks": 2,
+        "use_latent": True, "query_share": True,
+    },
+    "TimeBridge": {
+        "venue": "NeurIPS 2024",
+        "d_model": 128, "d_ff": 256, "n_heads": 8,
+        "dropout": 0.1, "attn_dropout": 0.1,
+        "ca_layers": 2, "ia_layers": 1, "pd_layers": 2,
+        "num_p": 4, "period": 7, "stable_len": 30,
+        "revin": True, "activation": "gelu",
+    },
+    "TQNet": {
+        "venue": "ICML 2024",
+        "d_model": 128, "dropout": 0.1,
+        "cycle": 7, "model_type": "linear", "use_revin": True,
+    },
+    "PIR": {
+        "venue": "NeurIPS 2024",
+        "d_model": 128, "n_heads": 8, "dropout": 0.1,
+        "backbone": "Transformer", "retrieval_num": 5,
+        "retrieval_stride": 1, "factor": 1,
+        "refine_layers": 1, "refine_d_model": 128,
+        "refine_d_ff": 256, "use_norm": True,
+        "including_time_features": True, "activation": "gelu",
+    },
+    "CARD": {
+        "venue": "ICLR 2024",
+        "d_model": 128, "d_ff": 256, "n_heads": 8, "e_layers": 2,
+        "dropout": 0.1, "patch_len": 16, "stride": 8,
+        "dp_rank": 32, "momentum": 0.1, "merge_size": 2,
+        "alpha": 0.0, "use_statistic": True,
+        "total_token_number": 0,
+    },
+    "PDF": {
+        "venue": "ICML 2024",
+        "d_model": 128, "d_ff": 256, "n_heads": 8, "e_layers": 2,
+        "dropout": 0.1, "fc_dropout": 0.1, "head_dropout": 0.0,
+        "patch_len": 16, "stride": 8, "padding_patch": "end",
+        "kernel_list": [3, 5, 7], "period": 7,
+        "serial_conv": True, "wo_conv": False, "add": True,
+        "revin": True, "affine": True, "subtract_last": False,
+        "individual": False,
+    },
+    "TimeRecipe": {
+        "venue": "NeurIPS 2024",
+        "d_model": 128, "d_ff": 256, "n_heads": 8, "e_layers": 2,
+        "dropout": 0.1, "patch_len": 16, "activation": "gelu",
+        "emb_type": "patch", "ff_type": "mlp",
+        "fusion": "concat", "use_decomp": False, "use_norm": True,
+    },
+    "DUET": {
+        "venue": "NeurIPS 2024",
+        "d_model": 128, "d_ff": 256, "n_heads": 8, "e_layers": 2,
+        "dropout": 0.1, "activation": "gelu", "factor": 1,
+        "CI": True, "fc_dropout": 0.1,
+    },
+    "SRSNet": {
+        "venue": "arXiv 2024",
+        "d_model": 128, "dropout": 0.1,
+        "patch_len": 16, "stride": 8,
+        "hidden_size": 256, "alpha": 0.5, "pos": True,
+        "head_mode": "linear", "affine": True, "subtract_last": False,
+    },
 }
 
 # Map model names to their TSLib file names (most are identical)
@@ -984,6 +1102,22 @@ create_cyclenet = _tslib_factory("CycleNet")
 create_xpatch = _tslib_factory("xPatch")
 create_filterts = _tslib_factory("FilterTS")
 
+# Phase 11: Section C SOTA models
+create_cfpt = _tslib_factory("CFPT")
+create_deformabletst = _tslib_factory("DeformableTST")
+create_moderntcn = _tslib_factory("ModernTCN")
+create_pathformer = _tslib_factory("PathFormer")
+create_sempo = _tslib_factory("SEMPO")
+create_timeperceiver = _tslib_factory("TimePerceiver")
+create_timebridge = _tslib_factory("TimeBridge")
+create_tqnet = _tslib_factory("TQNet")
+create_pir = _tslib_factory("PIR")
+create_card = _tslib_factory("CARD")
+create_pdf = _tslib_factory("PDF")
+create_timerecipe = _tslib_factory("TimeRecipe")
+create_duet = _tslib_factory("DUET")
+create_srsnet = _tslib_factory("SRSNet")
+
 
 # ============================================================================
 # Registry (imported by registry.py)
@@ -1023,6 +1157,21 @@ TSLIB_MODELS = {
     "CycleNet": create_cyclenet,
     "xPatch": create_xpatch,
     "FilterTS": create_filterts,
+    # Phase 11: Section C SOTA models
+    "CFPT": create_cfpt,
+    "DeformableTST": create_deformabletst,
+    "ModernTCN": create_moderntcn,
+    "PathFormer": create_pathformer,
+    "SEMPO": create_sempo,
+    "TimePerceiver": create_timeperceiver,
+    "TimeBridge": create_timebridge,
+    "TQNet": create_tqnet,
+    "PIR": create_pir,
+    "CARD": create_card,
+    "PDF": create_pdf,
+    "TimeRecipe": create_timerecipe,
+    "DUET": create_duet,
+    "SRSNet": create_srsnet,
 }
 
 

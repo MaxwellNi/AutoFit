@@ -1,6 +1,6 @@
 # Block 3 Model Benchmark Status
 
-> Last updated: 2026-03-12 (Phase 10 — V738/V737 ALL COMPLETE, oracle 5-layer root cause, tsA TIMEOUT)
+> Last updated: 2026-03-12 (Phase 11 — 14 new SOTA models integrated, V739 validation-based AutoFit)
 > Full results: `docs/BLOCK3_RESULTS.md`
 
 ## Snapshot
@@ -13,9 +13,11 @@
 | Phase 9 unique models | 93 |
 | Phase 9 complete (104/104) | 76 |
 | Phase 9 partial (<104) | 10 |
-| Phase 10 AutoFit records | V737=104, V738=104 |
-| Active SLURM jobs | 2 RUNNING (tsC t1_ce + t3_ce) |
-| **AutoFit integrity** | ❌ **ALL V733-V738 have oracle test-set leakage** |
+| Phase 10 AutoFit records | V737=104, V738=104 (INVALID — oracle leak) |
+| Phase 11 new models | 14 TSLib SOTA + V739 validation-based AutoFit |
+| Total registered models | **42 tslib_sota + 9 deep + 23 transformer + 12 foundation + 4 irregular + 15 stat + 9+ ml_tabular + 3+ autofit = 127+** |
+| Active SLURM jobs | 122 PENDING |
+| **AutoFit integrity** | ✅ V739 uses validation-based selection (no oracle leakage) |
 
 ## CRITICAL: 5-Layer Oracle Test-Set Leakage
 
@@ -107,6 +109,34 @@ See `docs/BLOCK3_RESULTS.md` for the complete 5-layer root cause analysis.
 
 V737 ablation check: core_text==core_only for 16/20, differs for 4 (NF non-determinism).
 V737 ablation check: full==core_edgar for 10/28, differs for 18 (NF non-determinism).
+
+### Phase 11: New SOTA Models (14 TSLib + V739 AutoFit)
+
+| Model | Category | Venue | Status |
+|---|---|---|---|
+| CFPT | tslib_sota | ICLR 2025 | ✅ Registered, awaiting SLURM |
+| DeformableTST | tslib_sota | ICLR 2025 | ✅ Registered, awaiting SLURM |
+| ModernTCN | tslib_sota | ICLR 2024 | ✅ Registered, awaiting SLURM |
+| PathFormer | tslib_sota | ICLR 2024 | ✅ Registered, awaiting SLURM |
+| SEMPO | tslib_sota | ICML 2024 | ✅ Registered, awaiting SLURM |
+| TimePerceiver | tslib_sota | arXiv 2024 | ✅ Registered, awaiting SLURM |
+| TimeBridge | tslib_sota | NeurIPS 2024 | ✅ Registered, awaiting SLURM |
+| TQNet | tslib_sota | ICML 2024 | ✅ Registered, awaiting SLURM |
+| PIR | tslib_sota | NeurIPS 2024 | ✅ Registered, awaiting SLURM |
+| CARD | tslib_sota | ICLR 2024 | ✅ Registered, awaiting SLURM |
+| PDF | tslib_sota | ICML 2024 | ✅ Registered, awaiting SLURM |
+| TimeRecipe | tslib_sota | NeurIPS 2024 | ✅ Registered, awaiting SLURM |
+| DUET | tslib_sota | NeurIPS 2024 | ✅ Registered (TSLib adapter), awaiting SLURM |
+| SRSNet | tslib_sota | arXiv 2024 | ✅ Registered (TSLib adapter), awaiting SLURM |
+| AutoFitV739 | autofit | Phase 11 | ✅ Registered, 11 SLURM jobs PENDING |
+
+**Not integrated (3 models with blocking reasons):**
+
+| Model | Reason | Resolution |
+|---|---|---|
+| Kairos | Foundation model (T5-based), requires IBM `tsfm` package — not pip-installable | Future: install `tsfm` from source |
+| TimeMixerPP | Updated TimeMixer — vendor already has working TimeMixer, updating would break Phase 9 reproducibility | Post-Phase 9: update vendored TimeMixer.py |
+| TabPFN_TS | Tabular foundation model, different paradigm from time series | Already partially handled as TabPFN in ml_tabular |
 
 ## Audit Exclusion List (21+ models)
 
