@@ -1,123 +1,148 @@
 # Block 3 Benchmark Results
 
-> Last updated: 2026-03-10 (Phase 9 — deep re-audit, 4 new bugs found, V736 ranking analysis)
+> Last updated: 2026-03-11 (Phase 10 — V738/V737 audit, test-set leakage finding, 93 models)
 > Canonical results dir: `runs/benchmarks/block3_phase9_fair/`
 > Phase 7/8 results are **DEPRECATED** (4 critical bugs fixed)
-> **Data integrity audit**: RE-AUDITED 2026-03-10 — 4 new critical findings (see §Deep Audit below)
+> **Data integrity audit**: RE-AUDITED 2026-03-11 — V738 oracle test-set leakage confirmed (see §V738 Fairness Audit below)
 
-**Generated**: 2026-03-09
+**Generated**: 2026-03-11
 **Benchmark Dir**: `block3_phase9_fair`
-**Total Records**: 8198
+**Total Records**: 8,928
 **Complete Models (104/104 conditions)**: 76
-**Partial Models**: 17
+**Partial Models**: 17 (+ V738 58/104, V737 in progress)
 
 ## Overview
 
 | Metric | Value |
 |--------|-------|
-| Raw records | 8198 |
+| Raw records | 8,928 |
 | Complete models (104/104) | 76 |
 | Partial models (<104) | 17 |
+| Unique models (total) | 93 |
 | Categories | autofit, deep_classical, foundation, irregular, ml_tabular, statistical, transformer_sota, tslib_sota |
 | Tasks | task1_outcome, task2_forecast, task3_risk_adjust |
 
-## Full Leaderboard (76 complete models, ranked by average MAE)
+## CRITICAL: V738/V737/V736 Oracle Test-Set Leakage 🔴🔴🔴
 
-| Rank | Model | Category | Avg MAE | Integrity |
-|-----:|-------|----------|--------:|-----------|
-| 1 | Chronos | foundation | 159,732 | ✅ genuine |
-| 2 | PatchTST | transformer_sota | 159,829 | ✅ genuine |
-| 3 | ChronosBolt | foundation | 159,873 | ✅ genuine |
-| 4 | NHITS | deep_classical | 159,983 | ✅ genuine |
-| 5 | TFT | deep_classical | 160,056 | ✅ genuine |
-| 6 | NBEATS | deep_classical | 160,176 | ✅ genuine |
-| 7 | NBEATSx | transformer_sota | 160,176 | ⚠️ near-duplicate of NBEATS (73.1% identical) |
-| 8 | DeepAR | deep_classical | 160,218 | ✅ genuine |
-| 9 | TimesNet | transformer_sota | 160,396 | ✅ genuine |
-| 10 | Informer | transformer_sota | 160,400 | ✅ genuine |
-| 11 | KAN | transformer_sota | 160,663 | ✅ genuine |
-| 12 | TimeMixer | transformer_sota | 160,691 | ✅ genuine |
-| 13 | BiTCN | transformer_sota | 160,758 | ✅ genuine |
-| 14 | RMoK | transformer_sota | 160,926 | ✅ genuine |
-| 15 | NLinear | transformer_sota | 161,032 | ✅ genuine |
-| 16 | FEDformer | transformer_sota | 161,649 | ✅ genuine |
-| 17 | TiDE | transformer_sota | 161,729 | ✅ genuine |
-| 18 | DLinear | transformer_sota | 161,856 | ✅ genuine |
-| 19 | GRU | deep_classical | 162,046 | ✅ genuine |
-| 20 | TSMixer | transformer_sota | 162,064 | ✅ genuine |
-| 21 | LSTM | deep_classical | 162,114 | ✅ genuine |
-| 22 | iTransformer | transformer_sota | 162,189 | ✅ genuine |
-| 23 | MLP | deep_classical | 162,387 | ✅ genuine |
-| 24 | TCN | deep_classical | 162,412 | ✅ genuine |
-| 25 | DilatedRNN | deep_classical | 162,594 | ✅ genuine |
-| 26 | SOFTS | transformer_sota | 162,891 | ✅ genuine |
-| **27** | **AutoFitV736** | **autofit** | **163,465** | **✅ genuine** |
-| 28 | TimeMoE | foundation | 163,486 | ⚠️ 98-99% identical to Timer/MOMENT |
-| 29 | Timer | foundation | 163,486 | ⚠️ 98-99% identical to TimeMoE/MOMENT |
-| 30 | MOMENT | foundation | 163,486 | ⚠️ 98-99% identical to Timer/TimeMoE |
-| **31** | **AutoFitV734** | **autofit** | **165,162** | **✅ genuine** |
-| 32 | LightGBMTweedie | ml_tabular | 165,728 | ✅ genuine (4/26 horizon-invariant — VARIES by horizon) |
-| 33 | Sundial | foundation | 165,729 | ❌ silent context-mean fallback |
-| 34 | TimesFM2 | foundation | 165,729 | ❌ silent context-mean fallback |
-| 35 | LagLlama | foundation | 165,729 | ❌ silent context-mean fallback |
-| 36 | Moirai | foundation | 165,729 | ❌ silent context-mean fallback |
-| 37 | MoiraiLarge | foundation | 165,729 | ❌ silent context-mean fallback |
-| 38 | Moirai2 | foundation | 165,729 | ❌ silent context-mean fallback |
-| 39 | Autoformer | transformer_sota | 166,652 | ✅ genuine |
-| **40** | **AutoFitV735** | **autofit** | **167,038** | **✅ genuine** |
-| 41 | DeepNPTS | transformer_sota | 167,862 | ✅ genuine |
-| 42 | RandomForest | ml_tabular | 173,229 | ✅ genuine (horizon-invariant by design) |
-| 43 | XGBoostPoisson | ml_tabular | 178,934 | ✅ genuine (horizon-invariant by design) |
-| 44 | TSMixerx | transformer_sota | 185,554 | ✅ genuine |
-| 45 | TimesFM | foundation | 189,242 | ⚠️ horizon-invariant (23/26) |
-| 46 | LightGBM | ml_tabular | 196,848 | ✅ genuine (5/26 horizon-invariant — VARIES by horizon) |
-| 47 | XGBoost | ml_tabular | 201,999 | ✅ genuine (horizon-invariant by design) |
-| 48 | ExtraTrees | ml_tabular | 206,963 | ✅ genuine (horizon-invariant by design) |
-| 49 | HistGradientBoosting | ml_tabular | 208,779 | ✅ genuine (horizon-invariant by design) |
-| 50 | CatBoost | ml_tabular | 242,324 | ✅ genuine (horizon-invariant by design) |
-| 51 | VanillaTransformer | transformer_sota | 260,812 | ✅ genuine |
-| 52 | BRITS | irregular | 343,295 | ✅ genuine (horizon-invariant) |
-| 53 | GRU-D | irregular | 343,728 | ✅ genuine (horizon-invariant) |
-| 54 | SAITS | irregular | 343,739 | ✅ genuine (horizon-invariant) |
-| 55 | HistoricAverage | statistical | 640,493 | ✅ baseline |
-| 56 | CSDI | irregular | 902,624 | ⚠️ 44/104 fallback |
-| 57 | xLSTM | transformer_sota | 902,705 | ❌ 100% fallback (training crash) |
-| 58 | TimeLLM | transformer_sota | 902,705 | ❌ 100% fallback (training crash) |
-| 59 | AutoCES | statistical | 902,705 | ❌ 100% fallback (training crash) |
-| 60 | MeanPredictor | ml_tabular | 902,705 | ✅ baseline (mean by design) |
-| 61 | StemGNN | transformer_sota | 902,705 | ❌ 40/104 fallback (training crash) |
-| 62 | TimeXer | transformer_sota | 902,705 | ❌ 40/104 fallback (training crash) |
-| 63-76 | *(statistical models)* | statistical | 1.58M-13.1M | ✅ genuine |
+> **Severity**: FATAL — invalidates ALL AutoFit V734-V738 rankings
+> **Discovered**: 2026-03-11
 
-### AutoFit Rankings Summary
+### Root Cause
 
-| Variant | Overall | task1 | task2 | task3 |
-|---------|---------|-------|-------|-------|
-| **V736** | **#27/76** (163,465) | #26 (128,663) | #27 (192,994) | #30 (193,694) |
-| V734 | #31/76 (165,162) | #31 (129,913) | #31 (194,869) | #31 (196,053) |
-| V735 | #40/76 (167,038) | #39 (131,293) | #39 (196,940) | #41 (198,656) |
+`ORACLE_TABLE_V738` (nf_adaptive_champion.py L1313) contains 44 conditions × top-5 models
+with **MAE values taken directly from Phase 9 test-set results**. Example verification:
 
-### Partial Models (still running)
+```
+ORACLE_TABLE_V738[("funding_raised_usd", 1, "core_only")] = [("NBEATS", 380659.46), ...]
+Phase 9 test split MAE for NBEATS, funding_raised_usd, h=1, core_only = 380659.46  ← EXACT MATCH
+```
 
-| Model | Records | Category |
-|-------|--------:|----------|
-| TimeFilter | 32/104 | tslib_sota |
-| MultiPatchFormer | 32/104 | tslib_sota |
-| MSGNet | 32/104 | tslib_sota |
-| PAttn | 32/104 | tslib_sota |
-| MambaSimple | 32/104 | tslib_sota |
-| Crossformer | 32/104 | tslib_sota |
-| ETSformer | 20/104 | tslib_sota |
-| LightTS | 20/104 | tslib_sota |
-| Pyraformer | 20/104 | tslib_sota |
-| Reformer | 20/104 | tslib_sota |
-| NegativeBinomialGLM | 16/104 | ml_tabular |
-| FreTS | 1/104 | tslib_sota |
-| MICN | 1/104 | tslib_sota |
-| SegRNN | 1/104 | tslib_sota |
-| NonstationaryTransformer | 1/104 | tslib_sota |
-| FiLM | 1/104 | tslib_sota |
-| SCINet | 1/104 | tslib_sota |
+The oracle table tells V738 **which model performed best on the same test set used for evaluation**.
+This is textbook **test-set information leakage** in model selection.
+
+### Same Issue in V736/V737
+
+`ORACLE_TABLE_TOP3` (L751) uses Phase 9 test-set **RMSE** values for the same purpose.
+V734/V735/V736/V737 all inherit this oracle. All AutoFit variants' rankings are scientifically invalid.
+
+### Dead Code: `val_frac=0.2`
+
+V738's `__init__` sets `val_frac=0.2` (L1412) — intended for validation-based model selection.
+However, `val_frac` is **never referenced** in `fit()` or `predict()`. The docstring claim
+"pick whichever has lower OOF MAE on 20% held out validation set" is NOT implemented.
+
+### Impact
+
+- V738's 83.9% champion rate (47/56 conditions) is **artificially inflated** by test-set knowledge
+- V736's normalized rank #8 is also invalid (oracle-assisted model selection)
+- All AutoFit rankings (#27, #29, #37 in leaderboard) reflect oracle advantage, not genuine model superiority
+- **Recommendation**: Remove AutoFit V734-V738 from paper rankings until oracle is replaced with proper cross-validation
+
+---
+
+## Full Leaderboard (76 complete models, ranked by mean rank across 104 conditions)
+
+> Ranking metric: **mean rank** (lower = better), computed per-condition MAE ranking then averaged.
+> This is the NeurIPS/ICML standard (TSLib/Monash/M4 benchmarks). Raw MAE average is misleading for multi-scale targets.
+
+| Rank | Model | Category | Mean Rank | Wins | Top-3 | Integrity |
+|-----:|-------|----------|----------:|-----:|------:|-----------|
+| 1 | NHITS | deep_classical | 4.8 | 15/104 | 45/104 | ✅ genuine |
+| 2 | PatchTST | transformer_sota | 4.8 | 4/104 | 51/104 | ✅ genuine |
+| 3 | NBEATS | deep_classical | 5.7 | 26/104 | 53/104 | ✅ genuine |
+| 4 | NBEATSx | transformer_sota | 6.4 | 3/104 | 31/104 | ⚠️ NBEATS near-duplicate |
+| 5 | ChronosBolt | foundation | 7.9 | 0/104 | 17/104 | ✅ genuine |
+| 6 | KAN | transformer_sota | 11.8 | 5/104 | 12/104 | ✅ genuine |
+| 7 | TimesNet | transformer_sota | 12.0 | 0/104 | 0/104 | ✅ genuine |
+| 8 | Chronos | foundation | 12.3 | 17/104 | 17/104 | ✅ genuine |
+| 9 | ~~AutoFitV736~~ | ~~autofit~~ | ~~13.2~~ | ~~20/104~~ | ~~24/104~~ | ❌ **oracle test-set leakage** |
+| 10 | TFT | deep_classical | 13.7 | 0/104 | 6/104 | ✅ genuine |
+| 11 | TCN | deep_classical | 14.8 | 0/104 | 0/104 | ✅ genuine |
+| 12 | MLP | deep_classical | 14.8 | 0/104 | 0/104 | ✅ genuine |
+| 13 | DeepAR | deep_classical | 15.3 | 0/104 | 0/104 | ✅ genuine |
+| 14 | NLinear | transformer_sota | 15.6 | 0/104 | 2/104 | ✅ genuine |
+| 15 | Informer | transformer_sota | 15.9 | 0/104 | 0/104 | ✅ genuine |
+| 16 | ~~AutoFitV734~~ | ~~autofit~~ | ~~16.6~~ | ~~0/104~~ | ~~22/104~~ | ❌ **oracle test-set leakage** |
+| 17 | GRU | deep_classical | 16.9 | 0/104 | 5/104 | ✅ genuine |
+| 18 | LSTM | deep_classical | 16.9 | 0/104 | 5/104 | ✅ genuine |
+| 19 | ~~AutoFitV735~~ | ~~autofit~~ | ~~19.2~~ | ~~6/104~~ | ~~7/104~~ | ❌ **oracle test-set leakage** |
+| 20 | DilatedRNN | deep_classical | 19.3 | 0/104 | 0/104 | ✅ genuine |
+| 21 | BiTCN | transformer_sota | 19.5 | 0/104 | 0/104 | ✅ genuine |
+| 22 | DLinear | transformer_sota | 20.2 | 1/104 | 5/104 | ✅ genuine |
+| 23 | TiDE | transformer_sota | 20.6 | 0/104 | 0/104 | ✅ genuine |
+| 24 | DeepNPTS | transformer_sota | 20.7 | 7/104 | 9/104 | ✅ genuine |
+| 25 | FEDformer | transformer_sota | 29.6 | 0/104 | 0/104 | ✅ genuine |
+| 26 | Timer | foundation | 30.3 | 0/104 | 0/104 | ⚠️ near-identical to TimeMoE/MOMENT |
+| 27+ | *(remaining 50 models)* | various | 31-93 | - | - | see per-task tables below |
+
+### Clean Leaderboard (excluding invalid models)
+
+Removing: 3 AutoFit (oracle leak), 6 silent-fallback foundation, 5 crash-fallback, 2 near-duplicates, 3 constant-prediction TSLib = **19 excluded**
+
+| Clean Rank | Model | Category | Mean Rank | Wins |
+|---:|-------|----------|----------:|-----:|
+| 1 | NHITS | deep_classical | 4.8 | 15 |
+| 2 | PatchTST | transformer_sota | 4.8 | 4 |
+| 3 | NBEATS | deep_classical | 5.7 | 26 |
+| 4 | ChronosBolt | foundation | 7.9 | 0 |
+| 5 | KAN | transformer_sota | 11.8 | 5 |
+| 6 | TimesNet | transformer_sota | 12.0 | 0 |
+| 7 | Chronos | foundation | 12.3 | 17 |
+| 8 | TFT | deep_classical | 13.7 | 0 |
+| 9 | TCN | deep_classical | 14.8 | 0 |
+| 10 | MLP | deep_classical | 14.8 | 0 |
+
+### Key Insight: NHITS and PatchTST dominate
+
+Both NHITS (mean_rank=4.8, 15 wins, 45 top-3) and PatchTST (mean_rank=4.8, 4 wins, 51 top-3) are
+tied at #1 — NHITS wins more conditions outright, while PatchTST is more consistently top-3.
+NBEATS (#3, 26 wins, 53 top-3) has the MOST condition wins of any model.
+
+### AutoFit Rankings Summary (INVALIDATED)
+
+> ⚠️ All AutoFit rankings below are **scientifically invalid** due to oracle test-set leakage.
+> The oracle tables (ORACLE_TABLE_V738, ORACLE_TABLE_TOP3) select models using test-set MAE/RMSE
+> values from the same Phase 9 evaluation. See §V738 Fairness Audit above.
+
+### Partial & In-Progress Models (2026-03-11)
+
+| Model | Records | Progress | Category | Status |
+|-------|--------:|----------|----------|--------|
+| V738 | 58/104 | co+ce done, ct+fu pending (cfisch 384G) | autofit | ❌ oracle leak |
+| V737 | ~30/104 | 6 jobs RUNNING (npin), 5 PENDING (cfisch) | autofit | ❌ oracle leak |
+| Chronos2 | 58/104 | 8/11 conditions | foundation | 🔄 |
+| TTM | 58/104 | 8/11 conditions | foundation | 🔄 |
+| TimeFilter | 52/104 | 11/11 conditions | tslib_sota | ❌ constant predictions |
+| MultiPatchFormer | 52/104 | 11/11 conditions | tslib_sota | ❌ constant predictions |
+| MSGNet | 52/104 | 11/11 conditions | tslib_sota | 🔄 tsA running |
+| PAttn | 52/104 | 11/11 conditions | tslib_sota | 🔄 tsA running |
+| MambaSimple | 52/104 | 11/11 conditions | tslib_sota | 🔄 tsA running |
+| Crossformer | 52/104 | 11/11 conditions | tslib_sota | 🔄 |
+| ETSformer | 41/104 | 5 conditions | tslib_sota | 🔄 tsC running |
+| LightTS | 41/104 | 5 conditions | tslib_sota | 🔄 tsC running |
+| Pyraformer | 41/104 | 5 conditions | tslib_sota | 🔄 tsC running |
+| Reformer | 41/104 | 5 conditions | tslib_sota | 🔄 tsC running |
+| NegativeBinomialGLM | 16/104 | 4 conditions | ml_tabular | 🔄 |
 
 ## task1_outcome
 
