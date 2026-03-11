@@ -1,62 +1,123 @@
 # Block 3 Benchmark Results
 
-> Last updated: 2026-03-11 (Phase 10 — V738/V737 audit, test-set leakage finding, 93 models)
+> Last updated: 2026-03-12 (Phase 10 — V738/V737 complete, deep 5-layer root cause analysis, tsA TIMEOUT)
 > Canonical results dir: `runs/benchmarks/block3_phase9_fair/`
 > Phase 7/8 results are **DEPRECATED** (4 critical bugs fixed)
-> **Data integrity audit**: RE-AUDITED 2026-03-11 — V738 oracle test-set leakage confirmed (see §V738 Fairness Audit below)
+> **Data integrity audit**: DEEP ROOT CAUSE ANALYSIS 2026-03-12 — 5-layer oracle leakage chain identified (see §Oracle Root Cause below)
 
-**Generated**: 2026-03-11
-**Benchmark Dir**: `block3_phase9_fair`
-**Total Records**: 8,928
-**Complete Models (104/104 conditions)**: 76
-**Partial Models**: 17 (+ V738 58/104, V737 in progress)
+**Generated**: 2026-03-12
+**Benchmark Dir**: `block3_phase9_fair` (Phase 9) + `block3_phase10/v737/`, `block3_phase10/v738/` (Phase 10)
+**Total Phase 9 Records**: 8,928
+**Phase 10 Records**: V737=104, V738=104 (both oracle-leaked, excluded from ranking)
+**Complete Models (104/104 conditions)**: 76 (Phase 9) + V737, V738 (Phase 10, invalid)
+**Partial Models**: 10 (tsC recovery in progress, tsA TIMEOUT)
 
 ## Overview
 
 | Metric | Value |
 |--------|-------|
-| Raw records | 8,928 |
-| Complete models (104/104) | 76 |
-| Partial models (<104) | 17 |
-| Unique models (total) | 93 |
+| Phase 9 raw records | 8,928 |
+| Phase 9 complete models (104/104) | 76 |
+| Phase 9 partial models (<104) | 10 |
+| Phase 9 unique models (total) | 93 |
+| Phase 10 AutoFit records | V737=104, V738=104 (INVALID — oracle leak) |
 | Categories | autofit, deep_classical, foundation, irregular, ml_tabular, statistical, transformer_sota, tslib_sota |
 | Tasks | task1_outcome, task2_forecast, task3_risk_adjust |
 
-## CRITICAL: V738/V737/V736 Oracle Test-Set Leakage 🔴🔴🔴
+## CRITICAL: 5-Layer Oracle Test-Set Leakage Root Cause Analysis 🔴🔴🔴
 
 > **Severity**: FATAL — invalidates ALL AutoFit V734-V738 rankings
-> **Discovered**: 2026-03-11
+> **Discovered**: 2026-03-11, **Deep analysis**: 2026-03-12
+> **Affects**: V733, V734, V735, V736, V737, V738 (ALL versions)
 
-### Root Cause
+### Layer 1 — Data Source: Benchmark Only Produces Test-Set Metrics
 
-`ORACLE_TABLE_V738` (nf_adaptive_champion.py L1313) contains 44 conditions × top-5 models
-with **MAE values taken directly from Phase 9 test-set results**. Example verification:
+The benchmark pipeline (`run_block3_benchmark_shard.py`) evaluates models on a
+train/test split and writes ONLY test-set MAE/RMSE to `metrics.json`. There is NO
+separate validation-set evaluation. Therefore, any oracle table built from
+`metrics.json` IS test-set leakage by definition.
+
+```
+benchmark → train/test split → evaluate on TEST → metrics.json (only test metrics)
+                                                        ↓
+                                        ORACLE_TABLE built from test metrics
+                                                        ↓
+                                        AutoFit selects models using test info → LEAKAGE
+```
+
+### Layer 2 — Copy-Paste Perpetuation Without Auditing
+
+Each AutoFit version built upon the previous one's oracle table, expanding it without
+questioning the data source:
+
+| Version | Oracle Table | Source | How Expanded |
+|---------|-------------|--------|-------------|
+| V733 | ORACLE_TABLE (L50) | Hand-coded, 5,848 records | Original sin |
+| V734 | ORACLE_TABLE_V734 (L425) | Phase 9 test avg_rank | Added confidence weighting |
+| V735 | ORACLE_TABLE_V735 (L689) | Phase 9 test RMSE, single best | Exact condition lookup |
+| V736 | ORACLE_TABLE_TOP3 (L751) | Phase 9 test RMSE, top-3 | Inverse-RMSE ensemble |
+| V737 | Inherits V736's ORACLE_TABLE_TOP3 | Same | Added EDGAR PCA |
+| V738 | ORACLE_TABLE_V738 (L1313) | Phase 9 test MAE, top-5 | Multi-pool routing |
+
+### Layer 3 — Missing Validation Infrastructure
+
+The benchmark harness has NO mechanism for:
+- Train/validation/test 3-way split
+- Cross-validation
+- Producing validation-set metrics separate from test-set
+
+Without validation metrics, it's structurally impossible to build a legitimate oracle table.
+
+### Layer 4 — Dead Code Created False Confidence
+
+V738's `__init__` (L1412): `self._val_frac = val_frac  # default 0.2`
+V738's docstring: "pick whichever has lower OOF MAE on 20% held out validation set"
+
+But `val_frac` is **NEVER referenced** in `fit()` (L1420-1532) or `predict()` (L1590-1646).
+The parameter exists, the docstring describes it working, but the implementation was never written.
+
+**Proof**: V753 in `autofit_wrapper.py` (L7232) HAS a working `_fit_validation()` method:
+```python
+def _fit_validation(self, X_train, y_train, horizon):
+    val_size = max(int(n * self._val_fraction), 20)
+    X_inner, X_val = X_train[:-val_size], X_train[-val_size:]
+    y_inner, y_val = y_train[:-val_size], y_train[-val_size:]
+    # ... train on inner, evaluate on val, select best model
+```
+V738 was supposed to copy this logic but only copied the parameter.
+
+### Layer 5 — No Automated Guard Against Test-Set Leakage
+
+No test or assertion prevents test-set information from flowing into `fit()`:
+- No integration test validates oracle values ≠ test-set metrics
+- No code review gate checks oracle table provenance
+- No runtime warning when oracle MAE exactly matches evaluation MAE
+
+### Verification: Oracle Values = Exact Test-Set Metrics
 
 ```
 ORACLE_TABLE_V738[("funding_raised_usd", 1, "core_only")] = [("NBEATS", 380659.46), ...]
-Phase 9 test split MAE for NBEATS, funding_raised_usd, h=1, core_only = 380659.46  ← EXACT MATCH
+Phase 9 test MAE(NBEATS, funding_raised_usd, h=1, core_only) = 380659.4598718175  ← EXACT
+
+ORACLE_TABLE_V738[("funding_raised_usd", 7, "core_only")] = [("NHITS", 380577.13), ...]
+Phase 9 test MAE(NHITS, funding_raised_usd, h=7, core_only) = 380577.1332467346  ← EXACT
 ```
 
-The oracle table tells V738 **which model performed best on the same test set used for evaluation**.
-This is textbook **test-set information leakage** in model selection.
+### Impact on V738 Results
 
-### Same Issue in V736/V737
+- V738 104/104 conditions complete (Phase 10)
+- V738 vs V737 head-to-head: V738 wins 77/104, V737 wins 27/104
+- V738's wins are driven by oracle advantage (5-model ensemble guided by test-set knowledge)
+- V737 also oracle-leaked (inherits ORACLE_TABLE_TOP3 from V736)
+- **Neither version's results are scientifically valid**
 
-`ORACLE_TABLE_TOP3` (L751) uses Phase 9 test-set **RMSE** values for the same purpose.
-V734/V735/V736/V737 all inherit this oracle. All AutoFit variants' rankings are scientifically invalid.
+### Root Fix Required
 
-### Dead Code: `val_frac=0.2`
-
-V738's `__init__` sets `val_frac=0.2` (L1412) — intended for validation-based model selection.
-However, `val_frac` is **never referenced** in `fit()` or `predict()`. The docstring claim
-"pick whichever has lower OOF MAE on 20% held out validation set" is NOT implemented.
-
-### Impact
-
-- V738's 83.9% champion rate (47/56 conditions) is **artificially inflated** by test-set knowledge
-- V736's normalized rank #8 is also invalid (oracle-assisted model selection)
-- All AutoFit rankings (#27, #29, #37 in leaderboard) reflect oracle advantage, not genuine model superiority
-- **Recommendation**: Remove AutoFit V734-V738 from paper rankings until oracle is replaced with proper cross-validation
+To build a legitimate AutoFit:
+1. Add train/val/test 3-way split to benchmark harness
+2. Build oracle tables from VALIDATION-set metrics only
+3. OR implement V753-style `_fit_validation()` inside AutoFit (no oracle table needed)
+4. Add integration test: `assert oracle_mae != test_mae` for all conditions
 
 ---
 
@@ -124,25 +185,37 @@ NBEATS (#3, 26 wins, 53 top-3) has the MOST condition wins of any model.
 > The oracle tables (ORACLE_TABLE_V738, ORACLE_TABLE_TOP3) select models using test-set MAE/RMSE
 > values from the same Phase 9 evaluation. See §V738 Fairness Audit above.
 
-### Partial & In-Progress Models (2026-03-11)
+### Partial & In-Progress Models (2026-03-12)
 
 | Model | Records | Progress | Category | Status |
 |-------|--------:|----------|----------|--------|
-| V738 | 58/104 | co+ce done, ct+fu pending (cfisch 384G) | autofit | ❌ oracle leak |
-| V737 | ~30/104 | 6 jobs RUNNING (npin), 5 PENDING (cfisch) | autofit | ❌ oracle leak |
+| V738 | 104/104 | ✅ COMPLETE | autofit | ❌ oracle leak — ALL rankings invalid |
+| V737 | 104/104 | ✅ COMPLETE | autofit | ❌ oracle leak — ALL rankings invalid |
 | Chronos2 | 58/104 | 8/11 conditions | foundation | 🔄 |
 | TTM | 58/104 | 8/11 conditions | foundation | 🔄 |
+| MSGNet | 52/104 | 11/11 conditions | tslib_sota | ❌ tsA TIMEOUT (2d walltime) |
+| PAttn | 52/104 | 11/11 conditions | tslib_sota | ❌ tsA TIMEOUT |
+| MambaSimple | 52/104 | 11/11 conditions | tslib_sota | ❌ tsA TIMEOUT |
+| Crossformer | 52/104 | 11/11 conditions | tslib_sota | 🔄 |
 | TimeFilter | 52/104 | 11/11 conditions | tslib_sota | ❌ constant predictions |
 | MultiPatchFormer | 52/104 | 11/11 conditions | tslib_sota | ❌ constant predictions |
-| MSGNet | 52/104 | 11/11 conditions | tslib_sota | 🔄 tsA running |
-| PAttn | 52/104 | 11/11 conditions | tslib_sota | 🔄 tsA running |
-| MambaSimple | 52/104 | 11/11 conditions | tslib_sota | 🔄 tsA running |
-| Crossformer | 52/104 | 11/11 conditions | tslib_sota | 🔄 |
-| ETSformer | 41/104 | 5 conditions | tslib_sota | 🔄 tsC running |
-| LightTS | 41/104 | 5 conditions | tslib_sota | 🔄 tsC running |
-| Pyraformer | 41/104 | 5 conditions | tslib_sota | 🔄 tsC running |
-| Reformer | 41/104 | 5 conditions | tslib_sota | 🔄 tsC running |
+| ETSformer | 50/104 | — | tslib_sota | 🔄 tsC still running (2 jobs) |
+| LightTS | 50/104 | — | tslib_sota | 🔄 tsC still running |
+| Pyraformer | 50/104 | — | tslib_sota | 🔄 tsC still running |
+| Reformer | 50/104 | — | tslib_sota | 🔄 tsC still running |
 | NegativeBinomialGLM | 16/104 | 4 conditions | ml_tabular | 🔄 |
+
+### SLURM Job Status (2026-03-12 ~04:30 UTC)
+
+| Batch | Jobs | Status | Wall Time | Notes |
+|-------|------|--------|-----------|-------|
+| tsA (5219864-66) | 3 | **TIMEOUT** | 2d 0h (max) | MSGNet/PAttn/MambaSimple stuck at 52/104 |
+| tsC (5221718,5221721) | 2 | RUNNING | 19-26h/48h | Reformer/ETSformer/LightTS/Pyraformer recovery |
+| tsC (5221719-20,5221722) | 3 | COMPLETED | — | Saved 23-48 records each |
+| V737 npin (5226208-13) | 6 | **COMPLETED** | 49-71 min | 104/104 records |
+| V738 cfisch (5226229-33) | 5 | **COMPLETED** | 30-75 min | 104/104 records |
+| V737 cfisch (5226239-43) | 5 | **COMPLETED** | 62-115 min | Already merged in V737 results |
+| **Total Active** | **2 RUNNING** | | | Only tsC t1_ce + t3_ce remain |
 
 ## task1_outcome
 

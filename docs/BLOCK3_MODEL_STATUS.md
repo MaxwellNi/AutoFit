@@ -1,6 +1,6 @@
 # Block 3 Model Benchmark Status
 
-> Last updated: 2026-03-11 (Phase 10 — V738/V737 oracle leak audit, 93 models registered)
+> Last updated: 2026-03-12 (Phase 10 — V738/V737 ALL COMPLETE, oracle 5-layer root cause, tsA TIMEOUT)
 > Full results: `docs/BLOCK3_RESULTS.md`
 
 ## Snapshot
@@ -8,22 +8,34 @@
 | Metric | Value |
 |---|---:|
 | Evaluation conditions per model | **104** (48+32+24) |
-| metrics.json files | 88 |
-| Valid metric records | 8,928 |
-| Unique models with results | 93 |
-| Models with 104/104 complete | 76 |
-| Models with partial results | 17 |
-| Active SLURM jobs | 14 RUNNING + 10 PENDING |
-| Active AutoFit versions | V734, V735, V736, V737, V738 |
-| **AutoFit integrity** | ❌ **ALL versions have oracle test-set leakage** |
+| Phase 9 metrics.json files | 88 |
+| Phase 9 valid metric records | 8,928 |
+| Phase 9 unique models | 93 |
+| Phase 9 complete (104/104) | 76 |
+| Phase 9 partial (<104) | 10 |
+| Phase 10 AutoFit records | V737=104, V738=104 |
+| Active SLURM jobs | 2 RUNNING (tsC t1_ce + t3_ce) |
+| **AutoFit integrity** | ❌ **ALL V733-V738 have oracle test-set leakage** |
 
-## CRITICAL: Oracle Test-Set Leakage in All AutoFit Versions
+## CRITICAL: 5-Layer Oracle Test-Set Leakage
 
-See `docs/BLOCK3_RESULTS.md` §V738 Fairness Audit for full details.
-- `ORACLE_TABLE_V738` (L1313): 44 conditions × top-5 models, MAE from Phase 9 test set
-- `ORACLE_TABLE_TOP3` (L751): 44 conditions × top-3 models, RMSE from Phase 9 test set
-- `val_frac=0.2` is dead code — never used in fit()/predict()
-- **All V734-V738 rankings are scientifically invalid**
+See `docs/BLOCK3_RESULTS.md` for the complete 5-layer root cause analysis.
+
+**Summary of layers**:
+1. **Data source**: Benchmark pipeline outputs ONLY test-set metrics — no validation split exists
+2. **Copy-paste perpetuation**: Each version expanded oracle table without auditing data source
+3. **Missing validation infrastructure**: No train/val/test 3-way split in benchmark harness
+4. **Dead code false confidence**: V738's `val_frac=0.2` set but never used (V753 has working version)
+5. **No automated guard**: No test prevents test-set info → fit()
+
+**Oracle tables (ALL from test-set)**:
+- `ORACLE_TABLE` (L50): V733, hand-coded, 5,848 records
+- `ORACLE_TABLE_V734` (L425): Coarse oracle, avg_rank from test-set
+- `ORACLE_TABLE_V735` (L689): Single best model from test-set RMSE
+- `ORACLE_TABLE_TOP3` (L751): Top-3 per condition from test-set RMSE → used by V736/V737
+- `ORACLE_TABLE_V738` (L1313): Top-5 per condition from test-set MAE → used by V738
+
+**All V734-V738 rankings are scientifically invalid for paper.**
 
 ## Condition Count Explained
 
@@ -34,41 +46,24 @@ See `docs/BLOCK3_RESULTS.md` §V738 Fairness Audit for full details.
 | task3_risk_adjust | 2 (funding_raised_usd, investors_count) | 4 | 3 (core_only, core_edgar, full — **no core_text**) | 24 |
 | **Total** | | | | **104** |
 
-## Active SLURM Jobs (2026-03-11 ~03:00 UTC)
+## Active SLURM Jobs (2026-03-12 ~04:30 UTC)
 
-### RUNNING (14 jobs)
+### RUNNING (2 jobs)
 
 | Job ID | Name | Time | Memory | Node | Progress |
 |-------:|------|------|--------|------|----------|
-| 5219864 | p9r2_tsA_t1_fu | 1d 17h | 640G | iris-184 | 4 saves, PAttn epoch 10/100 |
-| 5219865 | p9r2_tsA_t2_fu | 1d 17h | 640G | iris-171 | 4 saves, MambaSimple loading |
-| 5219866 | p9r2_tsA_t3_fu | 1d 17h | 640G | iris-173 | 4 saves, MambaSimple training |
-| 5221718 | p10r_tsC_t1_ce | 18h | 320G | iris-180 | 8 saves, EDGAR joining |
-| 5221719 | p10r_tsC_t1_co | 18h | 320G | iris-175 | 10 saves, Reformer epoch 14/100 |
-| 5221720 | p10r_tsC_t1_ct | 18h | 320G | iris-177 | 11 saves, Reformer epoch 20/100 |
-| 5221721 | p10r_tsC_t3_ce | 11h | 320G | iris-176 | 5 saves, Reformer epoch 0/100 |
-| 5221722 | p10r_tsC_t3_co | 11h | 320G | iris-185 | 7 saves, LightTS loading |
-| 5226208 | p10_v737_t1_co | 37m | 128G | iris-179 | 6 saves |
-| 5226209 | p10_v737_t2_co | 33m | 128G | iris-186 | 6 saves |
-| 5226210 | p10_v737_t3_co | 33m | 128G | iris-178 | 5 saves |
-| 5226211 | p10_v737_t1_ce | 32m | 192G | iris-174 | 6 saves |
-| 5226212 | p10_v737_t2_ce | 32m | 192G | iris-170 | 6 saves |
-| 5226213 | p10_v737_t3_ce | 32m | 192G | iris-183 | 6 saves |
+| 5221718 | p10r_tsC_t1_ce | 26h | 320G | iris-180 | Reformer/ETSformer/LightTS/Pyraformer recovery |
+| 5221721 | p10r_tsC_t3_ce | 19h | 320G | iris-176 | Reformer/ETSformer/LightTS/Pyraformer recovery |
 
-### PENDING (10 jobs)
+### RECENTLY COMPLETED
 
-| Job ID | Name | Memory | Reason |
-|-------:|------|--------|--------|
-| 5226229 | cf_v738_t1_ct | 384G | Resources |
-| 5226230 | cf_v738_t2_ct | 384G | Priority |
-| 5226231 | cf_v738_t1_fu | 384G | Priority |
-| 5226232 | cf_v738_t2_fu | 384G | Priority |
-| 5226233 | cf_v738_t3_fu | 384G | Priority |
-| 5226239 | cf_v737_t1_ct | 384G | Priority |
-| 5226240 | cf_v737_t2_ct | 384G | Priority |
-| 5226241 | cf_v737_t1_fu | 384G | Priority |
-| 5226242 | cf_v737_t2_fu | 384G | Priority |
-| 5226243 | cf_v737_t3_fu | 384G | Priority |
+| Batch | Jobs | Elapsed | Result |
+|-------|------|---------|--------|
+| tsA (5219864-66) | 3 | 2d 0h (TIMEOUT) | MSGNet/PAttn/MambaSimple stuck at 52/104 each |
+| tsC (5221719-20,5221722) | 3 | COMPLETED | tsC recovery shards |
+| V737 npin (5226208-13) | 6 | 49-71 min | ✅ 104/104 records |
+| V738 cfisch (5226229-33) | 5 | 30-75 min | ✅ 104/104 records (oracle-leaked) |
+| V737 cfisch (5226239-43) | 5 | 62-115 min | ✅ merged into V737 results |
 
 ## Model Completion (76 complete + 17 partial)
 
@@ -85,29 +80,35 @@ See `docs/BLOCK3_RESULTS.md` §V738 Fairness Audit for full details.
 | tslib_sota | 1 | WPMixer |
 | autofit | 3 | AutoFitV734, AutoFitV735, AutoFitV736 |
 
-### Partial (17 models)
+### Partial (10 models in Phase 9)
 
 | Model | Records | Category | Status |
 |---|---:|---|---|
 | Chronos2 | 58 | foundation | 🔄 |
 | TTM | 58 | foundation | 🔄 |
+| MSGNet | 52 | tslib_sota | ❌ tsA TIMEOUT |
+| PAttn | 52 | tslib_sota | ❌ tsA TIMEOUT |
+| MambaSimple | 52 | tslib_sota | ❌ tsA TIMEOUT |
+| Crossformer | 52 | tslib_sota | 🔄 |
 | TimeFilter | 52 | tslib_sota | ❌ constant pred |
 | MultiPatchFormer | 52 | tslib_sota | ❌ constant pred |
-| MSGNet | 52 | tslib_sota | 🔄 tsA |
-| PAttn | 52 | tslib_sota | 🔄 tsA |
-| MambaSimple | 52 | tslib_sota | 🔄 tsA |
-| Crossformer | 52 | tslib_sota | 🔄 |
-| ETSformer | 41 | tslib_sota | 🔄 tsC |
-| LightTS | 41 | tslib_sota | 🔄 tsC |
-| Pyraformer | 41 | tslib_sota | 🔄 tsC |
-| Reformer | 41 | tslib_sota | 🔄 tsC |
+| ETSformer | 50 | tslib_sota | 🔄 tsC running |
+| LightTS | 50 | tslib_sota | 🔄 tsC running |
+| Pyraformer | 50 | tslib_sota | 🔄 tsC running |
+| Reformer | 50 | tslib_sota | 🔄 tsC running |
 | NegativeBinomialGLM | 16 | ml_tabular | 🔄 |
-| KANAD | 104 | transformer_sota | ✅ |
-| FITS | 104 | transformer_sota | ✅ |
-| CATS | 104 | tslib_sota | ✅ |
-| SeasonalNaive | 104 | ml_tabular | ✅ |
 
-## Audit Exclusion List (19 models)
+### Phase 10 AutoFit (INVALID — oracle leakage)
+
+| Model | Records | V737 vs V738 | Status |
+|---|---:|---|---|
+| AutoFitV737 | 104/104 | V737 wins 27, V738 wins 77 | ❌ oracle leak (ORACLE_TABLE_TOP3) |
+| AutoFitV738 | 104/104 | see above | ❌ oracle leak (ORACLE_TABLE_V738) |
+
+V737 ablation check: core_text==core_only for 16/20, differs for 4 (NF non-determinism).
+V737 ablation check: full==core_edgar for 10/28, differs for 18 (NF non-determinism).
+
+## Audit Exclusion List (21+ models)
 
 | Finding | Models | Reason |
 |---------|--------|--------|
@@ -115,7 +116,7 @@ See `docs/BLOCK3_RESULTS.md` §V738 Fairness Audit for full details.
 | B (5) | AutoCES, xLSTM, TimeLLM, StemGNN, TimeXer | Training crash fallback |
 | C (2) | TimeMoE, MOMENT | Near-duplicate of Timer |
 | G (3) | MICN, MultiPatchFormer, TimeFilter | 100% constant predictions |
-| J (3) | AutoFitV734, AutoFitV735, AutoFitV736 | Oracle test-set leakage |
+| J (5) | AutoFitV734, AutoFitV735, AutoFitV736, AutoFitV737, AutoFitV738 | Oracle test-set leakage |
 
 ## Memory Requirements (empirical)
 
@@ -133,7 +134,7 @@ See `docs/BLOCK3_RESULTS.md` §V738 Fairness Audit for full details.
 | Phase 7 | 91 | 6,670 | ❌ DEPRECATED | 4 critical bugs |
 | Phase 8 | 99 | 7,478 | ❌ DEPRECATED | 4 critical bugs |
 | Phase 9 | 93 | 8,928 | ✅ CURRENT | Fair benchmark after bug fixes |
-| Phase 10 | +2 | ongoing | 🔄 IN PROGRESS | V737, V738 (both oracle-leaked) |
+| Phase 10 | +2 | V737=104, V738=104 | ❌ INVALID | Oracle test-set leakage (5-layer root cause) |
 
 ## Bugs Fixed (Phase 9)
 
