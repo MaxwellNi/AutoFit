@@ -1,7 +1,8 @@
-# MASTER SUPPLEMENT LIST — Model Research for Block 3 Phase 10 Expansion
+# MASTER SUPPLEMENT LIST — Model Research for Block 3 Phase 11 Expansion
 
-**Date**: 2026-03-10 (updated)
-**Purpose**: Comprehensive research on candidate models for benchmark expansion beyond the current 100-model Phase 9 registry.
+**Date**: 2026-03-11 (updated)
+**Purpose**: Comprehensive research on candidate models for benchmark expansion.
+**Current registry**: 108 active models (80 complete, 13 partial, 15 new queued).
 **Scope**: P0 (must-add), P1 (strong missing baselines), P2 (LLM/multimodal), benchmarks
 
 ---
@@ -12,7 +13,9 @@ Several entries below were previously marked "no public code" incorrectly. Corre
 - **TimerXL**: ✅ IMPLEMENTED — shares `thuml/timer-base-84m` checkpoint. NOT "dropped as duplicate".
 - **TiRex**: ✅ Available via TSLib `models/TiRex.py` AND `pip install uni2ts`. Should be RE-ENABLED.
 - **Mamba**: Status is "env/dependency blocked" (needs `mamba-ssm` CUDA kernel), NOT "code-blocked". MambaSimple (pure PyTorch) is already running.
-- **Kairos, SEMPO, TQNet, MMPD, interPDN, TimeMosaic, COSA, CFPT, PIR, SRSNet**: Marked "SKIP — no public code" — **PENDING VERIFICATION by user**. User claims several of these DO have public implementations. Awaiting user's Sections A-F correction document for exact URLs.
+- **SEMPO, TQNet, CFPT, PIR, SRSNet**: ✅ INTEGRATED in Phase 11 (commit 1691ff7). All have public TSLib-compatible implementations.
+- **MMPD, interPDN, TimeMosaic, COSA**: Still no public code found.
+- **Kairos**: Foundation model requiring IBM `tsfm` package — blocked by env dependency.
 
 ### Models to EXCLUDE from leaderboard (per deep audit 2026-03-10)
 - **100% constant**: MICN, MultiPatchFormer, TimeFilter
@@ -27,7 +30,7 @@ Already implemented in our codebase (`src/narrative/block3/models/`):
 - **deep_classical (9)**: NBEATS, NHITS, TFT, DeepAR, GRU, LSTM, TCN, MLP, DilatedRNN
 - **transformer_sota (23)**: PatchTST, iTransformer, TimesNet, TSMixer, Informer, Autoformer, FEDformer, VanillaTransformer, TiDE, NBEATSx, BiTCN, KAN, RMoK, SOFTS, StemGNN, DLinear, NLinear, TimeMixer, TimeXer, TSMixerx, xLSTM, TimeLLM, DeepNPTS
 - **foundation (15)**: Chronos, ChronosBolt, Chronos2, Moirai, MoiraiLarge, Moirai2, Timer, TimeMoE, MOMENT, LagLlama, TimesFM, Sundial, TTM, TimerXL, TimesFM2
-- **tslib_sota (20)**: TimeFilter, WPMixer, MultiPatchFormer, TiRex, MSGNet, PAttn, MambaSimple, Mamba, Koopa, FreTS, Crossformer, MICN, SegRNN, ETSformer, NonstationaryTransformer, FiLM, SCINet, LightTS, Pyraformer, Reformer
+- **tslib_sota (42)**: TimeFilter, WPMixer, MultiPatchFormer, TiRex, MSGNet, PAttn, MambaSimple, Mamba, Koopa, FreTS, Crossformer, MICN, SegRNN, ETSformer, NonstationaryTransformer, FiLM, SCINet, LightTS, Pyraformer, Reformer, KANAD, FITS, SparseTSF, CATS, Fredformer, CycleNet, xPatch, FilterTS, CFPT, DeformableTST, ModernTCN, PathFormer, SEMPO, TimePerceiver, TimeBridge, TQNet, PIR, CARD, PDF, TimeRecipe, DUET, SRSNet
 - **statistical (15)**, **ml_tabular (15)**, **irregular (4)**, **autofit (21)**
 
 Models in TSLib (`github.com/thuml/Time-Series-Library/models/`) as of 2026-03:

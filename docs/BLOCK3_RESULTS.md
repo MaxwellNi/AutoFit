@@ -1,25 +1,27 @@
 # Block 3 Benchmark Results
 
-> Last updated: 2026-03-12 (Phase 10 — V738/V737 complete, deep 5-layer root cause analysis, tsA TIMEOUT)
+> Last updated: 2026-03-11 (Phase 11 — 14 new SOTA models integrated, V739 validation-based AutoFit, cfisch idle)
 > Canonical results dir: `runs/benchmarks/block3_phase9_fair/`
 > Phase 7/8 results are **DEPRECATED** (4 critical bugs fixed)
 > **Data integrity audit**: DEEP ROOT CAUSE ANALYSIS 2026-03-12 — 5-layer oracle leakage chain identified (see §Oracle Root Cause below)
 
-**Generated**: 2026-03-12
-**Benchmark Dir**: `block3_phase9_fair` (Phase 9) + `block3_phase10/v737/`, `block3_phase10/v738/` (Phase 10)
-**Total Phase 9 Records**: 8,928
+**Generated**: 2026-03-11
+**Benchmark Dir**: `block3_phase9_fair` (Phase 9) + `block3_phase10/v737/`, `block3_phase10/v738/` (Phase 10) + `block3_phase11/` (Phase 11)
+**Total Phase 9 Records**: 8,972
 **Phase 10 Records**: V737=104, V738=104 (both oracle-leaked, excluded from ranking)
-**Complete Models (104/104 conditions)**: 76 (Phase 9) + V737, V738 (Phase 10, invalid)
-**Partial Models**: 10 (tsC recovery in progress, tsA TIMEOUT)
+**Phase 11 Models**: 14 new SOTA + V739 (PENDING in SLURM queue)
+**Complete Models (104/104 conditions)**: 80 (Phase 9) + V737, V738 (Phase 10, invalid)
+**Partial Models**: 13 (Phase 9 gap-fill) + 15 (Phase 11 new, 0/104)
 
 ## Overview
 
 | Metric | Value |
 |--------|-------|
-| Phase 9 raw records | 8,928 |
-| Phase 9 complete models (104/104) | 76 |
-| Phase 9 partial models (<104) | 10 |
+| Phase 9 raw records | 8,972 |
+| Phase 9 complete models (104/104) | 80 |
+| Phase 9 partial models (<104) | 13 |
 | Phase 9 unique models (total) | 93 |
+| Phase 11 new models (queued) | 14 + V739 |
 | Phase 10 AutoFit records | V737=104, V738=104 (INVALID — oracle leak) |
 | Categories | autofit, deep_classical, foundation, irregular, ml_tabular, statistical, transformer_sota, tslib_sota |
 | Tasks | task1_outcome, task2_forecast, task3_risk_adjust |
@@ -185,37 +187,53 @@ NBEATS (#3, 26 wins, 53 top-3) has the MOST condition wins of any model.
 > The oracle tables (ORACLE_TABLE_V738, ORACLE_TABLE_TOP3) select models using test-set MAE/RMSE
 > values from the same Phase 9 evaluation. See §V738 Fairness Audit above.
 
-### Partial & In-Progress Models (2026-03-12)
+### Partial & In-Progress Models (2026-03-11)
 
-| Model | Records | Progress | Category | Status |
-|-------|--------:|----------|----------|--------|
-| V738 | 104/104 | ✅ COMPLETE | autofit | ❌ oracle leak — ALL rankings invalid |
-| V737 | 104/104 | ✅ COMPLETE | autofit | ❌ oracle leak — ALL rankings invalid |
-| Chronos2 | 58/104 | 8/11 conditions | foundation | 🔄 |
-| TTM | 58/104 | 8/11 conditions | foundation | 🔄 |
-| MSGNet | 52/104 | 11/11 conditions | tslib_sota | ❌ tsA TIMEOUT (2d walltime) |
-| PAttn | 52/104 | 11/11 conditions | tslib_sota | ❌ tsA TIMEOUT |
-| MambaSimple | 52/104 | 11/11 conditions | tslib_sota | ❌ tsA TIMEOUT |
-| Crossformer | 52/104 | 11/11 conditions | tslib_sota | 🔄 |
-| TimeFilter | 52/104 | 11/11 conditions | tslib_sota | ❌ constant predictions |
-| MultiPatchFormer | 52/104 | 11/11 conditions | tslib_sota | ❌ constant predictions |
-| ETSformer | 50/104 | — | tslib_sota | 🔄 tsC still running (2 jobs) |
-| LightTS | 50/104 | — | tslib_sota | 🔄 tsC still running |
-| Pyraformer | 50/104 | — | tslib_sota | 🔄 tsC still running |
-| Reformer | 50/104 | — | tslib_sota | 🔄 tsC still running |
-| NegativeBinomialGLM | 16/104 | 4 conditions | ml_tabular | 🔄 |
+| Model | Records | Remaining | Category | Status |
+|-------|--------:|----------:|----------|--------|
+| V738 | 104/104 | 0 | autofit | ❌ oracle leak — ALL rankings invalid |
+| V737 | 104/104 | 0 | autofit | ❌ oracle leak — ALL rankings invalid |
+| Chronos2 | 58/104 | 46 | foundation | 🔄 SLURM queued (5 jobs) |
+| TTM | 58/104 | 46 | foundation | 🔄 SLURM queued (5 jobs) |
+| TimeFilter | 52/104 | 52 | tslib_sota | 🔄 SLURM queued (11 jobs) |
+| MultiPatchFormer | 52/104 | 52 | tslib_sota | 🔄 SLURM queued (11 jobs) |
+| MSGNet | 52/104 | 52 | tslib_sota | 🔄 SLURM queued (11 jobs) |
+| PAttn | 52/104 | 52 | tslib_sota | 🔄 SLURM queued (11 jobs) |
+| MambaSimple | 52/104 | 52 | tslib_sota | 🔄 SLURM queued (11 jobs) |
+| Crossformer | 52/104 | 52 | tslib_sota | 🔄 SLURM queued (11 jobs) |
+| ETSformer | 52/104 | 52 | tslib_sota | 🔄 SLURM queued (6 jobs) |
+| LightTS | 52/104 | 52 | tslib_sota | 🔄 SLURM queued (6 jobs) |
+| Pyraformer | 52/104 | 52 | tslib_sota | 🔄 SLURM queued (6 jobs) |
+| Reformer | 52/104 | 52 | tslib_sota | 🔄 SLURM queued (6 jobs) |
+| NegativeBinomialGLM | 16/104 | 88 | ml_tabular | 🔄 SLURM queued (11 jobs) |
+| AutoFitV739 | 0/104 | 104 | autofit | 🆕 SLURM queued (11 jobs, Phase 10) |
+| CFPT | 0/104 | 104 | tslib_sota | 🆕 SLURM queued (Phase 11) |
+| DeformableTST | 0/104 | 104 | tslib_sota | 🆕 SLURM queued (Phase 11) |
+| ModernTCN | 0/104 | 104 | tslib_sota | 🆕 SLURM queued (Phase 11) |
+| PathFormer | 0/104 | 104 | tslib_sota | 🆕 SLURM queued (Phase 11) |
+| SEMPO | 0/104 | 104 | tslib_sota | 🆕 SLURM queued (Phase 11) |
+| TimePerceiver | 0/104 | 104 | tslib_sota | 🆕 SLURM queued (Phase 11) |
+| TimeBridge | 0/104 | 104 | tslib_sota | 🆕 SLURM queued (Phase 11) |
+| TQNet | 0/104 | 104 | tslib_sota | 🆕 SLURM queued (Phase 11) |
+| PIR | 0/104 | 104 | tslib_sota | 🆕 SLURM queued (Phase 11) |
+| CARD | 0/104 | 104 | tslib_sota | 🆕 SLURM queued (Phase 11) |
+| PDF | 0/104 | 104 | tslib_sota | 🆕 SLURM queued (Phase 11) |
+| TimeRecipe | 0/104 | 104 | tslib_sota | 🆕 SLURM queued (Phase 11) |
+| DUET | 0/104 | 104 | tslib_sota | 🆕 SLURM queued (Phase 11) |
+| SRSNet | 0/104 | 104 | tslib_sota | 🆕 SLURM queued (Phase 11) |
 
-### SLURM Job Status (2026-03-12 ~04:30 UTC)
+**Total remaining conditions**: 2,260 (across 28 models)
 
-| Batch | Jobs | Status | Wall Time | Notes |
-|-------|------|--------|-----------|-------|
-| tsA (5219864-66) | 3 | **TIMEOUT** | 2d 0h (max) | MSGNet/PAttn/MambaSimple stuck at 52/104 |
-| tsC (5221718,5221721) | 2 | RUNNING | 19-26h/48h | Reformer/ETSformer/LightTS/Pyraformer recovery |
-| tsC (5221719-20,5221722) | 3 | COMPLETED | — | Saved 23-48 records each |
-| V737 npin (5226208-13) | 6 | **COMPLETED** | 49-71 min | 104/104 records |
-| V738 cfisch (5226229-33) | 5 | **COMPLETED** | 30-75 min | 104/104 records |
-| V737 cfisch (5226239-43) | 5 | **COMPLETED** | 62-115 min | Already merged in V737 results |
-| **Total Active** | **2 RUNNING** | | | Only tsC t1_ce + t3_ce remain |
+### SLURM Job Status (2026-03-11)
+
+| Batch | Jobs | Status | Account | Notes |
+|-------|------|--------|---------|-------|
+| Phase 9 gap-fill (p9r_*) | 100 | PENDING (Priority) | npin | Chronos2/TTM/TimeFilter/MultiPatchFormer/MSGNet/PAttn/MambaSimple/Crossformer/ETSformer/LightTS/Pyraformer/Reformer |
+| Phase 9 NegBinGLM (p9r_nbglm_*) | 11 | PENDING (Priority) | npin | bigmem partition |
+| Phase 10 V739 (p10_v739_*) | 11 | PENDING (Priority) | npin | GPU partition, validation-based AutoFit |
+| Phase 11 new SOTA (p11_tslib_new_*) | 11 | PENDING (Priority) | npin | 14 new models per script |
+| **cfisch** | **0** | **IDLE** | cfisch | No jobs submitted — account underutilized |
+| **Total queued (npin)** | **133** | ALL PENDING | npin | Reason: Priority scheduling |
 
 ## task1_outcome
 
