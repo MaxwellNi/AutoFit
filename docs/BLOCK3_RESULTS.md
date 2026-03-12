@@ -1,33 +1,41 @@
 # Block 3 Benchmark Results
 
-> Last updated: 2026-03-12 (Phase 12 — code audit complete, text embeddings EMPTY, 136 jobs PENDING)
+> Last updated: 2026-03-13 (V734-V738 ALL invalidated — oracle test-set leakage confirmed for V734/V735/V736)
 > Canonical results dir: `runs/benchmarks/block3_phase9_fair/`
 > Phase 7/8 results are **DEPRECATED** (4 critical bugs fixed)
 > **Data integrity audit**: DEEP ROOT CAUSE ANALYSIS 2026-03-12 — 5-layer oracle leakage chain identified (see §Oracle Root Cause below)
 > **Code audit**: 2026-03-12 — No critical bugs, no data leakage, no anomalous metrics
+> **V734-V738 audit (2026-03-13)**: ALL 5 AutoFit versions use oracle tables from **test-set** metrics — ALL INVALID
 
-**Generated**: 2026-03-12
+**Generated**: 2026-03-13
 **Benchmark Dir**: `block3_phase9_fair` (Phase 9) + `block3_phase10/v737/`, `block3_phase10/v738/` (Phase 10)
-**Total Records**: 9,180 (Phase 9: 8,972 + Phase 10: 208)
-**Phase 10 Records**: V737=104, V738=104 (both oracle-leaked, excluded from ranking)
+**Total Records (all)**: 9,180 (Phase 9: 8,972 + Phase 10: 208)
+**Valid Records**: 8,660 (excluding V734/V735/V736 Phase 9 + V737/V738 Phase 10)
+**Invalid Records (oracle leak)**: 520 (V734=104, V735=104, V736=104, V737=104, V738=104)
 **Phase 11 Models**: 14 new SOTA + V739 (ALL PENDING in SLURM queue)
-**Complete Models (104/104 conditions)**: 82 (Phase 9: 80 + Phase 10: V737, V738 INVALID)
+**Valid Complete Models (104/104 conditions)**: 77
 **Partial Models**: 13 (Phase 9 gap-fill PENDING)
+**INVALID AutoFit**: V734, V735, V736, V737, V738 (ALL oracle-leaked)
+**V739 Status**: 0/104 — 18 SLURM jobs PENDING, 0 results landed
 **Text Embeddings**: ❌ EMPTY — 4 generation jobs PENDING. All core_text ≡ core_only.
 
 ## Overview
 
 | Metric | Value |
 |--------|-------|
-| Total metric records | 9,180 |
-| Phase 9 complete models (104/104) | 80 |
+| Total metric records (all) | 9,180 |
+| **Valid metric records** | **8,660** |
+| Invalid records (oracle leak) | 520 (V734+V735+V736+V737+V738) |
+| **Valid complete models (104/104)** | **77** |
 | Phase 9 partial models (<104) | 13 |
-| Phase 9 unique models (total) | 93 |
-| Phase 10 AutoFit (INVALID) | V737=104, V738=104 |
+| Phase 9 unique models (total) | 93 (90 valid + 3 invalid) |
+| INVALID AutoFit (Phase 9) | V734=104, V735=104, V736=104 |
+| INVALID AutoFit (Phase 10) | V737=104, V738=104 |
 | Phase 11 new models (queued) | 14 + V739 |
+| V739 progress | **0/104** — 0 RUNNING, 18 PENDING |
 | Phase 12 text re-runs (blocked) | 40 scripts ready |
-| SLURM status | **0 RUNNING, 136 PENDING** |
-| Categories | autofit, deep_classical, foundation, irregular, ml_tabular, statistical, transformer_sota, tslib_sota |
+| SLURM status | **0 RUNNING, 125 PENDING** |
+| Categories | deep_classical, foundation, irregular, ml_tabular, statistical, transformer_sota, tslib_sota |
 | Tasks | task1_outcome, task2_forecast, task3_risk_adjust |
 
 ## CRITICAL: 5-Layer Oracle Test-Set Leakage Root Cause Analysis 🔴🔴🔴

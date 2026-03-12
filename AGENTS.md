@@ -27,15 +27,17 @@ ml_tabular single-horizon). All prior Phase 7/8 results are **DEPRECATED**.
   - `foundation` (11): Chronos, ChronosBolt, Chronos2, Moirai, etc.
   - `irregular` (4): GRU-D, SAITS, BRITS, CSDI
   - `tslib_sota` (34): TimeFilter, WPMixer, MSGNet, Crossformer, SCINet, CFPT, DeformableTST, ModernTCN, PathFormer, SEMPO, TimePerceiver, TimeBridge, TQNet, PIR, CARD, PDF, TimeRecipe, DUET, SRSNet, etc.
-  - `autofit` (4): V734, V735, V736, V739 (validation-based)
+  - `autofit` (1 valid): V739 (validation-based) — V734/V735/V736 are oracle-leaked and INVALID
 - **Platform**: ULHPC Iris — GPU (V100 32GB, ~756GB RAM), bigmem (3TB, 112 CPUs), QOS `normal` (2-day wall)
 - **Ablations**: 4 per task — `core_only`, `core_text`, `core_edgar`, `full` (task3: 3, no core_text)
 - **Tasks**: `task1_outcome`, `task2_forecast`, `task3_risk_adjust`
 - **Canonical Output Dir**: `runs/benchmarks/block3_phase9_fair/`
-- **Validated Progress**: 110 metrics.json files, 9,180 valid records, 95 models with results
-- **Complete Models**: 82 (104/104 conditions) — 80 Phase 9 + V737/V738 Phase 10 (INVALID)
+- **Validated Progress**: 110 metrics.json files, 8,660 valid records (excl. oracle-leaked AutoFit), 90 valid models
+- **Valid Complete Models**: 77 (104/104 conditions) — all non-AutoFit Phase 9 models
+- **INVALID AutoFit**: V734, V735, V736 (Phase 9), V737, V738 (Phase 10) — ALL oracle test-set leakage
+- **V739 Status**: 0/104 — 18 SLURM jobs PENDING, 0 results landed
 - **Partial Models**: 13 (gap-fill PENDING)
-- **SLURM Status**: 0 RUNNING, 136 PENDING (npin=47, cfisch=89)
+- **SLURM Status**: 0 RUNNING, 125 PENDING (npin=47, cfisch=78)
 - **Text Embeddings**: ❌ EMPTY — 4 generation jobs PENDING, all core_text ≡ core_only
 - **SLURM Scripts**: `.slurm_scripts/phase9/` (66 scripts), `.slurm_scripts/phase10/` (various), `.slurm_scripts/phase11/` (11+), `.slurm_scripts/phase12/` (44 scripts)
 - **Live Results**: See [docs/BLOCK3_RESULTS.md](docs/BLOCK3_RESULTS.md)
@@ -156,11 +158,12 @@ From `scripts/block3_profile_data.py`:
 19. ✅ V73 multi-agent coordination (Recon/Scout/Composer/Critic blackboard protocol)
 20. ✅ V72 root cause analysis (6 root causes, GPU gate fix)
 21. ✅ Phase 7/8 benchmark — deprecated (4 critical bugs found)
-22. ✅ Phase 9 results: 8,972 records, 80 complete models (104/104), 13 partial
+22. ✅ Phase 9 results: 8,660 valid records, 77 valid complete (excl. V734/V735/V736 oracle-leaked)
 23. ✅ Phase 10 V737/V738: both 104/104 but INVALID (5-layer oracle leakage)
 24. ✅ Phase 11: 14 TSLib SOTA + V739 AutoFit registered, SLURM scripts ready
 25. ✅ Text embedding OOM fix (Arrow string → .astype("object"), commit f67d69e)
 26. ✅ Code audit (2026-03-12): No data leakage, no critical bugs, 0 anomalous metrics
+27. ✅ V734/V735/V736 confirmed oracle-leaked (2026-03-13): ALL use test-set oracle tables
 27. ⏳ Text embedding generation: 4 jobs PENDING (runs/text_embeddings/ EMPTY)
 28. ⏳ Phase 12 core_text/full re-runs: 40 scripts ready, blocked on text embeddings
 29. ⏳ Gap-fill: 34 jobs PENDING for 7 partial models
