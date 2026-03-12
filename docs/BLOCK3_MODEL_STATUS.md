@@ -1,6 +1,6 @@
 # Block 3 Model Benchmark Status
 
-> Last updated: 2026-03-12 (Phase 11 — 14 new SOTA models integrated, V739 validation-based AutoFit)
+> Last updated: 2026-03-12 (Phase 12 — code audit, text embedding generation, progress update)
 > Full results: `docs/BLOCK3_RESULTS.md`
 
 ## Snapshot
@@ -8,15 +8,16 @@
 | Metric | Value |
 |---|---:|
 | Evaluation conditions per model | **104** (48+32+24) |
-| Phase 9 metrics.json files | 88 |
-| Phase 9 valid metric records | 8,928 |
-| Phase 9 unique models | 93 |
-| Phase 9 complete (104/104) | 76 |
-| Phase 9 partial (<104) | 10 |
+| Total metrics.json files | 110 (p9=88, p10=22) |
+| Total valid metric records | **9,180** |
+| Unique models with results | **95** |
+| Complete (104/104) | **82** (p9=80, p10=V737+V738 INVALID) |
+| Partial (<104) | **13** |
 | Phase 10 AutoFit records | V737=104, V738=104 (INVALID — oracle leak) |
 | Phase 11 new models | 14 TSLib SOTA + V739 validation-based AutoFit |
-| Total registered models | **42 tslib_sota + 9 deep + 23 transformer + 12 foundation + 4 irregular + 15 stat + 9+ ml_tabular + 3+ autofit = 127+** |
-| Active SLURM jobs | 122 PENDING |
+| Total registered models | **42 tslib_sota + 9 deep + 23 transformer + 14 foundation + 4 irregular + 15 stat + 11 ml_tabular + 6 autofit = 127** |
+| Active SLURM jobs | **0 RUNNING, 136 PENDING** (npin=47, cfisch=89) |
+| Text embeddings | ❌ EMPTY — 4 generation jobs PENDING |
 | **AutoFit integrity** | ✅ V739 uses validation-based selection (no oracle leakage) |
 
 ## CRITICAL: 5-Layer Oracle Test-Set Leakage
@@ -48,57 +49,66 @@ See `docs/BLOCK3_RESULTS.md` for the complete 5-layer root cause analysis.
 | task3_risk_adjust | 2 (funding_raised_usd, investors_count) | 4 | 3 (core_only, core_edgar, full — **no core_text**) | 24 |
 | **Total** | | | | **104** |
 
-## Active SLURM Jobs (2026-03-12 ~04:30 UTC)
+## Active SLURM Jobs (2026-03-12 ~21:00 UTC)
 
-### RUNNING (2 jobs)
+### RUNNING: 0 jobs
 
-| Job ID | Name | Time | Memory | Node | Progress |
-|-------:|------|------|--------|------|----------|
-| 5221718 | p10r_tsC_t1_ce | 26h | 320G | iris-180 | Reformer/ETSformer/LightTS/Pyraformer recovery |
-| 5221721 | p10r_tsC_t3_ce | 19h | 320G | iris-176 | Reformer/ETSformer/LightTS/Pyraformer recovery |
+All jobs stuck in PENDING (Priority) — cluster heavily loaded.
+
+### PENDING: 136 jobs (npin=47, cfisch=89)
+
+| Category | Account | Partition | Jobs | Status |
+|----------|---------|-----------|-----:|--------|
+| V739 AutoFit (new) | npin | gpu | 11 | ⏳ PENDING (Priority) |
+| V739 AutoFit (l40s) | cfisch | l40s | 7 | ⏳ PENDING (Priority) |
+| Gap-fill (Chronos2, TTM) | npin | gpu | 10 | ⏳ PENDING (Priority) |
+| Gap-fill (ETSformer, LightTS, Pyraformer, Reformer) | npin | gpu | 24 | ⏳ PENDING (Priority) |
+| NegBinomGLM gap-fill | cfisch | bigmem | 11 | ⏳ PENDING (Priority) |
+| Phase 11 TSLib SOTA (14 models) | cfisch | gpu | 11 | ⏳ PENDING (Priority) |
+| Text embedding generation | npin+cfisch | gpu+l40s | 4 | ⏳ PENDING (Priority) |
+| **Phase 12 re-runs** (core_text/full) | — | — | 40 scripts ready | 🚫 Blocked on text embeddings |
 
 ### RECENTLY COMPLETED
 
 | Batch | Jobs | Elapsed | Result |
 |-------|------|---------|--------|
-| tsA (5219864-66) | 3 | 2d 0h (TIMEOUT) | MSGNet/PAttn/MambaSimple stuck at 52/104 each |
-| tsC (5221719-20,5221722) | 3 | COMPLETED | tsC recovery shards |
 | V737 npin (5226208-13) | 6 | 49-71 min | ✅ 104/104 records |
 | V738 cfisch (5226229-33) | 5 | 30-75 min | ✅ 104/104 records (oracle-leaked) |
 | V737 cfisch (5226239-43) | 5 | 62-115 min | ✅ merged into V737 results |
+| tsC recovery (5221718-22) | 5 | up to 2d | ✅ ETSformer/LightTS/Pyraformer/Reformer → 52/104 |
 
-## Model Completion (76 complete + 17 partial)
+## Model Completion (82 complete + 13 partial)
 
-### Complete (76 models × 104/104)
+### Complete (80 models × 104/104 in Phase 9)
 
 | Category | Count | Models |
 |---|---:|---|
 | deep_classical | 9 | NBEATS, NHITS, TFT, DeepAR, GRU, LSTM, TCN, MLP, DilatedRNN |
 | foundation | 12 | Chronos, ChronosBolt, Timer, TimeMoE, MOMENT, TimesFM, Sundial, TimesFM2, LagLlama, Moirai, MoiraiLarge, Moirai2 |
 | irregular | 4 | GRU-D, SAITS, BRITS, CSDI |
-| ml_tabular | 9 | LightGBM, XGBoost, CatBoost, RandomForest, ExtraTrees, HistGradientBoosting, MeanPredictor, LightGBMTweedie, XGBoostPoisson |
+| ml_tabular | 10 | LightGBM, XGBoost, CatBoost, RandomForest, ExtraTrees, HistGradientBoosting, MeanPredictor, SeasonalNaive, LightGBMTweedie, XGBoostPoisson |
 | statistical | 15 | AutoARIMA, AutoETS, AutoTheta, MSTL, SF_SeasonalNaive, AutoCES, CrostonClassic, CrostonOptimized, CrostonSBA, DynamicOptimizedTheta, HistoricAverage, Holt, HoltWinters, Naive, WindowAverage |
 | transformer_sota | 23 | PatchTST, iTransformer, TimesNet, TSMixer, Informer, Autoformer, FEDformer, VanillaTransformer, TiDE, NBEATSx, xLSTM, TimeLLM, DeepNPTS, BiTCN, KAN, RMoK, SOFTS, StemGNN, DLinear, NLinear, TimeMixer, TimeXer, TSMixerx |
-| tslib_sota | 1 | WPMixer |
+| tslib_sota | 4 | WPMixer, FITS, KANAD, CATS |
 | autofit | 3 | AutoFitV734, AutoFitV735, AutoFitV736 |
 
-### Partial (10 models in Phase 9)
+### Partial (13 models in Phase 9)
 
 | Model | Records | Category | Status |
 |---|---:|---|---|
-| Chronos2 | 58 | foundation | 🔄 |
-| TTM | 58 | foundation | 🔄 |
+| Chronos2 | 58 | foundation | ⏳ 5 gap-fill jobs PENDING |
+| TTM | 58 | foundation | ⏳ 5 gap-fill jobs PENDING |
+| Crossformer | 52 | tslib_sota | ⏳ gap-fill needed |
 | MSGNet | 52 | tslib_sota | ❌ tsA TIMEOUT |
 | PAttn | 52 | tslib_sota | ❌ tsA TIMEOUT |
 | MambaSimple | 52 | tslib_sota | ❌ tsA TIMEOUT |
-| Crossformer | 52 | tslib_sota | 🔄 |
 | TimeFilter | 52 | tslib_sota | ❌ constant pred |
 | MultiPatchFormer | 52 | tslib_sota | ❌ constant pred |
-| ETSformer | 50 | tslib_sota | 🔄 tsC running |
-| LightTS | 50 | tslib_sota | 🔄 tsC running |
-| Pyraformer | 50 | tslib_sota | 🔄 tsC running |
-| Reformer | 50 | tslib_sota | 🔄 tsC running |
-| NegativeBinomialGLM | 16 | ml_tabular | 🔄 |
+| ETSformer | 52 | tslib_sota | ⏳ 6 gap-fill jobs PENDING |
+| LightTS | 52 | tslib_sota | ⏳ 6 gap-fill jobs PENDING |
+| Pyraformer | 52 | tslib_sota | ⏳ 6 gap-fill jobs PENDING |
+| Reformer | 52 | tslib_sota | ⏳ 6 gap-fill jobs PENDING |
+| NegativeBinomialGLM | 16 | ml_tabular | ⏳ 11 gap-fill jobs PENDING (bigmem) |
 
 ### Phase 10 AutoFit (INVALID — oracle leakage)
 
@@ -163,8 +173,33 @@ V737 ablation check: full==core_edgar for 10/28, differs for 18 (NF non-determin
 |-------|-------:|--------:|--------|-------|
 | Phase 7 | 91 | 6,670 | ❌ DEPRECATED | 4 critical bugs |
 | Phase 8 | 99 | 7,478 | ❌ DEPRECATED | 4 critical bugs |
-| Phase 9 | 93 | 8,928 | ✅ CURRENT | Fair benchmark after bug fixes |
+| Phase 9 | 93 | 8,972 | ✅ CURRENT | Fair benchmark after bug fixes |
 | Phase 10 | +2 | V737=104, V738=104 | ❌ INVALID | Oracle test-set leakage (5-layer root cause) |
+| Phase 11 | +14+1 | 0 | ⏳ PENDING | 14 TSLib SOTA + V739 AutoFit (no oracle) |
+| Phase 12 | — | 0 | 🚫 BLOCKED | core_text/full re-runs after text embeddings ready |
+
+## Text Embedding Status 🔴
+
+| Item | Status |
+|------|--------|
+| Model | GTE-Qwen2-1.5B-instruct (Alibaba-NLP, Apache-2.0) |
+| Output dim | 1536 → PCA 64 |
+| Directory | `runs/text_embeddings/` |
+| State | **EMPTY** — 6 prior generation attempts ALL failed |
+| Root cause | Arrow string OOM (2.55 TiB allocation on .loc[] with ArrowStringArray) |
+| Fix | `.astype("object")` + per-field truncation (commit f67d69e) |
+| Pending jobs | 4 generation jobs PENDING (2 gpu + 2 l40s) |
+| Impact | All existing core_text ≡ core_only, full ≡ core_edgar (text features = raw numeric only) |
+| Re-run plan | 40 Phase 12 scripts in `.slurm_scripts/phase12/rerun/` |
+
+## Code Audit (2026-03-12) ✅
+
+Comprehensive code audit completed. Key findings:
+- **No data leakage**: Temporal split with 7-day embargo correctly enforced; explicit leakage guards for co-determined columns
+- **No critical logic bugs**: Horizon handling (h_nf=max(h,7)) is correct for all horizons [7,14,30,60]
+- **V739 validation-based selection is sound**: Uses harness val_raw (temporal split), no test-set information leak
+- **No anomalous metrics**: 0 NaN/Inf/zero MAE across 9,180 records
+- **Historical OOM**: 106 failed jobs (mostly tslib_sota, ml_tabular, irregular) — already addressed with higher memory requests
 
 ## Bugs Fixed (Phase 9)
 

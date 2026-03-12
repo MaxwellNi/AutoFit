@@ -1,28 +1,32 @@
 # Block 3 Benchmark Results
 
-> Last updated: 2026-03-11 (Phase 11 — 14 new SOTA models integrated, V739 validation-based AutoFit, cfisch idle)
+> Last updated: 2026-03-12 (Phase 12 — code audit complete, text embeddings EMPTY, 136 jobs PENDING)
 > Canonical results dir: `runs/benchmarks/block3_phase9_fair/`
 > Phase 7/8 results are **DEPRECATED** (4 critical bugs fixed)
 > **Data integrity audit**: DEEP ROOT CAUSE ANALYSIS 2026-03-12 — 5-layer oracle leakage chain identified (see §Oracle Root Cause below)
+> **Code audit**: 2026-03-12 — No critical bugs, no data leakage, no anomalous metrics
 
-**Generated**: 2026-03-11
-**Benchmark Dir**: `block3_phase9_fair` (Phase 9) + `block3_phase10/v737/`, `block3_phase10/v738/` (Phase 10) + `block3_phase11/` (Phase 11)
-**Total Phase 9 Records**: 8,972
+**Generated**: 2026-03-12
+**Benchmark Dir**: `block3_phase9_fair` (Phase 9) + `block3_phase10/v737/`, `block3_phase10/v738/` (Phase 10)
+**Total Records**: 9,180 (Phase 9: 8,972 + Phase 10: 208)
 **Phase 10 Records**: V737=104, V738=104 (both oracle-leaked, excluded from ranking)
-**Phase 11 Models**: 14 new SOTA + V739 (PENDING in SLURM queue)
-**Complete Models (104/104 conditions)**: 80 (Phase 9) + V737, V738 (Phase 10, invalid)
-**Partial Models**: 13 (Phase 9 gap-fill) + 15 (Phase 11 new, 0/104)
+**Phase 11 Models**: 14 new SOTA + V739 (ALL PENDING in SLURM queue)
+**Complete Models (104/104 conditions)**: 82 (Phase 9: 80 + Phase 10: V737, V738 INVALID)
+**Partial Models**: 13 (Phase 9 gap-fill PENDING)
+**Text Embeddings**: ❌ EMPTY — 4 generation jobs PENDING. All core_text ≡ core_only.
 
 ## Overview
 
 | Metric | Value |
 |--------|-------|
-| Phase 9 raw records | 8,972 |
+| Total metric records | 9,180 |
 | Phase 9 complete models (104/104) | 80 |
 | Phase 9 partial models (<104) | 13 |
 | Phase 9 unique models (total) | 93 |
+| Phase 10 AutoFit (INVALID) | V737=104, V738=104 |
 | Phase 11 new models (queued) | 14 + V739 |
-| Phase 10 AutoFit records | V737=104, V738=104 (INVALID — oracle leak) |
+| Phase 12 text re-runs (blocked) | 40 scripts ready |
+| SLURM status | **0 RUNNING, 136 PENDING** |
 | Categories | autofit, deep_classical, foundation, irregular, ml_tabular, statistical, transformer_sota, tslib_sota |
 | Tasks | task1_outcome, task2_forecast, task3_risk_adjust |
 

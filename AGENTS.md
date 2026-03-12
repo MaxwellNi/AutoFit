@@ -32,8 +32,12 @@ ml_tabular single-horizon). All prior Phase 7/8 results are **DEPRECATED**.
 - **Ablations**: 4 per task — `core_only`, `core_text`, `core_edgar`, `full` (task3: 3, no core_text)
 - **Tasks**: `task1_outcome`, `task2_forecast`, `task3_risk_adjust`
 - **Canonical Output Dir**: `runs/benchmarks/block3_phase9_fair/`
-- **Validated Progress**: 66 metrics.json files, 5,083 valid records, 50 models materialized
-- **SLURM Scripts**: `.slurm_scripts/phase9/` (66 scripts + submission helper)
+- **Validated Progress**: 110 metrics.json files, 9,180 valid records, 95 models with results
+- **Complete Models**: 82 (104/104 conditions) — 80 Phase 9 + V737/V738 Phase 10 (INVALID)
+- **Partial Models**: 13 (gap-fill PENDING)
+- **SLURM Status**: 0 RUNNING, 136 PENDING (npin=47, cfisch=89)
+- **Text Embeddings**: ❌ EMPTY — 4 generation jobs PENDING, all core_text ≡ core_only
+- **SLURM Scripts**: `.slurm_scripts/phase9/` (66 scripts), `.slurm_scripts/phase10/` (various), `.slurm_scripts/phase11/` (11+), `.slurm_scripts/phase12/` (44 scripts)
 - **Live Results**: See [docs/BLOCK3_RESULTS.md](docs/BLOCK3_RESULTS.md)
 - **Full Status**: See [docs/BLOCK3_MODEL_STATUS.md](docs/BLOCK3_MODEL_STATUS.md)
 
@@ -152,7 +156,15 @@ From `scripts/block3_profile_data.py`:
 19. ✅ V73 multi-agent coordination (Recon/Scout/Composer/Critic blackboard protocol)
 20. ✅ V72 root cause analysis (6 root causes, GPU gate fix)
 21. ✅ Phase 7/8 benchmark — deprecated (4 critical bugs found)
-22. ✅ Phase 9 clean results: 5,083 valid records, 50 models in `block3_phase9_fair/`
-23. ⏳ Phase 9 re-runs: 66 SLURM scripts ready, targeting 100 models × 104 conditions
-24. ⏳ TCAV-style concept importance analysis
-25. ⏳ Final leaderboard + paper tables (after Phase 9 completes)
+22. ✅ Phase 9 results: 8,972 records, 80 complete models (104/104), 13 partial
+23. ✅ Phase 10 V737/V738: both 104/104 but INVALID (5-layer oracle leakage)
+24. ✅ Phase 11: 14 TSLib SOTA + V739 AutoFit registered, SLURM scripts ready
+25. ✅ Text embedding OOM fix (Arrow string → .astype("object"), commit f67d69e)
+26. ✅ Code audit (2026-03-12): No data leakage, no critical bugs, 0 anomalous metrics
+27. ⏳ Text embedding generation: 4 jobs PENDING (runs/text_embeddings/ EMPTY)
+28. ⏳ Phase 12 core_text/full re-runs: 40 scripts ready, blocked on text embeddings
+29. ⏳ Gap-fill: 34 jobs PENDING for 7 partial models
+30. ⏳ V739 benchmark: 18 jobs PENDING (11 npin gpu + 7 cfisch l40s)
+31. ⏳ Phase 11 TSLib: 11 cfisch jobs PENDING (14 new models)
+32. ⏳ TCAV-style concept importance analysis
+33. ⏳ Final leaderboard + paper tables (after Phase 12 completes)
