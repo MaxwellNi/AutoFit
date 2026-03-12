@@ -29,7 +29,7 @@ ml_tabular single-horizon). All prior Phase 7/8 results are **DEPRECATED**.
   - `tslib_sota` (34): TimeFilter, WPMixer, MSGNet, Crossformer, SCINet, CFPT, DeformableTST, ModernTCN, PathFormer, SEMPO, TimePerceiver, TimeBridge, TQNet, PIR, CARD, PDF, TimeRecipe, DUET, SRSNet, etc.
   - `autofit` (1): V739 (validation-based) — prior versions V734–V738 retired
 - **Platform**: ULHPC Iris — GPU (V100 32GB, ~756GB RAM), bigmem (3TB, 112 CPUs), QOS `normal` (2-day wall)
-- **Ablations**: 4 per task — `core_only`, `core_text`, `core_edgar`, `full` (task3: 3, no core_text)
+- **Ablations**: 4 per task — `core_only`, `core_only_seed2`, `core_edgar`, `core_edgar_seed2` (task3: 3, no core_only_seed2)
 - **Tasks**: `task1_outcome`, `task2_forecast`, `task3_risk_adjust`
 - **Canonical Output Dir**: `runs/benchmarks/block3_phase9_fair/`
 - **Validated Progress**: 88 metrics.json files, 8,660 records, 90 models
@@ -38,7 +38,7 @@ ml_tabular single-horizon). All prior Phase 7/8 results are **DEPRECATED**.
 - **Partial Models**: 12 (gap-fill PENDING)
 - **SLURM Status**: 0 RUNNING, 78 PENDING (npin=47, cfisch=31) — cluster GPU congestion
 - **Deprecated Outputs**: 26 dirs archived to `runs/benchmarks/_deprecated_archive/`
-- **Text Embeddings**: ❌ EMPTY — 4 generation jobs PENDING, all core_text ≡ core_only
+- **Text Embeddings**: ❌ EMPTY — 4 generation jobs PENDING; former core_text/full dirs reorganized as 2-seed replication (core_only_seed2/core_edgar_seed2)
 - **SLURM Scripts**: `.slurm_scripts/phase9/` (66 scripts), `.slurm_scripts/phase10/` (various), `.slurm_scripts/phase11/` (11+), `.slurm_scripts/phase12/` (44 scripts)
 - **Live Results**: See [docs/BLOCK3_RESULTS.md](docs/BLOCK3_RESULTS.md)
 - **Full Status**: See [docs/BLOCK3_MODEL_STATUS.md](docs/BLOCK3_MODEL_STATUS.md)
@@ -167,7 +167,7 @@ From `scripts/block3_profile_data.py`:
 28. ✅ V739 validated clean (2026-03-12): full code audit, zero oracle references, proper val_raw
 29. ✅ Deprecated outputs archived (2026-03-12): 26 dirs → `_deprecated_archive/`
 30. ⏳ Text embedding generation: 4 jobs PENDING (runs/text_embeddings/ EMPTY)
-31. ⏳ Phase 12 core_text/full re-runs: 40 scripts ready, blocked on text embeddings
+31. ⏳ Phase 12 real core_text/full re-runs: 40 scripts ready, blocked on text embeddings (existing dirs renamed to seed2)
 32. ⏳ Gap-fill: 34 jobs PENDING for 12 partial models
 33. ⏳ V739 benchmark: 18 jobs PENDING (11 npin gpu + 7 cfisch l40s)
 34. ⏳ Phase 11 TSLib: 11 cfisch jobs PENDING (14 new models)

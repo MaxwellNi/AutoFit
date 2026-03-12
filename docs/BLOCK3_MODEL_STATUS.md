@@ -31,10 +31,14 @@ Full root cause analysis: see `docs/BLOCK3_RESULTS.md`.
 
 | Task | Targets | Horizons | Ablations | Conditions |
 |---|---:|---:|---:|---:|
-| task1_outcome | 3 (funding_raised_usd, investors_count, is_funded) | 4 (1,7,14,30) | 4 (core_only, core_text, core_edgar, full) | 48 |
+| task1_outcome | 3 (funding_raised_usd, investors_count, is_funded) | 4 (1,7,14,30) | 4 (core_only, core_only_seed2, core_edgar, core_edgar_seed2) | 48 |
 | task2_forecast | 2 (funding_raised_usd, investors_count) | 4 | 4 | 32 |
-| task3_risk_adjust | 2 (funding_raised_usd, investors_count) | 4 | 3 (core_only, core_edgar, full — **no core_text**) | 24 |
+| task3_risk_adjust | 2 (funding_raised_usd, investors_count) | 4 | 3 (core_only, core_edgar, core_edgar_seed2 — **no core_only_seed2**) | 24 |
 | **Total** | | | | **104** |
+
+> **Note (2026-03-13)**: Original `core_text` renamed to `core_only_seed2`, `full` renamed to `core_edgar_seed2`.
+> These serve as independent 2-seed replication runs (text embeddings were never generated, so core_text ≡ core_only).
+> See `REPLICATION_MANIFEST.json` in benchmark root for full audit trail.
 
 ## Active SLURM Jobs (2026-03-12)
 
@@ -55,7 +59,7 @@ Top GPU consumer: elavdusinovi (51 running GPU jobs). Not a configuration issue 
 | Gap-fill (6 tslib models) | cfisch | gpu | 11 | ⏳ PENDING (Priority) |
 | Phase 11 TSLib SOTA (14 models) | cfisch | gpu | 11 | ⏳ PENDING (Priority) |
 | Text embedding generation | npin+cfisch | gpu+l40s | 4 | ⏳ PENDING (Priority) |
-| **Phase 12 re-runs** (core_text/full) | — | — | 40 scripts ready | 🚫 Blocked on text embeddings |
+| **Phase 12 re-runs** (real core_text/full) | — | — | 40 scripts ready | 🚫 Blocked on text embeddings |
 
 ### RECENTLY COMPLETED
 
@@ -143,8 +147,10 @@ V739: 0/104 — 18 SLURM jobs PENDING (11 npin gpu + 7 cfisch l40s). Future iter
 |----------|----------------:|------------------:|--------|
 | core_only | ~80-100 GB | 128G | ✅ sufficient |
 | core_edgar | ~140-160 GB | 192G | ✅ sufficient |
-| core_text | ~200-268 GB | 384G | ✅ (was OOM at 128G, 192G, 256G) |
-| full | ~200-268 GB | 384G | ✅ (was OOM at 128G, 192G, 256G) |
+| core_only_seed2 (was core_text) | ~80-100 GB | 128G | ✅ (identical to core_only — text embeddings absent) |
+| core_edgar_seed2 (was full) | ~140-160 GB | 192G | ✅ (identical to core_edgar — text embeddings absent) |
+
+> When real text embeddings are generated, core_text/full ablations will need 384G (RSS ~200-268 GB).
 
 ## Phase History
 
@@ -168,8 +174,8 @@ V739: 0/104 — 18 SLURM jobs PENDING (11 npin gpu + 7 cfisch l40s). Future iter
 | Root cause | Arrow string OOM (2.55 TiB allocation on .loc[] with ArrowStringArray) |
 | Fix | `.astype("object")` + per-field truncation (commit f67d69e) |
 | Pending jobs | 4 generation jobs PENDING (2 gpu + 2 l40s) |
-| Impact | All existing core_text ≡ core_only, full ≡ core_edgar (text features = raw numeric only) |
-| Re-run plan | 40 Phase 12 scripts in `.slurm_scripts/phase12/rerun/` |
+| Impact | Existing core_text/full renamed to core_only_seed2/core_edgar_seed2 (2-seed replication) |
+| Re-run plan | 40 Phase 12 scripts in `.slurm_scripts/phase12/rerun/` (for real core_text/full after embeddings) |
 
 ## Code Audit (2026-03-12) ✅
 
