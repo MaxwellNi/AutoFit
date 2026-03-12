@@ -32,12 +32,13 @@ ml_tabular single-horizon). All prior Phase 7/8 results are **DEPRECATED**.
 - **Ablations**: 4 per task — `core_only`, `core_text`, `core_edgar`, `full` (task3: 3, no core_text)
 - **Tasks**: `task1_outcome`, `task2_forecast`, `task3_risk_adjust`
 - **Canonical Output Dir**: `runs/benchmarks/block3_phase9_fair/`
-- **Validated Progress**: 110 metrics.json files, 8,660 valid records (excl. oracle-leaked AutoFit), 90 valid models
-- **Valid Complete Models**: 77 (104/104 conditions) — all non-AutoFit Phase 9 models
+- **Validated Progress**: 88 metrics.json files (Phase 9), 8,660 valid records (excl. oracle-leaked AutoFit), 90 valid models
+- **Valid Complete Models**: 78 (104/104 conditions) — includes NegBinGLM at 16/16
 - **INVALID AutoFit**: V734, V735, V736 (Phase 9), V737, V738 (Phase 10) — ALL oracle test-set leakage
-- **V739 Status**: 0/104 — 18 SLURM jobs PENDING, 0 results landed
-- **Partial Models**: 13 (gap-fill PENDING)
-- **SLURM Status**: 0 RUNNING, 125 PENDING (npin=47, cfisch=78)
+- **V739 Status**: 0/104 — 18 SLURM jobs PENDING (11 npin gpu + 7 cfisch l40s), 0 results landed
+- **Partial Models**: 12 (gap-fill PENDING)
+- **SLURM Status**: 0 RUNNING, 78 PENDING (npin=47, cfisch=31) — cluster GPU congestion
+- **Deprecated Outputs**: 26 dirs archived to `runs/benchmarks/_deprecated_archive/`
 - **Text Embeddings**: ❌ EMPTY — 4 generation jobs PENDING, all core_text ≡ core_only
 - **SLURM Scripts**: `.slurm_scripts/phase9/` (66 scripts), `.slurm_scripts/phase10/` (various), `.slurm_scripts/phase11/` (11+), `.slurm_scripts/phase12/` (44 scripts)
 - **Live Results**: See [docs/BLOCK3_RESULTS.md](docs/BLOCK3_RESULTS.md)
@@ -158,16 +159,18 @@ From `scripts/block3_profile_data.py`:
 19. ✅ V73 multi-agent coordination (Recon/Scout/Composer/Critic blackboard protocol)
 20. ✅ V72 root cause analysis (6 root causes, GPU gate fix)
 21. ✅ Phase 7/8 benchmark — deprecated (4 critical bugs found)
-22. ✅ Phase 9 results: 8,660 valid records, 77 valid complete (excl. V734/V735/V736 oracle-leaked)
+22. ✅ Phase 9 results: 8,660 valid records, 78 valid complete (excl. V734/V735/V736 oracle-leaked)
 23. ✅ Phase 10 V737/V738: both 104/104 but INVALID (5-layer oracle leakage)
 24. ✅ Phase 11: 14 TSLib SOTA + V739 AutoFit registered, SLURM scripts ready
 25. ✅ Text embedding OOM fix (Arrow string → .astype("object"), commit f67d69e)
 26. ✅ Code audit (2026-03-12): No data leakage, no critical bugs, 0 anomalous metrics
-27. ✅ V734/V735/V736 confirmed oracle-leaked (2026-03-13): ALL use test-set oracle tables
-27. ⏳ Text embedding generation: 4 jobs PENDING (runs/text_embeddings/ EMPTY)
-28. ⏳ Phase 12 core_text/full re-runs: 40 scripts ready, blocked on text embeddings
-29. ⏳ Gap-fill: 34 jobs PENDING for 7 partial models
-30. ⏳ V739 benchmark: 18 jobs PENDING (11 npin gpu + 7 cfisch l40s)
-31. ⏳ Phase 11 TSLib: 11 cfisch jobs PENDING (14 new models)
-32. ⏳ TCAV-style concept importance analysis
-33. ⏳ Final leaderboard + paper tables (after Phase 12 completes)
+27. ✅ V734-V738 ALL confirmed oracle-leaked (2026-03-13): test-set oracle tables
+28. ✅ V739 validated clean (2026-03-15): full code audit, zero oracle references, proper val_raw
+29. ✅ Deprecated outputs archived (2026-03-15): 26 dirs → `_deprecated_archive/`
+30. ⏳ Text embedding generation: 4 jobs PENDING (runs/text_embeddings/ EMPTY)
+31. ⏳ Phase 12 core_text/full re-runs: 40 scripts ready, blocked on text embeddings
+32. ⏳ Gap-fill: 34 jobs PENDING for 12 partial models
+33. ⏳ V739 benchmark: 18 jobs PENDING (11 npin gpu + 7 cfisch l40s)
+34. ⏳ Phase 11 TSLib: 11 cfisch jobs PENDING (14 new models)
+35. ⏳ TCAV-style concept importance analysis
+36. ⏳ Final leaderboard + paper tables (after Phase 12 completes)

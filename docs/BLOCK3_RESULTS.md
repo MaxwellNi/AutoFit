@@ -1,20 +1,20 @@
 # Block 3 Benchmark Results
 
-> Last updated: 2026-03-13 (V734-V738 ALL invalidated — oracle test-set leakage confirmed for V734/V735/V736)
+> Last updated: 2026-03-15 (78 valid complete, deprecated outputs archived, V739 confirmed clean)
 > Canonical results dir: `runs/benchmarks/block3_phase9_fair/`
 > Phase 7/8 results are **DEPRECATED** (4 critical bugs fixed)
 > **Data integrity audit**: DEEP ROOT CAUSE ANALYSIS 2026-03-12 — 5-layer oracle leakage chain identified (see §Oracle Root Cause below)
 > **Code audit**: 2026-03-12 — No critical bugs, no data leakage, no anomalous metrics
 > **V734-V738 audit (2026-03-13)**: ALL 5 AutoFit versions use oracle tables from **test-set** metrics — ALL INVALID
 
-**Generated**: 2026-03-13
-**Benchmark Dir**: `block3_phase9_fair` (Phase 9) + `block3_phase10/v737/`, `block3_phase10/v738/` (Phase 10)
+**Generated**: 2026-03-15
+**Benchmark Dir**: `block3_phase9_fair` (Phase 9, canonical) — deprecated outputs in `_deprecated_archive/`
 **Total Records (all)**: 9,180 (Phase 9: 8,972 + Phase 10: 208)
 **Valid Records**: 8,660 (excluding V734/V735/V736 Phase 9 + V737/V738 Phase 10)
 **Invalid Records (oracle leak)**: 520 (V734=104, V735=104, V736=104, V737=104, V738=104)
 **Phase 11 Models**: 14 new SOTA + V739 (ALL PENDING in SLURM queue)
-**Valid Complete Models (104/104 conditions)**: 77
-**Partial Models**: 13 (Phase 9 gap-fill PENDING)
+**Valid Complete Models (104/104 conditions)**: 78
+**Partial Models**: 12 (Phase 9 gap-fill PENDING)
 **INVALID AutoFit**: V734, V735, V736, V737, V738 (ALL oracle-leaked)
 **V739 Status**: 0/104 — 18 SLURM jobs PENDING, 0 results landed
 **Text Embeddings**: ❌ EMPTY — 4 generation jobs PENDING. All core_text ≡ core_only.
@@ -26,8 +26,8 @@
 | Total metric records (all) | 9,180 |
 | **Valid metric records** | **8,660** |
 | Invalid records (oracle leak) | 520 (V734+V735+V736+V737+V738) |
-| **Valid complete models (104/104)** | **77** |
-| Phase 9 partial models (<104) | 13 |
+| **Valid complete models (104/104)** | **78** |
+| Phase 9 partial models (<104) | 12 |
 | Phase 9 unique models (total) | 93 (90 valid + 3 invalid) |
 | INVALID AutoFit (Phase 9) | V734=104, V735=104, V736=104 |
 | INVALID AutoFit (Phase 10) | V737=104, V738=104 |

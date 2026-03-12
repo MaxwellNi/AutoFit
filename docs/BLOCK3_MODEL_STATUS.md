@@ -1,6 +1,6 @@
 # Block 3 Model Benchmark Status
 
-> Last updated: 2026-03-13 (V734-V738 ALL invalidated — oracle test-set leakage)
+> Last updated: 2026-03-15 (V734-V738 ALL invalidated, 78 valid complete, deprecated outputs archived)
 > Full results: `docs/BLOCK3_RESULTS.md`
 
 ## Snapshot
@@ -13,12 +13,12 @@
 | **Valid metric records** | **8,660** (excl. V734/V735/V736/V737/V738) |
 | Invalid records (oracle leak) | 520 (p9: V734+V735+V736=312, p10: V737+V738=208) |
 | Unique models with results | 95 (90 valid + 5 invalid) |
-| **Valid complete (104/104)** | **77** |
-| Partial (<104) | **13** |
+| **Valid complete (104/104)** | **78** |
+| Partial (<104) | **12** |
 | **INVALID AutoFit (ALL oracle-leaked)** | V734, V735, V736, V737, V738 |
 | Phase 11 new models | 14 TSLib SOTA + V739 validation-based AutoFit |
 | Total registered models | **42 tslib_sota + 9 deep + 23 transformer + 14 foundation + 4 irregular + 15 stat + 11 ml_tabular + 6 autofit = 127** |
-| Active SLURM jobs | **0 RUNNING, 125 PENDING** (npin=47, cfisch=78) |
+| Active SLURM jobs | **0 RUNNING, 78 PENDING** (npin=47, cfisch=31) |
 | Text embeddings | ❌ EMPTY — 4 generation jobs PENDING |
 | V739 results | ❌ 0/104 — all 18 jobs PENDING (11 gpu + 7 l40s), 0 results landed |
 | **AutoFit integrity** | ❌ V734-V738 ALL invalid; ✅ V739 clean (validation-based, no oracle) |
@@ -52,13 +52,14 @@ See `docs/BLOCK3_RESULTS.md` for the complete 5-layer root cause analysis.
 | task3_risk_adjust | 2 (funding_raised_usd, investors_count) | 4 | 3 (core_only, core_edgar, full — **no core_text**) | 24 |
 | **Total** | | | | **104** |
 
-## Active SLURM Jobs (2026-03-12 ~21:00 UTC)
+## Active SLURM Jobs (2026-03-15 ~12:00 UTC)
 
 ### RUNNING: 0 jobs
 
-All jobs stuck in PENDING (Priority) — cluster heavily loaded.
+All 78 PENDING jobs stuck behind other users (GPU partition: 78 running from other users, 504 total PENDING).
+Top GPU consumer: elavdusinovi (51 running GPU jobs). Not a configuration issue — pure cluster congestion.
 
-### PENDING: 136 jobs (npin=47, cfisch=89)
+### PENDING: 78 jobs (npin=47, cfisch=31)
 
 | Category | Account | Partition | Jobs | Status |
 |----------|---------|-----------|-----:|--------|
@@ -66,7 +67,8 @@ All jobs stuck in PENDING (Priority) — cluster heavily loaded.
 | V739 AutoFit (l40s) | cfisch | l40s | 7 | ⏳ PENDING (Priority) |
 | Gap-fill (Chronos2, TTM) | npin | gpu | 10 | ⏳ PENDING (Priority) |
 | Gap-fill (ETSformer, LightTS, Pyraformer, Reformer) | npin | gpu | 24 | ⏳ PENDING (Priority) |
-| NegBinomGLM gap-fill | cfisch | bigmem | 11 | ⏳ PENDING (Priority) |
+| NegBinomGLM gap-fill | cfisch | bigmem | 0 | ✅ COMPLETED (in NegativeBinomialGLM 16/104) |
+| Gap-fill (6 tslib models) | cfisch | gpu | 11 | ⏳ PENDING (Priority) |
 | Phase 11 TSLib SOTA (14 models) | cfisch | gpu | 11 | ⏳ PENDING (Priority) |
 | Text embedding generation | npin+cfisch | gpu+l40s | 4 | ⏳ PENDING (Priority) |
 | **Phase 12 re-runs** (core_text/full) | — | — | 40 scripts ready | 🚫 Blocked on text embeddings |
@@ -80,38 +82,37 @@ All jobs stuck in PENDING (Priority) — cluster heavily loaded.
 | V737 cfisch (5226239-43) | 5 | 62-115 min | ✅ merged into V737 results |
 | tsC recovery (5221718-22) | 5 | up to 2d | ✅ ETSformer/LightTS/Pyraformer/Reformer → 52/104 |
 
-## Model Completion (77 valid complete + 13 partial + 5 INVALID)
+## Model Completion (78 valid complete + 12 partial + 5 INVALID)
 
-### Valid Complete (77 models × 104/104 in Phase 9)
+### Valid Complete (78 models × 104/104 in Phase 9)
 
 | Category | Count | Models |
 |---|---:|---|
 | deep_classical | 9 | NBEATS, NHITS, TFT, DeepAR, GRU, LSTM, TCN, MLP, DilatedRNN |
 | foundation | 12 | Chronos, ChronosBolt, Timer, TimeMoE, MOMENT, TimesFM, Sundial, TimesFM2, LagLlama, Moirai, MoiraiLarge, Moirai2 |
 | irregular | 4 | GRU-D, SAITS, BRITS, CSDI |
-| ml_tabular | 10 | LightGBM, XGBoost, CatBoost, RandomForest, ExtraTrees, HistGradientBoosting, MeanPredictor, SeasonalNaive, LightGBMTweedie, XGBoostPoisson |
+| ml_tabular | 11 | LightGBM, XGBoost, CatBoost, RandomForest, ExtraTrees, HistGradientBoosting, MeanPredictor, SeasonalNaive, LightGBMTweedie, XGBoostPoisson, NegativeBinomialGLM (16/16 binary-only) |
 | statistical | 15 | AutoARIMA, AutoETS, AutoTheta, MSTL, SF_SeasonalNaive, AutoCES, CrostonClassic, CrostonOptimized, CrostonSBA, DynamicOptimizedTheta, HistoricAverage, Holt, HoltWinters, Naive, WindowAverage |
 | transformer_sota | 23 | PatchTST, iTransformer, TimesNet, TSMixer, Informer, Autoformer, FEDformer, VanillaTransformer, TiDE, NBEATSx, xLSTM, TimeLLM, DeepNPTS, BiTCN, KAN, RMoK, SOFTS, StemGNN, DLinear, NLinear, TimeMixer, TimeXer, TSMixerx |
 | tslib_sota | 4 | WPMixer, FITS, KANAD, CATS |
 | ~~autofit~~ | 0 | ~~AutoFitV734, AutoFitV735, AutoFitV736~~ → ALL INVALID (see below) |
 
-### Partial (13 models in Phase 9)
+### Partial (12 models in Phase 9)
 
 | Model | Records | Category | Status |
 |---|---:|---|---|
 | Chronos2 | 58 | foundation | ⏳ 5 gap-fill jobs PENDING |
 | TTM | 58 | foundation | ⏳ 5 gap-fill jobs PENDING |
-| Crossformer | 52 | tslib_sota | ⏳ gap-fill needed |
-| MSGNet | 52 | tslib_sota | ❌ tsA TIMEOUT |
-| PAttn | 52 | tslib_sota | ❌ tsA TIMEOUT |
-| MambaSimple | 52 | tslib_sota | ❌ tsA TIMEOUT |
-| TimeFilter | 52 | tslib_sota | ❌ constant pred |
-| MultiPatchFormer | 52 | tslib_sota | ❌ constant pred |
-| ETSformer | 52 | tslib_sota | ⏳ 6 gap-fill jobs PENDING |
-| LightTS | 52 | tslib_sota | ⏳ 6 gap-fill jobs PENDING |
-| Pyraformer | 52 | tslib_sota | ⏳ 6 gap-fill jobs PENDING |
-| Reformer | 52 | tslib_sota | ⏳ 6 gap-fill jobs PENDING |
-| NegativeBinomialGLM | 16 | ml_tabular | ⏳ 11 gap-fill jobs PENDING (bigmem) |
+| Crossformer | 52 | tslib_sota | ⏳ gap-fill PENDING (cfisch) |
+| MSGNet | 52 | tslib_sota | ⏳ gap-fill PENDING (cfisch) — was tsA TIMEOUT |
+| PAttn | 52 | tslib_sota | ⏳ gap-fill PENDING (cfisch) — was tsA TIMEOUT |
+| MambaSimple | 52 | tslib_sota | ⏳ gap-fill PENDING (cfisch) |
+| TimeFilter | 52 | tslib_sota | ⏳ gap-fill PENDING (cfisch) — ⚠️ constant pred on first 52 |
+| MultiPatchFormer | 52 | tslib_sota | ⏳ gap-fill PENDING (cfisch) — ⚠️ constant pred on first 52 |
+| ETSformer | 52 | tslib_sota | ⏳ 6 gap-fill jobs PENDING (npin) |
+| LightTS | 52 | tslib_sota | ⏳ 6 gap-fill jobs PENDING (npin) |
+| Pyraformer | 52 | tslib_sota | ⏳ 6 gap-fill jobs PENDING (npin) |
+| Reformer | 52 | tslib_sota | ⏳ 6 gap-fill jobs PENDING (npin) |
 
 ### INVALID AutoFit (ALL oracle-leaked — V734 through V738)
 
