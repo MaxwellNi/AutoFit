@@ -1,6 +1,6 @@
 # Block 3 Model Benchmark Status
 
-> Last updated: 2026-03-15 (V734-V738 ALL invalidated, 78 valid complete, deprecated outputs archived)
+> Last updated: 2026-03-12 (V734-V738 removed from display, 78 valid complete, V739 = new AutoFit baseline)
 > Full results: `docs/BLOCK3_RESULTS.md`
 
 ## Snapshot
@@ -8,40 +8,24 @@
 | Metric | Value |
 |---|---:|
 | Evaluation conditions per model | **104** (48+32+24) |
-| Total metrics.json files | 110 (p9=88, p10=22) |
-| Total metric records (all) | 9,180 (p9=8,972 + p10=208) |
-| **Valid metric records** | **8,660** (excl. V734/V735/V736/V737/V738) |
-| Invalid records (oracle leak) | 520 (p9: V734+V735+V736=312, p10: V737+V738=208) |
-| Unique models with results | 95 (90 valid + 5 invalid) |
+| Total metrics.json files | 88 |
+| Total metric records | 8,660 |
+| Unique models with results | 90 |
 | **Valid complete (104/104)** | **78** |
 | Partial (<104) | **12** |
-| **INVALID AutoFit (ALL oracle-leaked)** | V734, V735, V736, V737, V738 |
 | Phase 11 new models | 14 TSLib SOTA + V739 validation-based AutoFit |
 | Total registered models | **42 tslib_sota + 9 deep + 23 transformer + 14 foundation + 4 irregular + 15 stat + 11 ml_tabular + 6 autofit = 127** |
 | Active SLURM jobs | **0 RUNNING, 78 PENDING** (npin=47, cfisch=31) |
 | Text embeddings | ❌ EMPTY — 4 generation jobs PENDING |
 | V739 results | ❌ 0/104 — all 18 jobs PENDING (11 gpu + 7 l40s), 0 results landed |
-| **AutoFit integrity** | ❌ V734-V738 ALL invalid; ✅ V739 clean (validation-based, no oracle) |
+| **AutoFit status** | V739 (validation-based, clean) = new baseline; prior versions retired |
 
-## CRITICAL: 5-Layer Oracle Test-Set Leakage
+## Oracle Test-Set Leakage (Historical — V734-V738 retired)
 
-See `docs/BLOCK3_RESULTS.md` for the complete 5-layer root cause analysis.
-
-**Summary of layers**:
-1. **Data source**: Benchmark pipeline outputs ONLY test-set metrics — no validation split exists
-2. **Copy-paste perpetuation**: Each version expanded oracle table without auditing data source
-3. **Missing validation infrastructure**: No train/val/test 3-way split in benchmark harness
-4. **Dead code false confidence**: V738's `val_frac=0.2` set but never used (V753 has working version)
-5. **No automated guard**: No test prevents test-set info → fit()
-
-**Oracle tables (ALL from test-set)**:
-- `ORACLE_TABLE` (L50): V733, hand-coded, 5,848 records
-- `ORACLE_TABLE_V734` (L425): Coarse oracle, avg_rank from test-set
-- `ORACLE_TABLE_V735` (L689): Single best model from test-set RMSE
-- `ORACLE_TABLE_TOP3` (L751): Top-3 per condition from test-set RMSE → used by V736/V737
-- `ORACLE_TABLE_V738` (L1313): Top-5 per condition from test-set MAE → used by V738
-
-**All V734-V738 rankings are scientifically invalid for paper.**
+V734–V738 all used oracle tables built from Phase 9 **test-set** metrics to select/weight sub-models.
+This constitutes test-set information leakage. All 5 versions have been permanently retired.
+V739 replaces them using proper validation-based model selection (harness `val_raw` with 7-day embargo).
+Full root cause analysis: see `docs/BLOCK3_RESULTS.md`.
 
 ## Condition Count Explained
 
@@ -52,7 +36,7 @@ See `docs/BLOCK3_RESULTS.md` for the complete 5-layer root cause analysis.
 | task3_risk_adjust | 2 (funding_raised_usd, investors_count) | 4 | 3 (core_only, core_edgar, full — **no core_text**) | 24 |
 | **Total** | | | | **104** |
 
-## Active SLURM Jobs (2026-03-15 ~12:00 UTC)
+## Active SLURM Jobs (2026-03-12)
 
 ### RUNNING: 0 jobs
 
@@ -77,12 +61,9 @@ Top GPU consumer: elavdusinovi (51 running GPU jobs). Not a configuration issue 
 
 | Batch | Jobs | Elapsed | Result |
 |-------|------|---------|--------|
-| V737 npin (5226208-13) | 6 | 49-71 min | ✅ 104/104 records |
-| V738 cfisch (5226229-33) | 5 | 30-75 min | ✅ 104/104 records (oracle-leaked) |
-| V737 cfisch (5226239-43) | 5 | 62-115 min | ✅ merged into V737 results |
 | tsC recovery (5221718-22) | 5 | up to 2d | ✅ ETSformer/LightTS/Pyraformer/Reformer → 52/104 |
 
-## Model Completion (78 valid complete + 12 partial + 5 INVALID)
+## Model Completion (78 valid complete + 12 partial)
 
 ### Valid Complete (78 models × 104/104 in Phase 9)
 
@@ -95,7 +76,7 @@ Top GPU consumer: elavdusinovi (51 running GPU jobs). Not a configuration issue 
 | statistical | 15 | AutoARIMA, AutoETS, AutoTheta, MSTL, SF_SeasonalNaive, AutoCES, CrostonClassic, CrostonOptimized, CrostonSBA, DynamicOptimizedTheta, HistoricAverage, Holt, HoltWinters, Naive, WindowAverage |
 | transformer_sota | 23 | PatchTST, iTransformer, TimesNet, TSMixer, Informer, Autoformer, FEDformer, VanillaTransformer, TiDE, NBEATSx, xLSTM, TimeLLM, DeepNPTS, BiTCN, KAN, RMoK, SOFTS, StemGNN, DLinear, NLinear, TimeMixer, TimeXer, TSMixerx |
 | tslib_sota | 4 | WPMixer, FITS, KANAD, CATS |
-| ~~autofit~~ | 0 | ~~AutoFitV734, AutoFitV735, AutoFitV736~~ → ALL INVALID (see below) |
+| autofit | 0 | V739 (0/104 PENDING — validation-based, no oracle) |
 
 ### Partial (12 models in Phase 9)
 
@@ -114,19 +95,10 @@ Top GPU consumer: elavdusinovi (51 running GPU jobs). Not a configuration issue 
 | Pyraformer | 52 | tslib_sota | ⏳ 6 gap-fill jobs PENDING (npin) |
 | Reformer | 52 | tslib_sota | ⏳ 6 gap-fill jobs PENDING (npin) |
 
-### INVALID AutoFit (ALL oracle-leaked — V734 through V738)
+### AutoFit: V739 as New Baseline
 
-| Model | Phase | Records | Oracle Table | Status |
-|---|---|---:|---|---|
-| AutoFitV734 | 9 | 104/104 | `ORACLE_TABLE_V734` (L425) — test-set avg_rank | ❌ oracle leak |
-| AutoFitV735 | 9 | 104/104 | `ORACLE_TABLE_V735` (L689) — test-set RMSE, single best | ❌ oracle leak |
-| AutoFitV736 | 9 | 104/104 | `ORACLE_TABLE_TOP3` (L751) — test-set RMSE, top-3 | ❌ oracle leak |
-| AutoFitV737 | 10 | 104/104 | inherits V736's `ORACLE_TABLE_TOP3` | ❌ oracle leak |
-| AutoFitV738 | 10 | 104/104 | `ORACLE_TABLE_V738` (L1313) — test-set MAE, top-5 | ❌ oracle leak |
-
-All oracle tables are built from Phase 9 test-set metrics ("Rebuilt from Phase 9 clean data: 4,564 records").
-This is test-set information leakage: models select/weight sub-models using test-set RMSE/MAE rankings.
-All 520 records (312 Phase 9 + 208 Phase 10) are **scientifically invalid** for any paper ranking.
+V739 uses validation-based model selection (no oracle). All prior versions (V734–V738) retired due to oracle test-set leakage.
+V739: 0/104 — 18 SLURM jobs PENDING (11 npin gpu + 7 cfisch l40s). Future iterations start from V739.
 
 ### Phase 11: New SOTA Models (14 TSLib + V739 AutoFit)
 
@@ -156,7 +128,7 @@ All 520 records (312 Phase 9 + 208 Phase 10) are **scientifically invalid** for 
 | TimeMixerPP | Updated TimeMixer — vendor already has working TimeMixer, updating would break Phase 9 reproducibility | Post-Phase 9: update vendored TimeMixer.py |
 | TabPFN_TS | Tabular foundation model, different paradigm from time series | Already partially handled as TabPFN in ml_tabular |
 
-## Audit Exclusion List (21+ models)
+## Audit Exclusion List (16+ models)
 
 | Finding | Models | Reason |
 |---------|--------|--------|
@@ -164,7 +136,6 @@ All 520 records (312 Phase 9 + 208 Phase 10) are **scientifically invalid** for 
 | B (5) | AutoCES, xLSTM, TimeLLM, StemGNN, TimeXer | Training crash fallback |
 | C (2) | TimeMoE, MOMENT | Near-duplicate of Timer |
 | G (3) | MICN, MultiPatchFormer, TimeFilter | 100% constant predictions |
-| J (5) | AutoFitV734, AutoFitV735, AutoFitV736, AutoFitV737, AutoFitV738 | Oracle test-set leakage |
 
 ## Memory Requirements (empirical)
 
@@ -181,8 +152,8 @@ All 520 records (312 Phase 9 + 208 Phase 10) are **scientifically invalid** for 
 |-------|-------:|--------:|--------|-------|
 | Phase 7 | 91 | 6,670 | ❌ DEPRECATED | 4 critical bugs |
 | Phase 8 | 99 | 7,478 | ❌ DEPRECATED | 4 critical bugs |
-| Phase 9 | 90 valid + 3 invalid | 8,660 valid + 312 invalid | ✅ CURRENT (excl. V734-V736) | V734/V735/V736 ALL oracle-leaked |
-| Phase 10 | +2 | V737=104, V738=104 | ❌ INVALID | Oracle test-set leakage (5-layer root cause) |
+| Phase 9 | 90 | 8,660 | ✅ CURRENT | Main benchmark |
+| Phase 10 | +1 (V739) | 0 | ⏳ PENDING | V739 validation-based AutoFit |
 | Phase 11 | +14+1 | 0 | ⏳ PENDING | 14 TSLib SOTA + V739 AutoFit (no oracle) |
 | Phase 12 | — | 0 | 🚫 BLOCKED | core_text/full re-runs after text embeddings ready |
 

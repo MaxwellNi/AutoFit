@@ -27,15 +27,14 @@ ml_tabular single-horizon). All prior Phase 7/8 results are **DEPRECATED**.
   - `foundation` (11): Chronos, ChronosBolt, Chronos2, Moirai, etc.
   - `irregular` (4): GRU-D, SAITS, BRITS, CSDI
   - `tslib_sota` (34): TimeFilter, WPMixer, MSGNet, Crossformer, SCINet, CFPT, DeformableTST, ModernTCN, PathFormer, SEMPO, TimePerceiver, TimeBridge, TQNet, PIR, CARD, PDF, TimeRecipe, DUET, SRSNet, etc.
-  - `autofit` (1 valid): V739 (validation-based) — V734/V735/V736 are oracle-leaked and INVALID
+  - `autofit` (1): V739 (validation-based) — prior versions V734–V738 retired
 - **Platform**: ULHPC Iris — GPU (V100 32GB, ~756GB RAM), bigmem (3TB, 112 CPUs), QOS `normal` (2-day wall)
 - **Ablations**: 4 per task — `core_only`, `core_text`, `core_edgar`, `full` (task3: 3, no core_text)
 - **Tasks**: `task1_outcome`, `task2_forecast`, `task3_risk_adjust`
 - **Canonical Output Dir**: `runs/benchmarks/block3_phase9_fair/`
-- **Validated Progress**: 88 metrics.json files (Phase 9), 8,660 valid records (excl. oracle-leaked AutoFit), 90 valid models
+- **Validated Progress**: 88 metrics.json files, 8,660 records, 90 models
 - **Valid Complete Models**: 78 (104/104 conditions) — includes NegBinGLM at 16/16
-- **INVALID AutoFit**: V734, V735, V736 (Phase 9), V737, V738 (Phase 10) — ALL oracle test-set leakage
-- **V739 Status**: 0/104 — 18 SLURM jobs PENDING (11 npin gpu + 7 cfisch l40s), 0 results landed
+- **AutoFit**: V739 (validation-based, 0/104 PENDING) — V734–V738 retired
 - **Partial Models**: 12 (gap-fill PENDING)
 - **SLURM Status**: 0 RUNNING, 78 PENDING (npin=47, cfisch=31) — cluster GPU congestion
 - **Deprecated Outputs**: 26 dirs archived to `runs/benchmarks/_deprecated_archive/`
@@ -165,8 +164,8 @@ From `scripts/block3_profile_data.py`:
 25. ✅ Text embedding OOM fix (Arrow string → .astype("object"), commit f67d69e)
 26. ✅ Code audit (2026-03-12): No data leakage, no critical bugs, 0 anomalous metrics
 27. ✅ V734-V738 ALL confirmed oracle-leaked (2026-03-13): test-set oracle tables
-28. ✅ V739 validated clean (2026-03-15): full code audit, zero oracle references, proper val_raw
-29. ✅ Deprecated outputs archived (2026-03-15): 26 dirs → `_deprecated_archive/`
+28. ✅ V739 validated clean (2026-03-12): full code audit, zero oracle references, proper val_raw
+29. ✅ Deprecated outputs archived (2026-03-12): 26 dirs → `_deprecated_archive/`
 30. ⏳ Text embedding generation: 4 jobs PENDING (runs/text_embeddings/ EMPTY)
 31. ⏳ Phase 12 core_text/full re-runs: 40 scripts ready, blocked on text embeddings
 32. ⏳ Gap-fill: 34 jobs PENDING for 12 partial models
