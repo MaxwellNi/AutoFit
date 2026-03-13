@@ -1,6 +1,6 @@
 # Block 3 Model Benchmark Status
 
-> Last updated: 2026-03-12 (V734-V738 removed from display, 78 valid complete, V739 = new AutoFit baseline)
+> Last updated: 2026-03-13 (V734-V738 purged from all_results.csv, fast QOS migration, V739 RUNNING)
 > Full results: `docs/BLOCK3_RESULTS.md`
 
 ## Snapshot
@@ -8,16 +8,16 @@
 | Metric | Value |
 |---|---:|
 | Evaluation conditions per model | **104** (48+32+24) |
-| Total metrics.json files | 88 |
-| Total metric records | 8,660 |
+| Total metrics.json files | 77 |
+| Total metric records (post-filter) | 6,668 |
 | Unique models with results | 90 |
-| **Valid complete (104/104)** | **78** |
-| Partial (<104) | **12** |
+| **Valid complete (104/104)** | **77** |
+| Partial (<104) | **13** (incl NegativeBinomialGLM 16/104) |
 | Phase 11 new models | 14 TSLib SOTA + V739 validation-based AutoFit |
 | Total registered models | **42 tslib_sota + 9 deep + 23 transformer + 14 foundation + 4 irregular + 15 stat + 11 ml_tabular + 6 autofit = 127** |
-| Active SLURM jobs | **0 RUNNING, 78 PENDING** (npin=47, cfisch=31) |
-| Text embeddings | ❌ EMPTY — 4 generation jobs PENDING |
-| V739 results | ❌ 0/104 — all 18 jobs PENDING (11 gpu + 7 l40s), 0 results landed |
+| Active SLURM jobs | **2 RUNNING (V739 on l40s), 121 PENDING** (npin only) |
+| Text embeddings | ❌ EMPTY — 1 generation job PENDING (besteffort/gpu) |
+| V739 results | ⏳ 2 RUNNING (l40s), 9 PENDING — 0/104 results landed yet |
 | **AutoFit status** | V739 (validation-based, clean) = new baseline; prior versions retired |
 
 ## Oracle Test-Set Leakage (Historical — V734-V738 retired)
@@ -40,24 +40,42 @@ Full root cause analysis: see `docs/BLOCK3_RESULTS.md`.
 > These serve as independent 2-seed replication runs (text embeddings were never generated, so core_text ≡ core_only).
 > See `REPLICATION_MANIFEST.json` in benchmark root for full audit trail.
 
-## Active SLURM Jobs (2026-03-12)
+## Active SLURM Jobs (2026-03-13) — Fast QOS Migration
 
-### RUNNING: 0 jobs
+### RUNNING: 2 jobs (V739 on l40s/iris-snt-long)
 
-All 78 PENDING jobs stuck behind other users (GPU partition: 78 running from other users, 504 total PENDING).
-Top GPU consumer: elavdusinovi (51 running GPU jobs). Not a configuration issue — pure cluster congestion.
+| Job ID | Name | Node | Partition | QOS | Status |
+|--------|------|------|-----------|-----|--------|
+| 5232309 | v739f_t3_co | iris-198 | l40s | iris-snt-long | ✅ RUNNING |
+| 5232310 | v739f_t3_ce | iris-199 | l40s | iris-snt-long | ✅ RUNNING |
 
-### PENDING: 78 jobs (npin=47, cfisch=31)
+### QOS Migration Strategy (2026-03-13)
 
-| Category | Account | Partition | Jobs | Status |
-|----------|---------|-----------|-----:|--------|
-| V739 AutoFit (new) | npin | gpu | 11 | ⏳ PENDING (Priority) |
-| V739 AutoFit (l40s) | cfisch | l40s | 7 | ⏳ PENDING (Priority) |
-| Gap-fill (Chronos2, TTM) | npin | gpu | 10 | ⏳ PENDING (Priority) |
-| Gap-fill (ETSformer, LightTS, Pyraformer, Reformer) | npin | gpu | 24 | ⏳ PENDING (Priority) |
-| NegBinomGLM gap-fill | cfisch | bigmem | 0 | ✅ COMPLETED (in NegativeBinomialGLM 16/104) |
-| Gap-fill (6 tslib models) | cfisch | gpu | 11 | ⏳ PENDING (Priority) |
-| Phase 11 TSLib SOTA (14 models) | cfisch | gpu | 11 | ⏳ PENDING (Priority) |
+All jobs migrated from stuck `gpu/normal` QOS to faster paths:
+- **iris-gpu-long** on `gpu`: 14d wall, max 4 jobs/user, immediate allocation confirmed
+- **iris-snt-long** on `l40s`: L40S 48GB GPUs, GrpGRES=2 (2 GPUs max across all users)
+- **besteffort** on `gpu`/`hopper`/`bigmem`: preemptible, 50d wall, 300 jobs/user max
+- **Hopper** (iris-197): 4× H100 NVL 96GB VRAM, 2TB RAM, besteffort only
+
+### PENDING: 121 jobs (all npin)
+
+| Category | Jobs | Partition | QOS | Notes |
+|----------|-----:|-----------|-----|-------|
+| **V739 AutoFit** | 4 | gpu | iris-gpu-long | t1_co/ce, t2_co/ce (seed1, highest priority) |
+| **V739 AutoFit** | 2 | l40s | iris-snt-long | t1_ct, t3_fu (waiting QOSGrpGRES) |
+| **V739 AutoFit** | 3 | hopper | besteffort | t1_fu, t2_ct/fu (H100, preemptible) |
+| Gap-fill (Chronos2, TTM, ETSformer, LightTS, Reformer, Pyraformer) | 34 | gpu | besteffort | Resubmitted from normal |
+| TSLib gap-fill (Crossformer, MambaSimple, MSGNet, MultiPatchFormer, PAttn, TimeFilter) | 66 | gpu | besteffort | Newly submitted |
+| NegBinomialGLM | 11 | bigmem | besteffort | CPU-only, 256G |
+| Text embedding | 1 | gpu | besteffort | GTE-Qwen2-1.5B generation |
+
+### cfisch jobs (unchanged, not managed this session)
+
+| Category | Jobs | Partition | QOS | Notes |
+|----------|-----:|-----------|-----|-------|
+| Phase 11 TSLib | 11 | gpu | normal | Still stuck in queue |
+| Gap-fill | 11 | gpu | normal | Still stuck in queue |
+| Text embedding | 1 | gpu | normal | Still stuck in queue |
 | Text embedding generation | npin+cfisch | gpu+l40s | 4 | ⏳ PENDING (Priority) |
 | **Phase 12 re-runs** (real core_text/full) | — | — | 40 scripts ready | 🚫 Blocked on text embeddings |
 
@@ -102,7 +120,8 @@ Top GPU consumer: elavdusinovi (51 running GPU jobs). Not a configuration issue 
 ### AutoFit: V739 as New Baseline
 
 V739 uses validation-based model selection (no oracle). All prior versions (V734–V738) retired due to oracle test-set leakage.
-V739: 0/104 — 18 SLURM jobs PENDING (11 npin gpu + 7 cfisch l40s). Future iterations start from V739.
+V734-V738 metrics purged from all clean results (2026-03-13) → archived in `runs/benchmarks/_deprecated_archive/v734_v738_oracle_leaked/`.
+V739: 2/11 RUNNING (l40s), 9/11 PENDING across 3 QOS paths. Future iterations start from V739.
 
 ### Phase 11: New SOTA Models (14 TSLib + V739 AutoFit)
 

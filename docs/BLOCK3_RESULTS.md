@@ -1,32 +1,24 @@
 # Block 3 Benchmark Results
 
-**Generated**: 2026-03-12 17:03:33
+**Generated**: 2026-03-13 12:37:14
 **Benchmark Dir**: `block3_phase9_fair`
-**Total Records (post-filter)**: 6980
+**Total Records (post-filter)**: 6668
 
 ## Overview
 
 | Metric | Value |
 |--------|-------|
-| Raw records | 8972 |
-| Filtered records | 6980 |
+| Raw records | 8660 |
+| Filtered records | 6668 |
 | Comparability filter | fairness_only=True, min_coverage=0.98 |
-| Models evaluated | 72 |
-| Categories | autofit, deep_classical, foundation, irregular, ml_tabular, statistical, transformer_sota, tslib_sota |
+| Models evaluated | 69 |
+| Categories | deep_classical, foundation, irregular, ml_tabular, statistical, transformer_sota, tslib_sota |
 | Tasks | task1_outcome, task2_forecast, task3_risk_adjust |
-| Total evaluations | 6980 |
-| Real results | 6929 |
+| Total evaluations | 6668 |
+| Real results | 6617 |
 | Fallback (mean) | 51 |
 
 ## task1_outcome
-
-### autofit
-
-| Model | H=1 | H=7 | H=14 | H=30 | Status |
-|-------|-------:|-------:|-------:|-------:|--------|
-| AutoFitV736 | 389.3K | 389.2K | 390.5K | 391.6K | ✅ |
-| AutoFitV734 | 394.4K | 394.7K | 398.4K | 399.7K | ✅ |
-| AutoFitV735 | 400.1K | 400.9K | 406.7K | 408.7K | ✅ |
 
 ### deep_classical
 
@@ -134,14 +126,6 @@
 
 ## task2_forecast
 
-### autofit
-
-| Model | H=1 | H=7 | H=14 | H=30 | Status |
-|-------|-------:|-------:|-------:|-------:|--------|
-| AutoFitV736 | 389.3K | 389.2K | 390.5K | 391.6K | ✅ |
-| AutoFitV734 | 394.4K | 394.7K | 398.4K | 399.7K | ✅ |
-| AutoFitV735 | 400.1K | 400.9K | 406.7K | 408.7K | ✅ |
-
 ### deep_classical
 
 | Model | H=1 | H=7 | H=14 | H=30 | Status |
@@ -244,14 +228,6 @@
 | PAttn | 1.01M | 1.03M | 1.02M | 1.00M | ✅ |
 
 ## task3_risk_adjust
-
-### autofit
-
-| Model | H=1 | H=7 | H=14 | H=30 | Status |
-|-------|-------:|-------:|-------:|-------:|--------|
-| AutoFitV736 | 389.3K | 389.2K | 390.5K | 391.6K | ✅ |
-| AutoFitV734 | 394.4K | 394.7K | 398.4K | 399.7K | ✅ |
-| AutoFitV735 | 400.1K | 400.9K | 406.7K | 408.7K | ✅ |
 
 ### deep_classical
 
@@ -369,11 +345,8 @@
 | iTransformer | 1454.7 | 927.9 | 1763.2 |
 | BRITS | 1399.2 | 349.2 | 2770.7 |
 | MSTL | 1176.3 | 112.5 | 1982.0 |
-| AutoFitV736 | 1163.6 | 149.4 | 5032.5 |
-| AutoFitV734 | 1157.9 | 151.6 | 2743.4 |
 | LightTS | 1020.2 | 137.8 | 3222.8 |
 | AutoARIMA | 692.1 | 284.4 | 1179.2 |
-| AutoFitV735 | 662.8 | 23.2 | 2834.8 |
 | RandomForest | 642.1 | 224.6 | 1563.0 |
 | SOFTS | 459.7 | 329.9 | 708.1 |
 | ExtraTrees | 439.4 | 71.5 | 1186.1 |
@@ -439,10 +412,6 @@ Shows which task/category/ablation combinations have results.
 
 | Task | Category | Ablation | Models |
 |------|----------|----------|-------:|
-| task1_outcome | autofit | core_edgar | 3 |
-| task1_outcome | autofit | core_edgar_seed2 | 3 |
-| task1_outcome | autofit | core_only | 3 |
-| task1_outcome | autofit | core_only_seed2 | 3 |
 | task1_outcome | deep_classical | core_edgar | 9 |
 | task1_outcome | deep_classical | core_edgar_seed2 | 9 |
 | task1_outcome | deep_classical | core_only | 9 |
@@ -471,10 +440,6 @@ Shows which task/category/ablation combinations have results.
 | task1_outcome | tslib_sota | core_edgar_seed2 | 4 |
 | task1_outcome | tslib_sota | core_only | 6 |
 | task1_outcome | tslib_sota | core_only_seed2 | 6 |
-| task2_forecast | autofit | core_edgar | 3 |
-| task2_forecast | autofit | core_edgar_seed2 | 3 |
-| task2_forecast | autofit | core_only | 3 |
-| task2_forecast | autofit | core_only_seed2 | 3 |
 | task2_forecast | deep_classical | core_edgar | 9 |
 | task2_forecast | deep_classical | core_edgar_seed2 | 9 |
 | task2_forecast | deep_classical | core_only | 9 |
@@ -503,9 +468,6 @@ Shows which task/category/ablation combinations have results.
 | task2_forecast | tslib_sota | core_edgar_seed2 | 4 |
 | task2_forecast | tslib_sota | core_only | 4 |
 | task2_forecast | tslib_sota | core_only_seed2 | 4 |
-| task3_risk_adjust | autofit | core_edgar | 3 |
-| task3_risk_adjust | autofit | core_edgar_seed2 | 3 |
-| task3_risk_adjust | autofit | core_only | 3 |
 | task3_risk_adjust | deep_classical | core_edgar | 9 |
 | task3_risk_adjust | deep_classical | core_edgar_seed2 | 9 |
 | task3_risk_adjust | deep_classical | core_only | 9 |
@@ -529,4 +491,4 @@ Shows which task/category/ablation combinations have results.
 | task3_risk_adjust | tslib_sota | core_only | 6 |
 
 ---
-_Last updated: 2026-03-12 17:03:33_
+_Last updated: 2026-03-13 12:37:14_
