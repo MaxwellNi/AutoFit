@@ -2,7 +2,7 @@
 
 > Last verified: 2026-03-15
 > Scope: the first real `core_text` / `full` reruns on top of the current Phase 9 fair benchmark line.
-> Status: 40 jobs SUBMITTED (20 RUNNING + 14 PENDING + 5 bigmem RUNNING + 1 cfisch gap-fill)
+> Status: 48 jobs total — 15 COMPLETED (deep×5, foun×5, af39×5), 25 RUNNING, 8 PENDING (new t3_ct)
 
 ## Verified Current Readiness
 
@@ -19,7 +19,7 @@
    - `scripts/phase12_prepare_text_rerun.py --check-only`
 4. Generated rerun scripts already exist under:
    - `.slurm_scripts/phase12/rerun/`
-   - current count: `40` job scripts + `1` submission helper
+   - current count: `48` job scripts (40 original + 8 t3_ct) + `1` submission helper
 5. The generated submission helper is:
    - `.slurm_scripts/phase12/rerun/submit_all_phase12_rerun.sh`
 6. Current canonical fair benchmark still has only one stale physical `core_text` metrics file left in-place:
@@ -80,16 +80,31 @@ bash .slurm_scripts/phase12/rerun/submit_all_phase12_rerun.sh
 
 ## Submission Record (2026-03-15)
 
+### Original 40 jobs
+
 | Account | Job IDs | Partition | Content | Status |
 | --- | --- | --- | --- | --- |
-| npin | 5251977-5251981 | gpu | deep_classical ct/fu (t1/t2/t3) | RUNNING |
-| npin | 5251982-5251986 | gpu | foundation ct/fu (t1/t2/t3) | RUNNING |
-| npin | 5251987-5251991 | gpu | irregular ct/fu (t1/t2/t3) | 1R + 4PD |
-| npin | 5251992-5251996 | bigmem | statistical ct/fu (t1/t2/t3) | RUNNING |
-| cfisch | 5252017-5252021 | gpu | af39=autofit ct/fu (t1/t2/t3) | PENDING |
-| cfisch | 5252022-5252026 | bigmem | ml_tabular ct/fu (t1/t2/t3) | PENDING |
-| cfisch | 5252027-5252031 | gpu | transformer_sota ct/fu (t1/t2/t3) | PENDING |
-| cfisch | 5252032-5252036 | gpu | tslib_sota ct/fu (t1/t2/t3) | PENDING |
+| npin | 5251977-5251981 | gpu | deep_classical ct/fu (t1/t2/t3) | ✅ COMPLETED |
+| npin | 5251982-5251986 | gpu | foundation ct/fu (t1/t2/t3) | ✅ COMPLETED |
+| npin | 5251987-5251991 | gpu | irregular ct/fu (t1/t2/t3) | RUNNING (~4-5h) |
+| npin | 5251992-5251996 | bigmem | statistical ct/fu (t1/t2/t3) | RUNNING (~5h) |
+| cfisch | 5252181-5252185 | gpu | af39=autofit ct/fu (t1/t2/t3) | ✅ COMPLETED |
+| cfisch | 5252186-5252190 | bigmem | ml_tabular ct/fu (t1/t2/t3) | 4R + 1PD |
+| cfisch | 5252191-5252195 | gpu | transformer_sota ct/fu (t1/t2/t3) | RUNNING (~2.5h) |
+| cfisch | 5252196-5252200 | gpu | tslib_sota ct/fu (t1/t2/t3) | RUNNING (~1-2h) |
+
+### Additional 8 t3_ct jobs (task3/core_text gap, added 2026-03-15)
+
+| Account | Job IDs | Partition | Content | Status |
+| --- | --- | --- | --- | --- |
+| npin | 5252582 | gpu | deep_classical t3_ct | PENDING |
+| npin | 5252583 | gpu | foundation t3_ct | PENDING |
+| npin | 5252584 | gpu | irregular t3_ct | PENDING |
+| npin | 5252585 | bigmem | statistical t3_ct | PENDING |
+| cfisch | 5252586 | gpu | af39=autofit t3_ct | PENDING |
+| cfisch | 5252587 | bigmem | ml_tabular t3_ct | PENDING |
+| cfisch | 5252588 | gpu | transformer_sota t3_ct | PENDING |
+| cfisch | 5252589 | gpu | tslib_sota t3_ct | PENDING |
 
 **Key script fixes applied before submission:**
 - Removed explicit HF_HOME (system default works correctly)

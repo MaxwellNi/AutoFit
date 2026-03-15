@@ -25,8 +25,8 @@ Every future contributor should read these files in order before making claims o
 - Freeze: complete and read-only
 - Canonical benchmark: `runs/benchmarks/block3_phase9_fair/`
 - Raw benchmark scan:
-  - `91` metrics files
-  - `10213` raw records (Phase 12 text reruns actively landing)
+  - `117` metrics files
+  - `11058` raw records (Phase 12 text reruns actively landing)
   - `91` raw models
   - `80` raw complete models (`≥104`)
   - `11` raw partial models
@@ -41,12 +41,16 @@ Every future contributor should read these files in order before making claims o
 - Dominant champion model: NBEATS — 24/56 conditions won (43%)
 - Gap-fill progress:
   - 12 TSLib gap-fill jobs RUNNING (4 npin/l40s + 8 cfisch/gpu)
-  - FM seed2: 4/5 COMPLETED, 1 RUNNING (cf_gf_fm_t1_ces2)
+  - FM seed2: ALL 5/5 COMPLETED
   - Chronos2: COMPLETE (≥104), TTM: COMPLETE (≥104)
+  - TSLib @59: TimeFilter, MultiPatchFormer, MSGNet, PAttn, MambaSimple, Crossformer (up from 57)
+  - TSLib @82: ETSformer, LightTS, Pyraformer, Reformer (up from 80)
   - NegativeBinomialGLM: structural failure (20/104), cannot complete
 - Phase 12 text reruns:
-  - 40 jobs submitted (20 npin + 20 cfisch), 2026-03-15
-  - 20 RUNNING (deep/foun/irre/stat), 14 PENDING (af39/ml_t/tran/tsli), 5 bigmem RUNNING (stat)
+  - 48 total scripts (40 original + 8 new t3_ct added 2026-03-15)
+  - 15 COMPLETED (deep×5, foun×5, af39×5), 25 RUNNING, 8 PENDING (new t3_ct)
+  - core_text coverage: 77/91 models (t1+t2 done for deep/foun/af39; t3 pending)
+  - full coverage: 76/91 models
   - Scripts: `.slurm_scripts/phase12/rerun/`
   - All scripts: umask 002, --requeue, text embedding pre-flight check
 - Text embeddings:
@@ -99,7 +103,7 @@ Every future contributor should read these files in order before making claims o
 ## Immediate Next Work
 
 1. ~~Land the first clean V739 results.~~ ✅ V739 COMPLETE: 112/112 conditions landed.
-2. Finish gap-fill for the remaining 12 partial models (NegBinGLM structural failure = excluded).
-3. ~~Run and land the real text-enabled reruns~~ ✅ Phase 12 submitted (40 jobs, 2026-03-15). Wait for landing.
+2. Finish gap-fill for the remaining 10 partial TSLib models (NegBinGLM structural failure = excluded).
+3. ~~Run and land the real text-enabled reruns~~ ✅ Phase 12 submitted (48 jobs, 2026-03-15). 15/48 COMPLETED. Wait for remainder.
 4. Consolidate the clean benchmark surface (after Phase 12 lands).
 5. Only then start any V740+ iteration.
