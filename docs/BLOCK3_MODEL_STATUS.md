@@ -1,216 +1,89 @@
 # Block 3 Model Benchmark Status
 
-> Last updated: 2026-03-13 (V734-V738 purged from all_results.csv, fast QOS migration, V739 RUNNING)
-> Full results: `docs/BLOCK3_RESULTS.md`
+> Last updated: 2026-03-15
+> Current authority: `docs/CURRENT_SOURCE_OF_TRUTH.md`
+> Evidence: direct scan of `runs/benchmarks/block3_phase9_fair/`
 
 ## Snapshot
 
-| Metric | Value |
-|---|---:|
-| Evaluation conditions per model | **104** (48+32+24) |
-| Total metrics.json files | 77 |
-| Total metric records (post-filter) | 6,668 |
-| Unique models with results | 90 |
-| **Valid complete (104/104)** | **77** |
-| Partial (<104) | **13** (incl NegativeBinomialGLM 16/104) |
-| Phase 11 new models | 14 TSLib SOTA + V739 validation-based AutoFit |
-| Total registered models | **42 tslib_sota + 9 deep + 23 transformer + 14 foundation + 4 irregular + 15 stat + 11 ml_tabular + 6 autofit = 127** |
-| Active SLURM jobs | **2 RUNNING (V739 on l40s), 121 PENDING** (npin only) |
-| Text embeddings | ❌ EMPTY — 1 generation job PENDING (besteffort/gpu) |
-| V739 results | ⏳ 2 RUNNING (l40s), 9 PENDING — 0/104 results landed yet |
-| **AutoFit status** | V739 (validation-based, clean) = new baseline; prior versions retired |
+| Metric | Value | Evidence |
+| --- | ---: | --- |
+| raw metrics files | 91 | direct scan 2026-03-15 |
+| raw records | 10213 | direct scan 2026-03-15 (Phase 12 landing) |
+| raw models | 91 | direct scan 2026-03-15 |
+| raw complete models (≥104) | 80 | direct scan 2026-03-15 |
+| raw partial models | 11 | direct scan 2026-03-15 |
+| live jobs running | 29 | squeue 2026-03-15 |
+| live jobs pending | 19 | squeue 2026-03-15 |
+| Phase 12 text rerun jobs | 20R + 14PD | `.slurm_scripts/phase12/rerun/` |
 
-## Oracle Test-Set Leakage (Historical — V734-V738 retired)
+## V739 Status
 
-V734–V738 all used oracle tables built from Phase 9 **test-set** metrics to select/weight sub-models.
-This constitutes test-set information leakage. All 5 versions have been permanently retired.
-V739 replaces them using proper validation-based model selection (harness `val_raw` with 7-day embargo).
-Full root cause analysis: see `docs/BLOCK3_RESULTS.md`.
+| Fact | Value | Evidence |
+| --- | --- | --- |
+| current valid AutoFit line | `AutoFitV739` | Root `AGENTS.md` |
+| landed conditions | `112/112` (ALL COMPLETE) | direct scan: 12 metrics.json under `*/autofit/*` |
+| ablation breakdown | co=28, ce=28, ct=28, fu=28 | direct scan |
+| quality | 0 NaN/Inf, 0 fallback, 100% fairness pass | direct scan |
+| mean rank (56 universal conditions) | **#13/80** (top 16%) | computed across 56 universal conditions shared by all 80 models |
+| mean rank score | 14.38 | lower is better |
+| conditions won (champion) | 3/56 (1 per task) | best MAE in that condition |
+| all 12 V739 jobs | COMPLETED | sacct 2026-03-15 |
 
-## Condition Count Explained
+## Partial Models (11)
 
-| Task | Targets | Horizons | Ablations | Conditions |
-|---|---:|---:|---:|---:|
-| task1_outcome | 3 (funding_raised_usd, investors_count, is_funded) | 4 (1,7,14,30) | 4 (core_only, core_only_seed2, core_edgar, core_edgar_seed2) | 48 |
-| task2_forecast | 2 (funding_raised_usd, investors_count) | 4 | 4 | 32 |
-| task3_risk_adjust | 2 (funding_raised_usd, investors_count) | 4 | 3 (core_only, core_edgar, core_edgar_seed2 — **no core_only_seed2**) | 24 |
-| **Total** | | | | **104** |
+| Model | Records | Status | Notes |
+| --- | ---: | --- | --- |
+| NegativeBinomialGLM | 20/104 | ❌ structural failure | NaN/inf in weights, only is_funded works |
+| TimeFilter | 57/104 | ⏳ gap-fill running | TSLib jobs on gpu+l40s |
+| MultiPatchFormer | 57/104 | ⏳ gap-fill running | constant predictions (fairness_pass=False) |
+| MSGNet | 57/104 | ⏳ gap-fill running | very slow (~3.5 min/epoch) |
+| PAttn | 57/104 | ⏳ gap-fill running | TSLib jobs on gpu+l40s |
+| MambaSimple | 57/104 | ⏳ gap-fill running | TSLib jobs on gpu+l40s |
+| Crossformer | 57/104 | ⏳ gap-fill running | TSLib jobs on gpu+l40s |
+| ETSformer | 80/104 | ⏳ gap-fill running | TSLib jobs on gpu |
+| LightTS | 80/104 | ⏳ gap-fill running | TSLib jobs on gpu |
+| Pyraformer | 80/104 | ⏳ gap-fill running | TSLib jobs on gpu |
+| Reformer | 80/104 | ⏳ gap-fill running | TSLib jobs on gpu |
 
-> **Note (2026-03-13)**: Original `core_text` renamed to `core_only_seed2`, `full` renamed to `core_edgar_seed2`.
-> These serve as independent 2-seed replication runs (text embeddings were never generated, so core_text ≡ core_only).
-> See `REPLICATION_MANIFEST.json` in benchmark root for full audit trail.
+## Live Queue Reality
 
-## Active SLURM Jobs (2026-03-13) — Fast QOS Migration
+| Queue slice | Value | Evidence |
+| --- | ---: | --- |
+| npin l40s RUNNING | 4 | squeue 2026-03-15 (TSLib t1+t3 co/ce gap-fill) |
+| npin gpu RUNNING | 15 | squeue 2026-03-15 (Phase 12: deep+foun+irre ct/fu) |
+| npin bigmem RUNNING | 5 | squeue 2026-03-15 (Phase 12: stat ct/fu) |
+| cfisch gpu RUNNING | 9 | squeue 2026-03-15 (8 TSLib gap-fill + 1 FM seed2) |
+| cfisch gpu PENDING | 14 | squeue 2026-03-15 (Phase 12: af39+tran+tsli ct/fu) |
+| cfisch bigmem PENDING | 5 | squeue 2026-03-15 (Phase 12: ml_t ct/fu) |
+| **total** | **48** (29R + 19PD) | squeue 2026-03-15 |
 
-### RUNNING: 2 jobs (V739 on l40s/iris-snt-long)
+## Text Embeddings
 
-| Job ID | Name | Node | Partition | QOS | Status |
-|--------|------|------|-----------|-----|--------|
-| 5232309 | v739f_t3_co | iris-198 | l40s | iris-snt-long | ✅ RUNNING |
-| 5232310 | v739f_t3_ce | iris-199 | l40s | iris-snt-long | ✅ RUNNING |
+| Fact | Value | Evidence |
+| --- | --- | --- |
+| artifacts complete | `true` | `docs/benchmarks/phase9_current_snapshot.json` |
+| total rows | `5774931` | `runs/text_embeddings/embedding_metadata.json` |
+| unique texts | `69697` | `runs/text_embeddings/embedding_metadata.json` |
+| entities | `22569` | `runs/text_embeddings/embedding_metadata.json` |
+| PCA dimension | `64` | `runs/text_embeddings/embedding_metadata.json` |
 
-### QOS Migration Strategy (2026-03-13)
+## Interpretation
 
-All jobs migrated from stuck `gpu/normal` QOS to faster paths:
-- **iris-gpu-long** on `gpu`: 14d wall, max 4 jobs/user, immediate allocation confirmed
-- **iris-snt-long** on `l40s`: L40S 48GB GPUs, GrpGRES=2 (2 GPUs max across all users)
-- **besteffort** on `gpu`/`hopper`/`bigmem`: preemptible, 50d wall, 300 jobs/user max
-- **Hopper** (iris-197): 4× H100 NVL 96GB VRAM, 2TB RAM, besteffort only
+1. V739 is fully landed and benchmarked. It ranks **#16/78** by mean rank across all conditions.
+2. The remaining 12 partial models have gap-fill jobs running (17 SLURM jobs total).
+3. NegativeBinomialGLM (20/104) has a structural numerical overflow failure and cannot complete.
+4. The current physical Phase 9 results still represent the seed-replication reinterpretation of `core_text` / `full`.
+5. V739 uses {core_only, core_edgar, core_text, full}; other models use {core_only, core_edgar, core_only_seed2, core_edgar_seed2}. Prior to Phase 12, text ablation was dead code (raw text strings stripped by `select_dtypes`). With PCA embeddings (float32), text ablation NOW WORKS. Phase 12 reruns are in progress.
+6. Common misstatements about current status are documented in `docs/PHASE9_V739_FACT_ALIGNMENT.md`.
+7. Top-5 models by mean rank: NHITS (4.21), PatchTST (4.36), NBEATS (4.77), NBEATSx (5.84), ChronosBolt (7.11).
+8. NBEATS is the dominant champion model: 24/56 conditions won (43%).
+9. Per-task champion distribution: NBEATS(8), NHITS(5+), KAN(5), DeepNPTS(4), Chronos(2+), GRU(3), V739(3), PatchTST(2).
 
-### PENDING: 121 jobs (all npin)
+## Immediate Next Actions
 
-| Category | Jobs | Partition | QOS | Notes |
-|----------|-----:|-----------|-----|-------|
-| **V739 AutoFit** | 4 | gpu | iris-gpu-long | t1_co/ce, t2_co/ce (seed1, highest priority) |
-| **V739 AutoFit** | 2 | l40s | iris-snt-long | t1_ct, t3_fu (waiting QOSGrpGRES) |
-| **V739 AutoFit** | 3 | hopper | besteffort | t1_fu, t2_ct/fu (H100, preemptible) |
-| Gap-fill (Chronos2, TTM, ETSformer, LightTS, Reformer, Pyraformer) | 34 | gpu | besteffort | Resubmitted from normal |
-| TSLib gap-fill (Crossformer, MambaSimple, MSGNet, MultiPatchFormer, PAttn, TimeFilter) | 66 | gpu | besteffort | Newly submitted |
-| NegBinomialGLM | 11 | bigmem | besteffort | CPU-only, 256G |
-| Text embedding | 1 | gpu | besteffort | GTE-Qwen2-1.5B generation |
-
-### cfisch jobs (unchanged, not managed this session)
-
-| Category | Jobs | Partition | QOS | Notes |
-|----------|-----:|-----------|-----|-------|
-| Phase 11 TSLib | 11 | gpu | normal | Still stuck in queue |
-| Gap-fill | 11 | gpu | normal | Still stuck in queue |
-| Text embedding | 1 | gpu | normal | Still stuck in queue |
-| Text embedding generation | npin+cfisch | gpu+l40s | 4 | ⏳ PENDING (Priority) |
-| **Phase 12 re-runs** (real core_text/full) | — | — | 40 scripts ready | 🚫 Blocked on text embeddings |
-
-### RECENTLY COMPLETED
-
-| Batch | Jobs | Elapsed | Result |
-|-------|------|---------|--------|
-| tsC recovery (5221718-22) | 5 | up to 2d | ✅ ETSformer/LightTS/Pyraformer/Reformer → 52/104 |
-
-## Model Completion (78 valid complete + 12 partial)
-
-### Valid Complete (78 models × 104/104 in Phase 9)
-
-| Category | Count | Models |
-|---|---:|---|
-| deep_classical | 9 | NBEATS, NHITS, TFT, DeepAR, GRU, LSTM, TCN, MLP, DilatedRNN |
-| foundation | 12 | Chronos, ChronosBolt, Timer, TimeMoE, MOMENT, TimesFM, Sundial, TimesFM2, LagLlama, Moirai, MoiraiLarge, Moirai2 |
-| irregular | 4 | GRU-D, SAITS, BRITS, CSDI |
-| ml_tabular | 11 | LightGBM, XGBoost, CatBoost, RandomForest, ExtraTrees, HistGradientBoosting, MeanPredictor, SeasonalNaive, LightGBMTweedie, XGBoostPoisson, NegativeBinomialGLM (16/16 binary-only) |
-| statistical | 15 | AutoARIMA, AutoETS, AutoTheta, MSTL, SF_SeasonalNaive, AutoCES, CrostonClassic, CrostonOptimized, CrostonSBA, DynamicOptimizedTheta, HistoricAverage, Holt, HoltWinters, Naive, WindowAverage |
-| transformer_sota | 23 | PatchTST, iTransformer, TimesNet, TSMixer, Informer, Autoformer, FEDformer, VanillaTransformer, TiDE, NBEATSx, xLSTM, TimeLLM, DeepNPTS, BiTCN, KAN, RMoK, SOFTS, StemGNN, DLinear, NLinear, TimeMixer, TimeXer, TSMixerx |
-| tslib_sota | 4 | WPMixer, FITS, KANAD, CATS |
-| autofit | 0 | V739 (0/104 PENDING — validation-based, no oracle) |
-
-### Partial (12 models in Phase 9)
-
-| Model | Records | Category | Status |
-|---|---:|---|---|
-| Chronos2 | 58 | foundation | ⏳ 5 gap-fill jobs PENDING |
-| TTM | 58 | foundation | ⏳ 5 gap-fill jobs PENDING |
-| Crossformer | 52 | tslib_sota | ⏳ gap-fill PENDING (cfisch) |
-| MSGNet | 52 | tslib_sota | ⏳ gap-fill PENDING (cfisch) — was tsA TIMEOUT |
-| PAttn | 52 | tslib_sota | ⏳ gap-fill PENDING (cfisch) — was tsA TIMEOUT |
-| MambaSimple | 52 | tslib_sota | ⏳ gap-fill PENDING (cfisch) |
-| TimeFilter | 52 | tslib_sota | ⏳ gap-fill PENDING (cfisch) — ⚠️ constant pred on first 52 |
-| MultiPatchFormer | 52 | tslib_sota | ⏳ gap-fill PENDING (cfisch) — ⚠️ constant pred on first 52 |
-| ETSformer | 52 | tslib_sota | ⏳ 6 gap-fill jobs PENDING (npin) |
-| LightTS | 52 | tslib_sota | ⏳ 6 gap-fill jobs PENDING (npin) |
-| Pyraformer | 52 | tslib_sota | ⏳ 6 gap-fill jobs PENDING (npin) |
-| Reformer | 52 | tslib_sota | ⏳ 6 gap-fill jobs PENDING (npin) |
-
-### AutoFit: V739 as New Baseline
-
-V739 uses validation-based model selection (no oracle). All prior versions (V734–V738) retired due to oracle test-set leakage.
-V734-V738 metrics purged from all clean results (2026-03-13) → archived in `runs/benchmarks/_deprecated_archive/v734_v738_oracle_leaked/`.
-V739: 2/11 RUNNING (l40s), 9/11 PENDING across 3 QOS paths. Future iterations start from V739.
-
-### Phase 11: New SOTA Models (14 TSLib + V739 AutoFit)
-
-| Model | Category | Venue | Status |
-|---|---|---|---|
-| CFPT | tslib_sota | ICLR 2025 | ✅ Registered, awaiting SLURM |
-| DeformableTST | tslib_sota | ICLR 2025 | ✅ Registered, awaiting SLURM |
-| ModernTCN | tslib_sota | ICLR 2024 | ✅ Registered, awaiting SLURM |
-| PathFormer | tslib_sota | ICLR 2024 | ✅ Registered, awaiting SLURM |
-| SEMPO | tslib_sota | ICML 2024 | ✅ Registered, awaiting SLURM |
-| TimePerceiver | tslib_sota | arXiv 2024 | ✅ Registered, awaiting SLURM |
-| TimeBridge | tslib_sota | NeurIPS 2024 | ✅ Registered, awaiting SLURM |
-| TQNet | tslib_sota | ICML 2024 | ✅ Registered, awaiting SLURM |
-| PIR | tslib_sota | NeurIPS 2024 | ✅ Registered, awaiting SLURM |
-| CARD | tslib_sota | ICLR 2024 | ✅ Registered, awaiting SLURM |
-| PDF | tslib_sota | ICML 2024 | ✅ Registered, awaiting SLURM |
-| TimeRecipe | tslib_sota | NeurIPS 2024 | ✅ Registered, awaiting SLURM |
-| DUET | tslib_sota | NeurIPS 2024 | ✅ Registered (TSLib adapter), awaiting SLURM |
-| SRSNet | tslib_sota | arXiv 2024 | ✅ Registered (TSLib adapter), awaiting SLURM |
-| AutoFitV739 | autofit | Phase 11 | ✅ Registered, 11 SLURM jobs PENDING |
-
-**Not integrated (3 models with blocking reasons):**
-
-| Model | Reason | Resolution |
-|---|---|---|
-| Kairos | Foundation model (T5-based), requires IBM `tsfm` package — not pip-installable | Future: install `tsfm` from source |
-| TimeMixerPP | Updated TimeMixer — vendor already has working TimeMixer, updating would break Phase 9 reproducibility | Post-Phase 9: update vendored TimeMixer.py |
-| TabPFN_TS | Tabular foundation model, different paradigm from time series | Already partially handled as TabPFN in ml_tabular |
-
-## Audit Exclusion List (16+ models)
-
-| Finding | Models | Reason |
-|---------|--------|--------|
-| A (6) | Sundial, TimesFM2, LagLlama, Moirai, MoiraiLarge, Moirai2 | Context-mean fallback |
-| B (5) | AutoCES, xLSTM, TimeLLM, StemGNN, TimeXer | Training crash fallback |
-| C (2) | TimeMoE, MOMENT | Near-duplicate of Timer |
-| G (3) | MICN, MultiPatchFormer, TimeFilter | 100% constant predictions |
-
-## Memory Requirements (empirical)
-
-| Ablation | Actual Peak RSS | SLURM Allocation | Status |
-|----------|----------------:|------------------:|--------|
-| core_only | ~80-100 GB | 128G | ✅ sufficient |
-| core_edgar | ~140-160 GB | 192G | ✅ sufficient |
-| core_only_seed2 (was core_text) | ~80-100 GB | 128G | ✅ (identical to core_only — text embeddings absent) |
-| core_edgar_seed2 (was full) | ~140-160 GB | 192G | ✅ (identical to core_edgar — text embeddings absent) |
-
-> When real text embeddings are generated, core_text/full ablations will need 384G (RSS ~200-268 GB).
-
-## Phase History
-
-| Phase | Models | Records | Status | Notes |
-|-------|-------:|--------:|--------|-------|
-| Phase 7 | 91 | 6,670 | ❌ DEPRECATED | 4 critical bugs |
-| Phase 8 | 99 | 7,478 | ❌ DEPRECATED | 4 critical bugs |
-| Phase 9 | 90 | 8,660 | ✅ CURRENT | Main benchmark |
-| Phase 10 | +1 (V739) | 0 | ⏳ PENDING | V739 validation-based AutoFit |
-| Phase 11 | +14+1 | 0 | ⏳ PENDING | 14 TSLib SOTA + V739 AutoFit (no oracle) |
-| Phase 12 | — | 0 | 🚫 BLOCKED | core_text/full re-runs after text embeddings ready |
-
-## Text Embedding Status 🔴
-
-| Item | Status |
-|------|--------|
-| Model | GTE-Qwen2-1.5B-instruct (Alibaba-NLP, Apache-2.0) |
-| Output dim | 1536 → PCA 64 |
-| Directory | `runs/text_embeddings/` |
-| State | **EMPTY** — 6 prior generation attempts ALL failed |
-| Root cause | Arrow string OOM (2.55 TiB allocation on .loc[] with ArrowStringArray) |
-| Fix | `.astype("object")` + per-field truncation (commit f67d69e) |
-| Pending jobs | 4 generation jobs PENDING (2 gpu + 2 l40s) |
-| Impact | Existing core_text/full renamed to core_only_seed2/core_edgar_seed2 (2-seed replication) |
-| Re-run plan | 40 Phase 12 scripts in `.slurm_scripts/phase12/rerun/` (for real core_text/full after embeddings) |
-
-## Code Audit (2026-03-12) ✅
-
-Comprehensive code audit completed. Key findings:
-- **No data leakage**: Temporal split with 7-day embargo correctly enforced; explicit leakage guards for co-determined columns
-- **No critical logic bugs**: Horizon handling (h_nf=max(h,7)) is correct for all horizons [7,14,30,60]
-- **V739 validation-based selection is sound**: Uses harness val_raw (temporal split), no test-set information leak
-- **No anomalous metrics**: 0 NaN/Inf/zero MAE across 9,180 records
-- **Historical OOM**: 106 failed jobs (mostly tslib_sota, ml_tabular, irregular) — already addressed with higher memory requests
-
-## Bugs Fixed (Phase 9)
-
-1. **TSLib per-entity prediction**: Fixed with per-entity batched inference
-2. **Foundation prediction_length=7**: Fixed to use actual horizon
-3. **Moirai 50-entity cap**: Removed cap
-4. **ml_tabular single-horizon**: Fixed to run all horizons
-5. **ml_tabular fillna(0)**: Pass NaN through for tree-based models
-6. **Constant-prediction fairness guard**: `fairness_pass=False`
-7. **asinh transform bug** (V737/V738): NF wrapper reads original-scale targets, removed outer asinh
+1. ~~Land the first canonical fair-line V739 results.~~ ✅ DONE (112/112)
+2. Close the 12 remaining partial models (gap-fill jobs running — 13 jobs active).
+3. ~~Submit real text/full reruns.~~ ✅ DONE (40 Phase 12 jobs submitted 2026-03-15, 20 running + 14 pending).
+4. Wait for Phase 12 text reruns to land, then rebuild leaderboard with core_text/full results.
+5. Only then start V740+ iteration.

@@ -1,4 +1,10 @@
 #!/usr/bin/env bash
+# DEPRECATED LEGACY SURFACE
+# This script belongs to the retired V72 / early V73 execution line.
+# It is preserved for historical traceability only.
+# Do not use it for current Phase 9 / AutoFitV739 submissions or status decisions.
+# Current truth docs: docs/CURRENT_SOURCE_OF_TRUTH.md and docs/PHASE9_V739_FACT_ALIGNMENT.md
+
 # ============================================================================
 # Auto-release watcher for temporary holds used in V7.2 fast-track.
 # ============================================================================

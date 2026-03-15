@@ -1,8 +1,6 @@
 #!/usr/bin/env python3
 """Reject process-language traces in publication-facing status documents."""
 
-from __future__ import annotations
-
 import argparse
 from pathlib import Path
 from typing import List, Tuple

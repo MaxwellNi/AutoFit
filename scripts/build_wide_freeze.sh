@@ -1,4 +1,11 @@
 #!/usr/bin/env bash
+# DEPRECATED LEGACY SURFACE
+# This script references the retired V72 / early V73 truth-pack line and/or
+# the archived pre-Phase-9 audit surface.
+# It is kept for historical traceability and compatibility only.
+# Do not use it for current Phase 9 / AutoFitV739 status, ranking, or execution decisions.
+# Current truth docs: docs/CURRENT_SOURCE_OF_TRUTH.md and docs/PHASE9_V739_FACT_ALIGNMENT.md
+
 # Wide Feature Freeze: full 112M raw scan, wide contract, edgar, multiscale.
 # Run on 4090 with sufficient RAM. No OOM; never filter rows for empty text/array.
 set -e

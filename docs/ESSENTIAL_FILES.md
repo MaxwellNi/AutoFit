@@ -1,48 +1,40 @@
-# Essential Files Checklist
+# Essential Files (Current Project Surface)
 
-This document defines the **minimum required files** for a safe, reproducible
-workflow after disaster recovery. Use this as a gate before running any large
-experiments.
+This checklist defines the minimum files a future contributor must read before treating any project statement as current fact.
 
-## A) Must Exist (block if missing)
+## A. Mandatory Current-State Files
 
-- `RUNBOOK.md`
-- `DECISION.md`
-- `scripts/run_full_benchmark.py`
-- `scripts/audit_bench_configs.py`
-- `scripts/check_label_leakage.py`
-- `scripts/sanity_check_metrics.py`
-- `scripts/audit_progress_alignment.py`
-- `scripts/summarize_horizon_audit.py`
-- `src/narrative/`
-  - `models/tslib_runner.py`
-  - `models/tslib_data.py`
-  - `models/tslib_data_full.py`
-  - `models/backbones/*.py`
-  - `evaluation/report.py`
-  - `evaluation/runner.py`
-  - `evaluation/validation.py`
-  - `data_preprocessing/*.py`
-- `pyproject.toml`
-- `env/tslib.yml`
-- `QUICK_START.md`
+- Root `AGENTS.md`
+- `.local_mandatory_preexec.md`
+- `docs/CURRENT_SOURCE_OF_TRUTH.md`
+- `docs/PHASE9_V739_FACT_ALIGNMENT.md`
+- `docs/BLOCK3_MODEL_STATUS.md`
+- `docs/BLOCK3_RESULTS.md`
+- `docs/benchmarks/phase9_current_snapshot.md`
+- `docs/V739_CURRENT_RUN_MONITOR.md`
+- `docs/PHASE12_TEXT_RERUN_EXECUTION.md`
+- `docs/MINIMAL_CURRENT_HANDOFF.md`
+- `docs/BLOCK3_EXECUTION_CONTRACT.md`
 
-## B) Recommended (audit / reproducibility / open-source hygiene)
+## B. Mandatory Current Code Paths
 
-- `docs/RESEARCH_PIPELINE_IMPLEMENTATION.md`
-- `scripts/verify_docs_against_runs.py`
-- `scripts/audit_repo_consistency.py`
-- `scripts/auto_backup.sh`
-- `runs/backups/latest.txt`
-- `configs/`
-- `test/`
+- `src/narrative/data_preprocessing/block3_dataset.py`
+- `src/narrative/block3/models/registry.py`
+- `src/narrative/block3/models/nf_adaptive_champion.py`
+- `src/narrative/block3/models/tslib_models.py`
+- `scripts/run_block3_benchmark_shard.py`
+- `scripts/aggregate_block3_results.py`
+- `scripts/build_phase9_current_snapshot.py`
 
-## C) Non-essential (keep for now, but review later)
+## C. Mandatory Current Artifact Paths
 
-- `scripts/run_official_benchmark.py`
-- `scripts/run_official_models.py`
-- `scripts/run_all_experiments.sh`
-- `scripts/run_local_test.sh`
-- `scripts/test_local_small_scale.py`
-- `scripts/slurm/*.sbatch`
-- `PROJECT_SUMMARY.md`
+- `runs/benchmarks/block3_phase9_fair/all_results.csv`
+- `runs/benchmarks/block3_phase9_fair/REPLICATION_MANIFEST.json`
+- `runs/text_embeddings/embedding_metadata.json`
+- `runs/text_embeddings/text_embeddings.parquet`
+
+## D. Historical or Reference Material (Do Not Treat as Current State)
+
+- `docs/_legacy_repo/`
+- `docs/benchmarks/LEGACY__block3_truth_pack__v72_v73/` (historical truth-pack line)
+- `docs/references/`

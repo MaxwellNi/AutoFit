@@ -48,6 +48,15 @@ import torch
 import torch.nn.functional as F
 import yaml
 
+# Monkey-patch DynamicCache for transformers >=4.45 compatibility
+# GTE-Qwen2's custom modeling_qwen.py calls get_usable_length(seq_len, layer_idx)
+# which was removed in newer transformers. Replicate the old behavior.
+from transformers import DynamicCache
+if not hasattr(DynamicCache, "get_usable_length"):
+    def _compat_get_usable_length(self, new_seq_length, layer_idx=0):
+        return self.get_seq_length(layer_idx)
+    DynamicCache.get_usable_length = _compat_get_usable_length
+
 logging.basicConfig(
     level=logging.INFO,
     format="%(asctime)s [%(levelname)s] %(message)s",
@@ -241,6 +250,13 @@ def encode_texts(
 def apply_pca(embeddings: np.ndarray, n_components: int = 64) -> Tuple[np.ndarray, object]:
     """Apply PCA dimensionality reduction to embeddings."""
     from sklearn.decomposition import PCA
+
+    # Replace NaN/Inf with 0 (from empty text embeddings)
+    nan_mask = ~np.isfinite(embeddings)
+    n_nan = nan_mask.any(axis=1).sum()
+    if n_nan > 0:
+        logger.warning(f"PCA input: {n_nan} rows contain NaN/Inf, replacing with 0")
+        embeddings = np.where(nan_mask, 0.0, embeddings)
 
     logger.info(f"Applying PCA: {embeddings.shape[1]} → {n_components} dims")
     pca = PCA(n_components=n_components, random_state=42)

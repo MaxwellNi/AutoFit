@@ -4,10 +4,13 @@
 > Scope: Research-grade dissection of 9 champion models across 104 benchmark conditions
 > Purpose: Inform V740+ AutoFit design — core mechanism selection, routing logic, feature interaction
 
+> Reference update (2026-03-13): text embedding artifacts now exist in `runs/text_embeddings/`.
+> This document still analyzes the interim seed-replication benchmark line and must not be treated as current operational status.
+
 ## 0. Critical Caveat: Text Embedding Ablation → 2-Seed Replication
 
-**`runs/text_embeddings/` is EMPTY** — text embeddings were never generated (Arrow OOM blocked all 6 attempts).
-Consequence: original `core_text ≡ core_only` and `full ≡ core_edgar` for ALL 78 completed models.
+At the time of the analyzed benchmark line, `runs/text_embeddings/` was empty and the real text-enabled reruns had not landed yet.
+Consequence for the analyzed line: original `core_text ≡ core_only` and `full ≡ core_edgar` for ALL 78 completed models.
 
 **Reorganization (2026-03-13)**: Redundant directories physically renamed to serve as **independent 2-seed replication**:
 - `core_text/` → `core_only_seed2/` (metrics.json ablation field updated)

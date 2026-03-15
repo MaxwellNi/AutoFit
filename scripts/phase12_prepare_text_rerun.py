@@ -144,20 +144,53 @@ def check_embeddings():
     
     size = emb_path.stat().st_size
     print(f"✅ {EMBEDDINGS_PATH} exists ({size / 1e6:.1f} MB)")
-    
-    # Quick validation
+
+    # Prefer a lightweight metadata-based check so this script remains usable
+    # under plain system Python (where pandas/pyarrow may not be installed).
+    meta_path = emb_path.parent / "embedding_metadata.json"
+    if meta_path.exists():
+        try:
+            meta = json.loads(meta_path.read_text())
+            rows = int(meta.get("n_total_rows", 0) or 0)
+            pca_dim = int(meta.get("pca_dim", 0) or 0)
+            print(f"   Metadata rows: {rows:,}")
+            print(f"   PCA dimension: {pca_dim}")
+            if rows >= 100_000 and pca_dim > 0:
+                return True
+            print("   ⚠️ Metadata present but row count / PCA dimension looks incomplete")
+        except Exception as e:
+            print(f"   ⚠️ Cannot parse embedding metadata: {e}")
+
+    # Fallback to direct parquet reads if the runtime supports it.
+    try:
+        import pyarrow.parquet as pq
+
+        table = pq.read_table(emb_path, columns=["entity_id"])
+        rows = table.num_rows
+        print(f"   Rows (pyarrow): {rows:,}")
+        if rows >= 100_000:
+            return True
+        print("   ⚠️ Very few rows — may be incomplete")
+        return False
+    except Exception:
+        pass
+
     try:
         import pandas as pd
+
         df = pd.read_parquet(emb_path, columns=["entity_id"])
-        print(f"   Rows: {len(df):,}")
-        if len(df) < 100_000:
-            print(f"   ⚠️ Very few rows — may be incomplete")
-            return False
-    except Exception as e:
-        print(f"   ❌ Cannot read parquet: {e}")
+        rows = len(df)
+        print(f"   Rows (pandas): {rows:,}")
+        if rows >= 100_000:
+            return True
+        print("   ⚠️ Very few rows — may be incomplete")
         return False
-    
-    return True
+    except Exception as e:
+        print(f"   ⚠️ Cannot read parquet directly in this runtime: {e}")
+
+    # At this point the artifact exists but we could not inspect it directly.
+    # Treat the file existence as insufficient without metadata.
+    return False
 
 
 def count_invalid_results():

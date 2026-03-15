@@ -1,178 +1,105 @@
 # Agent Context
 
 ## Mission
-Block 3 modeling on the finalized WIDE2 freeze (`TRAIN_WIDE_FINAL`). The freeze is complete with all gates PASS. No feature backfilling is required.
 
-## Current State (as of 2026-03-08)
-- **WIDE2 Freeze: COMPLETE** (stamp `20260203_225620`)
-- All 5 gates PASS:
-  - `pointer_valid`: PASS
-  - `column_manifest`: PASS
-  - `raw_cardinality_coverage`: PASS
-  - `freeze_candidates`: PASS
-  - `offer_day_coverage_exact`: PASS
-- Block 3 entry verified via `scripts/block3_verify_freeze.py`
+Maintain and extend Block 3 on the finalized WIDE2 freeze using the **current clean benchmark line only**:
+- canonical benchmark root: `runs/benchmarks/block3_phase9_fair/`
+- canonical AutoFit baseline: `AutoFitV739`
+- canonical data pointer: `docs/audits/FULL_SCALE_POINTER.yaml`
 
-### Phase 9 Fair Benchmark — ULHPC Iris HPC (IN PROGRESS)
+## Read First
 
-Phase 9 is a complete re-benchmark after fixing 4 critical experimental bugs
-(TSLib per-entity prediction, foundation prediction_length, Moirai entity cap,
-ml_tabular single-horizon). All prior Phase 7/8 results are **DEPRECATED**.
+Every future contributor should read these files in order before making claims or changes:
+1. `.local_mandatory_preexec.md`
+2. `docs/CURRENT_SOURCE_OF_TRUTH.md`
+3. `docs/PHASE9_V739_FACT_ALIGNMENT.md`
+4. `docs/BLOCK3_MODEL_STATUS.md`
+5. `docs/BLOCK3_RESULTS.md`
+6. `docs/benchmarks/phase9_current_snapshot.md`
+7. `docs/V739_CURRENT_RUN_MONITOR.md`
+8. `docs/PHASE12_TEXT_RERUN_EXECUTION.md`
+9. `docs/PHASE9_V739_LESSONS_LEARNED.md`
 
-- **Target Model Count**: 114 models across 8 categories
-  - `ml_tabular` (15): multi-horizon, NaN passthrough for tree models
-  - `statistical` (15): original 5 + 10 new (Croston, Holt, AutoCES, etc.)
-  - `deep_classical` (9): NBEATS/NHITS/TFT/DeepAR + GRU/LSTM/TCN/MLP/DilatedRNN
-  - `transformer_sota` (23): PatchTST, iTransformer, TimesNet, TSMixer, etc.
-  - `foundation` (11): Chronos, ChronosBolt, Chronos2, Moirai, etc.
-  - `irregular` (4): GRU-D, SAITS, BRITS, CSDI
-  - `tslib_sota` (34): TimeFilter, WPMixer, MSGNet, Crossformer, SCINet, CFPT, DeformableTST, ModernTCN, PathFormer, SEMPO, TimePerceiver, TimeBridge, TQNet, PIR, CARD, PDF, TimeRecipe, DUET, SRSNet, etc.
-  - `autofit` (1): V739 (validation-based) — prior versions V734–V738 retired
-- **Platform**: ULHPC Iris — GPU (V100 32GB, ~756GB RAM), bigmem (3TB, 112 CPUs), QOS `normal` (2-day wall)
-- **Ablations**: 4 per task — `core_only`, `core_only_seed2`, `core_edgar`, `core_edgar_seed2` (task3: 3, no core_only_seed2)
-- **Tasks**: `task1_outcome`, `task2_forecast`, `task3_risk_adjust`
-- **Canonical Output Dir**: `runs/benchmarks/block3_phase9_fair/`
-- **Validated Progress**: 77 metrics.json files, 6,668 records (post-filter), 90 models
-- **Valid Complete Models**: 77 (104/104 conditions) — V734-V738 fully purged from results
-- **AutoFit**: V739 (validation-based, 2/11 RUNNING on l40s, 9 PENDING) — V734–V738 purged + archived
-- **Partial Models**: 13 (gap-fill PENDING on besteffort)
-- **SLURM Status**: 2 RUNNING (V739 on l40s), 121 PENDING (npin only, using iris-gpu-long/iris-snt-long/besteffort)
-- **Deprecated Outputs**: 26 dirs + V734-V738 metrics archived to `runs/benchmarks/_deprecated_archive/`
-- **Text Embeddings**: ❌ EMPTY — 4 generation jobs PENDING; former core_text/full dirs reorganized as 2-seed replication (core_only_seed2/core_edgar_seed2)
-- **SLURM Scripts**: `.slurm_scripts/phase9/` (66 scripts), `.slurm_scripts/phase10/` (various), `.slurm_scripts/phase11/` (11+), `.slurm_scripts/phase12/` (44 scripts)
-- **Live Results**: See [docs/BLOCK3_RESULTS.md](docs/BLOCK3_RESULTS.md)
-- **Full Status**: See [docs/BLOCK3_MODEL_STATUS.md](docs/BLOCK3_MODEL_STATUS.md)
+## Verified Current State (2026-03-15)
+
+- Freeze: complete and read-only
+- Canonical benchmark: `runs/benchmarks/block3_phase9_fair/`
+- Raw benchmark scan:
+  - `91` metrics files
+  - `10213` raw records (Phase 12 text reruns actively landing)
+  - `91` raw models
+  - `80` raw complete models (`≥104`)
+  - `11` raw partial models
+- AutoFit:
+  - V734-V738 are retired due to oracle test-set leakage
+  - V739 is the only valid current AutoFit baseline
+  - V739 landed conditions: `112/112` (ALL COMPLETE — 4 ablations × 3 tasks)
+  - V739 benchmark ranking: **#13/80** by mean rank (14.38, top 16% across 56 universal conditions)
+  - V739 conditions won: 3/56 (1 per task)
+  - V739 quality: 0 NaN/Inf, 0 fallback, 100% fairness pass
+- Top-5 models by mean rank: NHITS (4.21), PatchTST (4.36), NBEATS (4.77), NBEATSx (5.84), ChronosBolt (7.11)
+- Dominant champion model: NBEATS — 24/56 conditions won (43%)
+- Gap-fill progress:
+  - 12 TSLib gap-fill jobs RUNNING (4 npin/l40s + 8 cfisch/gpu)
+  - FM seed2: 4/5 COMPLETED, 1 RUNNING (cf_gf_fm_t1_ces2)
+  - Chronos2: COMPLETE (≥104), TTM: COMPLETE (≥104)
+  - NegativeBinomialGLM: structural failure (20/104), cannot complete
+- Phase 12 text reruns:
+  - 40 jobs submitted (20 npin + 20 cfisch), 2026-03-15
+  - 20 RUNNING (deep/foun/irre/stat), 14 PENDING (af39/ml_t/tran/tsli), 5 bigmem RUNNING (stat)
+  - Scripts: `.slurm_scripts/phase12/rerun/`
+  - All scripts: umask 002, --requeue, text embedding pre-flight check
+- Text embeddings:
+  - artifacts exist in `runs/text_embeddings/` (5.77M rows, 64 PCA dims, float32, 90MB, 0 NaN)
+  - PCA embedding columns are NUMERIC (float32) and survive `select_dtypes(include=[np.number])`
+  - Phase 12 text reruns submitted and running — will produce real core_text/full results
+  - cfisch has GROUP access to npin's HF cache (chmod g+rx fix applied 2026-03-15)
+
+## Canonical Directories
+
+- Results: `runs/benchmarks/block3_phase9_fair/`
+- Text embeddings: `runs/text_embeddings/`
+- Deprecated outputs archive: `runs/benchmarks/_deprecated_archive/`
+- Documentation archive: `docs/_legacy_repo/`
+- Reference-only research notes: `docs/references/`
 
 ## Hard Constraints
-- Only commit/push: `scripts/`, `src/`, `configs/`, `docs/`.
-- Never commit anything under `runs/`.
-- Block 3 must read **only** `docs/audits/FULL_SCALE_POINTER.yaml` (via `FreezePointer` class).
-- **Freeze artifacts are read-only**: never modify files under `runs/*_20260203_225620/`.
 
-## Execution Contract
-See `docs/BLOCK3_EXECUTION_CONTRACT.md` for the full execution contract.
-Preflight check: `python3 scripts/assert_block3_execution_contract.py --entrypoint <script>`
+- Only commit/push: `scripts/`, `src/`, `configs/`, `docs/`
+- Never commit anything under `runs/`
+- Never modify files under `runs/*_20260203_225620/`
+- Block 3 must read the freeze via `FreezePointer` and `docs/audits/FULL_SCALE_POINTER.yaml`
+- Do not use V734-V738 code paths, tables, or narratives as active baselines
 
-## Block 3 Architecture
+## Current Interpretation Rules
 
-### Data Flow
-```
-docs/audits/FULL_SCALE_POINTER.yaml
-        │
-        ▼
-FreezePointer (src/narrative/data_preprocessing/block3_dataset.py)
-        │
-        ├─> offers_core_daily (parquet)
-        ├─> offers_text (parquet)
-        └─> edgar_feature_store (parquet)
-                │
-                ▼
-        Block3Dataset (lazy loading + explicit joins)
-                │
-                ▼
-        BenchmarkHarness (scripts/run_block3_benchmark_shard.py)
-                │
-                ├─> Statistical (5):       AutoARIMA, AutoETS, AutoTheta, MSTL, SF_SeasonalNaive
-                ├─> ML Tabular (15):       LightGBM, XGBoost, CatBoost, RandomForest, ...
-                ├─> Deep Classical (9):    NBEATS, NHITS, TFT, DeepAR, GRU, LSTM, TCN, MLP, DilatedRNN
-                ├─> Transformer SOTA (23): PatchTST, iTransformer, TimesNet, TSMixer, Informer, ...
-                ├─> Foundation (11):       Chronos, ChronosBolt, Moirai, MoiraiLarge, Timer, ...
-                ├─> Irregular (4):         GRU-D, SAITS, BRITS, CSDI
-                ├─> TSLib SOTA (20):       TimeFilter, WPMixer, MSGNet, Crossformer, SCINet, ...
-                └─> AutoFit (3):           V734, V735, V736
-```
+1. Phase 7 / Phase 8 are historical only.
+2. The old V72 / early V73 truth-pack line is historical only.
+3. `docs/_legacy_repo/` is archive material, not current operational truth.
+4. `docs/references/` is useful background knowledge, not status truth.
+5. Current Phase 9 results still represent:
+   - `core_only`
+   - `core_only_seed2`
+   - `core_edgar`
+   - `core_edgar_seed2`
+   until the real text-enabled reruns land.
+6. `docs/PHASE9_V739_FACT_ALIGNMENT.md` defines the corrected statements that future contributors must use when old/legacy claims conflict with current evidence.
 
-### Join Keys
-- `entity_id` + `crawled_date_day`: offers_core ↔ offers_text
-- `cik` + `crawled_date_day`: offers_core ↔ edgar_store
+## Key Current Scripts
 
-### AutoFit Meta-Features
-From `scripts/block3_profile_data.py`:
-- `nonstationarity_score`, `periodicity_score`, `multiscale_score`
-- `long_memory_score`, `irregular_score`, `heavy_tail_score`
-- `exog_strength`, `edgar_strength`, `text_strength`, `missing_rate`
-
-## Key Scripts (Block 3)
 - Freeze verification: `scripts/block3_verify_freeze.py`
-- Data profiling: `scripts/block3_profile_data.py`
-- Benchmark harness (shard): `scripts/run_block3_benchmark_shard.py`
-- SLURM submission (Phase 9): `.slurm_scripts/phase9/submit_all_phase9.sh`
-- Results aggregator: `scripts/aggregate_block3_results.py`
-- Results consolidator: `scripts/consolidate_block3_results.py`
-- Paper tables: `scripts/make_paper_tables_v2.py`
+- Benchmark harness: `scripts/run_block3_benchmark_shard.py`
+- Results aggregation: `scripts/aggregate_block3_results.py`
+- Current-state fact snapshot: `scripts/build_phase9_current_snapshot.py`
+- Phase 12 rerun preparation: `scripts/phase12_prepare_text_rerun.py`
 - Dataset interface: `src/narrative/data_preprocessing/block3_dataset.py`
-- AutoFit composer: `src/narrative/auto_fit/rule_based_composer.py`
-- Concept bottleneck: `src/narrative/explainability/concept_bottleneck.py`
+- Registry: `src/narrative/block3/models/registry.py`
+- Current AutoFit implementation: `src/narrative/block3/models/nf_adaptive_champion.py`
 
-## Model Source Files (Block 3)
-- Deep + Transformer + Foundation: `src/narrative/block3/models/deep_models.py`
-- Statistical (StatsForecast): `src/narrative/block3/models/statistical.py`
-- Irregular (PyPOTS): `src/narrative/block3/models/irregular_models.py`
-- Traditional ML (sklearn): `src/narrative/block3/models/traditional_ml.py`
-- AutoFit wrapper: `src/narrative/block3/models/autofit_wrapper.py`
-- RL policy (contextual bandit): `src/narrative/block3/models/rl_policy.py`
-- Multi-agent coordination: `src/narrative/block3/models/multi_agent_ensemble.py`
-- Unified registry: `src/narrative/block3/models/registry.py`
-- Base classes: `src/narrative/block3/models/base.py`
+## Immediate Next Work
 
-## Block 3 Configuration
-- Config file: `configs/block3.yaml`
-- Targets: `total_amount_sold`, `number_investors`, `days_to_close`
-- Horizons: [7, 14, 30, 60]
-- Context lengths: [30, 60, 90]
-- Metrics: RMSE, MAE, MAPE, SMAPE, CRPS (probabilistic)
-
-## Commit Trail
-- `ae9626b` Fix EDGAR join: strip timezone from datetime64[ns,UTC] for merge_asof compatibility
-- `444f376` Phase 7: Fix entity coverage, RobustFallback, hybrid predict, EDGAR covariates, AutoFit target_transform
-- `d837828` Phase 7: SLURM submission scripts for full 67-model benchmark
-- `faafdcf` AutoFit V7: data-adapted robust ensemble with 6 SOTA innovations
-- `ad07032` AutoFit V6: conference-grade stacked generalization (Phase 6)
-- `dce0ff9` AutoFit V5: empirical regime-aware ensemble + 5 new foundation models (65 total)
-- `c53abf6` Phase 4: +10 SOTA models (59 total), AutoFitV4 w/ target-transform+NCL+full-OOF
-- `320c314` Phase 3: Fix 6 critical issues, 42 SLURM jobs submitted
-- `87baa13` Phase 2 AutoFit: 5-fold temporal CV + stability penalty, benchmark fixes
-- `014ac92` Fix n_series dynamic computation, SLURM mem 128G, 4090 launch scripts
-- `fcbe970` Model registry rewrite: 44 models, panel data fix, all 6 categories
-- `3ce5509` WIDE2 freeze seal complete, all gates PASS
-
-## Pending Work (Block 3)
-1. ✅ Freeze verification script
-2. ✅ Unified dataset interface
-3. ✅ Data profiling for AutoFit
-4. ✅ Benchmark harness with 6 baseline categories
-5. ✅ AutoFit rule-based composer
-6. ✅ Concept bottleneck for interpretability
-7. ✅ Model registry expansion: 127 models across 8 categories (Phase 4-8)
-8. ✅ Panel data fix: all categories receive entity-panel kwargs
-9. ✅ Deep/Transformer models: 22 NeuralForecast models (panel-aware, +xLSTM/TimeLLM/DeepNPTS)
-10. ✅ Statistical models: entity-sampled panel via StatsForecast
-11. ✅ Foundation models: 11 models (Chronos family + Moirai family + Timer/TimeMoE/MOMENT/LagLlama/TimesFM)
-12. ✅ Irregular models: GRU-D, SAITS, BRITS, CSDI via PyPOTS
-13. ✅ AutoFit V734/V735/V736 (older versions dropped)
-14. ✅ Benchmark harness updated for all 8 categories + 4 ablations
-15. ✅ Phase 7 code fixes (5 root causes across 4 files, 57/57 tests pass)
-16. ✅ EDGAR timezone fix (merge_asof dtype mismatch)
-17. ✅ Statistical OOM fix (64G → 112G memory)
-18. ✅ V73 factored contextual bandit RL policy (Thompson Sampling / LinUCB)
-19. ✅ V73 multi-agent coordination (Recon/Scout/Composer/Critic blackboard protocol)
-20. ✅ V72 root cause analysis (6 root causes, GPU gate fix)
-21. ✅ Phase 7/8 benchmark — deprecated (4 critical bugs found)
-22. ✅ Phase 9 results: 6,668 valid records (post-filter), 77 valid complete (V734-V738 fully purged)
-23. ✅ Phase 10 V737/V738: both 104/104 but INVALID (5-layer oracle leakage)
-24. ✅ Phase 11: 14 TSLib SOTA + V739 AutoFit registered, SLURM scripts ready
-25. ✅ Text embedding OOM fix (Arrow string → .astype("object"), commit f67d69e)
-26. ✅ Code audit (2026-03-12): No data leakage, no critical bugs, 0 anomalous metrics
-27. ✅ V734-V738 ALL confirmed oracle-leaked (2026-03-13): test-set oracle tables
-28. ✅ V739 validated clean (2026-03-12): full code audit, zero oracle references, proper val_raw
-29. ✅ Deprecated outputs archived (2026-03-13): 26 dirs + V734-V738 metrics → `_deprecated_archive/`
-30. ✅ Fast QOS migration (2026-03-13): all npin jobs migrated to iris-gpu-long/iris-snt-long/besteffort
-31. ⏳ V739 benchmark: 2 RUNNING (l40s), 9 PENDING across 3 QOS paths
-32. ⏳ Gap-fill: 111 jobs PENDING (34 original + 66 TSLib + 11 NegBinGLM) on besteffort
-30. ⏳ Text embedding generation: 1 job PENDING (besteffort/gpu); former core_text/full dirs reorganized as 2-seed replication (core_only_seed2/core_edgar_seed2)
-31. ⏳ Phase 12 real core_text/full re-runs: 40 scripts ready, blocked on text embeddings (existing dirs renamed to seed2)
-32. ⏳ Gap-fill: 111 jobs on besteffort for 13 partial models (6 original + 7 TSLib)
-33. ⏳ V739 benchmark: 2 RUNNING (l40s) + 9 PENDING (iris-gpu-long/besteffort)
-34. ⏳ Phase 11 TSLib: 11 cfisch jobs stuck on gpu/normal
-35. ⏳ TCAV-style concept importance analysis
-36. ⏳ Final leaderboard + paper tables (after Phase 12 completes)
+1. ~~Land the first clean V739 results.~~ ✅ V739 COMPLETE: 112/112 conditions landed.
+2. Finish gap-fill for the remaining 12 partial models (NegBinGLM structural failure = excluded).
+3. ~~Run and land the real text-enabled reruns~~ ✅ Phase 12 submitted (40 jobs, 2026-03-15). Wait for landing.
+4. Consolidate the clean benchmark surface (after Phase 12 lands).
+5. Only then start any V740+ iteration.

@@ -1,4 +1,11 @@
 #!/usr/bin/env bash
+# DEPRECATED LEGACY SURFACE
+# This script references the retired V72 / early V73 truth-pack line and/or
+# the archived pre-Phase-9 audit surface.
+# It is kept for historical traceability and compatibility only.
+# Do not use it for current Phase 9 / AutoFitV739 status, ranking, or execution decisions.
+# Current truth docs: docs/CURRENT_SOURCE_OF_TRUTH.md and docs/PHASE9_V739_FACT_ALIGNMENT.md
+
 # Full wide-freeze pipeline with audits and pointer update.
 # Safe defaults; override via env vars (WIDE_STAMP, SQLITE_DIR, MIN_FREE_GB, RAW_SAMPLE_ROWS_OFFERS, RAW_SAMPLE_ROWS_EDGAR).
 set -euo pipefail

@@ -1,50 +1,50 @@
-# Block 3 Benchmark Design (Current)
+# Block 3 Design (Current)
 
-## Core Design
+## 1. Benchmark Design
 
-1. Strict-comparable benchmark lattice:
-   - `task x ablation x target x horizon = 104` expected conditions
-2. Unified condition ledger:
-   - `docs/benchmarks/block3_truth_pack/condition_inventory_full.csv`
-3. Unified champion ledger:
-   - `docs/benchmarks/block3_truth_pack/condition_leaderboard.csv`
+1. Canonical benchmark root: `runs/benchmarks/block3_phase9_fair/`
+2. Condition lattice: `104` conditions
+3. Canonical data access: `FreezePointer` → `docs/audits/FULL_SCALE_POINTER.yaml`
+4. Freeze assets remain read-only.
 
-## Reporting Design
+## 2. Two Reporting Layers
 
-1. Human-readable canonical benchmark view:
-   - `docs/BLOCK3_FULL_SOTA_BENCHMARK.md`
-2. Machine-readable canonical benchmark view:
-   - `docs/benchmarks/block3_truth_pack/full_sota_104_table.csv`
-3. Current execution and queue view:
-   - `docs/benchmarks/block3_truth_pack/execution_status_latest.json`
-4. Current V7.2 standing:
-   - `docs/benchmarks/block3_truth_pack/v72_rank_104_table_latest.csv`
-   - `docs/benchmarks/block3_truth_pack/v72_rank_104_summary_latest.json`
+### Raw materialization layer
+Use this layer to answer: what has physically landed?
 
-## Observed V7.2 Failure Pattern
+Current verified values:
+- metrics files: `78`
+- raw records: `8664`
+- raw models: `90`
+- raw complete models: `77`
 
-1. V7.2 is complete on the strict lattice (`104/104`) but it does not win any strict condition.
-2. The dominant failure mode is lane imbalance:
-   - `funding_raised_usd` is near the frontier
-   - `investors_count` is the main loss driver
-   - `is_funded` remains materially behind the benchmark leaders
-3. The design implication is that V7.3 should not tune globally first. It should fix the count lane first, then the binary lane.
+### Filtered leaderboard layer
+Use this layer to answer: what remains fair and comparable after exclusions?
 
-## V7.3 Design Rules
+Current verified values:
+- filtered records: `6672`
+- filtered models: `69`
+- filtered complete models: `59`
+- filtered AutoFit models: none yet
 
-1. Reuse-first:
-   - do not rerun already materialized strict conditions unless a deliberate V7.3 experiment requires it
-2. Lane-specific redesign:
-   - count lane: two-part count head, non-negative and spike-safe guards
-   - binary lane: hazard head with OOF-only calibration selection
-   - heavy-tail lane: robust dual-objective losses with tail diagnostics
-3. Evidence-first:
-   - all policy updates must be justified by strict baseline evidence and OOF-only evaluation
+## 3. Current Ablation Semantics
 
-## Governance Design
+1. The current physical Phase 9 results still reflect the seed-replication reinterpretation.
+2. That means the benchmark currently represents:
+   - `core_only`
+   - `core_only_seed2`
+   - `core_edgar`
+   - `core_edgar_seed2`
+3. The real text-enabled reruns must still be executed on top of the newly available text embedding artifacts.
 
-1. Freeze pointer only:
-   - `docs/audits/FULL_SCALE_POINTER.yaml`
-2. Read-only freeze assets.
-3. No test-feedback-driven model selection.
-4. Contract assertion before every execution or submission path.
+## 4. Current AutoFit Design Baseline
+
+1. V739 is the only valid current AutoFit baseline.
+2. V739 uses validation-based selection with harness-supplied `val_raw`.
+3. V734-V738 are historical only and must not be reused for implementation or ranking.
+
+## 5. Current Design Boundary
+
+1. The project is still completing the clean Phase 9 line.
+2. Therefore, the current design goal is not “invent the next version first.”
+3. The current design goal is to finish a clean benchmark surface that future versions can trust.
