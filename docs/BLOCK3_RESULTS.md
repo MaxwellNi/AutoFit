@@ -17,8 +17,8 @@ The current benchmark surface is verified from:
 
 | Metric | Value | Evidence |
 | --- | ---: | --- |
-| raw metrics files | 117 | direct scan 2026-03-15 |
-| raw records | 11058 | direct scan 2026-03-15 (Phase 12 landing fast) |
+| raw metrics files | 131 | direct scan 2026-03-15 |
+| raw records | 12779 | direct scan 2026-03-15 (Phase 12 near-complete) |
 | raw models | 91 | direct scan 2026-03-15 |
 | raw complete models (≥104) | 80 | direct scan 2026-03-15 |
 | raw partial models | 11 | direct scan 2026-03-15 |
@@ -44,8 +44,8 @@ The current benchmark surface is verified from:
    - `core_only_seed2`
    - `core_edgar`
    - `core_edgar_seed2`
-3. Text embedding artifacts now exist. Phase 12 text reruns: 48 jobs total, 15 COMPLETED, rest running/pending.
-4. Once Phase 12 lands, `core_text` / `full` will reflect real text features. Currently 77/91 models have core_text, 76/91 have full.
+3. Text embedding artifacts fully functional. Phase 12 text reruns: 48 jobs total, 31 COMPLETED, 16 RUNNING, 1 OOM→fixed.
+4. `core_text` now covers **91/91** models, `full` covers **90/91** models (only NegBinGLM missing = structural failure).
 5. Current champion model: **NBEATS** — 24/56 conditions won (43%), dominant across all 3 tasks.
 6. Champion per task (top contributors): NBEATS(8), NHITS(5+), KAN(5), DeepNPTS(4), GRU(3), V739(3), PatchTST(2), Chronos(2+).
 

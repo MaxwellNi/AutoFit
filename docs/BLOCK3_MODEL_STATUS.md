@@ -8,14 +8,14 @@
 
 | Metric | Value | Evidence |
 | --- | ---: | --- |
-| raw metrics files | 117 | direct scan 2026-03-15 |
-| raw records | 11058 | direct scan 2026-03-15 (Phase 12 landing fast) |
+| raw metrics files | 131 | direct scan 2026-03-15 |
+| raw records | 12779 | direct scan 2026-03-15 (Phase 12 near-complete) |
 | raw models | 91 | direct scan 2026-03-15 |
 | raw complete models (≥104) | 80 | direct scan 2026-03-15 |
 | raw partial models | 11 | direct scan 2026-03-15 |
-| live jobs running | 37 | squeue 2026-03-15 |
-| live jobs pending | 9 | squeue 2026-03-15 |
-| Phase 12 text rerun jobs | 48 total (15 COMPLETED, 25R, 8PD) | `.slurm_scripts/phase12/rerun/` |
+| live jobs running | 29 | squeue 2026-03-15 |
+| live jobs pending | 0 | squeue 2026-03-15 |
+| Phase 12 text rerun jobs | 48+1 total (31 DONE, 16R, 1 OOM→fixed) | `.slurm_scripts/phase12/rerun/` |
 
 ## V739 Status
 
@@ -35,31 +35,27 @@
 | Model | Records | Status | Notes |
 | --- | ---: | --- | --- |
 | NegativeBinomialGLM | 20/104 | ❌ structural failure | NaN/inf in weights, only is_funded works |
-| TimeFilter | 59/104 | ⏳ gap-fill running | TSLib jobs on gpu+l40s |
-| MultiPatchFormer | 59/104 | ⏳ gap-fill running | constant predictions (fairness_pass=False) |
-| MSGNet | 59/104 | ⏳ gap-fill running | very slow (~3.5 min/epoch) |
-| PAttn | 59/104 | ⏳ gap-fill running | TSLib jobs on gpu+l40s |
-| MambaSimple | 59/104 | ⏳ gap-fill running | TSLib jobs on gpu+l40s |
-| Crossformer | 59/104 | ⏳ gap-fill running | TSLib jobs on gpu+l40s |
-| ETSformer | 82/104 | ⏳ gap-fill running | TSLib jobs on gpu |
-| LightTS | 82/104 | ⏳ gap-fill running | TSLib jobs on gpu |
-| Pyraformer | 82/104 | ⏳ gap-fill running | TSLib jobs on gpu |
-| Reformer | 82/104 | ⏳ gap-fill running | TSLib jobs on gpu |
+| TimeFilter | 69/104 | ⏳ gap-fill running | TSLib jobs on gpu+l40s |
+| MultiPatchFormer | 69/104 | ⏳ gap-fill running | constant predictions (fairness_pass=False) |
+| MSGNet | 69/104 | ⏳ gap-fill running | very slow (~25 min/epoch on V100) |
+| PAttn | 69/104 | ⏳ gap-fill running | TSLib jobs on gpu+l40s |
+| MambaSimple | 69/104 | ⏳ gap-fill running | TSLib jobs on gpu+l40s |
+| Crossformer | 69/104 | ⏳ gap-fill running | TSLib jobs on gpu+l40s |
+| ETSformer | 88/104 | ⏳ gap-fill running | TSLib jobs on gpu |
+| LightTS | 88/104 | ⏳ gap-fill running | TSLib jobs on gpu |
+| Pyraformer | 88/104 | ⏳ gap-fill running | TSLib jobs on gpu |
+| Reformer | 88/104 | ⏳ gap-fill running | TSLib jobs on gpu |
 
 ## Live Queue Reality
 
 | Queue slice | Value | Evidence |
 | --- | ---: | --- |
-| npin l40s RUNNING | 4 | squeue 2026-03-15 (TSLib t1+t3 co/ce gap-fill) |
-| npin gpu RUNNING | 5 | squeue 2026-03-15 (Phase 12: irre ct/fu) |
-| npin gpu PENDING | 3 | squeue 2026-03-15 (Phase 12: deep/foun/irre t3_ct) |
-| npin bigmem RUNNING | 5 | squeue 2026-03-15 (Phase 12: stat ct/fu) |
-| npin bigmem PENDING | 1 | squeue 2026-03-15 (Phase 12: stat t3_ct) |
-| cfisch gpu RUNNING | 18 | squeue 2026-03-15 (8 TSLib gap-fill + 10 Phase 12 tran/tsli) |
-| cfisch gpu PENDING | 3 | squeue 2026-03-15 (Phase 12: af39/tran/tsli t3_ct) |
-| cfisch bigmem RUNNING | 4 | squeue 2026-03-15 (Phase 12: ml_t t1/t2) |
-| cfisch bigmem PENDING | 2 | squeue 2026-03-15 (Phase 12: ml_t t3_fu/t3_ct) |
-| **total** | **45** (37R + 8PD) | squeue 2026-03-15 |
+| npin l40s RUNNING | 4 | squeue 2026-03-15 (TSLib gap-fill t1+t3 co/ce, 27h elapsed) |
+| npin gpu RUNNING | 1 | squeue 2026-03-15 (Phase 12: irre t3_ct) |
+| npin bigmem RUNNING | 1 | squeue 2026-03-15 (OOM fix: ml_t_t1_fu 640G) |
+| cfisch gpu RUNNING | 18 | squeue 2026-03-15 (8 TSLib gap-fill + 5 tran + 5 tsli) |
+| cfisch bigmem RUNNING | 2 | squeue 2026-03-15 (Phase 12: ml_t t2_fu + t3_fu) |
+| **total** | **26** (26R + 0PD) | squeue 2026-03-15 |
 
 ## Text Embeddings
 

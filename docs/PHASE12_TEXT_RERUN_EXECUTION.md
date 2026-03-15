@@ -2,7 +2,7 @@
 
 > Last verified: 2026-03-15
 > Scope: the first real `core_text` / `full` reruns on top of the current Phase 9 fair benchmark line.
-> Status: 48 jobs total — 15 COMPLETED (deep×5, foun×5, af39×5), 25 RUNNING, 8 PENDING (new t3_ct)
+> Status: 48+1 jobs total — 31 COMPLETED, 16 RUNNING, 1 OOM→fixed (ml_t_t1_fu 320G→640G, resubmitted as npin #5253389)
 
 ## Verified Current Readiness
 
@@ -86,25 +86,31 @@ bash .slurm_scripts/phase12/rerun/submit_all_phase12_rerun.sh
 | --- | --- | --- | --- | --- |
 | npin | 5251977-5251981 | gpu | deep_classical ct/fu (t1/t2/t3) | ✅ COMPLETED |
 | npin | 5251982-5251986 | gpu | foundation ct/fu (t1/t2/t3) | ✅ COMPLETED |
-| npin | 5251987-5251991 | gpu | irregular ct/fu (t1/t2/t3) | RUNNING (~4-5h) |
-| npin | 5251992-5251996 | bigmem | statistical ct/fu (t1/t2/t3) | RUNNING (~5h) |
+| npin | 5251987-5251991 | gpu | irregular ct/fu (t1/t2/t3) | ✅ COMPLETED |
+| npin | 5251992-5251996 | bigmem | statistical ct/fu (t1/t2/t3) | ✅ COMPLETED |
 | cfisch | 5252181-5252185 | gpu | af39=autofit ct/fu (t1/t2/t3) | ✅ COMPLETED |
-| cfisch | 5252186-5252190 | bigmem | ml_tabular ct/fu (t1/t2/t3) | 4R + 1PD |
-| cfisch | 5252191-5252195 | gpu | transformer_sota ct/fu (t1/t2/t3) | RUNNING (~2.5h) |
-| cfisch | 5252196-5252200 | gpu | tslib_sota ct/fu (t1/t2/t3) | RUNNING (~1-2h) |
+| cfisch | 5252186-5252190 | bigmem | ml_tabular ct/fu (t1/t2/t3) | 3✅ + 1 OOM→fixed + 2R |
+| cfisch | 5252191-5252195 | gpu | transformer_sota ct/fu (t1/t2/t3) | RUNNING (~10h) |
+| cfisch | 5252196-5252200 | gpu | tslib_sota ct/fu (t1/t2/t3) | RUNNING (~9h) |
 
 ### Additional 8 t3_ct jobs (task3/core_text gap, added 2026-03-15)
 
 | Account | Job IDs | Partition | Content | Status |
 | --- | --- | --- | --- | --- |
-| npin | 5252582 | gpu | deep_classical t3_ct | PENDING |
-| npin | 5252583 | gpu | foundation t3_ct | PENDING |
-| npin | 5252584 | gpu | irregular t3_ct | PENDING |
-| npin | 5252585 | bigmem | statistical t3_ct | PENDING |
-| cfisch | 5252586 | gpu | af39=autofit t3_ct | PENDING |
-| cfisch | 5252587 | bigmem | ml_tabular t3_ct | PENDING |
-| cfisch | 5252588 | gpu | transformer_sota t3_ct | PENDING |
-| cfisch | 5252589 | gpu | tslib_sota t3_ct | PENDING |
+| npin | 5252582 | gpu | deep_classical t3_ct | ✅ COMPLETED |
+| npin | 5252583 | gpu | foundation t3_ct | ✅ COMPLETED |
+| npin | 5252584 | gpu | irregular t3_ct | RUNNING (~3h) |
+| npin | 5252585 | bigmem | statistical t3_ct | ✅ COMPLETED |
+| cfisch | 5252586 | gpu | af39=autofit t3_ct | ✅ COMPLETED |
+| cfisch | 5252587 | bigmem | ml_tabular t3_ct | ✅ COMPLETED |
+| cfisch | 5252588 | gpu | transformer_sota t3_ct | RUNNING (~6h) |
+| cfisch | 5252589 | gpu | tslib_sota t3_ct | RUNNING (~6h) |
+
+### OOM Fix (added 2026-03-15)
+
+| Account | Job ID | Partition | Content | Status |
+| --- | --- | --- | --- | --- |
+| npin | 5253389 | bigmem/640G | ml_tabular t1_fu (OOM fix, 320G→640G) | RUNNING |
 
 **Key script fixes applied before submission:**
 - Removed explicit HF_HOME (system default works correctly)

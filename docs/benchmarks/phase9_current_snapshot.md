@@ -7,8 +7,8 @@
 
 | metric | value | evidence |
 | --- | --- | --- |
-| metrics_files | 117 | raw metrics scan |
-| raw_records | 11058 | raw metrics scan |
+| metrics_files | 131 | raw metrics scan |
+| raw_records | 12779 | raw metrics scan |
 | raw_models | 91 | raw metrics scan |
 | raw_complete_models | 80 | raw metrics scan |
 | raw_partial_models | 11 | raw metrics scan |
@@ -131,14 +131,14 @@
 
 | model_name | conditions | records |
 | --- | --- | --- |
-| ETSformer | 82 | 82 |
-| LightTS | 82 | 82 |
-| Pyraformer | 82 | 82 |
-| Reformer | 82 | 82 |
-| Crossformer | 59 | 59 |
-| MSGNet | 59 | 59 |
-| MambaSimple | 59 | 59 |
-| MultiPatchFormer | 59 | 59 |
-| PAttn | 59 | 59 |
-| TimeFilter | 59 | 59 |
+| ETSformer | 88 | 88 |
+| LightTS | 88 | 88 |
+| Pyraformer | 88 | 88 |
+| Reformer | 88 | 88 |
+| Crossformer | 69 | 69 |
+| MSGNet | 69 | 69 |
+| MambaSimple | 69 | 69 |
+| MultiPatchFormer | 69 | 69 |
+| PAttn | 69 | 69 |
+| TimeFilter | 69 | 69 |
 | NegativeBinomialGLM | 20 | 20 |

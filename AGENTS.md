@@ -25,8 +25,8 @@ Every future contributor should read these files in order before making claims o
 - Freeze: complete and read-only
 - Canonical benchmark: `runs/benchmarks/block3_phase9_fair/`
 - Raw benchmark scan:
-  - `117` metrics files
-  - `11058` raw records (Phase 12 text reruns actively landing)
+  - `131` metrics files
+  - `12779` raw records (Phase 12 text reruns actively landing)
   - `91` raw models
   - `80` raw complete models (`≥104`)
   - `11` raw partial models
@@ -43,14 +43,14 @@ Every future contributor should read these files in order before making claims o
   - 12 TSLib gap-fill jobs RUNNING (4 npin/l40s + 8 cfisch/gpu)
   - FM seed2: ALL 5/5 COMPLETED
   - Chronos2: COMPLETE (≥104), TTM: COMPLETE (≥104)
-  - TSLib @59: TimeFilter, MultiPatchFormer, MSGNet, PAttn, MambaSimple, Crossformer (up from 57)
-  - TSLib @82: ETSformer, LightTS, Pyraformer, Reformer (up from 80)
+  - TSLib @69: TimeFilter, MultiPatchFormer, MSGNet, PAttn, MambaSimple, Crossformer (up from 59)
+  - TSLib @88: ETSformer, LightTS, Pyraformer, Reformer (up from 82)
   - NegativeBinomialGLM: structural failure (20/104), cannot complete
 - Phase 12 text reruns:
   - 48 total scripts (40 original + 8 new t3_ct added 2026-03-15)
-  - 15 COMPLETED (deep×5, foun×5, af39×5), 25 RUNNING, 8 PENDING (new t3_ct)
-  - core_text coverage: 77/91 models (t1+t2 done for deep/foun/af39; t3 pending)
-  - full coverage: 76/91 models
+  - 31 COMPLETED, 16 RUNNING, 1 OOM→resubmitted (ml_t_t1_fu 320G→640G)
+  - core_text coverage: **91/91** models (ALL categories complete)
+  - full coverage: **90/91** models (NegBinGLM structural failure only)
   - Scripts: `.slurm_scripts/phase12/rerun/`
   - All scripts: umask 002, --requeue, text embedding pre-flight check
 - Text embeddings:
