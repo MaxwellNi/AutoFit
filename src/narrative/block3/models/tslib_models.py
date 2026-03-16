@@ -30,6 +30,7 @@ from __future__ import annotations
 
 import gc
 import importlib
+import inspect
 import logging
 import os
 import sys
@@ -512,6 +513,20 @@ class TSLibModelWrapper(ModelBase):
 
         return cfg
 
+    # Models whose top-level Model.forward() only accepts encoder input (x_enc)
+    # and would raise TypeError if called with the standard 4-arg TSLib interface.
+    # Determined by inspecting vendor source: each model's Model.forward() signature.
+    _ENCODER_ONLY_MODELS = frozenset({
+        "DeformableTST",  # forward(x)
+        "Fredformer",     # forward(x)
+        "ModernTCN",      # forward(x, te=None)
+        "PDF",            # forward(x)
+        "PathFormer",     # forward(x)
+        "SparseTSF",      # forward(x)
+        "TimeRecipe",     # forward(x_enc)
+        "xPatch",         # forward(x)
+    })
+
     def _load_tslib_model(self, configs: SimpleNamespace) -> nn.Module:
         """Dynamically load TSLib model class and instantiate it."""
         _ensure_tslib_path()
@@ -529,6 +544,26 @@ class TSLibModelWrapper(ModelBase):
                 f"Failed to load TSLib model '{model_file}': {e}\n"
                 f"Ensure TSLib is at {TSLIB_ROOT}"
             ) from e
+
+    def _is_encoder_only(self) -> bool:
+        """Check if loaded model uses encoder-only forward(x) interface."""
+        return self._tslib_model_name in self._ENCODER_ONLY_MODELS
+
+    def _forward_model(
+        self,
+        x_enc: torch.Tensor,
+        x_mark_enc: torch.Tensor,
+        dec_inp: torch.Tensor,
+        dec_mark: torch.Tensor,
+    ) -> torch.Tensor:
+        """Unified forward call respecting model-specific interface.
+
+        Standard TSLib models: model(x_enc, x_mark_enc, x_dec, x_mark_dec)
+        Encoder-only models:   model(x_enc)
+        """
+        if self._is_encoder_only():
+            return self._model(x_enc)
+        return self._model(x_enc, x_mark_enc, dec_inp, dec_mark)
 
     def _create_windows(
         self,
@@ -716,7 +751,7 @@ class TSLibModelWrapper(ModelBase):
                 )
 
                 try:
-                    out = self._model(bx, x_mark, dec_inp, dec_mark)
+                    out = self._forward_model(bx, x_mark, dec_inp, dec_mark)
                     # Output shape varies by model, but we want (B, pred_len) for target
                     if isinstance(out, tuple):
                         out = out[0]
@@ -761,7 +796,7 @@ class TSLibModelWrapper(ModelBase):
                     )
 
                     try:
-                        out = self._model(bx, x_mark, dec_inp, dec_mark)
+                        out = self._forward_model(bx, x_mark, dec_inp, dec_mark)
                         if isinstance(out, tuple):
                             out = out[0]
                         if out.dim() == 3:
@@ -911,7 +946,7 @@ class TSLibModelWrapper(ModelBase):
                     )
 
                     try:
-                        out = self._model(x_batch, x_mark, dec_inp, dec_mark)
+                        out = self._forward_model(x_batch, x_mark, dec_inp, dec_mark)
                         if isinstance(out, tuple):
                             out = out[0]
                         if out.dim() == 3:
@@ -1006,7 +1041,7 @@ class TSLibModelWrapper(ModelBase):
         self._model.eval()
         with torch.no_grad():
             try:
-                out = self._model(x_enc, x_mark, dec_inp, dec_mark)
+                out = self._forward_model(x_enc, x_mark, dec_inp, dec_mark)
                 if isinstance(out, tuple):
                     out = out[0]
                 if out.dim() == 3:
