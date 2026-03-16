@@ -1,6 +1,6 @@
 # Block 3 Model Benchmark Status
 
-> Last updated: 2026-03-17
+> Last updated: 2026-03-16 11:30 CET
 > Current authority: `docs/CURRENT_SOURCE_OF_TRUTH.md`
 > Evidence: direct scan of `runs/benchmarks/block3_phase9_fair/`
 
@@ -9,13 +9,13 @@
 | Metric | Value | Evidence |
 | --- | ---: | --- |
 | raw metrics files | 132 | direct scan 2026-03-16 |
-| raw records | 13407 | direct scan 2026-03-16 (Phase 12 near-complete) |
+| raw records | 13449 | direct scan 2026-03-16 11:28 CET |
 | raw models | 91 | direct scan 2026-03-16 |
 | raw complete models (≥104) | 80 | direct scan 2026-03-16 |
 | raw partial models | 11 | direct scan 2026-03-16 |
-| live jobs running | 16 + 12 PD | squeue 2026-03-17 |
+| live jobs running | 19R + 9PD | squeue 2026-03-16 11:28 CET |
 | Phase 12 text rerun jobs | 48+1 total (42 DONE, 6 RUNNING) | `.slurm_scripts/phase12/rerun/` |
-| **Phase 15 new model jobs** | **12 PENDING** | `.slurm_scripts/phase15/` |
+| Phase 15 new model jobs | 3R + 3PD npin, 6PD cfisch | `.slurm_scripts/phase15/` |
 
 ## V739 Status
 
@@ -46,19 +46,20 @@
 | Pyraformer | 94/104 | ⏳ gap-fill running | TSLib jobs on gpu |
 | Reformer | 94/104 | ⏳ gap-fill running | TSLib jobs on gpu |
 
-## Live Queue Reality
+## Live Queue Reality (2026-03-16 11:28 CET)
 
 | Queue slice | Value | Evidence |
 | --- | ---: | --- |
-| npin l40s RUNNING | 2 | squeue 2026-03-17 (TSLib gap-fill t1_co/t1_ce) |
-| npin gpu PENDING | 6 | squeue 2026-03-17 (Phase 15 new models: co/ce × 3 tasks) |
-| cfisch gpu RUNNING | 14 | squeue 2026-03-17 (6 Phase 12 tslib + 8 gap-fill) |
-| cfisch gpu PENDING | 6 | squeue 2026-03-17 (Phase 15 new models: ct/fu × 3 tasks) |
-| **total** | **28** (16R + 12PD) | squeue 2026-03-17 |
+| npin l40s RUNNING | 2 | gap-fill t1_co/t1_ce (38h+ elapsed) |
+| npin gpu RUNNING | 3 | Phase 15 new models: t1_co, t1_ce, t2_co (11min elapsed) |
+| npin gpu PENDING | 3 | Phase 15: t2_ce, t3_co, t3_ce |
+| cfisch gpu RUNNING | 14 | 6 Phase 12 tslib ct/fu (17-21h) + 8 gap-fill cos2/ces2 (34h) |
+| cfisch gpu PENDING | 6 | Phase 15 ct/fu (re-submitted after log dir chmod fix) |
+| **total** | **28** (19R + 9PD) | squeue 2026-03-16 |
 
 ## Phase 15: New TSLib Model Expansion (23 models)
 
-**Submitted**: 2026-03-17 | **Status**: 12 jobs PENDING (gpu partition)
+**Submitted**: 2026-03-16 | **Status**: npin 3R+3PD, cfisch 6PD (re-submitted after log dir fix)
 **Code commit**: `e177f6f` — encoder-only forward fix + benchmark scripts
 
 ### Models (23)
@@ -114,6 +115,6 @@ DeformableTST, Fredformer, ModernTCN, PDF, PathFormer, SparseTSF, TimeRecipe, xP
 1. ~~Land the first canonical fair-line V739 results.~~ ✅ DONE (112/112)
 2. Close the 12 remaining partial models (gap-fill jobs running — 13 jobs active).
 3. ~~Submit real text/full reruns.~~ ✅ DONE (48 Phase 12 jobs: 42 COMPLETED, 6 RUNNING).
-4. ~~Integrate 23 new TSLib models into benchmark.~~ ✅ DONE (Phase 15: 12 jobs submitted 2026-03-17).
+4. ~~Integrate 23 new TSLib models into benchmark.~~ ✅ DONE (Phase 15: 12 jobs submitted 2026-03-16).
 5. Wait for Phase 12 text reruns + Phase 15 new models to land, then rebuild leaderboard.
 6. Only then start V740+ iteration.

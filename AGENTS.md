@@ -60,7 +60,7 @@ Every future contributor should read these files in order before making claims o
   - Phase 12 text reruns LANDED real core_text/full results for all valid models
   - cfisch has GROUP access to npin's HF cache (chmod g+rx fix applied 2026-03-15)
 - Phase 15 new TSLib model expansion:
-  - 23 new models submitted (2026-03-17): CARD, CFPT, DeformableTST, DUET, FiLM, FilterTS, FreTS, Fredformer, MICN, ModernTCN, NonstationaryTransformer, PDF, PIR, PathFormer, SCINet, SEMPO, SRSNet, SegRNN, SparseTSF, TimeBridge, TimePerceiver, TimeRecipe, xPatch
+  - 23 new models submitted (2026-03-16): CARD, CFPT, DeformableTST, DUET, FiLM, FilterTS, FreTS, Fredformer, MICN, ModernTCN, NonstationaryTransformer, PDF, PIR, PathFormer, SCINet, SEMPO, SRSNet, SegRNN, SparseTSF, TimeBridge, TimePerceiver, TimeRecipe, xPatch
   - 8 encoder-only forward(x) models patched: DeformableTST, Fredformer, ModernTCN, PDF, PathFormer, SparseTSF, TimeRecipe, xPatch
   - 5 excluded: Koopa (NaN divergence), CycleNet/TQNet (cycle_index), Mamba (mamba_ssm), TiRex (tirex)
   - 12 jobs: npin gpu (co/ce × 3 tasks) + cfisch gpu (ct/fu × 3 tasks)
@@ -113,6 +113,6 @@ Every future contributor should read these files in order before making claims o
 1. ~~Land the first clean V739 results.~~ ✅ V739 COMPLETE: 112/112 conditions landed.
 2. Finish gap-fill for the remaining 10 partial TSLib models (NegBinGLM structural failure = excluded).
 3. ~~Run and land the real text-enabled reruns~~ ✅ Phase 12 submitted (48 jobs, 2026-03-15). 42/48 COMPLETED, 6 RUNNING.
-4. ~~Integrate 23 new TSLib models into benchmark~~ ✅ Phase 15 submitted (12 jobs, 2026-03-17). All PENDING.
+4. ~~Integrate 23 new TSLib models into benchmark~~ ✅ Phase 15 submitted (12 jobs, 2026-03-16). All PENDING.
 5. Wait for Phase 12 + Phase 15 + gap-fill to land, then consolidate full benchmark surface.
 6. Only then start any V740+ iteration.
