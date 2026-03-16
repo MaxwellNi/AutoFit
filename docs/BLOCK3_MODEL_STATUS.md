@@ -1,6 +1,6 @@
 # Block 3 Model Benchmark Status
 
-> Last updated: 2026-03-16 11:30 CET
+> Last updated: 2026-03-16 14:00 CET
 > Current authority: `docs/CURRENT_SOURCE_OF_TRUTH.md`
 > Evidence: direct scan of `runs/benchmarks/block3_phase9_fair/`
 
@@ -46,21 +46,37 @@
 | Pyraformer | 94/104 | ⏳ gap-fill running | TSLib jobs on gpu |
 | Reformer | 94/104 | ⏳ gap-fill running | TSLib jobs on gpu |
 
-## Live Queue Reality (2026-03-16 11:28 CET)
+## Live Queue Reality (2026-03-16 14:00 CET)
 
 | Queue slice | Value | Evidence |
 | --- | ---: | --- |
-| npin l40s RUNNING | 2 | gap-fill t1_co/t1_ce (38h+ elapsed) |
-| npin gpu RUNNING | 3 | Phase 15 new models: t1_co, t1_ce, t2_co (11min elapsed) |
+| npin l40s RUNNING | 2 | gap-fill t1_co/t1_ce (41h+ elapsed) |
+| npin gpu RUNNING | 3 | Phase 15 new models: t1_co, t1_ce, t2_co (2.5h elapsed, on FreTS/CARD) |
 | npin gpu PENDING | 3 | Phase 15: t2_ce, t3_co, t3_ce |
-| cfisch gpu RUNNING | 14 | 6 Phase 12 tslib ct/fu (17-21h) + 8 gap-fill cos2/ces2 (34h) |
+| cfisch gpu RUNNING | 14 | 6 Phase 12 tslib ct/fu (19-23h) + 8 gap-fill cos2/ces2 (37h) |
 | cfisch gpu PENDING | 6 | Phase 15 ct/fu (re-submitted after log dir chmod fix) |
-| **total** | **28** (19R + 9PD) | squeue 2026-03-16 |
+| **total** | **28** (19R + 9PD) | squeue 2026-03-16 14:00 CET |
 
 ## Phase 15: New TSLib Model Expansion (23 models)
 
 **Submitted**: 2026-03-16 | **Status**: npin 3R+3PD, cfisch 6PD (re-submitted after log dir fix)
 **Code commit**: `e177f6f` — encoder-only forward fix + benchmark scripts
+**Bug-fix commit**: pending — FilterTS, DUET, PathFormer config fixes + SEMPO tuple return + timm installed
+
+### Config Audit & Bug Fixes (2026-03-16 14:00 CET)
+
+Comprehensive vendor source audit identified and fixed 5 bugs:
+
+| Bug | Model(s) | Root Cause | Fix |
+| --- | --- | --- | --- |
+| `Invalid filter type` | FilterTS | `filter_type="freq"` not valid; valid: "all","predefined","cross_variable" | Changed to `"all"`, embedding to `"fourier_interpolate"` |
+| `No module named 'timm'` | DeformableTST | `timm` not in insider env | Installed `timm==1.0.25` |
+| `no attribute 'noisy_gating'` | DUET | Missing MoE config attrs | Added `noisy_gating=True, num_experts=4, k=2` |
+| `configs.gpu` AttributeError | PathFormer | PathFormer init does `torch.device('cuda:{}'.format(configs.gpu))` | Added `gpu=0` to config |
+| `num_nodes=1` shape mismatch | PathFormer | RevIN expects `num_features=num_nodes=enc_in`, was hardcoded to 1 | Removed from config; added `num_nodes=enc_in` to base config |
+| SEMPO tuple return crash | SEMPO | Returns `(pretrain_heads_list, prediction)` not `(prediction, attn)` | `out[-1] if isinstance(out[0], list) else out[0]` at all 4 call sites |
+
+**Impact**: The 3 currently running npin jobs (5253903, 5253904, 5253905) will fail on FilterTS/DeformableTST/DUET (3/23 models each). The remaining 9 PENDING jobs (3 npin + 6 cfisch) will pick up the fixed code. A targeted rerun for those 3 models × 3 conditions will be needed after current jobs finish.
 
 ### Models (23)
 CARD, CFPT, DeformableTST, DUET, FiLM, FilterTS, FreTS, Fredformer, MICN,
@@ -79,7 +95,7 @@ DeformableTST, Fredformer, ModernTCN, PDF, PathFormer, SparseTSF, TimeRecipe, xP
 | CycleNet | Needs `cycle_index` tensor (structural) |
 | TQNet | Needs `cycle_index` tensor (structural) |
 | Mamba | Needs `mamba_ssm` (MambaSimple used instead) |
-| TiRex | Needs `tirex` (not installed) |
+| TiRex | Needs NX-AI `tirex` package (not on PyPI; PyPI "tirex" is SIREX/CUME statistical tool) |
 
 ### Job Distribution
 | Account | Ablations | Partition | Mem | Scripts |

@@ -62,10 +62,12 @@ Every future contributor should read these files in order before making claims o
 - Phase 15 new TSLib model expansion:
   - 23 new models submitted (2026-03-16): CARD, CFPT, DeformableTST, DUET, FiLM, FilterTS, FreTS, Fredformer, MICN, ModernTCN, NonstationaryTransformer, PDF, PIR, PathFormer, SCINet, SEMPO, SRSNet, SegRNN, SparseTSF, TimeBridge, TimePerceiver, TimeRecipe, xPatch
   - 8 encoder-only forward(x) models patched: DeformableTST, Fredformer, ModernTCN, PDF, PathFormer, SparseTSF, TimeRecipe, xPatch
-  - 5 excluded: Koopa (NaN divergence), CycleNet/TQNet (cycle_index), Mamba (mamba_ssm), TiRex (tirex)
+  - 5 excluded: Koopa (NaN divergence), CycleNet/TQNet (cycle_index), Mamba (mamba_ssm), TiRex (NX-AI tirex not on PyPI)
   - 12 jobs: npin gpu (co/ce × 3 tasks) + cfisch gpu (ct/fu × 3 tasks)
   - Scripts: `.slurm_scripts/phase15/`
   - Code commit: `e177f6f` (encoder-only forward fix)
+  - Bug-fix audit (2026-03-16): FilterTS filter_type, DUET noisy_gating/num_experts/k, PathFormer gpu/num_nodes, SEMPO tuple return, timm installed
+  - Running jobs (3 npin): CARD ✅, CFPT ✅, FiLM ✅, FreTS ⏳ (DeformableTST/DUET/FilterTS errored; fix will apply to 9 PENDING jobs)
 
 ## Canonical Directories
 

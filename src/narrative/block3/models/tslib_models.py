@@ -258,10 +258,10 @@ TSLIB_CONFIGS: Dict[str, Dict[str, Any]] = {
     "FilterTS": {
         "venue": "arXiv 2024",
         "d_model": 128, "e_layers": 2,
-        "dropout": 0.1, "filter_type": "freq",
+        "dropout": 0.1, "filter_type": "all",
         "bandwidth": 0.1, "quantile": 0.5,
         "top_K_static_freqs": 5, "use_norm": True,
-        "embedding": "timeF",
+        "embedding": "fourier_interpolate",
     },
     # ── Phase 11: Section C SOTA models ──
     "CFPT": {
@@ -300,10 +300,10 @@ TSLIB_CONFIGS: Dict[str, Dict[str, Any]] = {
     "PathFormer": {
         "venue": "ICLR 2024",
         "d_model": 128, "d_ff": 256, "dropout": 0.1,
-        "num_nodes": 1, "num_experts_list": [4, 4],
+        "num_experts_list": [4, 4],
         "patch_size_list": [16, 12, 8], "layer_nums": 2,
         "k": 2, "residual_connection": True, "revin": True,
-        "batch_norm": True,
+        "batch_norm": True, "gpu": 0,
     },
     "SEMPO": {
         "venue": "ICML 2024",
@@ -373,6 +373,7 @@ TSLIB_CONFIGS: Dict[str, Dict[str, Any]] = {
         "d_model": 128, "d_ff": 256, "n_heads": 8, "e_layers": 2,
         "dropout": 0.1, "activation": "gelu", "factor": 1,
         "CI": True, "fc_dropout": 0.1,
+        "noisy_gating": True, "num_experts": 4, "k": 2,
     },
     "SRSNet": {
         "venue": "arXiv 2024",
@@ -500,6 +501,7 @@ class TSLibModelWrapper(ModelBase):
             distil=True,
             # Universal attributes needed by many models
             num_class=0,  # not used in forecasting but many models reference it
+            num_nodes=enc_in,  # PathFormer RevIN needs num_features=num_nodes=enc_in
             batch_size=self._batch_size,  # WPMixer needs this
             device=self._device,  # WPMixer needs torch.device (DWT_Decomposition calls .type)
             use_amp=False,  # WPMixer needs this
@@ -754,7 +756,9 @@ class TSLibModelWrapper(ModelBase):
                     out = self._forward_model(bx, x_mark, dec_inp, dec_mark)
                     # Output shape varies by model, but we want (B, pred_len) for target
                     if isinstance(out, tuple):
-                        out = out[0]
+                        # Most models: (prediction, attn) → take [0]
+                        # SEMPO: ([pretrain_heads], prediction) → take [-1]
+                        out = out[-1] if isinstance(out[0], list) else out[0]
                     # Take the last pred_len time steps, first feature (target)
                     if out.dim() == 3:
                         out = out[:, -pred_len:, 0]
@@ -798,7 +802,7 @@ class TSLibModelWrapper(ModelBase):
                     try:
                         out = self._forward_model(bx, x_mark, dec_inp, dec_mark)
                         if isinstance(out, tuple):
-                            out = out[0]
+                            out = out[-1] if isinstance(out[0], list) else out[0]
                         if out.dim() == 3:
                             out = out[:, -pred_len:, 0]
                         elif out.dim() == 2:
@@ -948,7 +952,7 @@ class TSLibModelWrapper(ModelBase):
                     try:
                         out = self._forward_model(x_batch, x_mark, dec_inp, dec_mark)
                         if isinstance(out, tuple):
-                            out = out[0]
+                            out = out[-1] if isinstance(out[0], list) else out[0]
                         if out.dim() == 3:
                             preds = out[:, -self._pred_len:, 0].cpu().numpy()
                         elif out.dim() == 2:
@@ -1043,7 +1047,7 @@ class TSLibModelWrapper(ModelBase):
             try:
                 out = self._forward_model(x_enc, x_mark, dec_inp, dec_mark)
                 if isinstance(out, tuple):
-                    out = out[0]
+                    out = out[-1] if isinstance(out[0], list) else out[0]
                 if out.dim() == 3:
                     preds = out[0, -self._pred_len:, 0].cpu().numpy()
                 elif out.dim() == 2:
