@@ -1,8 +1,9 @@
 # Phase 12 Real Text Rerun Execution
 
-> Last verified: 2026-03-15
+> Last verified: 2026-03-16
 > Scope: the first real `core_text` / `full` reruns on top of the current Phase 9 fair benchmark line.
-> Status: 48+1 jobs total — 31 COMPLETED, 16 RUNNING, 1 OOM→fixed (ml_t_t1_fu 320G→640G, resubmitted as npin #5253389)
+> Status: 48+1 jobs total — 42 COMPLETED, 6 RUNNING (cfisch tslib_sota only)
+> OOM: ml_t_t1_fu failed at 320G AND 640G, but ALL valid records saved (only NegBinGLM combos missing = structural failure)
 
 ## Verified Current Readiness
 

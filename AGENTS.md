@@ -20,13 +20,13 @@ Every future contributor should read these files in order before making claims o
 8. `docs/PHASE12_TEXT_RERUN_EXECUTION.md`
 9. `docs/PHASE9_V739_LESSONS_LEARNED.md`
 
-## Verified Current State (2026-03-15)
+## Verified Current State (2026-03-16)
 
 - Freeze: complete and read-only
 - Canonical benchmark: `runs/benchmarks/block3_phase9_fair/`
 - Raw benchmark scan:
-  - `131` metrics files
-  - `12779` raw records (Phase 12 text reruns actively landing)
+  - `132` metrics files
+  - `13407` raw records (Phase 12 text reruns nearly complete)
   - `91` raw models
   - `80` raw complete models (`≥104`)
   - `11` raw partial models
@@ -40,23 +40,24 @@ Every future contributor should read these files in order before making claims o
 - Top-5 models by mean rank: NHITS (4.21), PatchTST (4.36), NBEATS (4.77), NBEATSx (5.84), ChronosBolt (7.11)
 - Dominant champion model: NBEATS — 24/56 conditions won (43%)
 - Gap-fill progress:
-  - 12 TSLib gap-fill jobs RUNNING (4 npin/l40s + 8 cfisch/gpu)
+  - 10 TSLib gap-fill jobs RUNNING (2 npin/l40s + 8 cfisch/gpu)
   - FM seed2: ALL 5/5 COMPLETED
   - Chronos2: COMPLETE (≥104), TTM: COMPLETE (≥104)
-  - TSLib @69: TimeFilter, MultiPatchFormer, MSGNet, PAttn, MambaSimple, Crossformer (up from 59)
-  - TSLib @88: ETSformer, LightTS, Pyraformer, Reformer (up from 82)
-  - NegativeBinomialGLM: structural failure (20/104), cannot complete
+  - TSLib @80: TimeFilter, MultiPatchFormer, MSGNet, PAttn, MambaSimple, Crossformer (need +36 each)
+  - TSLib @94: ETSformer, LightTS, Pyraformer, Reformer (need +22 each)
+  - NegativeBinomialGLM: structural failure (21/104), cannot complete
 - Phase 12 text reruns:
-  - 48 total scripts (40 original + 8 new t3_ct added 2026-03-15)
-  - 31 COMPLETED, 16 RUNNING, 1 OOM→resubmitted (ml_t_t1_fu 320G→640G)
+  - 48+1 total scripts (40 original + 8 t3_ct + 1 OOM fix)
+  - 42 COMPLETED, 6 RUNNING (cfisch tslib_sota only)
+  - OOM: ml_t_t1_fu crashed at 320G AND 640G, but ALL valid records were saved (only NegBinGLM missing)
   - core_text coverage: **91/91** models (ALL categories complete)
-  - full coverage: **90/91** models (NegBinGLM structural failure only)
+  - full coverage: **91/91** models (ALL, NegBinGLM has partial records)
   - Scripts: `.slurm_scripts/phase12/rerun/`
   - All scripts: umask 002, --requeue, text embedding pre-flight check
 - Text embeddings:
   - artifacts exist in `runs/text_embeddings/` (5.77M rows, 64 PCA dims, float32, 90MB, 0 NaN)
   - PCA embedding columns are NUMERIC (float32) and survive `select_dtypes(include=[np.number])`
-  - Phase 12 text reruns submitted and running — will produce real core_text/full results
+  - Phase 12 text reruns LANDED real core_text/full results for all valid models
   - cfisch has GROUP access to npin's HF cache (chmod g+rx fix applied 2026-03-15)
 
 ## Canonical Directories

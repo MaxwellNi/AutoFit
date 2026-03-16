@@ -1,6 +1,6 @@
 # Block 3 Model Benchmark Status
 
-> Last updated: 2026-03-15
+> Last updated: 2026-03-16
 > Current authority: `docs/CURRENT_SOURCE_OF_TRUTH.md`
 > Evidence: direct scan of `runs/benchmarks/block3_phase9_fair/`
 
@@ -8,14 +8,14 @@
 
 | Metric | Value | Evidence |
 | --- | ---: | --- |
-| raw metrics files | 131 | direct scan 2026-03-15 |
-| raw records | 12779 | direct scan 2026-03-15 (Phase 12 near-complete) |
-| raw models | 91 | direct scan 2026-03-15 |
-| raw complete models (≥104) | 80 | direct scan 2026-03-15 |
-| raw partial models | 11 | direct scan 2026-03-15 |
-| live jobs running | 29 | squeue 2026-03-15 |
-| live jobs pending | 0 | squeue 2026-03-15 |
-| Phase 12 text rerun jobs | 48+1 total (31 DONE, 16R, 1 OOM→fixed) | `.slurm_scripts/phase12/rerun/` |
+| raw metrics files | 132 | direct scan 2026-03-16 |
+| raw records | 13407 | direct scan 2026-03-16 (Phase 12 near-complete) |
+| raw models | 91 | direct scan 2026-03-16 |
+| raw complete models (≥104) | 80 | direct scan 2026-03-16 |
+| raw partial models | 11 | direct scan 2026-03-16 |
+| live jobs running | 16 | squeue 2026-03-16 |
+| live jobs pending | 0 | squeue 2026-03-16 |
+| Phase 12 text rerun jobs | 48+1 total (42 DONE, 6 RUNNING) | `.slurm_scripts/phase12/rerun/` |
 
 ## V739 Status
 
@@ -34,28 +34,27 @@
 
 | Model | Records | Status | Notes |
 | --- | ---: | --- | --- |
-| NegativeBinomialGLM | 20/104 | ❌ structural failure | NaN/inf in weights, only is_funded works |
-| TimeFilter | 69/104 | ⏳ gap-fill running | TSLib jobs on gpu+l40s |
-| MultiPatchFormer | 69/104 | ⏳ gap-fill running | constant predictions (fairness_pass=False) |
-| MSGNet | 69/104 | ⏳ gap-fill running | very slow (~25 min/epoch on V100) |
-| PAttn | 69/104 | ⏳ gap-fill running | TSLib jobs on gpu+l40s |
-| MambaSimple | 69/104 | ⏳ gap-fill running | TSLib jobs on gpu+l40s |
-| Crossformer | 69/104 | ⏳ gap-fill running | TSLib jobs on gpu+l40s |
-| ETSformer | 88/104 | ⏳ gap-fill running | TSLib jobs on gpu |
-| LightTS | 88/104 | ⏳ gap-fill running | TSLib jobs on gpu |
-| Pyraformer | 88/104 | ⏳ gap-fill running | TSLib jobs on gpu |
-| Reformer | 88/104 | ⏳ gap-fill running | TSLib jobs on gpu |
+| NegativeBinomialGLM | 21/104 | ❌ structural failure | NaN/inf in weights, only is_funded works |
+| TimeFilter | 80/104 | ⏳ gap-fill running | TSLib jobs on gpu+l40s |
+| MultiPatchFormer | 80/104 | ⏳ gap-fill running | constant predictions (fairness_pass=False) |
+| MSGNet | 80/104 | ⏳ gap-fill running | very slow (~7 min/epoch on L40S) |
+| PAttn | 80/104 | ⏳ gap-fill running | TSLib jobs on gpu+l40s |
+| MambaSimple | 80/104 | ⏳ gap-fill running | very slow (~13 min/epoch on L40S) |
+| Crossformer | 80/104 | ⏳ gap-fill running | TSLib jobs on gpu+l40s |
+| ETSformer | 94/104 | ⏳ gap-fill running | TSLib jobs on gpu |
+| LightTS | 94/104 | ⏳ gap-fill running | TSLib jobs on gpu |
+| Pyraformer | 94/104 | ⏳ gap-fill running | TSLib jobs on gpu |
+| Reformer | 94/104 | ⏳ gap-fill running | TSLib jobs on gpu |
 
 ## Live Queue Reality
 
 | Queue slice | Value | Evidence |
 | --- | ---: | --- |
-| npin l40s RUNNING | 4 | squeue 2026-03-15 (TSLib gap-fill t1+t3 co/ce, 27h elapsed) |
-| npin gpu RUNNING | 1 | squeue 2026-03-15 (Phase 12: irre t3_ct) |
-| npin bigmem RUNNING | 1 | squeue 2026-03-15 (OOM fix: ml_t_t1_fu 640G) |
-| cfisch gpu RUNNING | 18 | squeue 2026-03-15 (8 TSLib gap-fill + 5 tran + 5 tsli) |
-| cfisch bigmem RUNNING | 2 | squeue 2026-03-15 (Phase 12: ml_t t2_fu + t3_fu) |
-| **total** | **26** (26R + 0PD) | squeue 2026-03-15 |
+| npin l40s RUNNING | 2 | squeue 2026-03-16 (TSLib gap-fill t1_co/t1_ce, ~37h/48h) |
+| npin gpu RUNNING | 0 | squeue 2026-03-16 |
+| npin bigmem RUNNING | 0 | squeue 2026-03-16 |
+| cfisch gpu RUNNING | 14 | squeue 2026-03-16 (6 tslib Phase 12 + 8 TSLib gap-fill) |
+| **total** | **16** (16R + 0PD) | squeue 2026-03-16 |
 
 ## Text Embeddings
 
@@ -70,10 +69,10 @@
 ## Interpretation
 
 1. V739 is fully landed and benchmarked. It ranks **#13/80** by mean rank across 56 universal conditions.
-2. The remaining 10 partial models have gap-fill jobs running (12 SLURM jobs total).
-3. NegativeBinomialGLM (20/104) has a structural numerical overflow failure and cannot complete.
-4. The current physical Phase 9 results now include real core_text and full from Phase 12 (77/91 models core_text, 76/91 full).
-5. V739 uses {core_only, core_edgar, core_text, full}; other models use {core_only, core_edgar, core_only_seed2, core_edgar_seed2}. Prior to Phase 12, text ablation was dead code (raw text strings stripped by `select_dtypes`). With PCA embeddings (float32), text ablation NOW WORKS. Phase 12 reruns actively landing.
+2. The remaining 10 partial models have gap-fill jobs running (10 SLURM jobs total: 2 npin/l40s + 8 cfisch/gpu).
+3. NegativeBinomialGLM (21/104) has a structural numerical overflow failure and cannot complete.
+4. The current physical Phase 9 results now include real core_text and full from Phase 12 (91/91 models both ablations).
+5. V739 uses {core_only, core_edgar, core_text, full}; other models use {core_only, core_edgar, core_only_seed2, core_edgar_seed2}. Prior to Phase 12, text ablation was dead code (raw text strings stripped by `select_dtypes`). With PCA embeddings (float32), text ablation NOW WORKS. Phase 12 reruns: 42/48 COMPLETED, 6 RUNNING.
 6. Common misstatements about current status are documented in `docs/PHASE9_V739_FACT_ALIGNMENT.md`.
 7. Top-5 models by mean rank: NHITS (4.21), PatchTST (4.36), NBEATS (4.77), NBEATSx (5.84), ChronosBolt (7.11).
 8. NBEATS is the dominant champion model: 24/56 conditions won (43%).
