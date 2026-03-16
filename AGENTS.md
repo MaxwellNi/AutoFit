@@ -26,10 +26,12 @@ Every future contributor should read these files in order before making claims o
 - Canonical benchmark: `runs/benchmarks/block3_phase9_fair/`
 - Raw benchmark scan:
   - `132` metrics files
-  - `13407` raw records (Phase 12 text reruns nearly complete)
+  - `13549` raw records (Phase 12 text reruns nearly complete)
   - `91` raw models
   - `80` raw complete models (`≥104`)
   - `11` raw partial models
+  - `164` total conditions (max 160 per model; task3×cs2 missing = 168−8)
+  - `56` ranking conditions (core_only 28 + core_edgar 28, shared by all 80 complete models)
 - AutoFit:
   - V734-V738 are retired due to oracle test-set leakage
   - V739 is the only valid current AutoFit baseline
@@ -66,8 +68,11 @@ Every future contributor should read these files in order before making claims o
   - 12 jobs: npin gpu (co/ce × 3 tasks) + cfisch gpu (ct/fu × 3 tasks)
   - Scripts: `.slurm_scripts/phase15/`
   - Code commit: `e177f6f` (encoder-only forward fix)
-  - Bug-fix audit (2026-03-16): FilterTS filter_type, DUET noisy_gating/num_experts/k, PathFormer gpu/num_nodes, SEMPO tuple return, timm installed
-  - Running jobs (3 npin): CARD ✅, CFPT ✅, FiLM ✅, FreTS ⏳ (DeformableTST/DUET/FilterTS errored; fix will apply to 9 PENDING jobs)
+  - Bug-fix audit (2026-03-16): 7 bugs total — FilterTS filter_type+embedding, DUET noisy_gating/num_experts/k, PathFormer gpu/num_nodes, SEMPO tuple return, DeformableTST timm+n_vars
+  - Bug-fix commits: `c4d214e` (6 bugs, 13:53 CET), `1185617` (n_vars fix, 14:24 CET)
+  - CFPT: 28176 batch errors per job (conv2d channel mismatch, channels=1 vs 5) — produces MAE but quality suspect
+  - Running jobs (3 npin): CARD ✅, CFPT ⚠️, FiLM ✅, FreTS ⏳ (DeformableTST/DUET/FilterTS errored; PathFormer/SEMPO will also fail on old code)
+  - Targeted rerun scripts: `.slurm_scripts/phase15/p15_rerun_errors_*.sh` for 5 errored models × 3 conditions
 
 ## Canonical Directories
 
@@ -115,6 +120,7 @@ Every future contributor should read these files in order before making claims o
 1. ~~Land the first clean V739 results.~~ ✅ V739 COMPLETE: 112/112 conditions landed.
 2. Finish gap-fill for the remaining 10 partial TSLib models (NegBinGLM structural failure = excluded).
 3. ~~Run and land the real text-enabled reruns~~ ✅ Phase 12 submitted (48 jobs, 2026-03-15). 42/48 COMPLETED, 6 RUNNING.
-4. ~~Integrate 23 new TSLib models into benchmark~~ ✅ Phase 15 submitted (12 jobs, 2026-03-16). All PENDING.
-5. Wait for Phase 12 + Phase 15 + gap-fill to land, then consolidate full benchmark surface.
+4. ~~Integrate 23 new TSLib models into benchmark~~ ✅ Phase 15 submitted (12 jobs, 2026-03-16). 3R + 3PD npin, 6PD cfisch.
+5. Submit targeted reruns for 5 failed models (DeformableTST/DUET/FilterTS/PathFormer/SEMPO) after main jobs finish.
+6. Wait for Phase 12 + Phase 15 + gap-fill to land, then consolidate full benchmark surface.
 6. Only then start any V740+ iteration.
