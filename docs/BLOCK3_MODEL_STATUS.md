@@ -1,6 +1,6 @@
 # Block 3 Model Benchmark Status
 
-> Last updated: 2026-03-16
+> Last updated: 2026-03-17
 > Current authority: `docs/CURRENT_SOURCE_OF_TRUTH.md`
 > Evidence: direct scan of `runs/benchmarks/block3_phase9_fair/`
 
@@ -13,9 +13,9 @@
 | raw models | 91 | direct scan 2026-03-16 |
 | raw complete models (≥104) | 80 | direct scan 2026-03-16 |
 | raw partial models | 11 | direct scan 2026-03-16 |
-| live jobs running | 16 | squeue 2026-03-16 |
-| live jobs pending | 0 | squeue 2026-03-16 |
+| live jobs running | 16 + 12 PD | squeue 2026-03-17 |
 | Phase 12 text rerun jobs | 48+1 total (42 DONE, 6 RUNNING) | `.slurm_scripts/phase12/rerun/` |
+| **Phase 15 new model jobs** | **12 PENDING** | `.slurm_scripts/phase15/` |
 
 ## V739 Status
 
@@ -50,11 +50,41 @@
 
 | Queue slice | Value | Evidence |
 | --- | ---: | --- |
-| npin l40s RUNNING | 2 | squeue 2026-03-16 (TSLib gap-fill t1_co/t1_ce, ~37h/48h) |
-| npin gpu RUNNING | 0 | squeue 2026-03-16 |
-| npin bigmem RUNNING | 0 | squeue 2026-03-16 |
-| cfisch gpu RUNNING | 14 | squeue 2026-03-16 (6 tslib Phase 12 + 8 TSLib gap-fill) |
-| **total** | **16** (16R + 0PD) | squeue 2026-03-16 |
+| npin l40s RUNNING | 2 | squeue 2026-03-17 (TSLib gap-fill t1_co/t1_ce) |
+| npin gpu PENDING | 6 | squeue 2026-03-17 (Phase 15 new models: co/ce × 3 tasks) |
+| cfisch gpu RUNNING | 14 | squeue 2026-03-17 (6 Phase 12 tslib + 8 gap-fill) |
+| cfisch gpu PENDING | 6 | squeue 2026-03-17 (Phase 15 new models: ct/fu × 3 tasks) |
+| **total** | **28** (16R + 12PD) | squeue 2026-03-17 |
+
+## Phase 15: New TSLib Model Expansion (23 models)
+
+**Submitted**: 2026-03-17 | **Status**: 12 jobs PENDING (gpu partition)
+**Code commit**: `e177f6f` — encoder-only forward fix + benchmark scripts
+
+### Models (23)
+CARD, CFPT, DeformableTST, DUET, FiLM, FilterTS, FreTS, Fredformer, MICN,
+ModernTCN, NonstationaryTransformer, PDF, PIR, PathFormer, SCINet, SEMPO,
+SRSNet, SegRNN, SparseTSF, TimeBridge, TimePerceiver, TimeRecipe, xPatch
+
+### Forward Compatibility Fix
+8 encoder-only models (forward(x) instead of standard 4-arg):
+DeformableTST, Fredformer, ModernTCN, PDF, PathFormer, SparseTSF, TimeRecipe, xPatch
+→ Fixed via `_ENCODER_ONLY_MODELS` frozenset + `_forward_model()` dispatcher
+
+### Excluded Models (5)
+| Model | Reason |
+| --- | --- |
+| Koopa | NaN divergence (§16) |
+| CycleNet | Needs `cycle_index` tensor (structural) |
+| TQNet | Needs `cycle_index` tensor (structural) |
+| Mamba | Needs `mamba_ssm` (MambaSimple used instead) |
+| TiRex | Needs `tirex` (not installed) |
+
+### Job Distribution
+| Account | Ablations | Partition | Mem | Scripts |
+| --- | --- | --- | --- | --- |
+| npin | core_only, core_edgar | gpu | 256G | 6 (t1/t2/t3 × 2) |
+| cfisch | core_text, full | gpu | 320G | 6 (t1/t2/t3 × 2) |
 
 ## Text Embeddings
 
@@ -83,6 +113,7 @@
 
 1. ~~Land the first canonical fair-line V739 results.~~ ✅ DONE (112/112)
 2. Close the 12 remaining partial models (gap-fill jobs running — 13 jobs active).
-3. ~~Submit real text/full reruns.~~ ✅ DONE (48 Phase 12 jobs: 40 original + 8 t3_ct, submitted 2026-03-15; 15 COMPLETED, 25 running, 8 pending).
-4. Wait for remaining Phase 12 text reruns to land, then rebuild leaderboard with core_text/full results.
-5. Only then start V740+ iteration.
+3. ~~Submit real text/full reruns.~~ ✅ DONE (48 Phase 12 jobs: 42 COMPLETED, 6 RUNNING).
+4. ~~Integrate 23 new TSLib models into benchmark.~~ ✅ DONE (Phase 15: 12 jobs submitted 2026-03-17).
+5. Wait for Phase 12 text reruns + Phase 15 new models to land, then rebuild leaderboard.
+6. Only then start V740+ iteration.
