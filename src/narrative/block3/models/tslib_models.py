@@ -501,6 +501,7 @@ class TSLibModelWrapper(ModelBase):
             distil=True,
             # Universal attributes needed by many models
             num_class=0,  # not used in forecasting but many models reference it
+            n_vars=enc_in,  # DeformableTST RevIN needs n_vars=enc_in
             num_nodes=enc_in,  # PathFormer RevIN needs num_features=num_nodes=enc_in
             batch_size=self._batch_size,  # WPMixer needs this
             device=self._device,  # WPMixer needs torch.device (DWT_Decomposition calls .type)

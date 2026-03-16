@@ -1,6 +1,6 @@
 # Block 3 Model Benchmark Status
 
-> Last updated: 2026-03-16 14:00 CET
+> Last updated: 2026-03-16 14:24 CET
 > Current authority: `docs/CURRENT_SOURCE_OF_TRUTH.md`
 > Evidence: direct scan of `runs/benchmarks/block3_phase9_fair/`
 
@@ -8,12 +8,14 @@
 
 | Metric | Value | Evidence |
 | --- | ---: | --- |
-| raw metrics files | 132 | direct scan 2026-03-16 |
-| raw records | 13449 | direct scan 2026-03-16 11:28 CET |
-| raw models | 91 | direct scan 2026-03-16 |
-| raw complete models (≥104) | 80 | direct scan 2026-03-16 |
-| raw partial models | 11 | direct scan 2026-03-16 |
-| live jobs running | 19R + 9PD | squeue 2026-03-16 11:28 CET |
+| raw metrics files | 132 | direct scan 2026-03-16 14:24 |
+| raw records | 13549 | direct scan 2026-03-16 14:24 |
+| raw models | 91 | direct scan 2026-03-16 14:24 |
+| raw complete models (≥104) | 80 | direct scan 2026-03-16 14:24 |
+| raw partial models | 11 | direct scan 2026-03-16 14:24 |
+| total unique conditions | 164 | 28 co + 28 ce + 24 cs2 + 28 ces2 + 28 ct + 28 fu |
+| ranking conditions (co+ce) | 56 | 28 core_only + 28 core_edgar |
+| live jobs running | 5R + 3PD npin, 14R + 6PD cfisch | squeue 2026-03-16 14:24 |
 | Phase 12 text rerun jobs | 48+1 total (42 DONE, 6 RUNNING) | `.slurm_scripts/phase12/rerun/` |
 | Phase 15 new model jobs | 3R + 3PD npin, 6PD cfisch | `.slurm_scripts/phase15/` |
 
@@ -34,19 +36,19 @@
 
 | Model | Records | Status | Notes |
 | --- | ---: | --- | --- |
-| NegativeBinomialGLM | 21/104 | ❌ structural failure | NaN/inf in weights, only is_funded works |
-| TimeFilter | 80/104 | ⏳ gap-fill running | TSLib jobs on gpu+l40s |
-| MultiPatchFormer | 80/104 | ⏳ gap-fill running | constant predictions (fairness_pass=False) |
-| MSGNet | 80/104 | ⏳ gap-fill running | very slow (~7 min/epoch on L40S) |
-| PAttn | 80/104 | ⏳ gap-fill running | TSLib jobs on gpu+l40s |
-| MambaSimple | 80/104 | ⏳ gap-fill running | very slow (~13 min/epoch on L40S) |
-| Crossformer | 80/104 | ⏳ gap-fill running | TSLib jobs on gpu+l40s |
-| ETSformer | 94/104 | ⏳ gap-fill running | TSLib jobs on gpu |
-| LightTS | 94/104 | ⏳ gap-fill running | TSLib jobs on gpu |
-| Pyraformer | 94/104 | ⏳ gap-fill running | TSLib jobs on gpu |
-| Reformer | 94/104 | ⏳ gap-fill running | TSLib jobs on gpu |
+| NegativeBinomialGLM | 21/160 | ❌ structural failure | NaN/inf in weights, only is_funded works |
+| TimeFilter | 91/160 | ⏳ gap-fill running | TSLib jobs on gpu+l40s |
+| MultiPatchFormer | 91/160 | ⏳ gap-fill running | constant predictions (fairness_pass=False) |
+| MSGNet | 91/160 | ⏳ gap-fill running | very slow (~7 min/epoch on L40S) |
+| PAttn | 91/160 | ⏳ gap-fill running | TSLib jobs on gpu+l40s |
+| MambaSimple | 91/160 | ⏳ gap-fill running | very slow (~13 min/epoch on L40S) |
+| Crossformer | 91/160 | ⏳ gap-fill running | TSLib jobs on gpu+l40s |
+| ETSformer | 104/160 | ⏳ gap-fill running | TSLib jobs on gpu |
+| LightTS | 104/160 | ⏳ gap-fill running | TSLib jobs on gpu |
+| Pyraformer | 104/160 | ⏳ gap-fill running | TSLib jobs on gpu |
+| Reformer | 104/160 | ⏳ gap-fill running | TSLib jobs on gpu |
 
-## Live Queue Reality (2026-03-16 14:00 CET)
+## Live Queue Reality (2026-03-16 13:53 CET)
 
 | Queue slice | Value | Evidence |
 | --- | ---: | --- |
@@ -55,28 +57,30 @@
 | npin gpu PENDING | 3 | Phase 15: t2_ce, t3_co, t3_ce |
 | cfisch gpu RUNNING | 14 | 6 Phase 12 tslib ct/fu (19-23h) + 8 gap-fill cos2/ces2 (37h) |
 | cfisch gpu PENDING | 6 | Phase 15 ct/fu (re-submitted after log dir chmod fix) |
-| **total** | **28** (19R + 9PD) | squeue 2026-03-16 14:00 CET |
+| **total** | **28** (19R + 9PD) | squeue 2026-03-16 14:24 CET |
 
 ## Phase 15: New TSLib Model Expansion (23 models)
 
 **Submitted**: 2026-03-16 | **Status**: npin 3R+3PD, cfisch 6PD (re-submitted after log dir fix)
 **Code commit**: `e177f6f` — encoder-only forward fix + benchmark scripts
-**Bug-fix commit**: pending — FilterTS, DUET, PathFormer config fixes + SEMPO tuple return + timm installed
+**Bug-fix commit**: `c4d214e` (2026-03-16 13:53 CET) — FilterTS, DUET, PathFormer, SEMPO fixes + timm installed
+**n_vars fix**: pending commit — DeformableTST `configs.n_vars` added to base config
 
-### Config Audit & Bug Fixes (2026-03-16 14:00 CET)
+### Config Audit & Bug Fixes (2026-03-16 13:53 CET, updated 14:24 CET)
 
-Comprehensive vendor source audit identified and fixed 5 bugs:
+Comprehensive vendor source audit identified and fixed 7 bugs:
 
 | Bug | Model(s) | Root Cause | Fix |
 | --- | --- | --- | --- |
 | `Invalid filter type` | FilterTS | `filter_type="freq"` not valid; valid: "all","predefined","cross_variable" | Changed to `"all"`, embedding to `"fourier_interpolate"` |
 | `No module named 'timm'` | DeformableTST | `timm` not in insider env | Installed `timm==1.0.25` |
+| `no attribute 'n_vars'` | DeformableTST | Missing `configs.n_vars` in base config | Added `n_vars=enc_in` to base config |
 | `no attribute 'noisy_gating'` | DUET | Missing MoE config attrs | Added `noisy_gating=True, num_experts=4, k=2` |
 | `configs.gpu` AttributeError | PathFormer | PathFormer init does `torch.device('cuda:{}'.format(configs.gpu))` | Added `gpu=0` to config |
 | `num_nodes=1` shape mismatch | PathFormer | RevIN expects `num_features=num_nodes=enc_in`, was hardcoded to 1 | Removed from config; added `num_nodes=enc_in` to base config |
 | SEMPO tuple return crash | SEMPO | Returns `(pretrain_heads_list, prediction)` not `(prediction, attn)` | `out[-1] if isinstance(out[0], list) else out[0]` at all 4 call sites |
 
-**Impact**: The 3 currently running npin jobs (5253903, 5253904, 5253905) will fail on FilterTS/DeformableTST/DUET (3/23 models each). The remaining 9 PENDING jobs (3 npin + 6 cfisch) will pick up the fixed code. A targeted rerun for those 3 models × 3 conditions will be needed after current jobs finish.
+**Impact**: The 3 currently running npin jobs (5253903/4/5) will fail on DeformableTST/DUET/FilterTS (3/23 models each). PathFormer and SEMPO not yet reached but will also fail on old code. The 9 PENDING jobs (3 npin + 6 cfisch) will pick up the fixed code. Targeted rerun scripts created for 5 errored models × 3 conditions: `.slurm_scripts/phase15/p15_rerun_errors_*.sh`
 
 ### Models (23)
 CARD, CFPT, DeformableTST, DUET, FiLM, FilterTS, FreTS, Fredformer, MICN,
