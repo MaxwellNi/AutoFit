@@ -20,38 +20,37 @@ Every future contributor should read these files in order before making claims o
 8. `docs/PHASE12_TEXT_RERUN_EXECUTION.md`
 9. `docs/PHASE9_V739_LESSONS_LEARNED.md`
 
-## Verified Current State (2026-03-16)
+## Verified Current State (2026-03-17)
 
 - Freeze: complete and read-only
 - Canonical benchmark: `runs/benchmarks/block3_phase9_fair/`
 - Raw benchmark scan:
-  - `132` metrics files
-  - `13549` raw records (Phase 12 text reruns nearly complete)
-  - `91` raw models
-  - `80` raw complete models (`≥104`)
-  - `11` raw partial models
-  - `164` total conditions (max 160 per model; task3×cs2 missing = 168−8)
-  - `56` ranking conditions (core_only 28 + core_edgar 28, shared by all 80 complete models)
+  - `14055` raw records
+  - `114` raw models (98 after audit exclusion of 16 models)
+  - `65` complete models (`=160` records)
+  - `49` partial models (various stages)
+  - `17` valid conditions (task3 has no core_only_seed2)
+  - `160` max records per model: t1(72) + t2(48) + t3(40)
 - AutoFit:
   - V734-V738 are retired due to oracle test-set leakage
   - V739 is the only valid current AutoFit baseline
-  - V739 landed conditions: `112/112` (ALL COMPLETE — 4 ablations × 3 tasks)
-  - V739 benchmark ranking: **#13/80** by mean rank (14.38, top 16% across 56 universal conditions)
-  - V739 conditions won: 3/56 (1 per task)
+  - V739 landed conditions: `112/160` (missing s2/e2 = seed2+edgar_seed2)
+  - V739 s2/e2 gap-fill: SUBMITTED (5 gpu jobs, 2026-03-17)
   - V739 quality: 0 NaN/Inf, 0 fallback, 100% fairness pass
 - Top-5 models by mean rank: NHITS (4.21), PatchTST (4.36), NBEATS (4.77), NBEATSx (5.84), ChronosBolt (7.11)
 - Dominant champion model: NBEATS — 24/56 conditions won (43%)
-- Gap-fill progress:
-  - 10 TSLib gap-fill jobs RUNNING (2 npin/l40s + 8 cfisch/gpu)
-  - FM seed2: ALL 5/5 COMPLETED
-  - Chronos2: COMPLETE (≥104), TTM: COMPLETE (≥104)
-  - TSLib @80: TimeFilter, MultiPatchFormer, MSGNet, PAttn, MambaSimple, Crossformer (need +36 each)
-  - TSLib @94: ETSformer, LightTS, Pyraformer, Reformer (need +22 each)
-  - NegativeBinomialGLM: structural failure (21/104), cannot complete
+- Model completion tiers:
+  - @160 (complete): 65 models (statistical 15, foundation 14, irregular 4, deep_classical 9, transformer_sota 22, tslib_sota 1)
+  - @157: 10 ml_tabular models (missing 3 t1_fu records each)
+  - @128: CATS/FITS/KANAD/WPMixer (ct+fu gap-fill SUBMITTED, 6 gpu jobs)
+  - @111: ETSformer/LightTS/Pyraformer/Reformer (covered by ALL33 accel scripts)
+  - @101: Crossformer/MSGNet/MambaSimple/MultiPatchFormer/PAttn/TimeFilter (covered by ALL33 accel)
+  - @16-24: 22 P15 new models (running across gpu/hopper/l40s)
+  - @21: NegativeBinomialGLM (structural failure, excluded)
 - Phase 12 text reruns:
   - 48+1 total scripts (40 original + 8 t3_ct + 1 OOM fix)
-  - 42 COMPLETED, 6 RUNNING (cfisch tslib_sota only)
-  - OOM: ml_t_t1_fu crashed at 320G AND 640G, but ALL valid records were saved (only NegBinGLM missing)
+  - 48 COMPLETED, cfisch tslib 6 TIMEOUT@2d (CATS/FITS/KANAD/WPMixer ct/fu partial)
+  - ml_t_t1_fu_fix OOM@200G → resubmitted with 320G (job 5260370)
   - core_text coverage: **91/91** models (ALL categories complete)
   - full coverage: **91/91** models (ALL, NegBinGLM has partial records)
   - Scripts: `.slurm_scripts/phase12/rerun/`
@@ -73,6 +72,11 @@ Every future contributor should read these files in order before making claims o
   - CFPT: 28176 batch errors per job (conv2d channel mismatch, channels=1 vs 5) — produces MAE but quality suspect
   - Running jobs (3 npin): CARD ✅, CFPT ⚠️, FiLM ✅, FreTS ⏳ (DeformableTST/DUET/FilterTS errored; PathFormer/SEMPO will also fail on old code)
   - Targeted rerun scripts: `.slurm_scripts/phase15/p15_rerun_errors_*.sh` for 5 errored models × 3 conditions
+  - Fix11 rerun: all 11 model fixes landed (commit `0373037`), 3 gpu + 2 hopper scripts running
+  - ModernTCN freq fix: commit `7e023e4`, 7 dedicated jobs all failed (OOM/TIMEOUT), covered by ALL33 accel
+  - ALL33 acceleration: 39 scripts (27 npin + 12 cfisch) across gpu/hopper/l40s
+  - Gap-fill round 2: 12 scripts for CATS/FITS/KANAD/WPMixer ct/fu + AF739 s2/e2 + ml t1_fu fix
+  - Total active: 71 jobs (npin 53 + cfisch 18), ~25 GPUs computing
 
 ## Canonical Directories
 
@@ -118,9 +122,11 @@ Every future contributor should read these files in order before making claims o
 ## Immediate Next Work
 
 1. ~~Land the first clean V739 results.~~ ✅ V739 COMPLETE: 112/112 conditions landed.
-2. Finish gap-fill for the remaining 10 partial TSLib models (NegBinGLM structural failure = excluded).
-3. ~~Run and land the real text-enabled reruns~~ ✅ Phase 12 submitted (48 jobs, 2026-03-15). 42/48 COMPLETED, 6 RUNNING.
-4. ~~Integrate 23 new TSLib models into benchmark~~ ✅ Phase 15 submitted (12 jobs, 2026-03-16). 3R + 3PD npin, 6PD cfisch.
-5. Submit targeted reruns for 5 failed models (DeformableTST/DUET/FilterTS/PathFormer/SEMPO) after main jobs finish.
-6. Wait for Phase 12 + Phase 15 + gap-fill to land, then consolidate full benchmark surface.
-6. Only then start any V740+ iteration.
+2. ~~Finish gap-fill for the remaining 10 partial TSLib models~~ ⏳ Covered by ALL33 accel scripts (39 jobs running).
+3. ~~Run and land the real text-enabled reruns~~ ✅ Phase 12 COMPLETE (48/48 + 6 cfisch TIMEOUT). CATS/FITS/KANAD/WPMixer ct/fu gap-fill resubmitted.
+4. ~~Integrate 23 new TSLib models into benchmark~~ ✅ Phase 15 submitted (12 jobs, 2026-03-16). Fix11 + ALL33 accel covering all conditions.
+5. ~~Submit targeted reruns for 5 failed models~~ ✅ Fix11 scripts running (commit `0373037`).
+6. Complete V739 s2/e2 gap-fill (5 jobs submitted, 2026-03-17).
+7. Complete ml_tabular t1_fu fix (320G, job 5260370).
+8. Wait for all 71 active jobs to land, then consolidate full benchmark surface.
+9. Only then start any V740+ iteration.
