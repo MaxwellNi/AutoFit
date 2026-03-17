@@ -495,9 +495,9 @@ class TSLibModelWrapper(ModelBase):
             # Task
             task_name="long_term_forecast",
             output_attention=False,
-            # Embedding (freq='d' for daily → 3 time features)
+            # Embedding (freq from model config, default 'd' for daily → 3 time features)
             embed="timeF",
-            freq="d",
+            freq=defaults.get("freq", "d"),
             # Common extras
             top_k=defaults.get("top_k", 5),
             num_kernels=defaults.get("num_kernels", 6),
