@@ -1,24 +1,24 @@
 # Phase 9 / V739 Current Snapshot
 
-> Generated: 2026-03-15T12:40:44.632923+00:00
+> Generated: 2026-03-17T09:06:30.519476+00:00
 > Canonical benchmark: `runs/benchmarks/block3_phase9_fair`
 
 ## Verified Current Facts
 
 | metric | value | evidence |
 | --- | --- | --- |
-| metrics_files | 131 | raw metrics scan |
-| raw_records | 12779 | raw metrics scan |
-| raw_models | 91 | raw metrics scan |
+| metrics_files | 132 | raw metrics scan |
+| raw_records | 13817 | raw metrics scan |
+| raw_models | 114 | raw metrics scan |
 | raw_complete_models | 80 | raw metrics scan |
-| raw_partial_models | 11 | raw metrics scan |
+| raw_partial_models | 34 | raw metrics scan |
 | filtered_records | 6672 | `all_results.csv` |
 | filtered_models | 69 | `all_results.csv` |
 | filtered_complete_models | 59 | `all_results.csv` |
 | filtered_partial_models | 10 | `all_results.csv` |
 | v739_conditions_landed | 112 | raw metrics scan |
 | v739_jobs_live | 0 | `squeue -u npin,cfisch` |
-| v739_canonical_phase9_scripts | 12 | V739 script scan |
+| v739_canonical_phase9_scripts | 13 | V739 script scan |
 | v739_legacy_phase10_scripts | 32 | V739 script scan |
 | text_embeddings_artifacts_complete | True | `runs/text_embeddings/` |
 
@@ -26,11 +26,11 @@
 
 | metric | value |
 | --- | --- |
-| jobs_total | 48 |
-| running | 34 |
-| pending | 14 |
-| npin_pending | 0 |
-| cfisch_pending | 14 |
+| jobs_total | 61 |
+| running | 33 |
+| pending | 28 |
+| npin_pending | 15 |
+| cfisch_pending | 13 |
 | v739_pending | 0 |
 | v739_running | 0 |
 
@@ -38,8 +38,8 @@
 
 | reason | count |
 | --- | --- |
-| (Priority) | 12 |
-| (Resources) | 2 |
+| (Priority) | 27 |
+| (Resources) | 1 |
 
 ## Text Embedding Artifacts
 
@@ -58,7 +58,7 @@
 
 | metric | value |
 | --- | --- |
-| canonical_phase9_fair_scripts | 12 |
+| canonical_phase9_fair_scripts | 13 |
 | legacy_phase10_scripts | 32 |
 
 ### V739 Script Families
@@ -125,20 +125,44 @@
 | .slurm_scripts/phase12/rerun/cf_p12_af39_t1_fu.sh | canonical_phase9_fair | runs/benchmarks/block3_phase9_fair/task1_outcome/autofit/full |
 | .slurm_scripts/phase12/rerun/cf_p12_af39_t2_ct.sh | canonical_phase9_fair | runs/benchmarks/block3_phase9_fair/task2_forecast/autofit/core_text |
 | .slurm_scripts/phase12/rerun/cf_p12_af39_t2_fu.sh | canonical_phase9_fair | runs/benchmarks/block3_phase9_fair/task2_forecast/autofit/full |
+| .slurm_scripts/phase12/rerun/cf_p12_af39_t3_ct.sh | canonical_phase9_fair | runs/benchmarks/block3_phase9_fair/task3_risk_adjust/autofit/core_text |
 | .slurm_scripts/phase12/rerun/cf_p12_af39_t3_fu.sh | canonical_phase9_fair | runs/benchmarks/block3_phase9_fair/task3_risk_adjust/autofit/full |
 
 ## Partial Raw Models
 
 | model_name | conditions | records |
 | --- | --- | --- |
-| ETSformer | 88 | 88 |
-| LightTS | 88 | 88 |
-| Pyraformer | 88 | 88 |
-| Reformer | 88 | 88 |
-| Crossformer | 69 | 69 |
-| MSGNet | 69 | 69 |
-| MambaSimple | 69 | 69 |
-| MultiPatchFormer | 69 | 69 |
-| PAttn | 69 | 69 |
-| TimeFilter | 69 | 69 |
-| NegativeBinomialGLM | 20 | 20 |
+| Crossformer | 96 | 100 |
+| MSGNet | 96 | 100 |
+| MambaSimple | 96 | 100 |
+| MultiPatchFormer | 96 | 100 |
+| PAttn | 96 | 100 |
+| TimeFilter | 96 | 100 |
+| ETSformer | 91 | 111 |
+| LightTS | 91 | 111 |
+| Pyraformer | 91 | 111 |
+| Reformer | 91 | 111 |
+| NegativeBinomialGLM | 21 | 21 |
+| xPatch | 9 | 9 |
+| DUET | 8 | 8 |
+| DeformableTST | 8 | 8 |
+| FilterTS | 8 | 8 |
+| PDF | 8 | 8 |
+| PIR | 8 | 8 |
+| PathFormer | 8 | 8 |
+| SEMPO | 8 | 8 |
+| SparseTSF | 8 | 8 |
+| TimeRecipe | 8 | 8 |
+| CARD | 6 | 6 |
+| CFPT | 6 | 6 |
+| FiLM | 6 | 6 |
+| FreTS | 6 | 6 |
+| Fredformer | 6 | 6 |
+| MICN | 6 | 6 |
+| NonstationaryTransformer | 6 | 6 |
+| SCINet | 6 | 6 |
+| SRSNet | 6 | 6 |
+| SegRNN | 6 | 6 |
+| TimeBridge | 6 | 6 |
+| TimePerceiver | 6 | 6 |
+| ModernTCN | 5 | 5 |

@@ -1,22 +1,22 @@
 # Block 3 Benchmark Results
 
-**Generated**: 2026-03-17 22:53:17
+**Generated**: 2026-03-18 11:18:23
 **Benchmark Dir**: `block3_phase9_fair`
-**Total Records (post-filter)**: 11756
+**Total Records (post-filter)**: 12039
 
 ## Overview
 
 | Metric | Value |
 |--------|-------|
-| Raw records | 14055 |
-| Filtered records | 11756 |
+| Raw records | 14352 |
+| Filtered records | 12039 |
 | Comparability filter | fairness_only=False, min_coverage=0.98 |
 | Models evaluated | 98 |
 | Categories | autofit, deep_classical, foundation, irregular, ml_tabular, statistical, transformer_sota, tslib_sota |
 | Tasks | task1_outcome, task2_forecast, task3_risk_adjust |
-| Total evaluations | 11756 |
-| Real results | 11662 |
-| Fallback (mean) | 94 |
+| Total evaluations | 12039 |
+| Real results | 11944 |
+| Fallback (mean) | 95 |
 
 ## task1_outcome
 
@@ -126,17 +126,17 @@
 | Crossformer | 674.4K | 679.1K | 695.5K | 678.4K | ⚠️ fallback |
 | FreTS | 734.2K | 3.52M | 4.41M | 4.46M | ✅ |
 | Reformer | 777.2K | 681.9K | 1.14M | 685.2K | ⚠️ fallback |
-| MambaSimple | 800.2K | 990.1K | 1.48M | 1.09M | ✅ |
+| MambaSimple | 800.2K | 990.1K | 1.48M | 1.09M | ⚠️ fallback |
 | MSGNet | 989.2K | 712.6K | 926.7K | 1.05M | ✅ |
-| xPatch | 1.00M | 2.52M | 2.93M | 6.15M | ✅ |
+| xPatch | 1.00M | 2.52M | 2.93M | 3.09M | ✅ |
 | PAttn | 1.01M | 1.03M | 1.02M | 1.00M | ✅ |
-| TimeRecipe | 1.01M | 8.24M | 1.02M | 693.1K | ✅ |
+| TimeRecipe | 1.01M | 8.24M | 1.02M | 680.0K | ✅ |
 | SRSNet | 1.02M | 1.01M | 1.02M | 1.01M | ✅ |
 | PIR | 1.02M | 1.02M | 1.02M | 1.02M | ✅ |
 | CARD | 1.02M | 1.02M | 1.02M | 1.02M | ✅ |
-| PDF | 1.02M | 1.03M | 1.03M | 1.10M | ✅ |
-| DUET | 1.03M | 1.03M | 1.03M | 1.04M | ✅ |
-| ModernTCN | 1.04M | 1.04M | 1.06M | 1.05M | ✅ |
+| PDF | 1.02M | 1.03M | 1.03M | 1.05M | ✅ |
+| DUET | 1.03M | 1.03M | 1.03M | 1.02M | ✅ |
+| ModernTCN | 1.04M | 1.04M | 1.06M | 1.14M | ✅ |
 | SCINet | 1.05M | 985.7K | 1.02M | 1.04M | ✅ |
 | FiLM | 1.06M | 1.06M | 1.06M | 1.06M | ✅ |
 | NonstationaryTransformer | 1.07M | 1.05M | 1.04M | 1.86M | ✅ |
@@ -155,7 +155,7 @@
 | CATS | 2.13M | 2.13M | 2.13M | 2.13M | ✅ |
 | WPMixer | 2.13M | 2.13M | 2.13M | 2.13M | ✅ |
 | Pyraformer | 2.13M | 2.13M | 2.13M | 2.13M | ✅ |
-| FilterTS | 5.32M | 4.05M | 1.70M | 2.87M | ✅ |
+| FilterTS | 5.32M | 4.05M | 1.70M | 8.89M | ✅ |
 | SegRNN | 8.83M | 6.36M | 4.20M | 7.15M | ✅ |
 
 ## task2_forecast
@@ -263,7 +263,7 @@
 | Model | H=1 | H=7 | H=14 | H=30 | Status |
 |-------|-------:|-------:|-------:|-------:|--------|
 | Crossformer | 674.4K | 679.1K | 695.5K | 678.4K | ✅ |
-| xPatch | 678.9K | 966.7K | 7.36M | 8.39M | ✅ |
+| xPatch | 678.9K | 995.9K | 6.95M | 6.58M | ✅ |
 | Reformer | 777.2K | 681.9K | 1.14M | 685.2K | ⚠️ fallback |
 | MambaSimple | 800.2K | 990.1K | 1.48M | 1.09M | ✅ |
 | FreTS | 805.7K | 3.87M | 1.98M | 3.09M | ✅ |
@@ -272,14 +272,14 @@
 | PAttn | 1.01M | 1.03M | 1.02M | 1.00M | ✅ |
 | PIR | 1.02M | 1.02M | 1.02M | 1.02M | ✅ |
 | CARD | 1.02M | 1.02M | 1.02M | 1.02M | ✅ |
-| DUET | 1.03M | 1.06M | 1.07M | 1.03M | ✅ |
-| ModernTCN | 1.04M | 1.06M | 1.07M | 1.06M | ✅ |
-| PDF | 1.04M | 1.08M | 1.07M | 1.11M | ✅ |
+| DUET | 1.03M | 1.04M | 1.05M | 1.06M | ✅ |
+| ModernTCN | 1.04M | 789.2K | 1.04M | 1.07M | ✅ |
+| PDF | 1.04M | 1.05M | 1.09M | 1.07M | ✅ |
 | FiLM | 1.06M | 1.07M | 1.07M | 1.07M | ✅ |
 | SCINet | 1.08M | 1.19M | 1.17M | 1.20M | ✅ |
 | Fredformer | 1.08M | 1.07M | 1.07M | 1.07M | ✅ |
 | NonstationaryTransformer | 1.09M | 1.04M | 1.07M | 1.04M | ✅ |
-| FilterTS | 1.40M | 1.89M | 3.42M | 2.41M | ✅ |
+| FilterTS | 1.40M | 1.54M | 2.90M | 2.02M | ✅ |
 | LightTS | 1.40M | 2.02M | 745.8K | 2.72M | ✅ |
 | FITS | 2.13M | 2.13M | 2.13M | 2.13M | ✅ |
 | TimePerceiver | 2.13M | 2.13M | 2.13M | 2.13M | ✅ |
@@ -295,7 +295,7 @@
 | Pyraformer | 2.13M | 2.13M | 2.13M | 2.13M | ✅ |
 | PathFormer | 2.13M | 2.13M | 2.13M | 2.13M | ✅ |
 | SegRNN | 4.11M | 6.06M | 3.04M | 6.68M | ✅ |
-| TimeRecipe | 13.33M | 7.99M | 4.97M | 9.89M | ✅ |
+| TimeRecipe | 13.33M | 1.02M | 1.03M | 10.84M | ✅ |
 
 ## task3_risk_adjust
 
@@ -402,73 +402,73 @@
 | Model | H=1 | H=7 | H=14 | H=30 | Status |
 |-------|-------:|-------:|-------:|-------:|--------|
 | Crossformer | 674.4K | 679.1K | 695.5K | 678.4K | ✅ |
-| xPatch | 678.9K | — | — | — | ✅ |
+| xPatch | 678.9K | 1.00M | 5.74M | — | ✅ |
 | Reformer | 777.2K | 681.9K | 1.14M | 685.2K | ⚠️ fallback |
 | MambaSimple | 800.2K | 990.1K | 1.48M | 1.09M | ✅ |
-| FreTS | 805.7K | — | — | — | ✅ |
+| FreTS | 805.7K | 843.4K | 813.0K | — | ✅ |
 | MSGNet | 989.2K | 712.6K | 926.7K | 1.05M | ✅ |
-| SRSNet | 994.8K | — | — | — | ✅ |
+| SRSNet | 994.8K | 1.02M | 1.03M | — | ✅ |
 | PAttn | 1.01M | 1.03M | 1.02M | 1.00M | ✅ |
-| PIR | 1.02M | — | — | — | ✅ |
-| CARD | 1.02M | — | — | — | ✅ |
-| DUET | 1.03M | — | — | — | ✅ |
+| PIR | 1.02M | 1.02M | 1.02M | — | ✅ |
+| CARD | 1.02M | 1.02M | 1.02M | — | ✅ |
+| DUET | 1.03M | 1.04M | 1.04M | — | ✅ |
 | ModernTCN | 1.04M | 855.5K | 1.05M | 1.05M | ✅ |
-| PDF | 1.04M | — | — | — | ✅ |
-| FiLM | 1.06M | — | — | — | ✅ |
-| SCINet | 1.08M | — | — | — | ✅ |
-| Fredformer | 1.08M | — | — | — | ✅ |
-| NonstationaryTransformer | 1.09M | — | — | — | ✅ |
-| FilterTS | 1.40M | — | — | — | ✅ |
+| PDF | 1.04M | 1.05M | 1.08M | — | ✅ |
+| FiLM | 1.06M | 1.07M | 1.07M | — | ✅ |
+| SCINet | 1.08M | 1.09M | 915.8K | — | ✅ |
+| Fredformer | 1.08M | 1.03M | 1.06M | — | ✅ |
+| NonstationaryTransformer | 1.09M | 921.9K | 732.6K | — | ✅ |
+| FilterTS | 1.40M | 1.74M | 688.6K | — | ✅ |
 | LightTS | 1.40M | 2.02M | 745.8K | 2.72M | ⚠️ fallback |
 | FITS | 2.13M | 2.13M | 2.13M | 2.13M | ✅ |
-| TimePerceiver | 2.13M | — | — | — | ✅ |
-| TimeBridge | 2.13M | — | — | — | ✅ |
-| SparseTSF | 2.13M | — | — | — | ✅ |
+| TimePerceiver | 2.13M | 2.13M | 2.13M | — | ✅ |
+| TimeBridge | 2.13M | 2.13M | 2.13M | — | ✅ |
+| SparseTSF | 2.13M | 2.13M | 2.13M | — | ✅ |
 | CATS | 2.13M | 2.13M | 2.13M | 2.13M | ✅ |
-| SEMPO | 2.13M | — | — | — | ✅ |
-| CFPT | 2.13M | — | — | — | ✅ |
+| SEMPO | 2.13M | 2.13M | 2.13M | — | ✅ |
+| CFPT | 2.13M | 2.13M | 2.13M | — | ✅ |
 | KANAD | 2.13M | 2.13M | 2.13M | 2.13M | ✅ |
-| DeformableTST | 2.13M | — | — | — | ✅ |
+| DeformableTST | 2.13M | 2.13M | 2.13M | — | ✅ |
 | WPMixer | 2.13M | 2.13M | 2.13M | 2.13M | ✅ |
 | ETSformer | 2.13M | 2.13M | 2.13M | 2.13M | ✅ |
 | Pyraformer | 2.13M | 2.13M | 2.13M | 2.13M | ✅ |
-| PathFormer | 2.13M | — | — | — | ✅ |
-| SegRNN | 4.11M | — | — | — | ✅ |
-| TimeRecipe | 13.33M | — | — | — | ✅ |
+| PathFormer | 2.13M | 2.13M | 2.13M | — | ✅ |
+| SegRNN | 4.11M | 5.70M | 3.33M | — | ✅ |
+| TimeRecipe | 13.33M | 7.94M | 1.02M | — | ✅ |
 
 ## Training Time Summary
 
 | Model | Avg (s) | Min (s) | Max (s) |
 |-------|--------:|--------:|--------:|
-| MambaSimple | 11750.8 | 865.8 | 49536.0 |
-| MSGNet | 11704.8 | 1121.9 | 31526.1 |
-| Fredformer | 6634.7 | 1677.9 | 12377.7 |
-| ModernTCN | 6355.6 | 788.0 | 13416.7 |
-| CARD | 5681.3 | 948.2 | 13560.9 |
-| FiLM | 5400.3 | 2334.1 | 8490.5 |
-| DeformableTST | 4954.2 | 1135.3 | 7439.9 |
+| MambaSimple | 11974.4 | 865.8 | 49536.0 |
+| MSGNet | 11805.3 | 1121.9 | 31526.1 |
+| Fredformer | 7703.0 | 1677.9 | 18666.2 |
+| ModernTCN | 7480.8 | 1239.2 | 18375.2 |
+| CARD | 6589.4 | 948.2 | 16684.9 |
+| FiLM | 5501.7 | 2334.1 | 10913.3 |
+| DeformableTST | 5474.5 | 1135.3 | 13195.5 |
+| FreTS | 4301.9 | 307.8 | 11555.5 |
 | Reformer | 4080.2 | 926.5 | 17614.9 |
-| SCINet | 3959.2 | 790.6 | 9860.8 |
-| FreTS | 3771.8 | 307.8 | 11333.4 |
-| Crossformer | 3036.3 | 277.7 | 7380.1 |
-| PIR | 2954.8 | 531.0 | 5201.8 |
-| PAttn | 2622.8 | 283.1 | 14803.5 |
-| PathFormer | 1826.4 | 274.1 | 4019.8 |
-| xPatch | 1700.0 | 207.0 | 3946.3 |
+| SCINet | 3742.6 | 790.6 | 9860.8 |
+| PIR | 3547.0 | 378.3 | 8699.0 |
+| Crossformer | 3014.4 | 277.7 | 7380.1 |
+| PAttn | 2716.5 | 283.1 | 14803.5 |
+| PathFormer | 1704.4 | 469.9 | 4028.7 |
+| xPatch | 1629.4 | 375.8 | 3946.3 |
+| DUET | 1563.0 | 296.1 | 3424.8 |
 | BRITS | 1526.4 | 349.2 | 2770.7 |
 | iTransformer | 1466.2 | 927.9 | 1806.3 |
 | NegativeBinomialGLM | 1437.5 | 1029.1 | 2304.0 |
-| DUET | 1250.5 | 79.7 | 3162.4 |
-| PDF | 1183.0 | 78.1 | 2662.8 |
+| PDF | 1366.9 | 105.1 | 3802.6 |
 | MSTL | 1157.4 | 112.0 | 1982.0 |
-| FilterTS | 962.3 | 210.6 | 1731.1 |
+| FilterTS | 1151.3 | 197.9 | 1951.9 |
 | LightTS | 848.0 | 137.8 | 3222.8 |
-| SegRNN | 711.8 | 214.5 | 1172.3 |
+| SegRNN | 739.4 | 214.5 | 1650.3 |
 | RandomForest | 706.6 | 224.6 | 1797.3 |
-| NonstationaryTransformer | 699.4 | 98.1 | 1958.9 |
-| TimeRecipe | 668.0 | 96.7 | 1812.8 |
+| NonstationaryTransformer | 703.2 | 98.1 | 1958.9 |
+| TimeRecipe | 699.4 | 96.7 | 1812.8 |
+| SRSNet | 688.6 | 154.7 | 1273.7 |
 | AutoARIMA | 639.3 | 213.1 | 1179.2 |
-| SRSNet | 614.5 | 154.7 | 1223.6 |
 | ExtraTrees | 550.3 | 71.5 | 1812.2 |
 | SOFTS | 466.8 | 329.9 | 708.1 |
 | AutoFitV739 | 384.9 | 144.1 | 837.6 |
@@ -477,40 +477,40 @@
 | RMoK | 287.0 | 165.1 | 470.1 |
 | Autoformer | 279.9 | 152.3 | 465.4 |
 | ETSformer | 277.4 | 25.6 | 1153.2 |
+| TimePerceiver | 265.5 | 68.8 | 437.1 |
 | Informer | 262.6 | 113.5 | 368.5 |
-| TimePerceiver | 259.9 | 68.8 | 416.1 |
 | TimesNet | 250.7 | 125.8 | 463.3 |
 | HistGradientBoosting | 218.8 | 6.8 | 1640.3 |
 | TimeMixer | 185.2 | 140.6 | 292.3 |
 | TSMixer | 165.9 | 107.6 | 270.0 |
+| WPMixer | 161.0 | 12.6 | 475.7 |
 | TSMixerx | 153.5 | 113.0 | 228.4 |
 | HoltWinters | 144.3 | 41.8 | 278.8 |
 | XGBoostPoisson | 135.5 | 30.8 | 336.4 |
 | XGBoost | 132.8 | 24.5 | 733.0 |
-| WPMixer | 131.2 | 12.6 | 442.2 |
+| CATS | 116.6 | 9.0 | 393.3 |
+| FITS | 115.5 | 8.9 | 390.0 |
+| KANAD | 115.2 | 8.9 | 348.8 |
 | AutoTheta | 112.1 | 50.0 | 201.1 |
 | TFT | 103.6 | 71.1 | 167.4 |
 | Pyraformer | 98.6 | 10.4 | 419.7 |
-| CATS | 92.3 | 9.0 | 306.5 |
-| KANAD | 91.9 | 8.9 | 305.3 |
-| CFPT | 91.9 | 24.2 | 132.6 |
-| FITS | 91.7 | 8.9 | 305.5 |
+| CFPT | 93.3 | 24.2 | 139.6 |
 | VanillaTransformer | 86.5 | 50.2 | 217.3 |
 | AutoETS | 80.3 | 8.6 | 157.5 |
 | PatchTST | 79.5 | 35.7 | 141.3 |
 | SAITS | 71.7 | 23.6 | 143.5 |
 | DeepAR | 70.7 | 30.6 | 171.3 |
+| SEMPO | 63.7 | 17.0 | 106.2 |
 | CSDI | 61.2 | 14.7 | 166.9 |
-| SEMPO | 57.8 | 10.6 | 97.4 |
 | Holt | 54.9 | 8.2 | 125.3 |
 | DilatedRNN | 51.1 | 24.5 | 85.7 |
+| SparseTSF | 50.5 | 22.7 | 114.1 |
 | TiDE | 47.2 | 20.3 | 104.3 |
-| SparseTSF | 45.0 | 13.8 | 114.1 |
 | TCN | 42.3 | 12.1 | 77.7 |
 | LSTM | 42.2 | 16.2 | 76.7 |
 | GRU | 40.6 | 11.8 | 80.1 |
+| TimeBridge | 39.7 | 10.3 | 65.7 |
 | BiTCN | 39.1 | 21.8 | 83.5 |
-| TimeBridge | 38.8 | 10.3 | 62.4 |
 | MLP | 37.2 | 9.2 | 71.6 |
 | DynamicOptimizedTheta | 36.0 | 16.8 | 68.6 |
 | KAN | 35.5 | 10.7 | 83.4 |
@@ -590,7 +590,7 @@ Shows which task/category/ablation combinations have results.
 | task1_outcome | tslib_sota | core_only | 34 |
 | task1_outcome | tslib_sota | core_only_seed2 | 12 |
 | task1_outcome | tslib_sota | core_text | 34 |
-| task1_outcome | tslib_sota | full | 12 |
+| task1_outcome | tslib_sota | full | 34 |
 | task2_forecast | autofit | core_edgar | 1 |
 | task2_forecast | autofit | core_only | 1 |
 | task2_forecast | autofit | core_text | 1 |
@@ -636,7 +636,7 @@ Shows which task/category/ablation combinations have results.
 | task2_forecast | tslib_sota | core_only | 34 |
 | task2_forecast | tslib_sota | core_only_seed2 | 8 |
 | task2_forecast | tslib_sota | core_text | 34 |
-| task2_forecast | tslib_sota | full | 12 |
+| task2_forecast | tslib_sota | full | 33 |
 | task3_risk_adjust | autofit | core_edgar | 1 |
 | task3_risk_adjust | autofit | core_only | 1 |
 | task3_risk_adjust | autofit | core_text | 1 |
@@ -674,8 +674,8 @@ Shows which task/category/ablation combinations have results.
 | task3_risk_adjust | tslib_sota | core_edgar | 34 |
 | task3_risk_adjust | tslib_sota | core_edgar_seed2 | 8 |
 | task3_risk_adjust | tslib_sota | core_only | 34 |
-| task3_risk_adjust | tslib_sota | core_text | 12 |
-| task3_risk_adjust | tslib_sota | full | 12 |
+| task3_risk_adjust | tslib_sota | core_text | 34 |
+| task3_risk_adjust | tslib_sota | full | 34 |
 
 ---
-_Last updated: 2026-03-17 22:53:17_
+_Last updated: 2026-03-18 11:18:24_

@@ -20,37 +20,38 @@ Every future contributor should read these files in order before making claims o
 8. `docs/PHASE12_TEXT_RERUN_EXECUTION.md`
 9. `docs/PHASE9_V739_LESSONS_LEARNED.md`
 
-## Verified Current State (2026-03-17)
+## Verified Current State (2026-03-18)
 
 - Freeze: complete and read-only
 - Canonical benchmark: `runs/benchmarks/block3_phase9_fair/`
 - Raw benchmark scan:
-  - `14055` raw records
+  - `14352` raw records
   - `114` raw models (98 after audit exclusion of 16 models)
-  - `65` complete models (`=160` records)
-  - `49` partial models (various stages)
+  - `69` complete models (`=160` records)
+  - `45` partial models (various stages)
   - `17` valid conditions (task3 has no core_only_seed2)
   - `160` max records per model: t1(72) + t2(48) + t3(40)
 - AutoFit:
   - V734-V738 are retired due to oracle test-set leakage
   - V739 is the only valid current AutoFit baseline
   - V739 landed conditions: `112/160` (missing s2/e2 = seed2+edgar_seed2)
-  - V739 s2/e2 gap-fill: SUBMITTED (5 gpu jobs, 2026-03-17)
+  - V739 s2/e2 gap-fill: RESUBMITTED after seed2 harness fix (5 gpu jobs, 2026-03-18)
   - V739 quality: 0 NaN/Inf, 0 fallback, 100% fairness pass
 - Top-5 models by mean rank: NHITS (4.21), PatchTST (4.36), NBEATS (4.77), NBEATSx (5.84), ChronosBolt (7.11)
 - Dominant champion model: NBEATS — 24/56 conditions won (43%)
 - Model completion tiers:
-  - @160 (complete): 65 models (statistical 15, foundation 14, irregular 4, deep_classical 9, transformer_sota 22, tslib_sota 1)
-  - @157: 10 ml_tabular models (missing 3 t1_fu records each)
-  - @128: CATS/FITS/KANAD/WPMixer (ct+fu gap-fill SUBMITTED, 6 gpu jobs)
+  - @160 (complete): 69 models (statistical 15, foundation 14, irregular 4, deep_classical 9, transformer_sota 22, tslib_sota 5)
+  - @157: 10 ml_tabular models (missing 3 t1_fu records each, bigmem 640G job running)
+  - @112: AutoFitV739 (missing s2/e2, resubmitted after harness fix)
   - @111: ETSformer/LightTS/Pyraformer/Reformer (covered by ALL33 accel scripts)
-  - @101: Crossformer/MSGNet/MambaSimple/MultiPatchFormer/PAttn/TimeFilter (covered by ALL33 accel)
-  - @16-24: 22 P15 new models (running across gpu/hopper/l40s)
+  - @105: Crossformer/MSGNet/MambaSimple/MultiPatchFormer/PAttn/TimeFilter (covered by ALL33 accel)
+  - @29: ModernTCN (covered by ALL33 accel)
+  - @23: 22 P15 new models (running across gpu/hopper/l40s)
   - @21: NegativeBinomialGLM (structural failure, excluded)
 - Phase 12 text reruns:
   - 48+1 total scripts (40 original + 8 t3_ct + 1 OOM fix)
   - 48 COMPLETED, cfisch tslib 6 TIMEOUT@2d (CATS/FITS/KANAD/WPMixer ct/fu partial)
-  - ml_t_t1_fu_fix OOM@200G → resubmitted with 320G (job 5260370)
+  - ml_t_t1_fu_fix OOM@200G → 320G also OOM → resubmitted on bigmem 640G (job 5262824)
   - core_text coverage: **91/91** models (ALL categories complete)
   - full coverage: **91/91** models (ALL, NegBinGLM has partial records)
   - Scripts: `.slurm_scripts/phase12/rerun/`
@@ -75,8 +76,10 @@ Every future contributor should read these files in order before making claims o
   - Fix11 rerun: all 11 model fixes landed (commit `0373037`), 3 gpu + 2 hopper scripts running
   - ModernTCN freq fix: commit `7e023e4`, 7 dedicated jobs all failed (OOM/TIMEOUT), covered by ALL33 accel
   - ALL33 acceleration: 39 scripts (27 npin + 12 cfisch) across gpu/hopper/l40s
-  - Gap-fill round 2: 12 scripts for CATS/FITS/KANAD/WPMixer ct/fu + AF739 s2/e2 + ml t1_fu fix
-  - Total active: 71 jobs (npin 53 + cfisch 18), ~25 GPUs computing
+  - Gap-fill round 2: CATS/FITS/KANAD/WPMixer ct/fu COMPLETED ✅ (6 jobs, 1-3h each) → 4 models now @160
+  - Seed2 harness fix: commit `a9162c2` — added `core_only_seed2`/`core_edgar_seed2` to ABLATION_NAMES + `_SEED2_BASE` mapping
+  - cos2 scripts: 6 new scripts in `.slurm_scripts/phase15/cos2/` covering ALL33 × t1/t2 × gpu/hp/l40
+  - Total active: 85 jobs (npin 64 + cfisch 21), ~26 GPUs computing
 
 ## Canonical Directories
 
@@ -126,7 +129,7 @@ Every future contributor should read these files in order before making claims o
 3. ~~Run and land the real text-enabled reruns~~ ✅ Phase 12 COMPLETE (48/48 + 6 cfisch TIMEOUT). CATS/FITS/KANAD/WPMixer ct/fu gap-fill resubmitted.
 4. ~~Integrate 23 new TSLib models into benchmark~~ ✅ Phase 15 submitted (12 jobs, 2026-03-16). Fix11 + ALL33 accel covering all conditions.
 5. ~~Submit targeted reruns for 5 failed models~~ ✅ Fix11 scripts running (commit `0373037`).
-6. Complete V739 s2/e2 gap-fill (5 jobs submitted, 2026-03-17).
-7. Complete ml_tabular t1_fu fix (320G, job 5260370).
-8. Wait for all 71 active jobs to land, then consolidate full benchmark surface.
+6. ~~Complete V739 s2/e2 gap-fill~~ ⏳ Resubmitted after seed2 harness fix (5 jobs, 2026-03-18).
+7. ~~Complete ml_tabular t1_fu fix~~ ⏳ Resubmitted on bigmem 640G (job 5262824, running).
+8. Wait for all 85 active jobs to land, then consolidate full benchmark surface.
 9. Only then start any V740+ iteration.
