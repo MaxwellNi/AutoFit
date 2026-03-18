@@ -37,8 +37,13 @@ Every future contributor should read these files in order before making claims o
   - V739 landed conditions: `112/160` (missing s2/e2 = seed2+edgar_seed2)
   - V739 s2/e2 gap-fill: RESUBMITTED after seed2 harness fix (5 gpu jobs, 2026-03-18)
   - V739 quality: 0 NaN/Inf, 0 fallback, 100% fairness pass
-- Top-5 models by mean rank: NHITS (4.21), PatchTST (4.36), NBEATS (4.77), NBEATSx (5.84), ChronosBolt (7.11)
-- Dominant champion model: NBEATS — 24/56 conditions won (43%)
+- Top-5 models by mean rank: PatchTST (4.28), NHITS (4.38), NBEATS (5.01), NBEATSx (5.81), ChronosBolt (7.42)
+- Dominant champion model: NBEATS — 65/160 conditions won (40.6%)
+- Champion analysis: `docs/references/BLOCK3_CHAMPION_COMPONENT_ANALYSIS.md` updated 2026-03-18
+  - Key finding: text embeddings HURT (core_text wins only 11.7% of pairs)
+  - DeepNPTS is task1-only specialist (16/16 wins on task1_outcome)
+  - PatchTST best mean rank (4.28) but only 4 wins (generalist)
+  - Seed2 highly stable: avg |delta| 0.12%, median 0.00%
 - Model completion tiers:
   - @160 (complete): 69 models (statistical 15, foundation 14, irregular 4, deep_classical 9, transformer_sota 22, tslib_sota 5)
   - @157: 10 ml_tabular models (missing 3 t1_fu records each, bigmem 640G job running)

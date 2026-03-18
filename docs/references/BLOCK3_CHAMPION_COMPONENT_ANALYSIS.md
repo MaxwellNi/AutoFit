@@ -1,50 +1,68 @@
 # Block 3 Champion Component Analysis
 
-> Date: 2026-03-12 (Phase 9 complete update, V734-V738 excluded, 8,660 clean records)
-> Scope: Research-grade dissection of 9 champion models across 104 benchmark conditions
+> Date: 2026-03-18 (Phase 12+15 update, 14,352 records, 69 complete models, real text/EDGAR/seed2 ablations)
+> Scope: Research-grade dissection of 9 champion models across 160 evaluation cells
 > Purpose: Inform V740+ AutoFit design — core mechanism selection, routing logic, feature interaction
 
-> Reference update (2026-03-13): text embedding artifacts now exist in `runs/text_embeddings/`.
-> This document still analyzes the interim seed-replication benchmark line and must not be treated as current operational status.
+> Previous version (2026-03-12): analyzed 8,660 records, 93 models, 104 conditions.
+> This update reflects the full 6-ablation benchmark surface with real text embeddings and seed2 replication.
 
-## 0. Critical Caveat: Text Embedding Ablation → 2-Seed Replication
+## 0. Benchmark Evolution: From Seed-Replication to Full 6-Ablation Surface
 
-At the time of the analyzed benchmark line, `runs/text_embeddings/` was empty and the real text-enabled reruns had not landed yet.
-Consequence for the analyzed line: original `core_text ≡ core_only` and `full ≡ core_edgar` for ALL 78 completed models.
+### Phase 9 → Phase 12+15 Changes
+| Metric | Phase 9 (2026-03-12) | Phase 12+15 (2026-03-18) | Change |
+|---|---|---|---|
+| Total records | 8,660 | 14,352 | +65.7% |
+| Complete models (@160) | 78 (93 incl. partial) | 69 | −9 (stricter: 160 not 104) |
+| Ablations | 4 (but core_text≡core_only, full≡core_edgar) | 6 (real text embeddings, real EDGAR, real seed2) |
+| Effective conditions | 104 (== 52 truly independent) | 160 (all independent) |
+| Text embeddings | absent (silent fallback) | real: 5.77M rows, 64 PCA dims, float32, 0 NaN |
+| Seed2 replication | derived from text≡core rename | independent SLURM seed2 runs |
+| Text effect | none (0 champion changes) | real: core_text wins 227 vs core_only wins 1,077 |
 
-**Reorganization (2026-03-13)**: Redundant directories physically renamed to serve as **independent 2-seed replication**:
-- `core_text/` → `core_only_seed2/` (metrics.json ablation field updated)
-- `full/` → `core_edgar_seed2/` (metrics.json ablation field updated)
-- 40 directories renamed, 4,032 metrics.json records updated
-- `REPLICATION_MANIFEST.json` generated at benchmark root with full audit trail
-- Script: `scripts/reorganize_replication_seed2.py`
+### Current Ablation Structure
+- **core_only**: temporal features only (seed1)
+- **core_only_seed2**: temporal features only (seed2) — independent replication
+- **core_text**: temporal + 64-dim PCA text embeddings from business descriptions
+- **core_edgar**: temporal + EDGAR SEC filing features
+- **core_edgar_seed2**: temporal + EDGAR (seed2) — independent replication
+- **full**: temporal + text + EDGAR (all features combined)
 
-**Replication statistics** (4,032 paired conditions):
-- 81.5% exact match (identical MAE between seed1 and seed2)
-- 91.5% within 0.1% relative difference
-- Mean difference: 0.3369%, max: 48.6% (CSDI stochastic outlier)
-- Model classification: 45 deterministic, 18 near-deterministic, 23 stochastic, 7 highly stochastic
+### 17 Valid Conditions
+- task1_outcome × 6 ablations = 6 conditions (72 records per model: 6 × 3 targets × 4 horizons)
+- task2_forecast × 6 ablations = 6 conditions (48 per model)
+- task3_risk_adjust × 5 ablations = 5 conditions (40 per model; task3 has no core_only_seed2)
+- **Total: 17 conditions × 160 records = 160 evaluation cells per model**
 
-**All analysis below uses the original 4-ablation naming for clarity** (core_only, core_text, core_edgar, full),
-with the understanding that core_text = core_only_seed2 and full = core_edgar_seed2 in the physical data.
+## 1. Champion Distribution Summary (Updated 2026-03-18, 69 Complete Models @ 160 Records)
 
-## 1. Champion Distribution Summary (Updated 2026-03-12, V734-V738 Excluded)
+14,352 records across 114 models. 69 models complete at 160/160 records.
+160 evaluation cells = 3 tasks × {6 ablations for task1/task2, 5 for task3} × 3 targets × 4 horizons.
+**Fair comparison uses only the 69 complete models (11,040 records).**
 
-8,660 clean records across 93 models. 104 conditions = 3 tasks × {4 ablations for task1/task2, 3 for task3} × 3 targets × 4 horizons.
+| Rank | Model | Wins/160 | Pct | Category | Mean Rank | Primary Domain |
+|---:|---|---:|---:|---|---:|---|
+| 1 | NBEATS | 65 | 40.6% | deep_classical | 5.01 | funding h=1, investors h≥7, cross-task |
+| 2 | Chronos | 23 | 14.4% | foundation | 10.55 | funding h=14/30 (EDGAR-conditioned) |
+| 3 | NHITS | 21 | 13.1% | deep_classical | 4.38 | funding h=7, is_funded (EDGAR) |
+| 4 | KAN | 16 | 10.0% | transformer_sota | 10.46 | investors h=1 (all ablations) |
+| 5 | DeepNPTS | 16 | 10.0% | deep_classical | 19.55 | is_funded (task1 ONLY, all ablations) |
+| 6 | GRU | 11 | 6.9% | deep_classical | 13.22 | funding h=14 (core_only/core_text) |
+| 7 | PatchTST | 4 | 2.5% | transformer_sota | 4.28 | is_funded h=1/14 (EDGAR) |
+| 8 | NBEATSx | 3 | 1.9% | deep_classical | 5.81 | funding h=1 (seed2 ablation) |
+| 9 | DLinear | 1 | 0.6% | transformer_sota | 18.57 | is_funded h=7 (seed2, task1 only) |
 
-| Model | Wins | Family | Mean Rank | Avg Margin to #2 | Primary Domain |
-|---|---:|---|---:|---:|---|
-| NBEATS | 41 | deep_classical | 4.84 | 0.006% | funding h=1, investors h≥7 |
-| Chronos | 17 | foundation | 10.44 | 0.108% | funding h=14/30 (with EDGAR) |
-| NHITS | 15 | deep_classical | 4.12 | 0.087% | funding h=7, is_funded h=7/30 (with EDGAR) |
-| KAN | 10 | transformer_sota | 10.41 | 0.056% | investors h=1 (all ablations) |
-| DeepNPTS | 8 | deep_classical | — | 0.295% | is_funded (core_only/core_text only) |
-| **GRU** | **5** | **deep_classical** | **—** | **0.037%** | **funding h=14 (core_only/core_text only)** |
-| PatchTST | 4 | transformer_sota | 4.13 | 0.385% | is_funded h=1/14 (with EDGAR) |
-| NBEATSx | 3 | deep_classical | 5.53 | 0.000% | funding h=1 (full ablation) |
-| DLinear | 1 | transformer_sota | — | 0.003% | is_funded h=7 (full, task1 only) |
+### Key Changes from Phase 9 (8,660 records → 14,352 records)
+1. **NBEATS dominance increased**: 41→65 wins (+58%). Gains all 17 seed2 conditions it was favored in.
+2. **Chronos gains**: 17→23 wins (+35%). Seed2 conditions confirm its h=14/30 advantage with EDGAR.
+3. **DeepNPTS anomaly**: 8→16 wins but ALL wins are **task1_outcome ONLY**. Zero wins on task2/task3. This is a critical specialization — DeepNPTS is not a general champion but a task1-specific specialist.
+4. **GRU strengthened**: 5→11 wins. Gains across all 3 tasks, confirming h=14 core_only niche.
+5. **PatchTST**: Unchanged at 4 wins but has the **BEST mean rank** (4.28) — most consistent model across all cells.
+6. **NBEATSx**: 3 wins, all on seed2 ablations (core_edgar_seed2) — confirms NBEATSx ≡ NBEATS within GPU noise.
+7. **DLinear**: 1 win, now on core_edgar_seed2 instead of full — confirms marginal champion status.
 
-**Key change from 2026-03-04**: GRU emerges as 6th champion (5 wins on funding/h=14/core_only+core_text), taking conditions previously attributed to Chronos when oracle-leaked AutoFit V734-V738 were in the pool. Chronos drops from 22→17 wins.
+### Mean Rank vs Win Count Discrepancy
+The most striking finding: **PatchTST has the best mean rank (4.28) but only 4 wins (2.5%)**. This means PatchTST is the most consistently good model (rarely bad) but rarely the absolute best. Conversely, DeepNPTS has 16 wins but mean rank 19.55 — brilliant on its niche but terrible elsewhere. This is the classic generalist-vs-specialist tradeoff that V740 routing must handle.
 
 ## 2. Per-Model Core Component Analysis
 
@@ -294,16 +312,62 @@ with the understanding that core_text = core_only_seed2 and full = core_edgar_se
 
 ## 3. Cross-Cutting Component Analysis
 
-### 3.0 Structural Observations (2026-03-12)
+### 3.0 Structural Observations (2026-03-18, 160 evaluation cells)
 
-**Observation 1: Task Invariance**
-103/104 conditions have identical champions across task1_outcome, task2_forecast, and task3_risk_adjust. The single exception is `core_edgar/investors_count/h=1`, where task1 selects NHITS and task2/task3 select KAN (margin: 0.005%, 2.2 MAE units out of 44.8K). This near-perfect task invariance means the champion is determined by `(target_type, horizon, ablation_class)` alone — the task framing contributes negligible information.
+**Observation 1: Task Invariance (Partially Broken)**
+In Phase 9 (104 cells), 103/104 conditions had identical champions across tasks. With 160 cells and real ablations, task invariance is weaker:
+- DeepNPTS wins 16 conditions — ALL on task1_outcome, zero on task2/task3.
+- This means task framing now carries meaningful signal for the non-parametric approach.
+- For other champions (NBEATS, Chronos, NHITS, KAN), task invariance still holds strongly.
+- **V740 oracle must include task as routing dimension for binary targets.**
 
-**Observation 2: Effective Dimension Collapse**
-Since core_text ≡ core_only and full ≡ core_edgar, the 104 conditions collapse to 2 effective ablation classes × 3 targets × 4 horizons × ~3 tasks = ~72 truly independent conditions (further reduced by task invariance to ~24 unique champion mappings).
+**Observation 2: Text Embeddings are Mostly Harmful**
+With real text embeddings (64-dim PCA from business descriptions):
+- core_text wins only 227 out of 1,932 pairs against core_only (11.7%)
+- core_only wins 1,077 pairs (55.7%), with 628 ties (32.5%)
+- **Text embeddings HURT more than they help** for the majority of models
+- This is a CRITICAL finding: the 64-dim PCA embeddings add noise that degrades time series forecasting
+- Strongest text beneficiary: AutoARIMA (avg delta = -0.00%) — effectively zero benefit
+- Most models show 0.00% text effect because they either: (a) don't use the extra columns, or (b) the PCA dims add noise that washes out
+- **V740 should NOT include text embeddings in its feature set unless embedding quality improves dramatically**
 
-**Observation 3: NBEATSx ≡ NBEATS at Machine Precision**
-NBEATSx's 3 wins all have 0.000% margin over NBEATS (MAE tied to 4+ decimal places: 374514.6840 = 374514.6840). The exogenous pathway in NBEATSx adds < 0.0001% to predictions. This means EDGAR features flow through the static covariate pathway but contribute negligible predictive signal to the basis expansion. NBEATSx "wins" by random GPU noise in the tied region.
+**Observation 3: EDGAR Effect is Mixed (Not Uniformly Helpful)**
+- core_edgar wins 670 / 1,932 pairs vs core_only's 924 wins (34.7% vs 47.8%)
+- EDGAR features slightly degrade overall performance
+- However, full (text+EDGAR) wins 737 vs core_edgar's 607 → text+EDGAR combo slightly better than EDGAR alone
+- **EDGAR benefits are target-specific**: helps binary (is_funded) and some funding conditions, hurts count (investors)
+
+**Observation 4: Seed Reproducibility is Excellent**
+- 1,344 paired cells between core_only and core_only_seed2
+- Avg |MAE delta|: 0.12%, Median: 0.00%, P95: 0.02%
+- Champion rankings are highly stable across seeds
+- Deterministic models: exact 0.00% delta; Neural models: <0.1% for most
+
+**Observation 5: Horizon-Dependent Architecture Selection**
+Mean rank by horizon for top models:
+| Model | h=1 | h=7 | h=14 | h=30 |
+|---|---:|---:|---:|---:|
+| NBEATS | 3.40 | 3.67 | 4.28 | **8.70** |
+| NHITS | 3.58 | **2.08** | 8.38 | 3.48 |
+| PatchTST | 4.20 | 4.22 | 3.75 | 4.92 |
+| NBEATSx | 4.15 | 4.42 | 5.12 | 9.55 |
+| ChronosBolt | 9.47 | 8.93 | 6.53 | **4.78** |
+
+Key pattern: NBEATS degrades at h=30 (8.70), ChronosBolt improves (4.78). The crossover is at h≈14. PatchTST is horizon-invariant (3.75-4.92).
+
+**Observation 6: Target-Specific Specialization**
+Mean rank by target:
+| Model | funding_raised | investors_count | is_funded |
+|---|---:|---:|---:|
+| NBEATS | 7.93 | **1.65** | 6.29 |
+| NHITS | 6.34 | 2.84 | **3.17** |
+| PatchTST | **3.34** | 5.84 | **2.50** |
+| Chronos | **2.87** | 16.53 | 15.38 |
+| DeepNPTS | 37.99 | 7.19 | **2.33** |
+
+- Chronos excels on funding_raised (2.87) but terrible on investors (16.53) and is_funded (15.38)
+- DeepNPTS: catastrophic on funding (37.99) but best on is_funded (2.33)
+- PatchTST: most balanced — top-4 on all 3 targets
 
 ### 3.1 Horizon-Component Mapping (Updated 2026-03-12)
 
@@ -336,28 +400,28 @@ NBEATSx's 3 wins all have 0.000% margin over NBEATS (MAE tied to 4+ decimal plac
 2. **EDGAR effect is target-dependent**: helps funding (−1.6%) and is_funded (−1.8%) but marginally hurts investors (+0.15%). The SEC filing features are informative for dollar amounts and binary status but add noise for count predictions.
 3. Binary targets exhibit the strongest ablation sensitivity: champions switch between 4 different models across ablations
 
-### 3.3 Ablation-Component Mapping (Updated 2026-03-12)
+### 3.3 Ablation-Component Mapping (Updated 2026-03-18, Real Text Embeddings)
 
 | Ablation Transition | Champion Shift | Conditions Affected | Quantitative Effect |
 |---|---|---|---|
-| core_only → core_text | **NONE** (identical) | 0/104 changes | 19/20 MAE identical; 1 diff = 0.00009% (GPU noise) |
-| core_only → core_edgar | GRU → Chronos (funding h=14) | 3 conditions | +EDGAR activates Chronos' conditioning pathway |
-| core_only → core_edgar | DeepNPTS → PatchTST/NHITS (is_funded) | ~8 conditions | +EDGAR enables attention/interpolation mechanisms |
-| core_only → core_edgar | NBEATS → NBEATSx (funding h=1) | 3 conditions | Margin: 0.000% (tied; GPU noise decides) |
-| core_edgar → full | **NONE** (identical) | 23/28 fully identical | full ≡ core_edgar because text embeddings absent |
-| Ablation-invariant | NBEATS, KAN, NHITS (most conditions) | ~80/104 | Pure temporal models: architecture > features |
+| core_only → core_text | **MOSTLY HARMFUL** | text wins 227 / 1,932 (11.7%) | 55.7% of pairs degraded by text |
+| core_only → core_edgar | **MIXED** | edgar wins 670 / 1,932 (34.7%) | 47.8% of pairs degraded by EDGAR |
+| core_edgar → full | **SLIGHT BENEFIT** | full wins 737 / 1,932 (38.1%) | Text+EDGAR > EDGAR alone |
+| core_only → core_only_seed2 | **NO CHAMPION CHANGE** | 0 systematic changes | Avg |delta| = 0.12%, seed-stable |
+| All ablation-invariant | NBEATS, KAN (most conditions) | ~75% of cells | Architecture > features for temporal models |
 
-**Key insights**:
-1. **Text ablation is currently dead**: core_text ≡ core_only because `runs/text_embeddings/` was never generated. All "text" results are actually core_only. Re-benchmarking after embedding generation is mandatory.
-2. **EDGAR ablation matters for 7 (target, horizon) combos** where it triggers champion switches (funding h=1, funding h=14, is_funded h=1/7/14/30, investors h=1)
-3. **EDGAR effect is asymmetric**: helps binary+continuous but hurts count, suggesting SEC filing information is structured/categorical (aligns with binary outcomes) rather than scale-informative (needed for count prediction)
-4. **~77% of conditions are ablation-invariant**: the winning model's architectural prior dominates over any feature engineering. This is the strongest justification for a structural oracle router.
+**Major revision from Phase 9:**
+1. **Text is now a real signal, but negative**: The Phase 9 analysis noted core_text ≡ core_only (text was missing). Now with real 64-dim PCA text embeddings, most models perform WORSE with text. This is likely because:
+   - PCA text embeddings capture company description similarity, not temporal predictive signal
+   - 64 extra dimensions increase input noise for models with limited capacity
+   - Statistical and foundation models naturally ignore them (correct behavior)
+2. **EDGAR benefits are concentrated**: EDGAR helps primarily for binary (is_funded) predictions where SEC filing dates carry information about corporate activity. For continuous and count targets, EDGAR adds marginally useful or harmful information.
+3. **Seed2 confirms robustness**: The independent seed2 runs (different GPU, different SLURM allocation) confirm that champion designations are not artifacts of specific random seed choices.
 
-## 4. V740 Structural Oracle Router (Updated 2026-03-12)
+## 4. V740 Structural Oracle Router (Updated 2026-03-18)
 
-Based on the component analysis above and verification that 99.0% of conditions
-(103/104) have a deterministic champion across tasks, the oracle router maps
-`(target_type, horizon, ablation_class)` directly to a model selection.
+Based on 160-cell analysis with real ablation effects. The oracle now needs a
+4th dimension: **task** (due to DeepNPTS's task1-only behavior on is_funded).
 
 ### 4.1 Why Not Blend
 
@@ -366,48 +430,41 @@ correlated prediction errors (rho > 0.9). Under positive correlation:
 
     MAE(a*y_A + (1-a)*y_B) ~ a*MAE(y_A) + (1-a)*MAE(y_B) >= min(MAE)
 
-The blend always falls *between* the best and worst constituent. Example:
-NHITS MAE=380,577 vs 50/50 NBEATS+NHITS blend ~ 380,618 (0.01% worse).
+The blend always falls *between* the best and worst constituent.
 
 ### 4.2 Why Not Validate
 
-The champion mapping is a pure function of 3 structural properties detectable
-at fit time: `(target_type, horizon, ablation_class)`. Validation-based
+The champion mapping is a pure function of structural properties detectable
+at fit time: `(target_type, horizon, ablation_class, task)`. Validation-based
 selection adds noise (~10-20% wrong-model probability from small val sets)
 without information gain over the deterministic oracle.
 
-**Caveat for V740**: The h=14/heavy_tail cell (GRU vs Chronos, 0.037% margin)
-is the weakest oracle entry. V740 should consider a lightweight validation
-gate specifically for this cell — train both, compare on a temporal holdout,
-choose the winner. Cost: 2× training for 1 cell out of 24.
+**Caveat for V740**: The h=14/heavy_tail cell (GRU vs Chronos, ~0.04% margin)
+remains the weakest oracle entry. V740 should consider a lightweight validation
+gate specifically for this cell.
 
-### 4.3 The Oracle Table (24 entries, Updated 2026-03-12)
+### 4.3 The Oracle Table (Updated 2026-03-18, expanded to include task dimension for binary targets)
 
 ```
-target_type  | horizon | temporal    | exogenous
--------------|---------|-------------|----------
-heavy_tail   |   h=1   |  NBEATS     |  NBEATS (NBEATSx at 0.000% margin)
-heavy_tail   |   h=7   |  NHITS      |  NHITS
-heavy_tail   |  h=14   |  GRU [NEW]  |  Chronos
-heavy_tail   |  h=30   |  Chronos    |  Chronos
-count        |   h=1   |  KAN        |  KAN
-count        |   h=7   |  NBEATS     |  NBEATS
-count        |  h=14   |  NBEATS     |  NBEATS
-count        |  h=30   |  NBEATS     |  NBEATS
-binary       |   h=1   |  DeepNPTS   |  PatchTST
-binary       |   h=7   |  DeepNPTS   |  NHITS
-binary       |  h=14   |  DeepNPTS   |  PatchTST
-binary       |  h=30   |  DeepNPTS   |  NHITS
+target_type  | horizon | has_edgar | task       | Model
+-------------|---------|-----------|------------|----------
+heavy_tail   |   h=1   | any       | any        | NBEATS
+heavy_tail   |   h=7   | any       | any        | NHITS
+heavy_tail   |  h=14   | no        | any        | GRU
+heavy_tail   |  h=14   | yes       | any        | Chronos
+heavy_tail   |  h=30   | any       | any        | Chronos
+count        |   h=1   | any       | any        | KAN
+count        |  h>=7   | any       | any        | NBEATS
+binary       | any     | no        | task1      | DeepNPTS
+binary       | any     | yes       | task1      | PatchTST (h=1,14) / NHITS (h=7,30)
+binary       | any     | no        | task2/3    | NBEATS (default, no specialist)
+binary       | any     | yes       | task2/3    | PatchTST (h=1,14) / NHITS (h=7,30)
 ```
 
-**Changes from prior version**:
-- `heavy_tail/h=14/temporal`: Chronos → **GRU** (margin 0.037% over LSTM, 0.05% over Chronos)
-- `heavy_tail/h=1/exogenous`: noted NBEATSx ties NBEATS at 0.000% — effectively same model
-
-Each entry maps `(target_type, horizon, ablation_class)` to `(primary, runner_up)`.
-The primary is trained on FULL data (no val split, no refit). If the primary
-fails at runtime, the runner-up is tried. If both fail, validation-based fallback
-with the full champion pool activates.
+**Key changes from Phase 9 Oracle:**
+1. **Task dimension added**: DeepNPTS is task1-specialist only → task2/task3 binary needs different routing.
+2. **Text dimension REMOVED**: core_text ≡ core_only in practice (text hurts); no routing by text needed.
+3. **seed2 confirms stability**: oracle entries unchanged by seed — robust to random initialization.
 
 ### 4.4 Component-Level Justification per Oracle Cell
 
@@ -430,118 +487,92 @@ with the full champion pool activates.
 - **No blending**: single model prediction with no correlated-error degradation
 - **Fallback safety**: validation path activates only on oracle failures or unseen conditions
 
-### 4.6 V740 Design Recommendations [NEW]
+### 4.6 V740 Design Recommendations (Updated 2026-03-18)
 
-Based on the 104-condition analysis:
+Based on the 160-cell analysis with real text and EDGAR ablation effects:
 
-1. **Reduce model pool**: Only 9 unique champions. V740 needs to train at most 9 models (NBEATS, NHITS, Chronos, KAN, DeepNPTS, PatchTST, GRU, NBEATSx, DLinear), not 93.
-2. **h=14 decision gate**: Train both GRU and Chronos; pick winner via 10% temporal holdout. This is the only cell worth validating.
-3. **Drop NBEATSx**: Tied with NBEATS at machine precision. Use NBEATS everywhere and save training cost.
-4. **Drop DLinear**: 1 win out of 104, and only on task1. NHITS covers this condition with <0.01% gap.
-5. **EDGAR gate**: For `is_funded` targets, EDGAR triggers champion switches (DeepNPTS → PatchTST/NHITS). Route by `has_edgar` flag to select the right temporal/exogenous model.
-6. **Text embedding re-run**: After generating text embeddings, re-benchmark core_text and full ablations. If text changes champions, add a `has_text` routing dimension to the oracle table.
+1. **Reduce model pool to 7**: NBEATS, NHITS, Chronos, KAN, DeepNPTS, PatchTST, GRU. Drop NBEATSx (tied with NBEATS) and DLinear (1 marginal win).
+2. **Drop text embeddings from V740**: core_text hurts 55.7% of pairs. PCA text embeddings add noise. Re-explore only if embedding method changes (e.g., fine-tuned LLM, temporal-aware embeddings).
+3. **h=14 decision gate**: Train both GRU and Chronos; pick winner via 10% temporal holdout.
+4. **Task-aware routing for binary targets**: DeepNPTS only works on task1; task2/task3 need a different default for is_funded.
+5. **EDGAR gate**: Binary is_funded targets show EDGAR-dependent champion switches (DeepNPTS → PatchTST/NHITS). Route by `has_edgar` flag.
+6. **PatchTST as universal fallback**: Best mean rank (4.28) despite few wins — the safest default when oracle routing fails.
+7. **ChronosBolt as consistent long-horizon pick**: Mean rank improves from 9.47→4.78 as horizon increases. Consider for h>=14 fallback.
+8. **Prioritize NBEATS components for V740 core engine**: 40.6% of all wins with a compact architecture. The basis expansion + double residual + robust scaler trio is the most transferable design pattern.
 
 ---
 
-## 5. Evidence Summary (Updated 2026-03-12)
+## 5. Evidence Summary (Updated 2026-03-18)
 
 All quantitative observations are derived from:
 
 ### Primary Data Sources
-- **8,660 validated benchmark records** (88 metrics.json files, excl. V734–V738 oracle-leaked) via `scripts/aggregate_block3_results.py`
-- **78 valid-complete models** (104/104 conditions each), representing 93 unique model variants
+- **14,352 benchmark records** across 114 models via `scripts/aggregate_block3_results.py`
+- **69 complete models** (@160/160 records each) used for fair comparison
+- **160 evaluation cells** = 3 tasks × {6/6/5 ablations} × 3 targets × 4 horizons
+- **11,040 fair-comparison records** (69 complete × 160 cells)
 - **Canonical output**: `runs/benchmarks/block3_phase9_fair/`
 
-### Verification Artifacts
-- **core_text ≡ core_only**: 19/20 champion-condition pairs have identical MAE; 1 diff = 0.3 MAE units on base ~380K (0.00009%, GPU non-determinism)
-- **full ≡ core_edgar**: 23/28 condition pairs identical; 5 diffs are tied-margin cases (< 0.003%)
-- **Task invariance**: 103/104 conditions identical across 3 tasks; 1 exception at core_edgar/investors/h=1 (KAN↔NHITS, 0.005%)
-- **Oracle leakage audit** (2026-03-13): V734–V738 confirmed oracle-leaked, removed from all analysis. V739 audited clean.
+### Ablation Effect Statistics (from 1,932 paired cells each)
+- **Text effect** (core_text vs core_only): core_text wins 227 (11.7%), core_only wins 1,077 (55.7%), ties 628 (32.5%)
+- **EDGAR effect** (core_edgar vs core_only): core_edgar wins 670 (34.7%), core_only wins 924 (47.8%)
+- **Full vs core_edgar** (text+EDGAR vs EDGAR): full wins 737 (38.1%), core_edgar wins 607 (31.4%)
+- **Seed reproducibility**: 1,344 pairs, avg |delta| = 0.12%, median = 0.00%, P95 = 0.02%
 
 ### Architecture References
 - `src/narrative/block3/models/deep_models.py` — NeuralForecast configs (NBEATS, NHITS, KAN, GRU, PatchTST, DeepNPTS, NBEATSx, DLinear)
-- `src/narrative/block3/models/registry.py` — unified 127-model registry
-- NeuralForecast library: [github.com/Nixtla/neuralforecast](https://github.com/Nixtla/neuralforecast)
-- Chronos library: [github.com/amazon-science/chronos-forecasting](https://github.com/amazon-science/chronos-forecasting)
-
-### Analysis Scripts
-- Champion extraction: `scripts/aggregate_block3_results.py` + `scripts/consolidate_block3_results.py`
-- Paper tables: `scripts/make_paper_tables_v2.py`
-- This analysis: direct Pandas groupby on aggregated metrics.json data
+- `src/narrative/block3/models/tslib_models.py` — TSLib models (23 new Phase 15 models)
+- `src/narrative/block3/models/registry.py` — unified model registry
+- `src/narrative/block3/models/nf_adaptive_champion.py` — AutoFit V739 implementation
 
 ### Key Numerical Constants (for reproducibility)
-- NBEATS avg champion margin: 0.006%
-- Chronos avg champion margin: 0.108%
-- PatchTST avg champion margin: 0.385%
-- GRU champion margin (h=14 funding core_only): 0.037%
-- EDGAR effect on funding: −1.6% MAE
-- EDGAR effect on investors: +0.15% MAE
-- EDGAR effect on is_funded: −1.8% MAE
-- Mean rank leaders: NHITS (4.12), PatchTST (4.13), NBEATS (4.84)
+- **Mean rank leaders**: PatchTST (4.28), NHITS (4.38), NBEATS (5.01), NBEATSx (5.81), ChronosBolt (7.42)
+- **Win count leaders**: NBEATS (65), Chronos (23), NHITS (21), KAN/DeepNPTS (16 each), GRU (11)
+- **Horizon crossover**: NBEATS dominates h=1,7 (rank 3.40, 3.67); degrades h=30 (8.70). ChronosBolt: opposite pattern (9.47→4.78)
+- **Target specialization**: Chronos rank 2.87 on funding, 16.53 on investors. DeepNPTS rank 2.33 on is_funded, 37.99 on funding.
+- **DeepNPTS task anomaly**: 16/16 wins on task1_outcome; 0/0 on task2/task3
 
 ---
 
-## 6. Compute Cost Analysis & V740 Efficiency Design [NEW: 2026-03-12]
+## 6. Compute Cost Analysis & V740 Efficiency Design (Updated 2026-03-18)
 
-### 6.1 50% Compute Waste: Lessons for V740
+### 6.1 Phase 12+15 Compute Investment
 
-**Problem**: Text embeddings were never generated → core_text ≡ core_only, full ≡ core_edgar.
-3,888 / 8,660 records (44.9%) were redundant, wasting ~638 GPU-hours.
+**Current benchmark surface**: 114 models × 17 conditions = 1,938 model-condition slots
+- 69 complete (@160): 11,040 records ✅
+- 10 ml_tabular (@157): 1,570 records (3 records short each, bigmem job running)
+- 1 AutoFitV739 (@112): 5 seed2 conditions PENDING
+- 34 remaining partial models: various stages, covered by ALL33 accel scripts
 
-**Root cause chain**:
-1. `_join_text_embeddings()` silently skipped missing file (no warning, no raise)
-2. `select_dtypes(include=[np.number])` silently dropped raw text columns
-3. No pre-flight check before submitting core_text/full SLURM jobs
-4. Results looked normal (valid MAE, no errors) — failure was invisible
+**Estimated total compute**: ~4,000 GPU-hours invested across Phase 9-15
+- Phase 12 text reruns: ~800 GPU-hours (48 scripts × ~16h avg)
+- Phase 15 new models: ~600 GPU-hours and counting (85+ jobs)
+- ALL33 gap-fill: ~400 GPU-hours and counting
 
-### 6.2 Salvage Value: Redundant Results as Free Independent Replication
+### 6.2 V740 Fast Iteration Plan
 
-The redundant runs are NOT worthless — they are independent SLURM jobs (different GPU nodes,
-different random seeds from GPU non-determinism), producing a **free 2-seed replication**.
+With the 160-cell champion analysis complete, V740 iteration can focus on:
 
-**Per-Model Training Variance (core_only vs core_text, 1,656 pairs)**:
-
-| Category | Models | Mean Pct Diff | Exact Match Rate | Implication |
-|---|---:|---:|---:|---|
-| Deterministic | 53 | 0.000% | 100% | StatsForecast, ML tabular, Foundation zero-shot |
-| Near-deterministic | 25 | <0.01% | 75-90% | NBEATS, GRU, Chronos — GPU float noise only |
-| Stochastic | 9 | 0.01-0.1% | 60-85% | PatchTST, VanillaTransformer, TimesNet |
-| Highly stochastic | 3 | >1% | 0-40% | CSDI (4.4%), iTransformer (2.1%), BRITS (1.2%) |
-
-**Champion stability audit**: 92/104 champion designations are **STABLE** (margin > 2× training variance).
-12/104 are UNSTABLE — all NBEATS↔NBEATSx ties at 0.000% margin.
-
-**2-seed averaging**: MAE_robust = (MAE_co + MAE_ct) / 2. Result: **0/28 champion changes**
-from averaging → current champion ranking is robust.
-
-### 6.3 V739/V740 Iteration Speed Optimization
-
-**Current benchmark**: 93 models × 4 ablations × ~132 conditions = ~49,000 evaluations → weeks
-**Optimized V739/V740 iteration**: 9 champions × 2 ablations × ~66 conditions = ~1,188 evaluations → hours
-
-| Parameter | Full Benchmark | V739/V740 Iteration | Savings |
+**7-model express benchmark** (drop NBEATSx, DLinear):
+| Parameter | Full Benchmark | V740 Express | Savings |
 |---|---|---|---|
-| Models | 93 | 9 (NBEATS, NHITS, Chronos, KAN, DeepNPTS, PatchTST, GRU, NBEATSx, DLinear) | 90% |
-| Ablations | 4 | 2 (core_only + core_edgar) | 50% |
-| Combined | 49,000 evals | 1,188 evals | **97.6%** |
-| Estimated time | 2-3 weeks | 2-4 hours | 100×+ faster |
+| Models | 114 | 7 (NBEATS, NHITS, Chronos, KAN, DeepNPTS, PatchTST, GRU) | 94% |
+| Ablations | 6 | 2 (core_only + core_edgar) | 67% |
+| Conditions | 17 | ~6 (2 ablations × 3 tasks, skip seed2) | 65% |
+| Total cells | 160 | ~42 | **74% savings** |
+| Estimated time | 2-3 weeks | 4-8 hours | 50×+ faster |
 
-**When to expand back to full benchmark**:
-1. After V740 design is finalized and validated on 9-champion × 2-ablation
-2. After text embeddings are generated → add core_text / full ablations
-3. Final paper submission → full 93-model × 4-ablation for completeness
+**When to expand**:
+1. V740 oracle router validated on 7-model × 2-ablation → if champion map changes, investigate
+2. Full 114-model benchmark only needed for final paper tables
+3. 22 new P15 models may reveal new champions → wait for completion before V740 finalization
 
-### 6.4 Unstable Models: Exclusion or Multi-Seed Policy
+### 6.3 Unstable Models: Current Population
 
-Models with training variance >1% produce unreliable single-run results:
-
-| Model | Training Variance | Recommendation |
-|---|---|---|
-| CSDI | 4.4% (max 36.8%) | Exclude from V740 candidates or require 5-seed |
-| iTransformer | 2.1% (max 8.0%) | Exclude from V740 candidates or require 3-seed |
-| BRITS | 1.2% (max 12.7%) | Exclude from V740 candidates or require 3-seed |
-
-None of these 3 models are champions at any condition → safe to exclude from V740 entirely.
+Models with high training variance from seed2 analysis:
+- Deterministic models (exact 0.00% delta): StatsForecast, ML tabular, Foundation zero-shot
+- Neural models with <0.1% delta: NBEATS, NHITS, GRU, PatchTST — champion-stable
+- High-variance models: CSDI, iTransformer, BRITS — none are champions, safe to exclude from V740
 
 ---
 
