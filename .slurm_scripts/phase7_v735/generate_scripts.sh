@@ -36,8 +36,8 @@ for task_full in task1_outcome task2_forecast task3_risk_adjust; do
 #SBATCH --partition=gpu
 #SBATCH --qos=iris-gpu-long
 #SBATCH --time=2-00:00:00
-#SBATCH --mem=384G
-#SBATCH --cpus-per-task=8
+#SBATCH --mem=200G
+#SBATCH --cpus-per-task=7
 #SBATCH --gres=gpu:1
 #SBATCH --output=${LOG_DIR}/${job_name}_%j.out
 #SBATCH --error=${LOG_DIR}/${job_name}_%j.err

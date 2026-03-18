@@ -5,7 +5,7 @@
 #SBATCH --qos=normal
 #SBATCH --time=2-00:00:00
 #SBATCH --mem=192G
-#SBATCH --cpus-per-task=14
+#SBATCH --cpus-per-task=7
 #SBATCH --gres=gpu:1
 #SBATCH --output=/work/projects/eint/logs/phase11/p11_tslib_new_t3_fu_%j.out
 #SBATCH --error=/work/projects/eint/logs/phase11/p11_tslib_new_t3_fu_%j.err

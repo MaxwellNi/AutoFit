@@ -30,8 +30,8 @@ for ti in 0 1 2; do
 #SBATCH --partition=gpu
 #SBATCH --qos=iris-gpu-long
 #SBATCH --time=3-00:00:00
-#SBATCH --mem=384G
-#SBATCH --cpus-per-task=8
+#SBATCH --mem=200G
+#SBATCH --cpus-per-task=7
 #SBATCH --gres=gpu:1
 #SBATCH --output=${LOG_DIR}/${JOB_NAME}_%j.out
 #SBATCH --error=${LOG_DIR}/${JOB_NAME}_%j.err

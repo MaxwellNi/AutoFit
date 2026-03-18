@@ -4,8 +4,8 @@
 #SBATCH --partition=gpu
 #SBATCH --qos=normal
 #SBATCH --time=1-00:00:00
-#SBATCH --mem=200G
-#SBATCH --cpus-per-task=8
+#SBATCH --mem=189G
+#SBATCH --cpus-per-task=7
 #SBATCH --gres=gpu:1
 #SBATCH --output=/work/projects/eint/logs/phase15/af739_t1_e2_%j.out
 #SBATCH --error=/work/projects/eint/logs/phase15/af739_t1_e2_%j.err

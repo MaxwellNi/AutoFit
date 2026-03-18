@@ -4,7 +4,7 @@
 #SBATCH --partition=gpu
 #SBATCH --qos=normal
 #SBATCH --time=18:00:00
-#SBATCH --mem=256G
+#SBATCH --mem=200G
 #SBATCH --cpus-per-task=7
 #SBATCH --gres=gpu:volta:1
 #SBATCH --output=runs/benchmarks/block3_20260203_225620_iris_phase3/task1_outcome/foundation/core_edgar/slurm_%j.log

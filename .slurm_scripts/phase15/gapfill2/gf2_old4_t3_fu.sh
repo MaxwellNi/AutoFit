@@ -5,7 +5,7 @@
 #SBATCH --qos=normal
 #SBATCH --time=2-00:00:00
 #SBATCH --mem=200G
-#SBATCH --cpus-per-task=8
+#SBATCH --cpus-per-task=7
 #SBATCH --gres=gpu:1
 #SBATCH --output=/work/projects/eint/logs/phase15/gf2_old4_t3_fu_%j.out
 #SBATCH --error=/work/projects/eint/logs/phase15/gf2_old4_t3_fu_%j.err

@@ -4,8 +4,8 @@
 #SBATCH --partition=gpu
 #SBATCH --qos=iris-gpu-long
 #SBATCH --time=7-00:00:00
-#SBATCH --mem=700G
-#SBATCH --cpus-per-task=27
+#SBATCH --mem=189G
+#SBATCH --cpus-per-task=7
 #SBATCH --gres=gpu:volta:1
 #SBATCH --output=/work/projects/eint/logs/phase7_remaining/p7r_v73_t1_ct_%j.out
 #SBATCH --error=/work/projects/eint/logs/phase7_remaining/p7r_v73_t1_ct_%j.err

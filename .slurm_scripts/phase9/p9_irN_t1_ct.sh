@@ -5,7 +5,7 @@
 #SBATCH --qos=normal
 #SBATCH --time=2-00:00:00
 #SBATCH --mem=128G
-#SBATCH --cpus-per-task=14
+#SBATCH --cpus-per-task=7
 #SBATCH --gres=gpu:1
 #SBATCH --output=/work/projects/eint/logs/phase9/p9_irN_t1_ct_%j.out
 #SBATCH --error=/work/projects/eint/logs/phase9/p9_irN_t1_ct_%j.err

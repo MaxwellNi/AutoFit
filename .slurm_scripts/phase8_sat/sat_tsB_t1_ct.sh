@@ -4,8 +4,8 @@
 #SBATCH --partition=gpu
 #SBATCH --qos=normal
 #SBATCH --time=2-00:00:00
-#SBATCH --mem=320G
-#SBATCH --cpus-per-task=14
+#SBATCH --mem=189G
+#SBATCH --cpus-per-task=7
 #SBATCH --gres=gpu:volta:1
 #SBATCH --output=/work/projects/eint/logs/phase8_sat/sat_tsB_t1_ct_%j.out
 #SBATCH --error=/work/projects/eint/logs/phase8_sat/sat_tsB_t1_ct_%j.err

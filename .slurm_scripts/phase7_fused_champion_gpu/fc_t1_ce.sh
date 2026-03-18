@@ -4,8 +4,8 @@
 #SBATCH --partition=gpu
 #SBATCH --qos=iris-gpu-long
 #SBATCH --time=2-00:00:00
-#SBATCH --mem=192G
-#SBATCH --cpus-per-task=8
+#SBATCH --mem=189G
+#SBATCH --cpus-per-task=7
 #SBATCH --gres=gpu:volta:1
 #SBATCH --output=/work/projects/eint/logs/phase7_fused_champion/fc_t1_ce_%j.out
 #SBATCH --error=/work/projects/eint/logs/phase7_fused_champion/fc_t1_ce_%j.err

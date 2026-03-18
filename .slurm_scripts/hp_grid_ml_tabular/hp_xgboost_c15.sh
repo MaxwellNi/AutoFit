@@ -4,8 +4,8 @@
 #SBATCH --partition=gpu
 #SBATCH --qos=iris-gpu-long
 #SBATCH --time=1-12:00:00
-#SBATCH --mem=384G
-#SBATCH --cpus-per-task=8
+#SBATCH --mem=200G
+#SBATCH --cpus-per-task=7
 #SBATCH --gres=gpu:1
 #SBATCH --output=/work/projects/eint/logs/hp_grid_ml_tabular/hp_xgboost_c15_%j.out
 #SBATCH --error=/work/projects/eint/logs/hp_grid_ml_tabular/hp_xgboost_c15_%j.err

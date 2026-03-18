@@ -4,8 +4,8 @@
 #SBATCH --partition=gpu
 #SBATCH --qos=normal
 #SBATCH --time=2-00:00:00
-#SBATCH --mem=378G
-#SBATCH --cpus-per-task=14
+#SBATCH --mem=250G
+#SBATCH --cpus-per-task=7
 #SBATCH --gres=gpu:volta:1
 #SBATCH --output=/work/projects/eint/logs/phase7_remaining/p7r_tsC_t1_fu_%j.out
 #SBATCH --error=/work/projects/eint/logs/phase7_remaining/p7r_tsC_t1_fu_%j.err

@@ -4,8 +4,8 @@
 #SBATCH --partition=gpu
 #SBATCH --qos=iris-gpu-long
 #SBATCH --time=2-00:00:00
-#SBATCH --mem=320G
-#SBATCH --cpus-per-task=14
+#SBATCH --mem=150G
+#SBATCH --cpus-per-task=7
 #SBATCH --gres=gpu:volta:1
 #SBATCH --constraint=volta32
 #SBATCH --output=/work/projects/eint/logs/phase7_v71extreme_20260214_130737/p7xF_dpr_t1_co_%j.out

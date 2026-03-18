@@ -4,7 +4,7 @@
 #SBATCH --partition=gpu,l40s,hopper
 #SBATCH --qos=besteffort
 #SBATCH --time=2-00:00:00
-#SBATCH --mem=350G
+#SBATCH --mem=189G
 #SBATCH --cpus-per-task=14
 #SBATCH --gres=gpu:1
 #SBATCH --requeue

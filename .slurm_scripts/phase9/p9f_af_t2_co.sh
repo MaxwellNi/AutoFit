@@ -1,0 +1,51 @@
+#!/usr/bin/env bash
+#SBATCH --job-name=p9f_af_t2_co
+#SBATCH --partition=bigmem
+#SBATCH --qos=normal
+#SBATCH --time=2-00:00:00
+#SBATCH --mem=256G
+#SBATCH --cpus-per-task=28
+#SBATCH --output=/home/users/npin/repo_root/slurm_logs/phase9/p9f_af_t2_co_%j.out
+#SBATCH --error=/home/users/npin/repo_root/slurm_logs/phase9/p9f_af_t2_co_%j.err
+#SBATCH --export=ALL
+#SBATCH --signal=USR1@120
+
+set -e
+INSIDER_PY="/mnt/aiongpfs/projects/eint/envs/.micromamba/envs/insider/bin/python3"
+export LD_LIBRARY_PATH="/mnt/aiongpfs/projects/eint/envs/.micromamba/envs/insider/lib:${LD_LIBRARY_PATH:-}"
+cd /home/users/npin/repo_root
+
+if [[ ! -x "${INSIDER_PY}" ]]; then
+  echo "FATAL: insider python missing: ${INSIDER_PY}"; exit 2
+fi
+echo "============================================================"
+echo "Phase 9 FIXED AutoFit | Job ${SLURM_JOB_ID} on $(hostname)"
+echo "$(date -Iseconds) | Python: $(${INSIDER_PY} -V)"
+echo "Git: $(git rev-parse --short HEAD)"
+echo "============================================================"
+
+# V735 first (single model, fastest)
+echo ">>> V735: task2_forecast | core_only | $(date -Iseconds)"
+"${INSIDER_PY}" scripts/run_block3_benchmark_shard.py \
+    --task task2_forecast --category autofit --ablation core_only \
+    --preset full --output-dir runs/benchmarks/block3_phase9_fair/task2_forecast/autofit/core_only --seed 42 \
+    --no-verify-first --models AutoFitV735
+echo ">>> V735 done: $(date -Iseconds)"
+
+# V734 (3-model ensemble with fixed stack_k)
+echo ">>> V734: task2_forecast | core_only | $(date -Iseconds)"
+"${INSIDER_PY}" scripts/run_block3_benchmark_shard.py \
+    --task task2_forecast --category autofit --ablation core_only \
+    --preset full --output-dir runs/benchmarks/block3_phase9_fair/task2_forecast/autofit/core_only --seed 42 \
+    --no-verify-first --models AutoFitV734
+echo ">>> V734 done: $(date -Iseconds)"
+
+# V736 (3-model stacking ensemble)
+echo ">>> V736: task2_forecast | core_only | $(date -Iseconds)"
+"${INSIDER_PY}" scripts/run_block3_benchmark_shard.py \
+    --task task2_forecast --category autofit --ablation core_only \
+    --preset full --output-dir runs/benchmarks/block3_phase9_fair/task2_forecast/autofit/core_only --seed 42 \
+    --no-verify-first --models AutoFitV736
+echo ">>> V736 done: $(date -Iseconds)"
+
+echo "ALL DONE: $(date -Iseconds)"

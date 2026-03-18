@@ -4,8 +4,8 @@
 #SBATCH --partition=gpu
 #SBATCH --qos=iris-gpu-long
 #SBATCH --time=1-00:00:00
-#SBATCH --mem=256G
-#SBATCH --cpus-per-task=14
+#SBATCH --mem=150G
+#SBATCH --cpus-per-task=7
 #SBATCH --gres=gpu:volta:1
 #SBATCH --output=/work/projects/eint/logs/phase8/p8_fmTF_t3_co_%j.out
 #SBATCH --error=/work/projects/eint/logs/phase8/p8_fmTF_t3_co_%j.err
