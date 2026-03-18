@@ -115,7 +115,8 @@ logger = logging.getLogger(__name__)
 GLOBAL_SEED = 42
 TASK_NAMES = ["task1_outcome", "task2_forecast", "task3_risk_adjust"]
 CATEGORY_NAMES = ["statistical", "ml_tabular", "deep_classical", "transformer_sota", "foundation", "irregular", "tslib_sota", "autofit"]
-ABLATION_NAMES = ["core_only", "core_text", "core_edgar", "full"]
+ABLATION_NAMES = ["core_only", "core_text", "core_edgar", "full",
+                  "core_only_seed2", "core_edgar_seed2"]
 PRESET_NAMES = ["smoke", "quick", "standard", "full"]
 
 # Global reference for SIGTERM handler
@@ -399,10 +400,17 @@ class BenchmarkShard:
         except Exception:
             return "unknown"
     
+    # Map seed2 ablation names to their base ablation for feature config
+    _SEED2_BASE = {
+        "core_only_seed2": "core_only",
+        "core_edgar_seed2": "core_edgar",
+    }
+
     def _get_ablation_config(self) -> Dict[str, bool]:
         """Get ablation configuration flags."""
         ablations = self.tasks_config.get("ablations", {})
-        abl_config = ablations.get(self.ablation, {})
+        base_abl = self._SEED2_BASE.get(self.ablation, self.ablation)
+        abl_config = ablations.get(base_abl, {})
         return {
             "use_text": abl_config.get("use_text", False),
             "use_edgar": abl_config.get("use_edgar", False),
