@@ -1,18 +1,19 @@
 # Block 3 Champion Component Analysis
 
-> Date: 2026-03-18 (Phase 12+15 update, 14,352 records, 69 complete models, real text/EDGAR/seed2 ablations)
+> Date: 2026-03-18 (Phase 12+15 update, 14,418 records, 69 complete models, real text/EDGAR/seed2 ablations)
 > Scope: Research-grade dissection of 9 champion models across 160 evaluation cells
 > Purpose: Inform V740+ AutoFit design — core mechanism selection, routing logic, feature interaction
 
 > Previous version (2026-03-12): analyzed 8,660 records, 93 models, 104 conditions.
 > This update reflects the full 6-ablation benchmark surface with real text embeddings and seed2 replication.
+> Update 2026-03-18b: 14,418 records (+66 from running jobs). Key finding: 87% task redundancy.
 
 ## 0. Benchmark Evolution: From Seed-Replication to Full 6-Ablation Surface
 
 ### Phase 9 → Phase 12+15 Changes
 | Metric | Phase 9 (2026-03-12) | Phase 12+15 (2026-03-18) | Change |
 |---|---|---|---|
-| Total records | 8,660 | 14,352 | +65.7% |
+| Total records | 8,660 | 14,418 | +66.4% |
 | Complete models (@160) | 78 (93 incl. partial) | 69 | −9 (stricter: 160 not 104) |
 | Ablations | 4 (but core_text≡core_only, full≡core_edgar) | 6 (real text embeddings, real EDGAR, real seed2) |
 | Effective conditions | 104 (== 52 truly independent) | 160 (all independent) |
@@ -36,7 +37,7 @@
 
 ## 1. Champion Distribution Summary (Updated 2026-03-18, 69 Complete Models @ 160 Records)
 
-14,352 records across 114 models. 69 models complete at 160/160 records.
+14,418 records across 114 models. 69 models complete at 160/160 records.
 160 evaluation cells = 3 tasks × {6 ablations for task1/task2, 5 for task3} × 3 targets × 4 horizons.
 **Fair comparison uses only the 69 complete models (11,040 records).**
 
@@ -66,7 +67,7 @@ The most striking finding: **PatchTST has the best mean rank (4.28) but only 4 w
 
 ## 2. Per-Model Core Component Analysis
 
-### 2.1 NBEATS — 41 wins (Basis Expansion + Double Residual)
+### 2.1 NBEATS — 65 wins (Basis Expansion + Double Residual)
 
 **Architecture**: Stack of blocks with structured basis functions.
 
@@ -95,7 +96,7 @@ The most striking finding: **PatchTST has the best mean rank (4.28) but only 4 w
 
 ---
 
-### 2.2 Chronos — 17 wins (Pre-trained Tokenized Decoder) [Updated: was 22, −5 to GRU]
+### 2.2 Chronos — 23 wins (Pre-trained Tokenized Decoder) [Updated: was 17 in Phase 9]
 
 **Architecture**: T5 language model adapted for time series via value tokenization.
 
@@ -124,7 +125,7 @@ The most striking finding: **PatchTST has the best mean rank (4.28) but only 4 w
 
 ---
 
-### 2.3 NHITS — 15 wins (Hierarchical Interpolation + Multi-Resolution)
+### 2.3 NHITS — 21 wins (Hierarchical Interpolation + Multi-Resolution)
 
 **Architecture**: Multi-scale blocks with MaxPool downsampling and interpolation upsampling.
 
@@ -150,7 +151,7 @@ The most striking finding: **PatchTST has the best mean rank (4.28) but only 4 w
 
 ---
 
-### 2.4 KAN — 10 wins (Kolmogorov-Arnold Learnable Activations)
+### 2.4 KAN — 16 wins (Kolmogorov-Arnold Learnable Activations)
 
 **Architecture**: Replaces fixed activation functions (ReLU) with learnable B-spline functions on edges.
 
@@ -175,7 +176,7 @@ The most striking finding: **PatchTST has the best mean rank (4.28) but only 4 w
 
 ---
 
-### 2.5 DeepNPTS — 8 wins (Non-Parametric Distribution-Free TS)
+### 2.5 DeepNPTS — 16 wins (Non-Parametric Distribution-Free TS)
 
 **Architecture**: Learns attention-like weights over past observations for prediction, without assuming any distributional form.
 
@@ -280,7 +281,7 @@ The most striking finding: **PatchTST has the best mean rank (4.28) but only 4 w
 
 ---
 
-### 2.9 GRU — 5 wins (Gated Recurrent Hidden State) [NEW: 2026-03-12]
+### 2.9 GRU — 11 wins (Gated Recurrent Hidden State) [Updated: 2026-03-18, was 5 in Phase 9]
 
 **Architecture**: Gated recurrent unit with update/reset gates controlling information flow.
 
@@ -314,12 +315,19 @@ The most striking finding: **PatchTST has the best mean rank (4.28) but only 4 w
 
 ### 3.0 Structural Observations (2026-03-18, 160 evaluation cells)
 
-**Observation 1: Task Invariance (Partially Broken)**
-In Phase 9 (104 cells), 103/104 conditions had identical champions across tasks. With 160 cells and real ablations, task invariance is weaker:
-- DeepNPTS wins 16 conditions — ALL on task1_outcome, zero on task2/task3.
-- This means task framing now carries meaningful signal for the non-parametric approach.
-- For other champions (NBEATS, Chronos, NHITS, KAN), task invariance still holds strongly.
-- **V740 oracle must include task as routing dimension for binary targets.**
+**Observation 1: Task Redundancy is 87% (CRITICAL FINDING)**
+Direct MAE comparison of overlapping cells (same target × horizon × ablation) across tasks:
+- 120 overlapping cell comparisons → 104 IDENTICAL MAE, 16 different
+- **87% of task-overlapping cells produce identical MAE** — truly unique evaluation cells ≈72 (not 160)
+- "Different" cases are mostly floating-point precision (e.g., 380926.295 vs 380926.294) or minor run-to-run variability
+- Task3 OOD evaluation currently uses same test set as task1/task2 (no actual OOD slicing)
+- **V740 implication**: 160-cell surface is inflated; real signal lives in ~72 unique cells. Task dimension adds minimal information except for binary targets where DeepNPTS is task1-specific.
+
+**Observation 1b: Task-Specific Champion Anomaly**
+Despite 87% redundancy, DeepNPTS exhibits a genuine task anomaly:
+- DeepNPTS wins 16 conditions — ALL on task1_outcome, zero on task2/task3
+- For other champions (NBEATS, Chronos, NHITS, KAN), task invariance holds strongly
+- **V740 oracle must include task as routing dimension for binary targets only**
 
 **Observation 2: Text Embeddings are Mostly Harmful**
 With real text embeddings (64-dim PCA from business descriptions):
@@ -335,13 +343,22 @@ With real text embeddings (64-dim PCA from business descriptions):
 - core_edgar wins 670 / 1,932 pairs vs core_only's 924 wins (34.7% vs 47.8%)
 - EDGAR features slightly degrade overall performance
 - However, full (text+EDGAR) wins 737 vs core_edgar's 607 → text+EDGAR combo slightly better than EDGAR alone
+- **Full vs core_only**: full wins 870/1,932 (45.0%), core_only wins 811 (42.0%), ties 251 — closest margin of any ablation pair
 - **EDGAR benefits are target-specific**: helps binary (is_funded) and some funding conditions, hurts count (investors)
+
+**Observation 3b: Category Win Distribution**
+- deep_classical: 97 wins (60.6%) — NBEATS(65)+NHITS(21)+GRU(11) dominate
+- transformer_sota: 40 wins (25.0%) — KAN(16)+PatchTST(4)+DLinear(1)+others
+- foundation: 23 wins (14.4%) — Chronos(23) provides all foundation wins
 
 **Observation 4: Seed Reproducibility is Excellent**
 - 1,344 paired cells between core_only and core_only_seed2
-- Avg |MAE delta|: 0.12%, Median: 0.00%, P95: 0.02%
+- Avg |MAE delta|: 0.138%, Median: 0.000%
 - Champion rankings are highly stable across seeds
-- Deterministic models: exact 0.00% delta; Neural models: <0.1% for most
+- Deterministic models: exact 0.00% delta (AutoARIMA, AutoETS, AutoTheta, MSTL, SF_SeasonalNaive)
+- Neural models: <0.1% for most champions
+- Most seed-UNSTABLE: CSDI (avg=4.42%, max=36.8%), iTransformer (avg=2.12%), BRITS (avg=1.25%)
+- None of the unstable models are champions — safe to exclude from V740
 
 **Observation 5: Horizon-Dependent Architecture Selection**
 Mean rank by horizon for top models:
@@ -489,7 +506,7 @@ binary       | any     | yes       | task2/3    | PatchTST (h=1,14) / NHITS (h=7
 
 ### 4.6 V740 Design Recommendations (Updated 2026-03-18)
 
-Based on the 160-cell analysis with real text and EDGAR ablation effects:
+Based on the 160-cell analysis (87% task redundancy → ~72 truly unique cells) with real text and EDGAR ablation effects:
 
 1. **Reduce model pool to 7**: NBEATS, NHITS, Chronos, KAN, DeepNPTS, PatchTST, GRU. Drop NBEATSx (tied with NBEATS) and DLinear (1 marginal win).
 2. **Drop text embeddings from V740**: core_text hurts 55.7% of pairs. PCA text embeddings add noise. Re-explore only if embedding method changes (e.g., fine-tuned LLM, temporal-aware embeddings).
@@ -499,6 +516,13 @@ Based on the 160-cell analysis with real text and EDGAR ablation effects:
 6. **PatchTST as universal fallback**: Best mean rank (4.28) despite few wins — the safest default when oracle routing fails.
 7. **ChronosBolt as consistent long-horizon pick**: Mean rank improves from 9.47→4.78 as horizon increases. Consider for h>=14 fallback.
 8. **Prioritize NBEATS components for V740 core engine**: 40.6% of all wins with a compact architecture. The basis expansion + double residual + robust scaler trio is the most transferable design pattern.
+9. **Exploit task redundancy**: 87% of task-overlapping cells produce identical MAE. V740 express benchmark can use task1 only as primary evaluation surface (72 cells), validate task2/task3 only for binary targets where DeepNPTS anomaly exists.
+10. **Horizon specialization is stronger than task specialization**:
+    - h=1: KAN dominates (40.0% of h=1 cells), NBEATS second (35.0%)
+    - h=7: NHITS dominates (45.0%), NBEATS second (42.5%)
+    - h=14: NBEATS (42.5%), GRU (27.5%), Chronos (15.0%)
+    - h=30: Chronos+NBEATS tied (42.5% each)
+    - Target specialization: investors_count → NBEATS (75.0%), is_funded → DeepNPTS (66.7%), funding_raised → Chronos (33.8%)
 
 ---
 
@@ -507,17 +531,19 @@ Based on the 160-cell analysis with real text and EDGAR ablation effects:
 All quantitative observations are derived from:
 
 ### Primary Data Sources
-- **14,352 benchmark records** across 114 models via `scripts/aggregate_block3_results.py`
+- **14,418 benchmark records** across 114 models via `scripts/aggregate_block3_results.py`
 - **69 complete models** (@160/160 records each) used for fair comparison
-- **160 evaluation cells** = 3 tasks × {6/6/5 ablations} × 3 targets × 4 horizons
+- **160 evaluation cells** = 3 tasks × {6/6/5 ablations} × 3 targets × 4 horizons (but ~72 truly unique due to 87% task redundancy)
 - **11,040 fair-comparison records** (69 complete × 160 cells)
 - **Canonical output**: `runs/benchmarks/block3_phase9_fair/`
 
 ### Ablation Effect Statistics (from 1,932 paired cells each)
 - **Text effect** (core_text vs core_only): core_text wins 227 (11.7%), core_only wins 1,077 (55.7%), ties 628 (32.5%)
 - **EDGAR effect** (core_edgar vs core_only): core_edgar wins 670 (34.7%), core_only wins 924 (47.8%)
+- **Full vs core_only** (text+EDGAR vs baseline): full wins 870 (45.0%), core_only wins 811 (42.0%), ties 251
 - **Full vs core_edgar** (text+EDGAR vs EDGAR): full wins 737 (38.1%), core_edgar wins 607 (31.4%)
-- **Seed reproducibility**: 1,344 pairs, avg |delta| = 0.12%, median = 0.00%, P95 = 0.02%
+- **Seed reproducibility**: avg |delta| = 0.138%, median = 0.000%
+- **Task redundancy**: 87% of overlapping cells produce identical MAE across tasks
 
 ### Architecture References
 - `src/narrative/block3/models/deep_models.py` — NeuralForecast configs (NBEATS, NHITS, KAN, GRU, PatchTST, DeepNPTS, NBEATSx, DLinear)
@@ -540,13 +566,20 @@ All quantitative observations are derived from:
 
 **Current benchmark surface**: 114 models × 17 conditions = 1,938 model-condition slots
 - 69 complete (@160): 11,040 records ✅
-- 10 ml_tabular (@157): 1,570 records (3 records short each, bigmem job running)
-- 1 AutoFitV739 (@112): 5 seed2 conditions PENDING
-- 34 remaining partial models: various stages, covered by ALL33 accel scripts
+- 10 ml_tabular (@157): 1,570 records (3 records short each, split-model job 5263582 PENDING)
+- 1 AutoFitV739 (@112): 5 seed2 conditions resubmitted
+- 22 P15 new models (@26): all missing seed2 ablations, covered by cos2 scripts
+- 11 partial models: various stages, covered by ALL33 accel scripts
 
-**Estimated total compute**: ~4,000 GPU-hours invested across Phase 9-15
+**Active compute (2026-03-18)**: 90 jobs (npin 69 + cfisch 21), ~26 GPUs
+- npin GPU (11 RUNNING): p15_new, fix11, gf_ts, af739
+- npin L40S (3 RUNNING): l40_fix11, l40_cos2 × 2
+- cfisch GPU (6 RUNNING): cf_p15_new ct/fu × 3 tasks
+- cfisch L40S (1 RUNNING): l40cf_ac_t1_fu
+
+**Estimated total compute**: ~4,500 GPU-hours invested across Phase 9-15
 - Phase 12 text reruns: ~800 GPU-hours (48 scripts × ~16h avg)
-- Phase 15 new models: ~600 GPU-hours and counting (85+ jobs)
+- Phase 15 new models: ~800 GPU-hours and counting (85+ jobs across 3 partitions)
 - ALL33 gap-fill: ~400 GPU-hours and counting
 
 ### 6.2 V740 Fast Iteration Plan

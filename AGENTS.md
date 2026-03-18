@@ -25,12 +25,14 @@ Every future contributor should read these files in order before making claims o
 - Freeze: complete and read-only
 - Canonical benchmark: `runs/benchmarks/block3_phase9_fair/`
 - Raw benchmark scan:
-  - `14352` raw records
+  - `14418` raw records
   - `114` raw models (98 after audit exclusion of 16 models)
   - `69` complete models (`=160` records)
   - `45` partial models (various stages)
   - `17` valid conditions (task3 has no core_only_seed2)
   - `160` max records per model: t1(72) + t2(48) + t3(40)
+  - `87%` task redundancy: overlapping cells across tasks produce identical MAE
+  - `~72` truly unique evaluation cells (not 160)
 - AutoFit:
   - V734-V738 are retired due to oracle test-set leakage
   - V739 is the only valid current AutoFit baseline
@@ -41,12 +43,16 @@ Every future contributor should read these files in order before making claims o
 - Dominant champion model: NBEATS — 65/160 conditions won (40.6%)
 - Champion analysis: `docs/references/BLOCK3_CHAMPION_COMPONENT_ANALYSIS.md` updated 2026-03-18
   - Key finding: text embeddings HURT (core_text wins only 11.7% of pairs)
+  - Key finding: 87% task redundancy (~72 truly unique cells, not 160)
   - DeepNPTS is task1-only specialist (16/16 wins on task1_outcome)
   - PatchTST best mean rank (4.28) but only 4 wins (generalist)
-  - Seed2 highly stable: avg |delta| 0.12%, median 0.00%
+  - Seed2 highly stable: avg |delta| 0.138%, median 0.00%
+  - EDGAR mixed: wins 34.7% of pairs (target-dependent)
+  - Full vs core_only: closest margin (45.0% vs 42.0%)
+- Model registry: `docs/references/MODEL_REGISTRY.md` — 152 registered, 117 active, 114 in benchmark
 - Model completion tiers:
   - @160 (complete): 69 models (statistical 15, foundation 14, irregular 4, deep_classical 9, transformer_sota 22, tslib_sota 5)
-  - @157: 10 ml_tabular models (missing 3 t1_fu records each, bigmem 640G job running)
+  - @157: 10 ml_tabular models (missing 3 t1_fu records each, split-model job 5263582 PENDING)
   - @112: AutoFitV739 (missing s2/e2, resubmitted after harness fix)
   - @111: ETSformer/LightTS/Pyraformer/Reformer (covered by ALL33 accel scripts)
   - @105: Crossformer/MSGNet/MambaSimple/MultiPatchFormer/PAttn/TimeFilter (covered by ALL33 accel)
