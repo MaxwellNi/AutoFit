@@ -1,22 +1,22 @@
 # Block 3 Benchmark Results
 
-**Generated**: 2026-03-18 16:56:04
+**Generated**: 2026-03-19 12:15:45
 **Benchmark Dir**: `block3_phase9_fair`
-**Total Records (post-filter)**: 10960
+**Total Records (post-filter)**: 11132
 
 ## Overview
 
 | Metric | Value |
 |--------|-------|
-| Raw records | 14418 |
-| Filtered records | 10960 |
+| Raw records | 14681 |
+| Filtered records | 11132 |
 | Comparability filter | fairness_only=True, min_coverage=0.98 |
 | Models evaluated | 85 |
 | Categories | autofit, deep_classical, foundation, irregular, ml_tabular, statistical, transformer_sota, tslib_sota |
 | Tasks | task1_outcome, task2_forecast, task3_risk_adjust |
-| Total evaluations | 10960 |
-| Real results | 10865 |
-| Fallback (mean) | 95 |
+| Total evaluations | 11132 |
+| Real results | 11035 |
+| Fallback (mean) | 97 |
 
 ## task1_outcome
 
@@ -128,13 +128,13 @@
 | Reformer | 777.2K | 681.9K | 1.14M | 685.2K | ⚠️ fallback |
 | MambaSimple | 800.2K | 990.1K | 1.48M | 1.09M | ⚠️ fallback |
 | MSGNet | 989.2K | 712.6K | 926.7K | 1.05M | ✅ |
-| xPatch | 1.00M | 2.52M | 2.93M | 3.09M | ✅ |
+| xPatch | 1.00M | 695.9K | 1.15M | 3.09M | ✅ |
 | PAttn | 1.01M | 1.03M | 1.02M | 1.00M | ✅ |
-| TimeRecipe | 1.01M | 8.24M | 1.02M | 680.0K | ✅ |
+| TimeRecipe | 1.01M | 1.02M | 1.01M | 680.0K | ✅ |
 | SRSNet | 1.02M | 1.01M | 1.02M | 1.01M | ✅ |
 | PIR | 1.02M | 1.02M | 1.02M | 1.02M | ✅ |
 | CARD | 1.02M | 1.02M | 1.02M | 1.02M | ✅ |
-| PDF | 1.02M | 1.03M | 1.03M | 1.05M | ✅ |
+| PDF | 1.02M | 1.02M | 1.04M | 1.05M | ✅ |
 | DUET | 1.03M | 1.03M | 1.03M | 1.02M | ✅ |
 | ModernTCN | 1.04M | 1.04M | 1.06M | 1.14M | ✅ |
 | SCINet | 1.05M | 985.7K | 1.02M | 1.04M | ✅ |
@@ -142,7 +142,7 @@
 | NonstationaryTransformer | 1.07M | 1.05M | 1.04M | 1.86M | ✅ |
 | Fredformer | 1.08M | 1.07M | 986.3K | 1.05M | ✅ |
 | LightTS | 1.40M | 2.02M | 745.8K | 2.72M | ⚠️ fallback |
-| FilterTS | 5.32M | 4.05M | 1.70M | 8.89M | ✅ |
+| FilterTS | 5.32M | 2.60M | 4.13M | 8.89M | ✅ |
 | SegRNN | 8.83M | 6.36M | 4.20M | 7.15M | ✅ |
 
 ## task2_forecast
@@ -249,27 +249,27 @@
 
 | Model | H=1 | H=7 | H=14 | H=30 | Status |
 |-------|-------:|-------:|-------:|-------:|--------|
-| Crossformer | 674.4K | 679.1K | 695.5K | 678.4K | ✅ |
-| xPatch | 678.9K | 700.8K | 6.95M | 6.58M | ✅ |
+| Crossformer | 674.4K | 679.1K | 695.5K | 678.4K | ⚠️ fallback |
+| xPatch | 678.9K | 700.8K | 1.30M | 8.39M | ✅ |
 | Reformer | 777.2K | 681.9K | 1.14M | 685.2K | ⚠️ fallback |
 | MambaSimple | 800.2K | 990.1K | 1.48M | 1.09M | ✅ |
-| FreTS | 805.7K | 2.32M | 1.98M | 3.09M | ✅ |
+| FreTS | 805.7K | 2.32M | 742.1K | 3.09M | ✅ |
 | MSGNet | 989.2K | 712.6K | 926.7K | 1.05M | ✅ |
-| SRSNet | 994.8K | 1.01M | 973.0K | 1.01M | ✅ |
+| SRSNet | 994.8K | 1.01M | 1.01M | 1.01M | ✅ |
 | PAttn | 1.01M | 1.03M | 1.02M | 1.00M | ✅ |
 | PIR | 1.02M | 1.02M | 1.02M | 1.02M | ✅ |
 | CARD | 1.02M | 1.02M | 1.02M | 1.02M | ✅ |
-| DUET | 1.03M | 1.03M | 1.05M | 1.06M | ✅ |
-| ModernTCN | 1.04M | 789.2K | 1.04M | 1.07M | ✅ |
-| PDF | 1.04M | 1.03M | 1.09M | 1.07M | ✅ |
-| FiLM | 1.06M | 1.06M | 1.07M | 1.07M | ✅ |
-| SCINet | 1.08M | 1.08M | 1.17M | 1.20M | ✅ |
+| DUET | 1.03M | 1.03M | 1.03M | 1.03M | ✅ |
+| ModernTCN | 1.04M | 1.06M | 1.07M | 1.06M | ✅ |
+| PDF | 1.04M | 1.03M | 1.03M | 1.11M | ✅ |
+| FiLM | 1.06M | 1.06M | 1.06M | 1.07M | ✅ |
+| SCINet | 1.08M | 1.08M | 1.04M | 1.20M | ✅ |
 | Fredformer | 1.08M | 1.05M | 1.07M | 1.07M | ✅ |
-| NonstationaryTransformer | 1.09M | 1.04M | 1.07M | 1.04M | ✅ |
-| FilterTS | 1.40M | 1.23M | 2.90M | 2.02M | ✅ |
+| NonstationaryTransformer | 1.09M | 1.04M | 1.04M | 1.04M | ✅ |
+| FilterTS | 1.40M | 1.23M | 5.24M | 2.41M | ✅ |
 | LightTS | 1.40M | 2.02M | 745.8K | 2.72M | ✅ |
-| SegRNN | 4.11M | 2.99M | 3.04M | 6.68M | ✅ |
-| TimeRecipe | 13.33M | 1.02M | 1.03M | 10.84M | ✅ |
+| SegRNN | 4.11M | 2.99M | 8.42M | 6.68M | ✅ |
+| TimeRecipe | 13.33M | 1.02M | 10.88M | 9.89M | ✅ |
 
 ## task3_risk_adjust
 
@@ -376,59 +376,59 @@
 | Model | H=1 | H=7 | H=14 | H=30 | Status |
 |-------|-------:|-------:|-------:|-------:|--------|
 | Crossformer | 674.4K | 679.1K | 695.5K | 678.4K | ✅ |
-| xPatch | 678.9K | 700.8K | 5.74M | 9.91M | ✅ |
+| xPatch | 678.9K | 700.8K | 1.30M | 5.78M | ✅ |
 | Reformer | 777.2K | 681.9K | 1.14M | 685.2K | ⚠️ fallback |
 | MambaSimple | 800.2K | 990.1K | 1.48M | 1.09M | ✅ |
-| FreTS | 805.7K | 2.32M | 813.0K | 3.37M | ✅ |
+| FreTS | 805.7K | 2.32M | 742.1K | 1.05M | ✅ |
 | MSGNet | 989.2K | 712.6K | 926.7K | 1.05M | ✅ |
-| SRSNet | 994.8K | 1.01M | 1.03M | 1.03M | ✅ |
+| SRSNet | 994.8K | 1.01M | 1.01M | 1.01M | ✅ |
 | PAttn | 1.01M | 1.03M | 1.02M | 1.00M | ✅ |
 | PIR | 1.02M | 1.02M | 1.02M | 1.02M | ✅ |
 | CARD | 1.02M | 1.02M | 1.02M | 1.02M | ✅ |
-| DUET | 1.03M | 1.03M | 1.04M | 1.05M | ✅ |
-| ModernTCN | 1.04M | 855.5K | 1.05M | 1.05M | ✅ |
-| PDF | 1.04M | 1.03M | 1.08M | 1.06M | ✅ |
-| FiLM | 1.06M | 1.06M | 1.07M | 1.08M | ✅ |
-| SCINet | 1.08M | 1.08M | 915.8K | 1.05M | ✅ |
-| Fredformer | 1.08M | 1.05M | 1.06M | 1.06M | ✅ |
-| NonstationaryTransformer | 1.09M | 1.04M | 732.6K | 1.07M | ✅ |
-| FilterTS | 1.40M | 1.23M | 688.6K | 16.15M | ✅ |
+| DUET | 1.03M | 1.03M | 1.03M | 1.03M | ✅ |
+| ModernTCN | 1.04M | 1.04M | 1.04M | 674.4K | ✅ |
+| PDF | 1.04M | 1.03M | 1.03M | 1.07M | ✅ |
+| FiLM | 1.06M | 1.06M | 1.06M | 1.06M | ✅ |
+| SCINet | 1.08M | 1.08M | 1.04M | 1.03M | ✅ |
+| Fredformer | 1.08M | 1.05M | 1.07M | 1.05M | ✅ |
+| NonstationaryTransformer | 1.09M | 1.04M | 1.04M | 1.35M | ✅ |
+| FilterTS | 1.40M | 1.23M | 5.24M | 8.36M | ✅ |
 | LightTS | 1.40M | 2.02M | 745.8K | 2.72M | ⚠️ fallback |
-| SegRNN | 4.11M | 2.99M | 3.33M | 3.73M | ✅ |
-| TimeRecipe | 13.33M | 1.02M | 1.02M | 974.8K | ✅ |
+| SegRNN | 4.11M | 2.99M | 8.42M | 2.42M | ✅ |
+| TimeRecipe | 13.33M | 1.02M | 10.88M | 999.9K | ✅ |
 
 ## Training Time Summary
 
 | Model | Avg (s) | Min (s) | Max (s) |
 |-------|--------:|--------:|--------:|
-| MambaSimple | 11974.4 | 865.8 | 49536.0 |
-| MSGNet | 11805.3 | 1121.9 | 31526.1 |
-| ModernTCN | 7480.8 | 1239.2 | 18375.2 |
-| Fredformer | 7447.5 | 1675.6 | 18666.2 |
-| CARD | 7270.7 | 948.2 | 18277.9 |
-| FiLM | 5411.8 | 1677.6 | 10913.3 |
-| SCINet | 4270.4 | 790.6 | 12003.6 |
-| Reformer | 4080.2 | 926.5 | 17614.9 |
-| FreTS | 3950.9 | 307.8 | 11555.5 |
-| PIR | 3693.0 | 335.9 | 8699.0 |
-| Crossformer | 3014.4 | 277.7 | 7380.1 |
-| PAttn | 2716.5 | 283.1 | 14803.5 |
-| xPatch | 1645.2 | 353.5 | 3946.3 |
+| MSGNet | 13306.7 | 1121.9 | 91361.6 |
+| MambaSimple | 12324.8 | 865.8 | 49536.0 |
+| CARD | 8025.2 | 585.6 | 18384.9 |
+| Fredformer | 7411.0 | 853.2 | 18666.2 |
+| ModernTCN | 5964.9 | 788.0 | 13416.7 |
+| FiLM | 4923.9 | 1611.8 | 10913.3 |
+| FreTS | 4273.4 | 307.8 | 13755.7 |
+| Reformer | 4106.0 | 926.5 | 17614.9 |
+| SCINet | 3910.5 | 274.2 | 12003.6 |
+| PIR | 3899.4 | 335.9 | 10695.2 |
+| Crossformer | 3079.5 | 277.7 | 7380.1 |
+| PAttn | 2803.0 | 283.1 | 14803.5 |
+| xPatch | 1747.1 | 207.0 | 6820.0 |
 | BRITS | 1526.4 | 349.2 | 2770.7 |
-| DUET | 1475.6 | 123.6 | 3424.8 |
+| PDF | 1516.2 | 78.1 | 3909.5 |
 | iTransformer | 1466.2 | 927.9 | 1806.3 |
 | NegativeBinomialGLM | 1437.5 | 1029.1 | 2304.0 |
-| PDF | 1428.2 | 105.1 | 3802.6 |
+| DUET | 1283.1 | 79.7 | 3216.7 |
 | MSTL | 1157.4 | 112.0 | 1982.0 |
-| FilterTS | 1100.3 | 197.9 | 1951.9 |
-| LightTS | 848.0 | 137.8 | 3222.8 |
-| NonstationaryTransformer | 739.9 | 98.1 | 1958.9 |
-| SegRNN | 725.1 | 214.5 | 1650.3 |
-| RandomForest | 706.6 | 224.6 | 1797.3 |
-| TimeRecipe | 686.4 | 96.7 | 1812.8 |
-| SRSNet | 663.7 | 154.7 | 1273.7 |
+| FilterTS | 1027.6 | 197.9 | 2137.9 |
+| LightTS | 855.4 | 137.8 | 3222.8 |
+| RandomForest | 776.4 | 224.6 | 4432.2 |
+| NonstationaryTransformer | 689.5 | 98.1 | 1958.9 |
+| SegRNN | 688.9 | 98.5 | 1650.3 |
+| TimeRecipe | 666.2 | 96.7 | 1812.8 |
+| SRSNet | 650.1 | 136.4 | 1223.6 |
 | AutoARIMA | 639.3 | 213.1 | 1179.2 |
-| ExtraTrees | 550.3 | 71.5 | 1812.2 |
+| ExtraTrees | 613.7 | 71.5 | 3940.6 |
 | SOFTS | 466.8 | 329.9 | 708.1 |
 | AutoFitV739 | 384.9 | 144.1 | 837.6 |
 | GRU-D | 362.7 | 169.4 | 552.8 |
@@ -437,13 +437,13 @@
 | Autoformer | 279.9 | 152.3 | 465.4 |
 | Informer | 262.6 | 113.5 | 368.5 |
 | TimesNet | 250.7 | 125.8 | 463.3 |
-| HistGradientBoosting | 218.8 | 6.8 | 1640.3 |
+| HistGradientBoosting | 216.7 | 6.8 | 1640.3 |
 | TimeMixer | 185.2 | 140.6 | 292.3 |
 | TSMixer | 165.9 | 107.6 | 270.0 |
 | TSMixerx | 153.5 | 113.0 | 228.4 |
 | HoltWinters | 144.3 | 41.8 | 278.8 |
+| XGBoost | 137.7 | 24.5 | 733.0 |
 | XGBoostPoisson | 135.5 | 30.8 | 336.4 |
-| XGBoost | 132.8 | 24.5 | 733.0 |
 | AutoTheta | 112.1 | 50.0 | 201.1 |
 | TFT | 103.6 | 71.1 | 167.4 |
 | VanillaTransformer | 86.5 | 50.2 | 217.3 |
@@ -465,14 +465,14 @@
 | NHITS | 33.0 | 10.5 | 79.4 |
 | NBEATSx | 32.9 | 9.3 | 79.2 |
 | NBEATS | 31.9 | 9.3 | 74.5 |
+| CatBoost | 31.4 | 2.2 | 288.7 |
 | Chronos2 | 30.4 | 7.9 | 57.1 |
 | DeepNPTS | 30.2 | 14.1 | 75.4 |
 | NLinear | 29.9 | 11.8 | 73.6 |
 | DLinear | 29.1 | 7.8 | 71.8 |
 | TTM | 28.9 | 7.2 | 56.7 |
-| CatBoost | 26.5 | 2.2 | 112.0 |
-| LightGBMTweedie | 25.8 | 4.7 | 415.7 |
-| LightGBM | 24.6 | 4.7 | 562.0 |
+| LightGBMTweedie | 25.7 | 4.7 | 415.7 |
+| LightGBM | 24.8 | 4.7 | 562.0 |
 | Timer | 16.3 | 2.9 | 56.5 |
 | Chronos | 16.1 | 2.7 | 55.8 |
 | ChronosBolt | 15.4 | 2.6 | 55.3 |
@@ -536,7 +536,7 @@ Shows which task/category/ablation combinations have results.
 | task1_outcome | tslib_sota | core_edgar | 21 |
 | task1_outcome | tslib_sota | core_edgar_seed2 | 4 |
 | task1_outcome | tslib_sota | core_only | 21 |
-| task1_outcome | tslib_sota | core_only_seed2 | 6 |
+| task1_outcome | tslib_sota | core_only_seed2 | 21 |
 | task1_outcome | tslib_sota | core_text | 21 |
 | task1_outcome | tslib_sota | full | 21 |
 | task2_forecast | autofit | core_edgar | 1 |
@@ -582,7 +582,7 @@ Shows which task/category/ablation combinations have results.
 | task2_forecast | tslib_sota | core_edgar | 21 |
 | task2_forecast | tslib_sota | core_edgar_seed2 | 4 |
 | task2_forecast | tslib_sota | core_only | 21 |
-| task2_forecast | tslib_sota | core_only_seed2 | 4 |
+| task2_forecast | tslib_sota | core_only_seed2 | 19 |
 | task2_forecast | tslib_sota | core_text | 21 |
 | task2_forecast | tslib_sota | full | 20 |
 | task3_risk_adjust | autofit | core_edgar | 1 |
@@ -626,4 +626,4 @@ Shows which task/category/ablation combinations have results.
 | task3_risk_adjust | tslib_sota | full | 21 |
 
 ---
-_Last updated: 2026-03-18 16:56:05_
+_Last updated: 2026-03-19 12:15:46_

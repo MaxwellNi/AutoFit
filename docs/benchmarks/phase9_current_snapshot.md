@@ -1,6 +1,6 @@
 # Phase 9 / V739 Current Snapshot
 
-> Generated: 2026-03-17T09:06:30.519476+00:00
+> Generated: 2026-03-19T11:16:19.311713+00:00
 > Canonical benchmark: `runs/benchmarks/block3_phase9_fair`
 
 ## Verified Current Facts
@@ -8,14 +8,14 @@
 | metric | value | evidence |
 | --- | --- | --- |
 | metrics_files | 132 | raw metrics scan |
-| raw_records | 13817 | raw metrics scan |
+| raw_records | 14681 | raw metrics scan |
 | raw_models | 114 | raw metrics scan |
-| raw_complete_models | 80 | raw metrics scan |
-| raw_partial_models | 34 | raw metrics scan |
-| filtered_records | 6672 | `all_results.csv` |
-| filtered_models | 69 | `all_results.csv` |
-| filtered_complete_models | 59 | `all_results.csv` |
-| filtered_partial_models | 10 | `all_results.csv` |
+| raw_complete_models | 86 | raw metrics scan |
+| raw_partial_models | 28 | raw metrics scan |
+| filtered_records | 11132 | `all_results.csv` |
+| filtered_models | 85 | `all_results.csv` |
+| filtered_complete_models | 67 | `all_results.csv` |
+| filtered_partial_models | 18 | `all_results.csv` |
 | v739_conditions_landed | 112 | raw metrics scan |
 | v739_jobs_live | 0 | `squeue -u npin,cfisch` |
 | v739_canonical_phase9_scripts | 13 | V739 script scan |
@@ -26,11 +26,11 @@
 
 | metric | value |
 | --- | --- |
-| jobs_total | 61 |
-| running | 33 |
-| pending | 28 |
-| npin_pending | 15 |
-| cfisch_pending | 13 |
+| jobs_total | 44 |
+| running | 24 |
+| pending | 20 |
+| npin_pending | 20 |
+| cfisch_pending | 0 |
 | v739_pending | 0 |
 | v739_running | 0 |
 
@@ -38,8 +38,7 @@
 
 | reason | count |
 | --- | --- |
-| (Priority) | 27 |
-| (Resources) | 1 |
+| (Priority) | 20 |
 
 ## Text Embedding Artifacts
 
@@ -132,37 +131,31 @@
 
 | model_name | conditions | records |
 | --- | --- | --- |
-| Crossformer | 96 | 100 |
-| MSGNet | 96 | 100 |
-| MambaSimple | 96 | 100 |
-| MultiPatchFormer | 96 | 100 |
-| PAttn | 96 | 100 |
-| TimeFilter | 96 | 100 |
-| ETSformer | 91 | 111 |
-| LightTS | 91 | 111 |
-| Pyraformer | 91 | 111 |
-| Reformer | 91 | 111 |
+| ETSformer | 92 | 112 |
+| LightTS | 92 | 112 |
+| Pyraformer | 92 | 112 |
+| Reformer | 92 | 112 |
+| DUET | 36 | 36 |
+| DeformableTST | 36 | 36 |
+| FilterTS | 36 | 36 |
+| ModernTCN | 36 | 36 |
+| PDF | 36 | 36 |
+| PIR | 36 | 36 |
+| PathFormer | 36 | 36 |
+| SEMPO | 36 | 36 |
+| SparseTSF | 36 | 36 |
+| TimeRecipe | 36 | 36 |
+| xPatch | 36 | 36 |
+| CARD | 35 | 35 |
+| CFPT | 35 | 35 |
+| FiLM | 35 | 35 |
+| FreTS | 35 | 35 |
+| Fredformer | 35 | 35 |
+| MICN | 35 | 35 |
+| NonstationaryTransformer | 35 | 35 |
+| SCINet | 35 | 35 |
+| SRSNet | 35 | 35 |
+| SegRNN | 35 | 35 |
+| TimeBridge | 35 | 35 |
+| TimePerceiver | 35 | 35 |
 | NegativeBinomialGLM | 21 | 21 |
-| xPatch | 9 | 9 |
-| DUET | 8 | 8 |
-| DeformableTST | 8 | 8 |
-| FilterTS | 8 | 8 |
-| PDF | 8 | 8 |
-| PIR | 8 | 8 |
-| PathFormer | 8 | 8 |
-| SEMPO | 8 | 8 |
-| SparseTSF | 8 | 8 |
-| TimeRecipe | 8 | 8 |
-| CARD | 6 | 6 |
-| CFPT | 6 | 6 |
-| FiLM | 6 | 6 |
-| FreTS | 6 | 6 |
-| Fredformer | 6 | 6 |
-| MICN | 6 | 6 |
-| NonstationaryTransformer | 6 | 6 |
-| SCINet | 6 | 6 |
-| SRSNet | 6 | 6 |
-| SegRNN | 6 | 6 |
-| TimeBridge | 6 | 6 |
-| TimePerceiver | 6 | 6 |
-| ModernTCN | 5 | 5 |
