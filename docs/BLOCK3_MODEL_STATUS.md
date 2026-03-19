@@ -1,6 +1,6 @@
 # Block 3 Model Benchmark Status
 
-> Last updated: 2026-03-19 20:00 CET
+> Last updated: 2026-03-19 17:30 CET
 > Current authority: `docs/CURRENT_SOURCE_OF_TRUTH.md`
 > Evidence: direct scan of `runs/benchmarks/block3_phase9_fair/`
 
@@ -9,8 +9,8 @@
 | Metric | Value | Evidence |
 | --- | ---: | --- |
 | raw metrics files | 132 | direct scan 2026-03-19 |
-| raw records | 14681 | direct scan 2026-03-19 |
-| raw models (all) | 114 | direct scan 2026-03-19 |
+| raw records | 14785 | direct scan 2026-03-19 17:30 |
+| raw models (all) | 137 | direct scan (114 real + 23 retired AutoFit@1) |
 | audit-excluded models | 17 | AUDIT_EXCLUDED_MODELS in aggregate_block3_results.py |
 | active (leaderboard) models | 97 | 114 raw - 17 excluded |
 | raw complete @160 | 75 | direct scan (includes 13 excluded@160) |
@@ -44,7 +44,7 @@
 | XGBoostPoisson | 157/160 | ❌ structural OOM | Missing t1/full/is_funded h{7,14,30}. UNFIXABLE. |
 | Chronos2 | 114/160 | ⏳ gpu_fnd scripts PENDING | Missing cos2(18) + e2(28) |
 | TTM | 114/160 | ⏳ gpu_fnd scripts PENDING | Missing cos2(18) + e2(28) |
-| AutoFitV739 | 112/160 | ⏳ af739 scripts RUNNING | Missing cos2(20) + e2(28) |
+| AutoFitV739 | 113/160 | ⏳ af739 scripts RUNNING | Missing cos2+e2; af739_t1_e2 resubmitted (5266705) |
 | Crossformer | 104/160 | ⏳ ALL33 accel R+PD | Missing scattered co/ce/ct/fu/cos2/e2 |
 | MSGNet | 104/160 | ⏳ ALL33 accel R+PD | same |
 | MambaSimple | 104/160 | ⏳ ALL33 accel R+PD | same |
@@ -79,16 +79,20 @@
 | TimeBridge | 35/160 | ⏳ ALL33 accel PD | Phase 15 new model |
 | TimePerceiver | 35/160 | ⏳ ALL33 accel PD | Phase 15 new model |
 
-## Live Queue Reality (2026-03-19 20:00 CET)
+## Live Queue Reality (2026-03-19 17:30 CET)
 
 | Queue slice | Value | Evidence |
 | --- | ---: | --- |
-| npin gpu RUNNING | 19 | af739 s2/e2(5), ALL33 e2(3), cos2(2), p15 cos2(3), p15 co/ce(3), gap-fill(3) |
-| npin l40s RUNNING | 3 | l40_ac_t3_ce, l40_cos2_t1/t2 (legacy 14c, finishing within ~15-39h) |
-| npin gpu PENDING | 20 | ALL33 co/ce/ct/fu(12), fix11(3), fnd cos2/e2(5) |
+| npin gpu RUNNING | 23 | af739 s2/e2(4), ALL33 co/ce/ct/e2(11), cos2(2), p15 cos2(3), p15 co/ce(2), fnd(1) |
+| npin l40s RUNNING | 2 | l40_ac_t3_ce(14h), l40_cos2_t2(25h) — legacy 14c, finishing naturally |
+| npin gpu PENDING | 13 | af739_t1_e2(resubmit), ALL33 fu(3)+ct(1), fix11(3), fnd cos2/e2(5) |
 | cfisch gpu RUNNING | 1 | cf_p15_t1_ces2 |
-| cfisch l40s RUNNING | 1 | l40cf_ac_t1_fu (legacy 14c) |
-| **total** | **44** (24R + 20PD) | squeue 2026-03-19 |
+| cfisch l40s RUNNING | 1 | l40cf_ac_t1_fu (legacy 14c, ~16h left) |
+| **total** | **40** (27R + 13PD) | squeue 2026-03-19 17:34 |
+
+**Actions taken 2026-03-19 17:34**:
+- af739_t1_e2: TIMEOUT@1d → resubmitted as job 5266705
+- l40_cos2_t1: cancelled (PD on l40s, redundant with gpu_cos2_t1 RUNNING)
 
 ## Phase 15: New TSLib Model Expansion (23 models)
 

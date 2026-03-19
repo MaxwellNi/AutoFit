@@ -1,8 +1,6 @@
 # Block 3 Benchmark — Memory Requirements Reference
 
-> **Last updated:** 2026-03-18
-> **Source:** `sacct` actual OOM failures + completed job MaxRSS profiles
-> **Purpose:** 防止 OOM 导致的计算资源浪费，为未来任务提交提供内存需求参考
+ > **Last updated:** 2026-03-19\n> **Source:** `sacct` actual OOM failures + completed job MaxRSS profiles + l40s DefMemPerCPU analysis\n> **Purpose:** 防止 OOM 导致的计算资源浪费，为未来任务提交提供内存需求参考
 
 ---
 
@@ -159,12 +157,20 @@
 
 ## 4. 集群分区参考
 
-| 分区 | 节点数 | 每节点内存 | GPU | 最佳用途 |
-|------|--------|-----------|-----|---------|
-| gpu | 24 | ~320G | V100-16GB | 主要计算分区，co/ce/ct 任务 |
-| l40s | 2 | ~300G | L40S | co/ce tasks (较快GPU) |
-| hopper | 1 | ~200G+ | H100 | 快速单模型训练 |
-| bigmem | 4 | 640G | 无GPU | statistical models (CPU only), fu 超大任务 |
+| 分区 | 节点数 | 每节点内存 | GPU | DefMemPerCPU | MaxMemPerCPU | 最佳用途 |
+|------|--------|-----------|-----|-------------|-------------|---------|
+| gpu | 24 | 756G | 4× V100 | 27G | UNLIMITED | **主要分区** — 所有GPU任务 |
+| l40s | 2 | 515G | 4× L40S | **15G** | **15G (hard!)** | ⛔ **不推荐** — 8c×15G=120G上限 |
+| hopper | 1 | 2TB | 4× H100 | 18G | ? | ⛔ **禁用** — admin 投诉CPU过度分配 |
+| bigmem | 4 | 3TB | 无GPU | varies | varies | CPU-only (statistical, ml_tabular) |
+
+### ⚠️ l40s 内存陷阱 (2026-03-19 血泪教训)
+- l40s 的 `MaxMemPerCPU=15G` 是**硬限制**，不可用 `--mem` 覆盖
+- SLURM 公式: `NumCPUs = max(cpus-per-task, ceil(mem_MB / DefMemPerCPU))`
+- 请求 200G → 需 ceil(204800/15000) = **14 CPUs** → admin 投诉原因
+- 8 cores × 15G = 120G → 仅能跑 core_only (115G peak，5G headroom，高风险)
+- 2 cores × 15G = 30G → **完全不可行**
+- **结论**: l40s 不适合我们的 benchmark 工作负载。全部用 gpu 分区。
 
 ---
 
@@ -177,26 +183,28 @@
 4. **ml_tabular fu**: **必须**逐模型拆分，禁止全批次
 5. **TSLib 全批次**: **禁止** >30 models 一次性提交，必须分批
 
-### 推荐提交策略:
+### 推荐提交策略 (2026-03-19 更新 — GPU only):
 ```
-# 安全提交: 单类别 (5-22 models)
-co/ce → --mem=200G -p gpu (或 l40s)
-ct    → --mem=256G -p gpu
-fu    → --mem=320G -p gpu (或 bigmem)
+# 安全提交: 单类别 (5-22 models) — 全部用 gpu 分区
+co/s2 → --mem=150G -p gpu --cpus-per-task=7 --gres=gpu:1
+ce/e2 → --mem=189G -p gpu --cpus-per-task=7 --gres=gpu:1  (实际分配8c)
+ct    → --mem=189G -p gpu --cpus-per-task=7 --gres=gpu:1  (实际分配8c)
+fu    → --mem=200G -p gpu --cpus-per-task=7 --gres=gpu:1  (实际分配8c)
 
 # AutoFit V739
-co/ce → --mem=200G -p l40s
-ct    → --mem=300G -p l40s (或 320G gpu)
-fu    → --mem=384G -p gpu
+co/s2 → --mem=150G -p gpu
+ce/e2 → --mem=189G -p gpu
+ct    → --mem=189G -p gpu
+fu    → --mem=200G -p gpu
 
-# ml_tabular 拆分
+# ml_tabular 拆分 (禁止全批次!)
 单模型 → --mem=200G -p gpu
 
-# Phase 15 新模型 (23个)
-any   → --mem=256G -p gpu
+# ⛔ 禁止使用 l40s 和 hopper 提交新任务
+# ⛔ 禁止 ml_tabular 全模型一次性 fu 任务
 
 # 如果 OOM → 升级路径:
-200G → 256G → 320G → 384G → 640G(bigmem)
+150G → 189G → 200G → 320G → bigmem(640G)
 ```
 
 ---

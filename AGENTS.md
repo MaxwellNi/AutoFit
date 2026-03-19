@@ -20,13 +20,13 @@ Every future contributor should read these files in order before making claims o
 8. `docs/PHASE12_TEXT_RERUN_EXECUTION.md`
 9. `docs/PHASE9_V739_LESSONS_LEARNED.md`
 
-## Verified Current State (2026-03-19 20:00)
+## Verified Current State (2026-03-19 17:30)
 
 - Freeze: complete and read-only
 - Canonical benchmark: `runs/benchmarks/block3_phase9_fair/`
-- Raw benchmark scan (2026-03-19 rescan):
-  - `14681` raw records in metrics.json
-  - `114` raw models in benchmark
+- Raw benchmark scan (2026-03-19 17:30 rescan):
+  - `14785` raw records in metrics.json (+104 from running jobs landing)
+  - `137` raw models in benchmark (114 real + 23 retired AutoFit @1 record each)
   - `17` audit-excluded models (see AUDIT_EXCLUDED_MODELS in aggregate_block3_results.py):
     - A: Sundial, TimesFM2, LagLlama, Moirai, MoiraiLarge, Moirai2 (silent fallback)
     - B: AutoCES, xLSTM, TimeLLM, StemGNN, TimeXer (training crash fallback)
@@ -61,10 +61,10 @@ Every future contributor should read these files in order before making claims o
   - @159: XGBoost (1 missing: t1/full/is_funded — structural OOM, UNFIXABLE)
   - @157: XGBoostPoisson (3 missing: t1/full/h{7,14,30}/is_funded — structural OOM, UNFIXABLE)
   - @114: Chronos2, TTM (missing seed2/e2 — covered by gpu_fnd scripts, 5 PENDING)
-  - @112: AutoFitV739 (missing s2/e2 — 5 jobs RUNNING on gpu)
-  - @104: Crossformer/MSGNet/MambaSimple/MultiPatchFormer/PAttn/TimeFilter (covered by ALL33 accel)
-  - @92: ETSformer/LightTS/Pyraformer/Reformer (covered by ALL33 accel)
-  - @35-36: 23 P15 new models (covered by ALL33 accel + fix11 + cos2/e2 GPU scripts)
+  - @113: AutoFitV739 (missing s2/e2 — 5 jobs RUNNING on gpu, +1 landed since last scan)
+  - @105: Crossformer/MSGNet/MambaSimple/PAttn (covered by ALL33 accel)
+  - @93: ETSformer/LightTS/Pyraformer/Reformer (covered by ALL33 accel)
+  - @38-40: 23 P15 new models (covered by ALL33 accel + fix11 + cos2/e2 GPU scripts, progressing)
   - NegativeBinomialGLM: excluded (structural failure, 21 records)
 - Phase 12 text reruns:
   - 48+1 total scripts (40 original + 8 t3_ct + 1 OOM fix)
@@ -91,8 +91,10 @@ Every future contributor should read these files in order before making claims o
   - Admin compliance: cancelled ALL hopper+l40s pending (37 jobs), resubmitted on GPU at 7-8 CPUs
   - HPC resource policy: GPU partition ONLY, 7 CPUs for co/ce/ct, 8 CPUs for fu/e2, max 200G
   - l40s constraint: DefMemPerCPU=MaxMemPerCPU=15G → at 8 cores max 120G → insufficient for our 115G+ workload
-  - Total active (2026-03-19): npin 22R+20PD + cfisch 2R+0PD = 44 total jobs
-  - All 20 npin pending: GPU partition, 7-8 CPUs, Priority-waiting
+  - Total active (2026-03-19 17:30): npin 25R+13PD + cfisch 2R = 40 total jobs
+  - af739_t1_e2: timed out at 1d, resubmitted (job 5266705)
+  - l40_cos2_t1: cancelled (redundant with gpu_cos2_t1 running)
+  - All 13 npin pending: GPU partition, 7-8 CPUs, Priority-waiting
 
 ## Canonical Directories
 
