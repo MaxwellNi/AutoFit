@@ -1,21 +1,21 @@
 # Block 3 Benchmark Results
 
-**Generated**: 2026-03-19 12:15:45
+**Generated**: 2026-03-20 10:11:17
 **Benchmark Dir**: `block3_phase9_fair`
-**Total Records (post-filter)**: 11132
+**Total Records (post-filter)**: 11510
 
 ## Overview
 
 | Metric | Value |
 |--------|-------|
-| Raw records | 14681 |
-| Filtered records | 11132 |
+| Raw records | 15211 |
+| Filtered records | 11510 |
 | Comparability filter | fairness_only=True, min_coverage=0.98 |
-| Models evaluated | 85 |
+| Models evaluated | 108 |
 | Categories | autofit, deep_classical, foundation, irregular, ml_tabular, statistical, transformer_sota, tslib_sota |
 | Tasks | task1_outcome, task2_forecast, task3_risk_adjust |
-| Total evaluations | 11132 |
-| Real results | 11035 |
+| Total evaluations | 11510 |
+| Real results | 11413 |
 | Fallback (mean) | 97 |
 
 ## task1_outcome
@@ -24,7 +24,30 @@
 
 | Model | H=1 | H=7 | H=14 | H=30 | Status |
 |-------|-------:|-------:|-------:|-------:|--------|
+| AutoFitV738 | 380.4K | — | — | — | ✅ |
+| AutoFitV737 | 380.4K | — | — | — | ✅ |
 | AutoFitV739 | 380.8K | 380.9K | 381.0K | 380.3K | ✅ |
+| AutoFitV732 | 384.2K | — | — | — | ✅ |
+| AutoFitV736 | 384.2K | — | — | — | ✅ |
+| NFAdaptiveChampion | 385.0K | — | — | — | ✅ |
+| AutoFitV734 | 386.7K | — | — | — | ✅ |
+| AutoFitV735 | 388.1K | — | — | — | ✅ |
+| AutoFitV733 | 388.1K | — | — | — | ✅ |
+| AutoFitV1 | 393.2K | — | — | — | ✅ |
+| AutoFitV6 | 393.2K | — | — | — | ✅ |
+| AutoFitV3Max | 393.2K | — | — | — | ✅ |
+| AutoFitV3 | 393.2K | — | — | — | ✅ |
+| AutoFitV73 | 396.1K | — | — | — | ✅ |
+| AutoFitV731 | 396.1K | — | — | — | ✅ |
+| AutoFitV4 | 426.8K | — | — | — | ✅ |
+| AutoFitV3E | 429.6K | — | — | — | ✅ |
+| AutoFitV2 | 430.4K | — | — | — | ✅ |
+| AutoFitV2E | 430.4K | — | — | — | ✅ |
+| AutoFitV5 | 475.6K | — | — | — | ✅ |
+| AutoFitV71 | 482.9K | — | — | — | ✅ |
+| AutoFitV72 | 482.9K | — | — | — | ✅ |
+| AutoFitV7 | 488.4K | — | — | — | ✅ |
+| FusedChampion | 3.76M | — | — | — | ✅ |
 
 ### deep_classical
 
@@ -151,7 +174,30 @@
 
 | Model | H=1 | H=7 | H=14 | H=30 | Status |
 |-------|-------:|-------:|-------:|-------:|--------|
+| AutoFitV738 | 380.4K | — | — | — | ✅ |
+| AutoFitV737 | 380.4K | — | — | — | ✅ |
 | AutoFitV739 | 380.8K | 380.9K | 381.0K | 380.3K | ✅ |
+| AutoFitV732 | 384.2K | — | — | — | ✅ |
+| AutoFitV736 | 384.2K | — | — | — | ✅ |
+| NFAdaptiveChampion | 385.0K | — | — | — | ✅ |
+| AutoFitV734 | 386.7K | — | — | — | ✅ |
+| AutoFitV735 | 388.1K | — | — | — | ✅ |
+| AutoFitV733 | 388.1K | — | — | — | ✅ |
+| AutoFitV1 | 393.2K | — | — | — | ✅ |
+| AutoFitV6 | 393.2K | — | — | — | ✅ |
+| AutoFitV3Max | 393.2K | — | — | — | ✅ |
+| AutoFitV3 | 393.2K | — | — | — | ✅ |
+| AutoFitV73 | 396.1K | — | — | — | ✅ |
+| AutoFitV731 | 396.1K | — | — | — | ✅ |
+| AutoFitV4 | 426.8K | — | — | — | ✅ |
+| AutoFitV3E | 430.0K | — | — | — | ✅ |
+| AutoFitV2 | 430.4K | — | — | — | ✅ |
+| AutoFitV2E | 430.4K | — | — | — | ✅ |
+| AutoFitV5 | 475.6K | — | — | — | ✅ |
+| AutoFitV71 | 482.9K | — | — | — | ✅ |
+| AutoFitV72 | 483.0K | — | — | — | ✅ |
+| AutoFitV7 | 488.4K | — | — | — | ✅ |
+| FusedChampion | 3.76M | — | — | — | ✅ |
 
 ### deep_classical
 
@@ -250,26 +296,26 @@
 | Model | H=1 | H=7 | H=14 | H=30 | Status |
 |-------|-------:|-------:|-------:|-------:|--------|
 | Crossformer | 674.4K | 679.1K | 695.5K | 678.4K | ⚠️ fallback |
-| xPatch | 678.9K | 700.8K | 1.30M | 8.39M | ✅ |
+| xPatch | 678.9K | 700.8K | 1.30M | 1.73M | ✅ |
 | Reformer | 777.2K | 681.9K | 1.14M | 685.2K | ⚠️ fallback |
 | MambaSimple | 800.2K | 990.1K | 1.48M | 1.09M | ✅ |
-| FreTS | 805.7K | 2.32M | 742.1K | 3.09M | ✅ |
+| FreTS | 805.7K | 2.32M | 742.1K | 918.1K | ✅ |
 | MSGNet | 989.2K | 712.6K | 926.7K | 1.05M | ✅ |
 | SRSNet | 994.8K | 1.01M | 1.01M | 1.01M | ✅ |
 | PAttn | 1.01M | 1.03M | 1.02M | 1.00M | ✅ |
 | PIR | 1.02M | 1.02M | 1.02M | 1.02M | ✅ |
 | CARD | 1.02M | 1.02M | 1.02M | 1.02M | ✅ |
-| DUET | 1.03M | 1.03M | 1.03M | 1.03M | ✅ |
-| ModernTCN | 1.04M | 1.06M | 1.07M | 1.06M | ✅ |
-| PDF | 1.04M | 1.03M | 1.03M | 1.11M | ✅ |
-| FiLM | 1.06M | 1.06M | 1.06M | 1.07M | ✅ |
-| SCINet | 1.08M | 1.08M | 1.04M | 1.20M | ✅ |
-| Fredformer | 1.08M | 1.05M | 1.07M | 1.07M | ✅ |
+| DUET | 1.03M | 1.03M | 1.03M | 1.01M | ✅ |
+| ModernTCN | 1.04M | 1.04M | 968.4K | 700.3K | ✅ |
+| PDF | 1.04M | 1.03M | 1.03M | 1.10M | ✅ |
+| FiLM | 1.06M | 1.06M | 1.06M | 1.06M | ✅ |
+| SCINet | 1.08M | 1.08M | 1.04M | 1.11M | ✅ |
+| Fredformer | 1.08M | 1.05M | 1.07M | 1.09M | ✅ |
 | NonstationaryTransformer | 1.09M | 1.04M | 1.04M | 1.04M | ✅ |
-| FilterTS | 1.40M | 1.23M | 5.24M | 2.41M | ✅ |
+| FilterTS | 1.40M | 1.23M | 5.24M | 9.23M | ✅ |
 | LightTS | 1.40M | 2.02M | 745.8K | 2.72M | ✅ |
-| SegRNN | 4.11M | 2.99M | 8.42M | 6.68M | ✅ |
-| TimeRecipe | 13.33M | 1.02M | 10.88M | 9.89M | ✅ |
+| SegRNN | 4.11M | 2.99M | 8.42M | 6.38M | ✅ |
+| TimeRecipe | 13.33M | 1.02M | 10.88M | 1.01M | ✅ |
 
 ## task3_risk_adjust
 
@@ -277,7 +323,30 @@
 
 | Model | H=1 | H=7 | H=14 | H=30 | Status |
 |-------|-------:|-------:|-------:|-------:|--------|
+| AutoFitV738 | 380.4K | — | — | — | ✅ |
+| AutoFitV737 | 380.4K | — | — | — | ✅ |
 | AutoFitV739 | 380.8K | 380.9K | 381.0K | 380.3K | ✅ |
+| AutoFitV732 | 384.2K | — | — | — | ✅ |
+| AutoFitV736 | 384.2K | — | — | — | ✅ |
+| NFAdaptiveChampion | 385.0K | — | — | — | ✅ |
+| AutoFitV734 | 386.7K | — | — | — | ✅ |
+| AutoFitV735 | 388.1K | — | — | — | ✅ |
+| AutoFitV733 | 388.1K | — | — | — | ✅ |
+| AutoFitV1 | 393.2K | — | — | — | ✅ |
+| AutoFitV6 | 393.2K | — | — | — | ✅ |
+| AutoFitV3Max | 393.2K | — | — | — | ✅ |
+| AutoFitV3 | 393.2K | — | — | — | ✅ |
+| AutoFitV73 | 396.1K | — | — | — | ✅ |
+| AutoFitV731 | 396.1K | — | — | — | ✅ |
+| AutoFitV4 | 426.8K | — | — | — | ✅ |
+| AutoFitV3E | 429.6K | — | — | — | ✅ |
+| AutoFitV2 | 430.4K | — | — | — | ✅ |
+| AutoFitV2E | 430.4K | — | — | — | ✅ |
+| AutoFitV5 | 475.6K | — | — | — | ✅ |
+| AutoFitV71 | 482.9K | — | — | — | ✅ |
+| AutoFitV72 | 482.9K | — | — | — | ✅ |
+| AutoFitV7 | 488.4K | — | — | — | ✅ |
+| FusedChampion | 3.76M | — | — | — | ✅ |
 
 ### deep_classical
 
@@ -401,38 +470,56 @@
 
 | Model | Avg (s) | Min (s) | Max (s) |
 |-------|--------:|--------:|--------:|
-| MSGNet | 13306.7 | 1121.9 | 91361.6 |
-| MambaSimple | 12324.8 | 865.8 | 49536.0 |
-| CARD | 8025.2 | 585.6 | 18384.9 |
-| Fredformer | 7411.0 | 853.2 | 18666.2 |
-| ModernTCN | 5964.9 | 788.0 | 13416.7 |
-| FiLM | 4923.9 | 1611.8 | 10913.3 |
-| FreTS | 4273.4 | 307.8 | 13755.7 |
-| Reformer | 4106.0 | 926.5 | 17614.9 |
-| SCINet | 3910.5 | 274.2 | 12003.6 |
-| PIR | 3899.4 | 335.9 | 10695.2 |
-| Crossformer | 3079.5 | 277.7 | 7380.1 |
-| PAttn | 2803.0 | 283.1 | 14803.5 |
-| xPatch | 1747.1 | 207.0 | 6820.0 |
+| MSGNet | 14154.5 | 1121.9 | 105725.4 |
+| MambaSimple | 12549.3 | 865.8 | 49536.0 |
+| AutoFitV73 | 9971.0 | 8729.0 | 11347.5 |
+| AutoFitV731 | 9771.8 | 8791.0 | 11053.9 |
+| CARD | 6917.9 | 585.6 | 23346.0 |
+| Fredformer | 6504.2 | 853.2 | 18666.2 |
+| ModernTCN | 6492.6 | 788.0 | 33291.0 |
+| AutoFitV3E | 6092.2 | 5707.4 | 6440.6 |
+| AutoFitV2 | 5797.8 | 5620.5 | 6060.4 |
+| AutoFitV4 | 5776.8 | 5606.3 | 5973.2 |
+| AutoFitV2E | 5725.7 | 5602.3 | 5929.3 |
+| AutoFitV1 | 5482.7 | 5325.0 | 5738.7 |
+| FiLM | 5405.5 | 1611.8 | 23591.9 |
+| AutoFitV3 | 5392.0 | 5273.7 | 5569.3 |
+| AutoFitV3Max | 5375.2 | 5281.7 | 5545.5 |
+| AutoFitV72 | 5109.2 | 4674.1 | 5792.6 |
+| AutoFitV71 | 5057.1 | 4752.5 | 5417.4 |
+| AutoFitV7 | 4320.0 | 4036.1 | 4780.2 |
+| Reformer | 4124.2 | 926.5 | 17614.9 |
+| SCINet | 4114.9 | 274.2 | 25414.7 |
+| AutoFitV6 | 4056.6 | 3964.6 | 4251.7 |
+| FreTS | 3725.4 | 307.8 | 13755.7 |
+| PIR | 3589.1 | 335.9 | 10695.2 |
+| Crossformer | 3135.9 | 277.7 | 9227.3 |
+| PAttn | 2812.8 | 283.1 | 14803.5 |
+| AutoFitV5 | 1883.8 | 1824.2 | 2016.3 |
+| xPatch | 1654.6 | 207.0 | 6820.0 |
 | BRITS | 1526.4 | 349.2 | 2770.7 |
-| PDF | 1516.2 | 78.1 | 3909.5 |
 | iTransformer | 1466.2 | 927.9 | 1806.3 |
 | NegativeBinomialGLM | 1437.5 | 1029.1 | 2304.0 |
-| DUET | 1283.1 | 79.7 | 3216.7 |
+| PDF | 1401.8 | 78.1 | 3909.5 |
+| DUET | 1351.2 | 79.7 | 3854.1 |
 | MSTL | 1157.4 | 112.0 | 1982.0 |
-| FilterTS | 1027.6 | 197.9 | 2137.9 |
-| LightTS | 855.4 | 137.8 | 3222.8 |
+| FilterTS | 937.7 | 197.9 | 2137.9 |
+| LightTS | 866.9 | 137.8 | 3222.8 |
+| NonstationaryTransformer | 864.8 | 98.1 | 8944.6 |
 | RandomForest | 776.4 | 224.6 | 4432.2 |
-| NonstationaryTransformer | 689.5 | 98.1 | 1958.9 |
-| SegRNN | 688.9 | 98.5 | 1650.3 |
-| TimeRecipe | 666.2 | 96.7 | 1812.8 |
-| SRSNet | 650.1 | 136.4 | 1223.6 |
+| SegRNN | 721.7 | 98.5 | 2140.5 |
+| SRSNet | 652.9 | 136.4 | 2739.1 |
 | AutoARIMA | 639.3 | 213.1 | 1179.2 |
 | ExtraTrees | 613.7 | 71.5 | 3940.6 |
+| TimeRecipe | 611.6 | 96.7 | 1812.8 |
 | SOFTS | 466.8 | 329.9 | 708.1 |
-| AutoFitV739 | 384.9 | 144.1 | 837.6 |
+| NFAdaptiveChampion | 386.9 | 369.3 | 407.6 |
+| AutoFitV739 | 384.7 | 144.1 | 837.6 |
+| AutoFitV734 | 374.5 | 368.3 | 379.9 |
 | GRU-D | 362.7 | 169.4 | 552.8 |
 | FEDformer | 351.0 | 171.1 | 585.0 |
+| AutoFitV733 | 290.9 | 287.1 | 295.0 |
+| AutoFitV735 | 288.7 | 283.6 | 293.8 |
 | RMoK | 287.0 | 165.1 | 470.1 |
 | Autoformer | 279.9 | 152.3 | 465.4 |
 | Informer | 262.6 | 113.5 | 368.5 |
@@ -452,9 +539,12 @@
 | SAITS | 71.7 | 23.6 | 143.5 |
 | DeepAR | 70.7 | 30.6 | 171.3 |
 | CSDI | 66.7 | 14.7 | 166.9 |
+| FusedChampion | 55.1 | 49.0 | 59.8 |
 | Holt | 54.9 | 8.2 | 125.3 |
 | DilatedRNN | 51.1 | 24.5 | 85.7 |
+| AutoFitV736 | 47.8 | 45.2 | 50.6 |
 | TiDE | 47.2 | 20.3 | 104.3 |
+| AutoFitV737 | 46.6 | 44.3 | 51.2 |
 | TCN | 42.3 | 12.1 | 77.7 |
 | LSTM | 42.2 | 16.2 | 76.7 |
 | GRU | 40.6 | 11.8 | 80.1 |
@@ -473,6 +563,8 @@
 | TTM | 28.9 | 7.2 | 56.7 |
 | LightGBMTweedie | 25.7 | 4.7 | 415.7 |
 | LightGBM | 24.8 | 4.7 | 562.0 |
+| AutoFitV732 | 22.9 | 21.9 | 24.0 |
+| AutoFitV738 | 22.0 | 21.4 | 22.5 |
 | Timer | 16.3 | 2.9 | 56.5 |
 | Chronos | 16.1 | 2.7 | 55.8 |
 | ChronosBolt | 15.4 | 2.6 | 55.3 |
@@ -494,7 +586,9 @@ Shows which task/category/ablation combinations have results.
 | Task | Category | Ablation | Models |
 |------|----------|----------|-------:|
 | task1_outcome | autofit | core_edgar | 1 |
+| task1_outcome | autofit | core_edgar_seed2 | 24 |
 | task1_outcome | autofit | core_only | 1 |
+| task1_outcome | autofit | core_only_seed2 | 24 |
 | task1_outcome | autofit | core_text | 1 |
 | task1_outcome | autofit | full | 1 |
 | task1_outcome | deep_classical | core_edgar | 9 |
@@ -534,12 +628,13 @@ Shows which task/category/ablation combinations have results.
 | task1_outcome | transformer_sota | core_text | 19 |
 | task1_outcome | transformer_sota | full | 19 |
 | task1_outcome | tslib_sota | core_edgar | 21 |
-| task1_outcome | tslib_sota | core_edgar_seed2 | 4 |
+| task1_outcome | tslib_sota | core_edgar_seed2 | 19 |
 | task1_outcome | tslib_sota | core_only | 21 |
 | task1_outcome | tslib_sota | core_only_seed2 | 21 |
 | task1_outcome | tslib_sota | core_text | 21 |
 | task1_outcome | tslib_sota | full | 21 |
 | task2_forecast | autofit | core_edgar | 1 |
+| task2_forecast | autofit | core_edgar_seed2 | 24 |
 | task2_forecast | autofit | core_only | 1 |
 | task2_forecast | autofit | core_text | 1 |
 | task2_forecast | autofit | full | 1 |
@@ -580,12 +675,13 @@ Shows which task/category/ablation combinations have results.
 | task2_forecast | transformer_sota | core_text | 19 |
 | task2_forecast | transformer_sota | full | 19 |
 | task2_forecast | tslib_sota | core_edgar | 21 |
-| task2_forecast | tslib_sota | core_edgar_seed2 | 4 |
+| task2_forecast | tslib_sota | core_edgar_seed2 | 19 |
 | task2_forecast | tslib_sota | core_only | 21 |
 | task2_forecast | tslib_sota | core_only_seed2 | 19 |
 | task2_forecast | tslib_sota | core_text | 21 |
 | task2_forecast | tslib_sota | full | 20 |
 | task3_risk_adjust | autofit | core_edgar | 1 |
+| task3_risk_adjust | autofit | core_edgar_seed2 | 24 |
 | task3_risk_adjust | autofit | core_only | 1 |
 | task3_risk_adjust | autofit | core_text | 1 |
 | task3_risk_adjust | autofit | full | 1 |
@@ -620,10 +716,11 @@ Shows which task/category/ablation combinations have results.
 | task3_risk_adjust | transformer_sota | core_text | 19 |
 | task3_risk_adjust | transformer_sota | full | 19 |
 | task3_risk_adjust | tslib_sota | core_edgar | 21 |
-| task3_risk_adjust | tslib_sota | core_edgar_seed2 | 4 |
+| task3_risk_adjust | tslib_sota | core_edgar_seed2 | 19 |
 | task3_risk_adjust | tslib_sota | core_only | 21 |
+| task3_risk_adjust | tslib_sota | core_only_seed2 | 15 |
 | task3_risk_adjust | tslib_sota | core_text | 21 |
 | task3_risk_adjust | tslib_sota | full | 21 |
 
 ---
-_Last updated: 2026-03-19 12:15:46_
+_Last updated: 2026-03-20 10:11:18_

@@ -1,6 +1,6 @@
 # Block 3 Model Benchmark Status
 
-> Last updated: 2026-03-19 17:30 CET
+> Last updated: 2026-03-20 10:00 CET
 > Current authority: `docs/CURRENT_SOURCE_OF_TRUTH.md`
 > Evidence: direct scan of `runs/benchmarks/block3_phase9_fair/`
 
@@ -8,20 +8,20 @@
 
 | Metric | Value | Evidence |
 | --- | ---: | --- |
-| raw metrics files | 132 | direct scan 2026-03-19 |
-| raw records | 14785 | direct scan 2026-03-19 17:30 |
-| raw models (all) | 137 | direct scan (114 real + 23 retired AutoFit@1) |
+| raw metrics files | 132+ | direct scan 2026-03-20 |
+| raw records | 15211 | direct scan 2026-03-20 10:00 |
+| raw models (all) | 137 | direct scan (116 real + 21 retired AutoFit@1) |
 | audit-excluded models | 17 | AUDIT_EXCLUDED_MODELS in aggregate_block3_results.py |
-| active (leaderboard) models | 97 | 114 raw - 17 excluded |
-| raw complete @160 | 75 | direct scan (includes 13 excluded@160) |
-| active complete @160 | 62 | 75 - 13 excluded@160 |
-| incomplete active models | 35 | 97 - 62 |
+| active (leaderboard) models | 99 | 116 raw - 17 excluded |
+| raw complete @160 | 77 | direct scan (includes 13 excluded@160) |
+| active complete @160 | 64 | 77 - 13 excluded@160 |
+| incomplete active models | 35 | 99 - 64 |
 | unfixable gaps | 2 | XGBoost@159, XGBoostPoisson@157 (structural OOM) |
-| total unique records | 14464 | deduped (task, ablation, horizon, target) |
-| max possible records | 18080 | 113 models × ~160 each |
-| overall completion | 80.0% | 14464 / 18080 |
+| total unique records | 15015 | deduped (task, ablation, horizon, target) |
+| max possible records | ~18080 | ~99 active × ~160 each + excluded |
+| overall completion | 83.0% | 15015 / ~18080 |
 | conditions per model | 160 | t1(72) + t2(48) + t3(40) |
-| live jobs | npin 22R+20PD, cfisch 2R | squeue 2026-03-19 |
+| live jobs | npin 27R + cfisch 1R + 4 af739 PD | squeue 2026-03-20 |
 | Phase 12 text reruns | 48/48 COMPLETED | all categories |
 | Phase 15 new models | 23 submitted, covered by ALL33 accel | `.slurm_scripts/phase15/` |
 
@@ -30,69 +30,66 @@
 | Fact | Value | Evidence |
 | --- | --- | --- |
 | current valid AutoFit line | `AutoFitV739` | Root `AGENTS.md` |
-| landed conditions | `112/160` | co=28, ce=28, ct=28, fu=28; missing: cos2=20, ces2(e2)=28 |
-| s2/e2 gap-fill | RUNNING | af739_t{1,2}_s2, af739_t{1,2,3}_e2 on gpu |
+| landed conditions | `116/160` | co=28, ce=28, ct=28, fu=28, cos2=1, e2=3; missing 44 s2/e2 |
+| s2/e2 gap-fill | 1 RUNNING + 4 PENDING @2d | af739_t1_e2(5266705) R, 4 resubmitted(5267972-75) PD |
 | quality | 0 NaN/Inf, 0 fallback, 100% fairness pass | direct scan |
 | mean rank (56 universal conditions) | **#13/80** (top 16%) | computed across 56 universal conditions shared by all 80 models |
 | V734-V738 | RETIRED | oracle test-set leakage |
 
-## Incomplete Active Models (38 models)
+## Incomplete Active Models (35 models)
 
 | Model | Records | Status | Notes |
 | --- | ---: | --- | --- |
 | XGBoost | 159/160 | ❌ structural OOM | Missing t1/full/is_funded. UNFIXABLE. |
 | XGBoostPoisson | 157/160 | ❌ structural OOM | Missing t1/full/is_funded h{7,14,30}. UNFIXABLE. |
-| Chronos2 | 114/160 | ⏳ gpu_fnd scripts PENDING | Missing cos2(18) + e2(28) |
-| TTM | 114/160 | ⏳ gpu_fnd scripts PENDING | Missing cos2(18) + e2(28) |
-| AutoFitV739 | 113/160 | ⏳ af739 scripts RUNNING | Missing cos2+e2; af739_t1_e2 resubmitted (5266705) |
-| Crossformer | 104/160 | ⏳ ALL33 accel R+PD | Missing scattered co/ce/ct/fu/cos2/e2 |
-| MSGNet | 104/160 | ⏳ ALL33 accel R+PD | same |
-| MambaSimple | 104/160 | ⏳ ALL33 accel R+PD | same |
-| MultiPatchFormer | 104/160 | ⏳ ALL33 accel R+PD | (audit-excluded: constant predictions) |
-| PAttn | 104/160 | ⏳ ALL33 accel R+PD | same |
-| TimeFilter | 104/160 | ⏳ ALL33 accel R+PD | (audit-excluded: constant predictions) |
-| ETSformer | 92/160 | ⏳ ALL33 accel R+PD | Missing co/ce/ct/fu/e2 partially |
-| LightTS | 92/160 | ⏳ ALL33 accel R+PD | same |
-| Pyraformer | 92/160 | ⏳ ALL33 accel R+PD | same |
-| Reformer | 92/160 | ⏳ ALL33 accel R+PD | same |
-| DUET | 36/160 | ⏳ ALL33 accel + fix11 | Phase 15 fix11 model |
-| DeformableTST | 36/160 | ⏳ ALL33 accel + fix11 | Phase 15 fix11 model |
-| FilterTS | 36/160 | ⏳ ALL33 accel + fix11 | Phase 15 fix11 model |
-| ModernTCN | 36/160 | ⏳ ALL33 accel + fix11 | Phase 15 fix11 model, was OOM@128G |
-| PDF | 36/160 | ⏳ ALL33 accel + fix11 | Phase 15 fix11 model |
-| PIR | 36/160 | ⏳ ALL33 accel + fix11 | Phase 15 fix11 model |
-| PathFormer | 36/160 | ⏳ ALL33 accel + fix11 | Phase 15 fix11 model |
-| SEMPO | 36/160 | ⏳ ALL33 accel + fix11 | Phase 15 fix11 model |
-| SparseTSF | 36/160 | ⏳ ALL33 accel + fix11 | Phase 15 fix11 model |
-| TimeRecipe | 36/160 | ⏳ ALL33 accel + fix11 | Phase 15 fix11 model |
-| xPatch | 36/160 | ⏳ ALL33 accel + fix11 | Phase 15 fix11 model |
-| CARD | 35/160 | ⏳ ALL33 accel PD | Phase 15 new model |
-| CFPT | 35/160 | ⏳ ALL33 accel PD | Phase 15 new model |
-| FiLM | 35/160 | ⏳ ALL33 accel PD | Phase 15 new model |
-| FreTS | 35/160 | ⏳ ALL33 accel PD | Phase 15 new model |
-| Fredformer | 35/160 | ⏳ ALL33 accel PD | Phase 15 new model |
-| MICN | 35/160 | ⏳ ALL33 accel PD | (audit-excluded: constant predictions) |
-| NonstationaryTransformer | 35/160 | ⏳ ALL33 accel PD | Phase 15 new model |
-| SCINet | 35/160 | ⏳ ALL33 accel PD | Phase 15 new model |
-| SRSNet | 35/160 | ⏳ ALL33 accel PD | Phase 15 new model |
-| SegRNN | 35/160 | ⏳ ALL33 accel PD | Phase 15 new model |
-| TimeBridge | 35/160 | ⏳ ALL33 accel PD | Phase 15 new model |
-| TimePerceiver | 35/160 | ⏳ ALL33 accel PD | Phase 15 new model |
+| AutoFitV739 | 116/160 | ⏳ af739 1R+4PD @2d | Missing cos2+e2; 5267972-75+5266705 |
+| ETSformer | 113/160 | ⏳ ALL33 accel RUNNING | Missing scattered s2/e2/ct/fu |
+| LightTS | 113/160 | ⏳ ALL33 accel RUNNING | same |
+| Pyraformer | 113/160 | ⏳ ALL33 accel RUNNING | same |
+| Reformer | 113/160 | ⏳ ALL33 accel RUNNING | same |
+| Crossformer | 109/160 | ⏳ ALL33 accel RUNNING | Missing scattered conditions |
+| MSGNet | 109/160 | ⏳ ALL33 accel RUNNING | same |
+| MambaSimple | 109/160 | ⏳ ALL33 accel RUNNING | same |
+| PAttn | 109/160 | ⏳ ALL33 accel RUNNING | same |
+| DUET | 54/160 | ⏳ ALL33 accel RUNNING | Phase 15 fix11 model |
+| DeformableTST | 54/160 | ⏳ ALL33 accel RUNNING | Phase 15 fix11, slow (CUDA OOM warnings) |
+| FilterTS | 54/160 | ⏳ ALL33 accel RUNNING | Phase 15 fix11 model |
+| ModernTCN | 52/160 | ⏳ ALL33 accel RUNNING | Phase 15 fix11, large model (12.5M params) |
+| PDF | 54/160 | ⏳ ALL33 accel RUNNING | Phase 15 fix11 model |
+| PIR | 54/160 | ⏳ ALL33 accel RUNNING | Phase 15 fix11 model |
+| PathFormer | 54/160 | ⏳ ALL33 accel RUNNING | Phase 15 fix11 model |
+| SEMPO | 54/160 | ⏳ ALL33 accel RUNNING | Phase 15 fix11 model |
+| SparseTSF | 54/160 | ⏳ ALL33 accel RUNNING | Phase 15 fix11 model |
+| TimeRecipe | 54/160 | ⏳ ALL33 accel RUNNING | Phase 15 fix11 model |
+| xPatch | 54/160 | ⏳ ALL33 accel RUNNING | Phase 15 fix11 model |
+| CARD | 54/160 | ⏳ ALL33 accel RUNNING | Phase 15 new model |
+| CFPT | 54/160 | ⏳ ALL33 accel RUNNING | Phase 15 new model |
+| FiLM | 54/160 | ⏳ ALL33 accel RUNNING | Phase 15 new model |
+| FreTS | 54/160 | ⏳ ALL33 accel RUNNING | Phase 15 new model |
+| Fredformer | 54/160 | ⏳ ALL33 accel RUNNING | Phase 15 new model |
+| NonstationaryTransformer | 54/160 | ⏳ ALL33 accel RUNNING | Phase 15 new model |
+| SCINet | 54/160 | ⏳ ALL33 accel RUNNING | Phase 15 new model |
+| SRSNet | 54/160 | ⏳ ALL33 accel RUNNING | Phase 15 new model |
+| SegRNN | 54/160 | ⏳ ALL33 accel RUNNING | Phase 15 new model |
+| TimeBridge | 54/160 | ⏳ ALL33 accel RUNNING | Phase 15 new model |
+| TimePerceiver | 54/160 | ⏳ ALL33 accel RUNNING | Phase 15 new model |
 
-## Live Queue Reality (2026-03-19 17:30 CET)
+## Live Queue Reality (2026-03-20 10:00 CET)
 
 | Queue slice | Value | Evidence |
 | --- | ---: | --- |
-| npin gpu RUNNING | 23 | af739 s2/e2(4), ALL33 co/ce/ct/e2(11), cos2(2), p15 cos2(3), p15 co/ce(2), fnd(1) |
-| npin l40s RUNNING | 2 | l40_ac_t3_ce(14h), l40_cos2_t2(25h) — legacy 14c, finishing naturally |
-| npin gpu PENDING | 13 | af739_t1_e2(resubmit), ALL33 fu(3)+ct(1), fix11(3), fnd cos2/e2(5) |
+| npin gpu RUNNING | 27 | af739_t1_e2(1), ALL33 co/ce/ct/fu/e2(15), fix11(3), cos2(2), p15 cos2(3), p15 co/ce(3) |
+| npin l40s RUNNING | 0 | All l40s cancelled (admin complaint + redundancy) |
+| npin gpu PENDING | 4 | af739 s2/e2 (5267972-75) |
 | cfisch gpu RUNNING | 1 | cf_p15_t1_ces2 |
-| cfisch l40s RUNNING | 1 | l40cf_ac_t1_fu (legacy 14c, ~16h left) |
-| **total** | **40** (27R + 13PD) | squeue 2026-03-19 17:34 |
+| **total** | **32** (28R + 4PD) | squeue 2026-03-20 10:00 |
 
-**Actions taken 2026-03-19 17:34**:
-- af739_t1_e2: TIMEOUT@1d → resubmitted as job 5266705
-- l40_cos2_t1: cancelled (PD on l40s, redundant with gpu_cos2_t1 RUNNING)
+**Actions taken 2026-03-20 10:00**:
+- l40_cos2_t2 (5262822): CANCELLED — admin complained 14 CPUs / 1 CPU utilized / 88G used. Redundant with gpu_cos2_t2 RUNNING.
+- l40_ac_t3_ce (5264037): CANCELLED — redundant with gpu_ac_t3_ce RUNNING.
+- af739_t1_s2, af739_t2_s2, af739_t2_e2, af739_t3_e2: All TIMEOUT@1d → scripts bumped to 2d → resubmitted (5267972-5267975)
+- af739_t1_e2 (5266705): still RUNNING (6h, 1d limit, couldn't extend via scontrol)
+- gpu_fnd_cos2_t1/t2, gpu_fnd_e2_t1/t2/t3: 5 COMPLETED (7-26 min each) → Chronos2+TTM now @160 ✅
 
 ## Phase 15: New TSLib Model Expansion (23 models)
 
@@ -154,16 +151,16 @@ DeformableTST, Fredformer, ModernTCN, PDF, PathFormer, SparseTSF, TimeRecipe, xP
 
 ## Interpretation
 
-1. V739 is partially landed: 112/160 conditions complete. The 48 missing conditions (seed2 + edgar_seed2) are covered by 5 af739 scripts RUNNING on gpu.
-2. Of 97 active models, 62 are at 160/160. The remaining 35 active incomplete models are covered by 44 active SLURM jobs.
-3. 2 models have unfixable structural OOM gaps: XGBoost@159, XGBoostPoisson@157 (also active, counted in the 35).
-4. NegativeBinomialGLM is audit-excluded (21 records, structural convergence failure).
-5. Phase 12 text reruns: 48/48 COMPLETED. core_text: 91/91 models. full: 91/91 models.
-6. Phase 15 new TSLib models: 23 models submitted, all covered by ALL33 accel GPU scripts.
-7. l40s partition: UNUSABLE for new jobs (MaxMemPerCPU=15G, our workload needs 115G+). 3+1 legacy l40s jobs finishing.
-8. HPC resource policy: GPU partition ONLY, 7 CPUs for co/ce/ct, 8 CPUs for fu/e2, max 200G.
-9. Top-5 by mean rank: PatchTST (4.28), NHITS (4.38), NBEATS (5.01), NBEATSx (5.81), ChronosBolt (7.42).
-10. NBEATS is dominant champion: 65/160 conditions won (40.6%). Text embeddings HURT (core_text wins 11.7%).
+1. V739 partially landed: 116/160. 44 missing (s2+e2) covered by 5 af739 scripts (1 RUNNING + 4 PENDING @2d).
+2. Of 99 active models, 64 at 160/160 (↑2: Chronos2+TTM COMPLETE). 35 incomplete covered by 32 SLURM jobs.
+3. 2 models have unfixable structural OOM gaps: XGBoost@159, XGBoostPoisson@157.
+4. NegativeBinomialGLM: audit-excluded (21 records, structural failure).
+5. Phase 12 text reruns: 48/48 COMPLETED. core_text+full: 91/91 models.
+6. Phase 15 new TSLib models: 23 submitted, @54/160, ALL33 accel RUNNING.
+7. l40s partition: ZERO jobs remaining. NEVER submit new l40s jobs.
+8. HPC policy: GPU only, 7 CPUs for co/ce/ct, 8 for fu/e2, max 200G.
+9. Top-5 by mean rank: PatchTST(4.28), NHITS(4.38), NBEATS(5.01), NBEATSx(5.81), ChronosBolt(7.42).
+10. NBEATS dominant champion: 65/160 wins (40.6%). Text embeddings HURT (core_text wins 11.7%).
 
 ## Immediate Next Actions
 
