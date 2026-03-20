@@ -20,12 +20,12 @@ Every future contributor should read these files in order before making claims o
 8. `docs/PHASE12_TEXT_RERUN_EXECUTION.md`
 9. `docs/PHASE9_V739_LESSONS_LEARNED.md`
 
-## Verified Current State (2026-03-20 10:00)
+## Verified Current State (2026-03-20 12:00)
 
 - Freeze: complete and read-only
 - Canonical benchmark: `runs/benchmarks/block3_phase9_fair/`
-- Raw benchmark scan (2026-03-20 10:00 rescan):
-  - `15211` raw records in metrics.json (+426 from overnight jobs landing)
+- Raw benchmark scan (2026-03-20 12:00 rescan):
+  - `15212` raw records in metrics.json
   - `137` raw models in benchmark (116 real + 21 retired AutoFit @1 record each)
   - `17` audit-excluded models (see AUDIT_EXCLUDED_MODELS in aggregate_block3_results.py):
     - A: Sundial, TimesFM2, LagLlama, Moirai, MoiraiLarge, Moirai2 (silent fallback)
@@ -43,7 +43,7 @@ Every future contributor should read these files in order before making claims o
   - V734-V738 are retired due to oracle test-set leakage
   - V739 is the only valid current AutoFit baseline
   - V739 landed conditions: `116/160` (missing 44 s2/e2 = seed2+edgar_seed2)
-  - V739 s2/e2 gap-fill: af739_t1_e2 RUNNING (5266705), 4 resubmitted @2d (5267972-75)
+  - V739 s2/e2 gap-fill: af739_t1_s2/t2_s2/t2_e2 RUNNING@2d (5267968-70), af739_t1_e2 RUNNING@1d (5266705, 15h left), af739_t3_e2 PENDING@2d (5267971)
   - V739 quality: 0 NaN/Inf, 0 fallback, 100% fairness pass
 - Top-5 models by mean rank: PatchTST (4.28), NHITS (4.38), NBEATS (5.01), NBEATSx (5.81), ChronosBolt (7.42)
 - Dominant champion model: NBEATS — 65/160 conditions won (40.6%)
@@ -86,16 +86,17 @@ Every future contributor should read these files in order before making claims o
   - Code commit: `e177f6f` (encoder-only forward fix)
   - Bug-fix commits: `c4d214e` (6 bugs), `1185617` (n_vars fix), `0373037` (fix11)
   - Seed2 harness fix: commit `a9162c2`
-  - ALL33 acceleration: migrated ALL jobs from hopper/l40s to GPU-only (2026-03-19)
-  - GPU scripts: 12 accel (`gpu_t{1,2,3}_{co,ce,ct,fu}`) + 3 fix11 + 3 e2 (running) + 5 fnd seed2
-  - Admin compliance: cancelled ALL hopper+l40s pending (37 jobs), resubmitted on GPU at 7-8 CPUs
-  - HPC resource policy: GPU partition ONLY, 7 CPUs for co/ce/ct, 8 CPUs for fu/e2, max 200G
-  - l40s constraint: DefMemPerCPU=MaxMemPerCPU=15G → at 8 cores max 120G → insufficient for our 115G+ workload
-  - Total active (2026-03-20 10:00): npin 27R + cfisch 1R = 28 RUNNING, 4 af739 PENDING
-  - Chronos2+TTM: COMPLETE @160 (gpu_fnd scripts completed in 7-26 min)
-  - af739: all 5 scripts at 2d time limit (4 resubmitted 5267972-75, 1 running 5266705)
-  - l40s: ZERO jobs remaining (cancelled both l40_cos2_t2 + l40_ac_t3_ce per admin complaint)
-  - All new submissions: GPU partition ONLY, 7-8 CPUs
+  - ALL33 acceleration: 3-partition parallel strategy active (2026-03-20 12:00)
+  - Admin Julien approved l40s/hopper usage ("as you have a rationale for this bigger cpu/gpu ratio this is not waste")
+  - GPU scripts: 12 accel + 3 fix11 + 3 e2 + 5 cos2/new RUNNING + 4 af739 RUNNING/PENDING
+  - L40S scripts: 15 accel (5268065-79), 5 RUNNING + 10 PENDING, QOS=iris-snt
+  - Hopper scripts: 15 accel (5268095-109), all PENDING, QOS=besteffort (preemptible)
+  - l40s optimization: co/s2→120G(8c), ce/ct/e2/fu→200G(14c). Admin-approved.
+  - hopper: co→150G(9c), ce/ct/e2→189G(11c), fu→200G(12c). No iris-hopper QOS available.
+  - Total active (2026-03-20 12:00): npin 35R+26PD + cfisch 1R = 62 jobs
+  - Chronos2+TTM: COMPLETE @160
+  - af739: 3 RUNNING@2d + 1 RUNNING@1d(15h left) + 1 PENDING@2d
+  - 4 duplicate af739 cancelled, 15 duplicate l40s cancelled
 
 ## Canonical Directories
 
@@ -149,5 +150,5 @@ Every future contributor should read these files in order before making claims o
 7. ~~Complete ml_tabular t1_fu fix~~ ❌ OOM at all memory levels (200G/320G/640G). XGBoost@159, XGBoostPoisson@157 — structural limit.
 8. ~~Fix HPC admin complaints (CPU over-allocation)~~ ✅ All hopper+l40s pending cancelled, all jobs migrated to GPU at 7-8 CPUs.
 9. ~~Chronos2+TTM seed2 gap-fill~~ ✅ All 5 gpu_fnd scripts COMPLETED (7-26 min each).
-10. Wait for all 31 active jobs to complete (27 running + 4 pending).
+10. Wait for all 62 active jobs to complete (35 running + 26 pending across gpu+l40s+hopper).
 11. Only then start any V740+ iteration.

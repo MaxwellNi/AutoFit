@@ -74,28 +74,31 @@
 | TimeBridge | 54/160 | ⏳ ALL33 accel RUNNING | Phase 15 new model |
 | TimePerceiver | 54/160 | ⏳ ALL33 accel RUNNING | Phase 15 new model |
 
-## Live Queue Reality (2026-03-20 10:00 CET)
+## Live Queue Reality (2026-03-20 12:00 CET)
 
 | Queue slice | Value | Evidence |
 | --- | ---: | --- |
-| npin gpu RUNNING | 27 | af739_t1_e2(1), ALL33 co/ce/ct/fu/e2(15), fix11(3), cos2(2), p15 cos2(3), p15 co/ce(3) |
-| npin l40s RUNNING | 0 | All l40s cancelled (admin complaint + redundancy) |
-| npin gpu PENDING | 4 | af739 s2/e2 (5267972-75) |
+| npin gpu RUNNING | 30 | af739(4), ALL33 co/ce/ct/fu/e2(15), fix11(3), cos2(2), p15 cos2(3), p15 co/ce(3) |
+| npin l40s RUNNING | 5 | l40_ac_t1_fu, t2_fu, t3_fu (200G,14c) + t1_co, t3_co (120G,9c) |
+| npin l40s PENDING | 10 | l40_ac remaining (5268070-79) |
+| npin hopper PENDING | 15 | hp_ac_t{1,2,3}_{co,ce,ct,e2,fu} (5268095-109, besteffort) |
+| npin gpu PENDING | 1 | af739_t3_e2 (5267971) |
 | cfisch gpu RUNNING | 1 | cf_p15_t1_ces2 |
-| **total** | **32** (28R + 4PD) | squeue 2026-03-20 10:00 |
+| **total** | **62** (36R + 26PD) | squeue 2026-03-20 12:00 |
 
-**Actions taken 2026-03-20 10:00**:
-- l40_cos2_t2 (5262822): CANCELLED — admin complained 14 CPUs / 1 CPU utilized / 88G used. Redundant with gpu_cos2_t2 RUNNING.
-- l40_ac_t3_ce (5264037): CANCELLED — redundant with gpu_ac_t3_ce RUNNING.
-- af739_t1_s2, af739_t2_s2, af739_t2_e2, af739_t3_e2: All TIMEOUT@1d → scripts bumped to 2d → resubmitted (5267972-5267975)
-- af739_t1_e2 (5266705): still RUNNING (6h, 1d limit, couldn't extend via scontrol)
-- gpu_fnd_cos2_t1/t2, gpu_fnd_e2_t1/t2/t3: 5 COMPLETED (7-26 min each) → Chronos2+TTM now @160 ✅
+**Actions taken 2026-03-20 12:00**:
+- Admin Julien approved l40s/hopper usage: "as you have a rationale for this bigger cpu/gpu ratio this is not waste"
+- 3-partition parallel strategy activated: gpu + l40s (iris-snt) + hopper (besteffort)
+- L40S: 15 scripts (5268065-79), 5 RUNNING + 10 PENDING. co→120G(8c), ce/ct/e2/fu→200G(14c)
+- Hopper: 15 scripts (5268095-109), all PENDING. co→150G(9c), ce/ct/e2→189G(11c), fu→200G(12c)
+- 4 duplicate af739 cancelled (5267972-75), 15 duplicate l40s cancelled (5268080-94)
+- L40S 5 RUNNING on most-behind tasks: t1/t2/t3_fu + t1/t3_co — exactly the bottleneck jobs
 
 ## Phase 15: New TSLib Model Expansion (23 models)
 
 **Submitted**: 2026-03-16 | **Status (2026-03-19)**: ALL33 accel GPU — 12 accel + 3 fix11 covering all 23 models
 **Code commits**: `e177f6f` (encoder-only), `c4d214e` (6 bugs), `1185617` (n_vars), `0373037` (fix11), `a9162c2` (seed2)
-**Migration**: All P15 hopper/l40s jobs cancelled 2026-03-19, resubmitted on gpu at 7-8 CPUs (admin compliance)
+**Migration**: 3-partition parallel strategy (2026-03-20): gpu+l40s+hopper all running identical ALL33 scripts, harness skip prevents duplicates
 
 ### Config Audit & Bug Fixes (2026-03-16 13:53 CET, updated 14:24 CET)
 
@@ -132,12 +135,14 @@ DeformableTST, Fredformer, ModernTCN, PDF, PathFormer, SparseTSF, TimeRecipe, xP
 | Mamba | Needs `mamba_ssm` (MambaSimple used instead) |
 | TiRex | Needs NX-AI `tirex` package (not on PyPI; PyPI "tirex" is SIREX/CUME statistical tool) |
 
-### Job Distribution (current: ALL33 acceleration)
+### Job Distribution (current: ALL33 3-partition acceleration)
 | Partition | Scripts | Mem | CPUs | Scope |
 | --- | --- | --- | --- | --- |
 | gpu | gpu_t{1,2,3}_{co,ce,ct,fu} (12 scripts) | 150-200G | 7-8 | ALL 33 TSLib models (10 old + 23 new) |
 | gpu | gpu_fix11_t{1,2,3} (3 scripts) | 150G | 7 | 11 fix11 models (n_vars/bug-fix) |
 | gpu | gpu_fnd_cos2_t{1,2,3}, gpu_fnd_e2_t{1,2} (5 scripts) | 189G | 8 | Chronos2+TTM seed2+edgar |
+| l40s | l40_t{1,2,3}_{co,ce,ct,e2,fu} (15 scripts) | 120-200G | 8-14 | ALL 33 TSLib models (iris-snt QOS) |
+| hopper | hp_t{1,2,3}_{co,ce,ct,e2,fu} (15 scripts) | 150-200G | 9-12 | ALL 33 TSLib models (besteffort QOS) |
 
 ## Text Embeddings
 
@@ -156,19 +161,19 @@ DeformableTST, Fredformer, ModernTCN, PDF, PathFormer, SparseTSF, TimeRecipe, xP
 3. 2 models have unfixable structural OOM gaps: XGBoost@159, XGBoostPoisson@157.
 4. NegativeBinomialGLM: audit-excluded (21 records, structural failure).
 5. Phase 12 text reruns: 48/48 COMPLETED. core_text+full: 91/91 models.
-6. Phase 15 new TSLib models: 23 submitted, @54/160, ALL33 accel RUNNING.
-7. l40s partition: ZERO jobs remaining. NEVER submit new l40s jobs.
-8. HPC policy: GPU only, 7 CPUs for co/ce/ct, 8 for fu/e2, max 200G.
-9. Top-5 by mean rank: PatchTST(4.28), NHITS(4.38), NBEATS(5.01), NBEATSx(5.81), ChronosBolt(7.42).
-10. NBEATS dominant champion: 65/160 wins (40.6%). Text embeddings HURT (core_text wins 11.7%).
+6. Phase 15 new TSLib models: 23 submitted, @54/160, ALL33 3-partition accel RUNNING.
+7. l40s partition: 5 RUNNING + 10 PENDING (admin approved, iris-snt QOS).
+8. Hopper partition: 15 PENDING (besteffort QOS, preemptible).
+9. HPC policy: 3-partition parallel approved by admin Julien (2026-03-20).
+10. Top-5 by mean rank: PatchTST(4.28), NHITS(4.38), NBEATS(5.01), NBEATSx(5.81), ChronosBolt(7.42).
 
 ## Immediate Next Actions
 
 1. ~~Land V739 original 112 conditions.~~ ✅ DONE.
 2. ~~Phase 12 text reruns.~~ ✅ DONE (48/48 COMPLETED).
 3. ~~Phase 15 new models submitted.~~ ✅ DONE (ALL33 accel covering all 23 models).
-4. ~~Fix HPC admin complaints~~ ✅ DONE (all hopper+l40s cancelled, migrated to gpu @ 7-8 CPUs).
-5. Wait for 44 active jobs to complete (24R + 20PD on gpu/l40s).
-6. V739 s2/e2 gap-fill: 5 af739 scripts RUNNING. When complete → V739@160.
-7. Chronos2+TTM seed2/e2: 5 gpu_fnd scripts PENDING. When complete → both@160.
+4. ~~Fix HPC admin complaints~~ ✅ DONE → Admin approved l40s/hopper usage (2026-03-20).
+5. Wait for 62 active jobs to complete (36R + 26PD across gpu+l40s+hopper).
+6. V739 s2/e2 gap-fill: 5 af739 scripts RUNNING/PENDING. When complete → V739@160.
+7. Chronos2+TTM: ✅ COMPLETE @160.
 8. Only after all completions → rebuild final leaderboard → start V740+ iteration.
