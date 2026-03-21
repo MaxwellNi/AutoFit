@@ -20,12 +20,12 @@ Every future contributor should read these files in order before making claims o
 8. `docs/PHASE12_TEXT_RERUN_EXECUTION.md`
 9. `docs/PHASE9_V739_LESSONS_LEARNED.md`
 
-## Verified Current State (2026-03-21 01:00)
+## Verified Current State (2026-03-21 12:00)
 
 - Freeze: complete and read-only
 - Canonical benchmark: `runs/benchmarks/block3_phase9_fair/`
-- Raw benchmark scan (2026-03-21 01:00 rescan):
-  - `15374` raw records in metrics.json
+- Raw benchmark scan (2026-03-21 12:00 rescan):
+  - `15515` raw records in metrics.json (↑303 from 15212@20h, ↑141 from 15374@01h)
   - `137` raw models in benchmark (116 real + 21 retired AutoFit @1 record each)
   - `17` audit-excluded models (see AUDIT_EXCLUDED_MODELS in aggregate_block3_results.py):
     - A: Sundial, TimesFM2, LagLlama, Moirai, MoiraiLarge, Moirai2 (silent fallback)
@@ -37,13 +37,13 @@ Every future contributor should read these files in order before making claims o
   - `77` raw models at 160/160, `64` active (leaderboard) models at 160/160
   - `35` incomplete active models
   - `160` max per model: t1(72) + t2(48) + t3(40). task3 has no core_only_seed2.
-  - Total unique records: 15177/~18080 = **83.9%** completion
+  - Per-ablation: co=2803, s2=2128, ce=2780, e2=2600, ct=2617, fu=2587
   - `87%` task redundancy: ~72 truly unique evaluation cells
 - AutoFit:
   - V734-V738 are retired due to oracle test-set leakage
   - V739 is the only valid current AutoFit baseline
-  - V739 landed conditions: `116/160` (missing 44 s2/e2 = seed2+edgar_seed2)
-  - V739 s2/e2 gap-fill: af739_t1_s2/t2_s2/t2_e2 RUNNING@2d (5267968-70), af739_t1_e2 RUNNING@1d (5266705, 15h left), af739_t3_e2 PENDING@2d (5267971)
+  - V739 landed conditions: `119/160` (↑3: co=28,ce=28,ct=28,fu=28,s2=3,e2=4)
+  - V739 s2/e2 gap-fill: af739_t1_s2/t2_s2/t2_e2 RUNNING@1d2h (5267968-70), af739_t3_e2 RUNNING@15h (5267971), af739_t1_e2 RESUBMITTED@2d (5268390, old 5266705 TIMEOUT@1d)
   - V739 quality: 0 NaN/Inf, 0 fallback, 100% fairness pass
 - Top-5 models by mean rank: PatchTST (4.28), NHITS (4.38), NBEATS (5.01), NBEATSx (5.81), ChronosBolt (7.42)
 - Dominant champion model: NBEATS — 65/160 conditions won (40.6%)
@@ -60,11 +60,11 @@ Every future contributor should read these files in order before making claims o
   - @160 (complete): 64 active + 13 excluded = 77 raw (↑2: Chronos2+TTM DONE)
   - @159: XGBoost (1 missing: t1/full/is_funded — structural OOM, UNFIXABLE)
   - @157: XGBoostPoisson (3 missing: t1/full/h{7,14,30}/is_funded — structural OOM, UNFIXABLE)
-  - @116: AutoFitV739 (missing s2/e2 — 5 af739 scripts: 1 running + 4 resubmitted @2d)
+  - @119: AutoFitV739 (missing s2/e2 — 4 af739 RUNNING + af739_t1_e2 resubmitted 5268390)
   - @113: ETSformer/LightTS/Pyraformer/Reformer (covered by ALL33 accel)
   - @109: Crossformer/MSGNet/MambaSimple/PAttn (covered by ALL33 accel)
-  - @61: 21 P15 new models (progressing, ALL33 3-partition accel RUNNING)
-  - @61: ModernTCN (ALL33 accel RUNNING, slow 12.5M params)
+  - @64: 23 P15 new models (↑3 from 61, ALL33 3-partition accel RUNNING)
+  - s2 gap: 23 P15 + 4 old models missing t2 s2 — gpu_cos2_t2 resubmitted (5268391)
   - NegativeBinomialGLM: excluded (structural failure, 21 records)
 - Phase 12 text reruns:
   - 48+1 total scripts (40 original + 8 t3_ct + 1 OOM fix)
@@ -88,16 +88,18 @@ Every future contributor should read these files in order before making claims o
   - Seed2 harness fix: commit `a9162c2`
   - ALL33 acceleration: 3-partition parallel strategy active (2026-03-20 12:00)
   - Admin Julien approved l40s/hopper usage ("as you have a rationale for this bigger cpu/gpu ratio this is not waste")
-  - GPU scripts: 12 accel + 3 fix11 + 3 e2 + 5 cos2/new RUNNING + 4 af739 RUNNING/PENDING
+  - GPU scripts: 12 accel + 3 fix11 + 4 af739 RUNNING, af739_t1_e2 + gpu_cos2_t2 just submitted
   - L40S scripts: 15 accel (5268065-79), 5 RUNNING + 10 PENDING, QOS=iris-snt
-  - Hopper scripts: 15 accel (5268095-109), all PENDING, QOS=besteffort (preemptible)
+  - Hopper scripts: 15 accel (5268095-109), 1 RUNNING (hp_ac_t1_fu!) + 14 PENDING, QOS=besteffort
   - l40s optimization: co/s2→120G(8c), ce/ct/e2/fu→200G(14c). Admin-approved.
   - hopper: co→150G(9c), ce/ct/e2→189G(11c), fu→200G(12c). No iris-hopper QOS available.
-  - Total active (2026-03-21 01:00): npin 36R+25PD = 61 jobs
-  - Chronos2+TTM: COMPLETE @160
-  - af739: 5 RUNNING (t1_e2@21h, t1_s2/t2_s2/t2_e2@14h, t3_e2@4h)
-  - cf_p15_t1_ces2: TIMEOUT@2d (covered by gpu_ac_t1_e2 at ~95%)
-  - 4 duplicate af739 cancelled, 15 duplicate l40s cancelled
+  - Total active (2026-03-21 12:00): npin 25R+26PD = 51 jobs
+  - TIMEOUT wave (2026-03-21 ~06:00): 12 jobs TIMEOUT@2d (gpu_ac_e2×3, gpu_cos2×2, p15_cos2×3, p15_new×3, cf_p15_t1_ces2)
+  - af739_t1_e2 (5266705) TIMEOUT@1d → RESUBMITTED as 5268390 @2d
+  - gpu_cos2_t2 TIMEOUT@2d → RESUBMITTED as 5268391 (192 missing t2 s2 conditions)
+  - Chronos2+TTM: COMPLETE @160 (s2=20/20 verified)
+  - Hopper first job: hp_ac_t1_fu RUNNING on iris-197 (shared with 3 jgoncalves jobs)
+  - ETSformer: device error → constant predictions (fairness_pass=False, already excluded)
 
 ## Canonical Directories
 
@@ -151,5 +153,6 @@ Every future contributor should read these files in order before making claims o
 7. ~~Complete ml_tabular t1_fu fix~~ ❌ OOM at all memory levels (200G/320G/640G). XGBoost@159, XGBoostPoisson@157 — structural limit.
 8. ~~Fix HPC admin complaints (CPU over-allocation)~~ ✅ All hopper+l40s pending cancelled, all jobs migrated to GPU at 7-8 CPUs.
 9. ~~Chronos2+TTM seed2 gap-fill~~ ✅ All 5 gpu_fnd scripts COMPLETED (7-26 min each).
-10. Wait for all 61 active jobs to complete (36 running + 25 pending across gpu+l40s+hopper).
-11. Only then start any V740+ iteration.
+10. Wait for all 51 active jobs to complete (25 running + 26 pending across gpu+l40s+hopper).
+11. s2 (core_only_seed2) gap-fill: gpu_cos2_t2 resubmitted (5268391) for 27 models missing t2 s2.
+12. Only then start any V740+ iteration.

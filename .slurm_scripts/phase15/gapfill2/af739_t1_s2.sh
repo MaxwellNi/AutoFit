@@ -3,7 +3,7 @@
 #SBATCH --account=npin
 #SBATCH --partition=gpu
 #SBATCH --qos=normal
-#SBATCH --time=1-00:00:00
+#SBATCH --time=2-00:00:00
 #SBATCH --mem=150G
 #SBATCH --cpus-per-task=7
 #SBATCH --gres=gpu:1
