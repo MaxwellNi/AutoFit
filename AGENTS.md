@@ -20,12 +20,12 @@ Every future contributor should read these files in order before making claims o
 8. `docs/PHASE12_TEXT_RERUN_EXECUTION.md`
 9. `docs/PHASE9_V739_LESSONS_LEARNED.md`
 
-## Verified Current State (2026-03-20 12:00)
+## Verified Current State (2026-03-21 01:00)
 
 - Freeze: complete and read-only
 - Canonical benchmark: `runs/benchmarks/block3_phase9_fair/`
-- Raw benchmark scan (2026-03-20 12:00 rescan):
-  - `15212` raw records in metrics.json
+- Raw benchmark scan (2026-03-21 01:00 rescan):
+  - `15374` raw records in metrics.json
   - `137` raw models in benchmark (116 real + 21 retired AutoFit @1 record each)
   - `17` audit-excluded models (see AUDIT_EXCLUDED_MODELS in aggregate_block3_results.py):
     - A: Sundial, TimesFM2, LagLlama, Moirai, MoiraiLarge, Moirai2 (silent fallback)
@@ -37,7 +37,7 @@ Every future contributor should read these files in order before making claims o
   - `77` raw models at 160/160, `64` active (leaderboard) models at 160/160
   - `35` incomplete active models
   - `160` max per model: t1(72) + t2(48) + t3(40). task3 has no core_only_seed2.
-  - Total unique records: 15015/~18080 = **83.0%** completion
+  - Total unique records: 15177/~18080 = **83.9%** completion
   - `87%` task redundancy: ~72 truly unique evaluation cells
 - AutoFit:
   - V734-V738 are retired due to oracle test-set leakage
@@ -63,8 +63,8 @@ Every future contributor should read these files in order before making claims o
   - @116: AutoFitV739 (missing s2/e2 — 5 af739 scripts: 1 running + 4 resubmitted @2d)
   - @113: ETSformer/LightTS/Pyraformer/Reformer (covered by ALL33 accel)
   - @109: Crossformer/MSGNet/MambaSimple/PAttn (covered by ALL33 accel)
-  - @54: 21 P15 new models (progressing, ALL33 accel RUNNING)
-  - @52: ModernTCN (slower, ALL33 accel RUNNING)
+  - @61: 21 P15 new models (progressing, ALL33 3-partition accel RUNNING)
+  - @61: ModernTCN (ALL33 accel RUNNING, slow 12.5M params)
   - NegativeBinomialGLM: excluded (structural failure, 21 records)
 - Phase 12 text reruns:
   - 48+1 total scripts (40 original + 8 t3_ct + 1 OOM fix)
@@ -93,9 +93,10 @@ Every future contributor should read these files in order before making claims o
   - Hopper scripts: 15 accel (5268095-109), all PENDING, QOS=besteffort (preemptible)
   - l40s optimization: co/s2→120G(8c), ce/ct/e2/fu→200G(14c). Admin-approved.
   - hopper: co→150G(9c), ce/ct/e2→189G(11c), fu→200G(12c). No iris-hopper QOS available.
-  - Total active (2026-03-20 12:00): npin 35R+26PD + cfisch 1R = 62 jobs
+  - Total active (2026-03-21 01:00): npin 36R+25PD = 61 jobs
   - Chronos2+TTM: COMPLETE @160
-  - af739: 3 RUNNING@2d + 1 RUNNING@1d(15h left) + 1 PENDING@2d
+  - af739: 5 RUNNING (t1_e2@21h, t1_s2/t2_s2/t2_e2@14h, t3_e2@4h)
+  - cf_p15_t1_ces2: TIMEOUT@2d (covered by gpu_ac_t1_e2 at ~95%)
   - 4 duplicate af739 cancelled, 15 duplicate l40s cancelled
 
 ## Canonical Directories
@@ -150,5 +151,5 @@ Every future contributor should read these files in order before making claims o
 7. ~~Complete ml_tabular t1_fu fix~~ ❌ OOM at all memory levels (200G/320G/640G). XGBoost@159, XGBoostPoisson@157 — structural limit.
 8. ~~Fix HPC admin complaints (CPU over-allocation)~~ ✅ All hopper+l40s pending cancelled, all jobs migrated to GPU at 7-8 CPUs.
 9. ~~Chronos2+TTM seed2 gap-fill~~ ✅ All 5 gpu_fnd scripts COMPLETED (7-26 min each).
-10. Wait for all 62 active jobs to complete (35 running + 26 pending across gpu+l40s+hopper).
+10. Wait for all 61 active jobs to complete (36 running + 25 pending across gpu+l40s+hopper).
 11. Only then start any V740+ iteration.
