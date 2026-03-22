@@ -1,6 +1,6 @@
 # Phase 9 / V739 Current Snapshot
 
-> Generated: 2026-03-22T10:59:38.428946+00:00
+> Generated: 2026-03-22T19:20:39.856654+00:00
 > Canonical benchmark: `runs/benchmarks/block3_phase9_fair`
 
 ## Verified Current Facts
@@ -8,15 +8,15 @@
 | metric | value | evidence |
 | --- | --- | --- |
 | metrics_files | 137 | raw metrics scan |
-| raw_records | 15750 | raw metrics scan |
+| raw_records | 15864 | raw metrics scan |
 | raw_models | 137 | raw metrics scan |
 | raw_complete_models | 86 | raw metrics scan |
 | raw_partial_models | 51 | raw metrics scan |
-| filtered_records | 11927 | `all_results.csv` |
-| filtered_models | 108 | `all_results.csv` |
+| filtered_records | 12020 | `all_results.csv` |
+| filtered_models | 107 | `all_results.csv` |
 | filtered_complete_models | 67 | `all_results.csv` |
-| filtered_partial_models | 41 | `all_results.csv` |
-| v739_conditions_landed | 124 | raw metrics scan |
+| filtered_partial_models | 40 | `all_results.csv` |
+| v739_conditions_landed | 125 | raw metrics scan |
 | v739_jobs_live | 0 | `squeue -u npin,cfisch` |
 | v739_canonical_phase9_scripts | 13 | V739 script scan |
 | v739_legacy_phase10_scripts | 32 | V739 script scan |
@@ -26,8 +26,8 @@
 
 | metric | value |
 | --- | --- |
-| jobs_total | 54 |
-| running | 26 |
+| jobs_total | 60 |
+| running | 32 |
 | pending | 28 |
 | npin_pending | 28 |
 | cfisch_pending | 0 |
@@ -136,50 +136,50 @@
 | LightTS | 93 | 113 |
 | Pyraformer | 93 | 113 |
 | Reformer | 93 | 113 |
-| CARD | 69 | 69 |
+| CARD | 75 | 75 |
+| DUET | 75 | 75 |
+| FiLM | 75 | 75 |
+| FilterTS | 75 | 75 |
+| FreTS | 75 | 75 |
+| Fredformer | 75 | 75 |
+| ModernTCN | 75 | 75 |
+| NonstationaryTransformer | 75 | 75 |
+| PDF | 75 | 75 |
+| PIR | 75 | 75 |
+| SCINet | 75 | 75 |
+| SRSNet | 75 | 75 |
+| SegRNN | 75 | 75 |
+| TimeRecipe | 75 | 75 |
+| xPatch | 75 | 75 |
 | CFPT | 69 | 69 |
-| DUET | 69 | 69 |
 | DeformableTST | 69 | 69 |
-| FiLM | 69 | 69 |
-| FilterTS | 69 | 69 |
-| FreTS | 69 | 69 |
-| Fredformer | 69 | 69 |
 | MICN | 69 | 69 |
-| ModernTCN | 69 | 69 |
-| NonstationaryTransformer | 69 | 69 |
-| PDF | 69 | 69 |
-| PIR | 69 | 69 |
 | PathFormer | 69 | 69 |
-| SCINet | 69 | 69 |
 | SEMPO | 69 | 69 |
-| SRSNet | 69 | 69 |
-| SegRNN | 69 | 69 |
 | SparseTSF | 69 | 69 |
 | TimeBridge | 69 | 69 |
 | TimePerceiver | 69 | 69 |
-| TimeRecipe | 69 | 69 |
-| xPatch | 69 | 69 |
 | NegativeBinomialGLM | 21 | 21 |
-| AutoFitV1 | 12 | 12 |
-| AutoFitV2 | 12 | 12 |
-| AutoFitV2E | 12 | 12 |
-| AutoFitV3 | 12 | 12 |
-| AutoFitV3E | 12 | 12 |
-| AutoFitV3Max | 12 | 12 |
-| AutoFitV4 | 12 | 12 |
-| AutoFitV5 | 12 | 12 |
-| AutoFitV6 | 12 | 12 |
-| AutoFitV7 | 12 | 12 |
-| AutoFitV71 | 12 | 12 |
-| AutoFitV72 | 12 | 12 |
-| AutoFitV73 | 12 | 12 |
-| AutoFitV731 | 12 | 12 |
-| AutoFitV732 | 12 | 12 |
-| AutoFitV733 | 12 | 12 |
-| AutoFitV734 | 12 | 12 |
-| AutoFitV735 | 12 | 12 |
-| AutoFitV736 | 12 | 12 |
-| AutoFitV737 | 12 | 12 |
-| AutoFitV738 | 12 | 12 |
-| FusedChampion | 12 | 12 |
-| NFAdaptiveChampion | 12 | 12 |
+| AutoFitV1 | 13 | 13 |
+| AutoFitV2 | 13 | 13 |
+| AutoFitV2E | 13 | 13 |
+| AutoFitV3 | 13 | 13 |
+| AutoFitV3E | 13 | 13 |
+| AutoFitV3Max | 13 | 13 |
+| AutoFitV4 | 13 | 13 |
+| AutoFitV5 | 13 | 13 |
+| AutoFitV6 | 13 | 13 |
+| AutoFitV7 | 13 | 13 |
+| AutoFitV71 | 13 | 13 |
+| AutoFitV72 | 13 | 13 |
+| AutoFitV73 | 13 | 13 |
+| AutoFitV731 | 13 | 13 |
+| AutoFitV732 | 13 | 13 |
+| AutoFitV733 | 13 | 13 |
+| AutoFitV734 | 13 | 13 |
+| AutoFitV735 | 13 | 13 |
+| AutoFitV736 | 13 | 13 |
+| AutoFitV737 | 13 | 13 |
+| AutoFitV738 | 13 | 13 |
+| FusedChampion | 13 | 13 |
+| NFAdaptiveChampion | 13 | 13 |

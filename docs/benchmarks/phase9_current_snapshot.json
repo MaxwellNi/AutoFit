@@ -1,11 +1,11 @@
 {
-  "generated_at_utc": "2026-03-22T10:59:38.428946+00:00",
+  "generated_at_utc": "2026-03-22T19:20:39.856654+00:00",
   "benchmark_dir": "runs/benchmarks/block3_phase9_fair",
   "filtered_csv": "runs/benchmarks/block3_phase9_fair/all_results.csv",
   "text_dir": "runs/text_embeddings",
   "raw": {
     "metrics_files": 137,
-    "raw_records": 15750,
+    "raw_records": 15864,
     "raw_models": 137,
     "raw_complete_models": 86,
     "raw_partial_models": 51,
@@ -120,16 +120,81 @@
       },
       {
         "model_name": "CARD",
-        "conditions": 69,
-        "records": 69
-      },
-      {
-        "model_name": "CFPT",
-        "conditions": 69,
-        "records": 69
+        "conditions": 75,
+        "records": 75
       },
       {
         "model_name": "DUET",
+        "conditions": 75,
+        "records": 75
+      },
+      {
+        "model_name": "FiLM",
+        "conditions": 75,
+        "records": 75
+      },
+      {
+        "model_name": "FilterTS",
+        "conditions": 75,
+        "records": 75
+      },
+      {
+        "model_name": "FreTS",
+        "conditions": 75,
+        "records": 75
+      },
+      {
+        "model_name": "Fredformer",
+        "conditions": 75,
+        "records": 75
+      },
+      {
+        "model_name": "ModernTCN",
+        "conditions": 75,
+        "records": 75
+      },
+      {
+        "model_name": "NonstationaryTransformer",
+        "conditions": 75,
+        "records": 75
+      },
+      {
+        "model_name": "PDF",
+        "conditions": 75,
+        "records": 75
+      },
+      {
+        "model_name": "PIR",
+        "conditions": 75,
+        "records": 75
+      },
+      {
+        "model_name": "SCINet",
+        "conditions": 75,
+        "records": 75
+      },
+      {
+        "model_name": "SRSNet",
+        "conditions": 75,
+        "records": 75
+      },
+      {
+        "model_name": "SegRNN",
+        "conditions": 75,
+        "records": 75
+      },
+      {
+        "model_name": "TimeRecipe",
+        "conditions": 75,
+        "records": 75
+      },
+      {
+        "model_name": "xPatch",
+        "conditions": 75,
+        "records": 75
+      },
+      {
+        "model_name": "CFPT",
         "conditions": 69,
         "records": 69
       },
@@ -139,47 +204,7 @@
         "records": 69
       },
       {
-        "model_name": "FiLM",
-        "conditions": 69,
-        "records": 69
-      },
-      {
-        "model_name": "FilterTS",
-        "conditions": 69,
-        "records": 69
-      },
-      {
-        "model_name": "FreTS",
-        "conditions": 69,
-        "records": 69
-      },
-      {
-        "model_name": "Fredformer",
-        "conditions": 69,
-        "records": 69
-      },
-      {
         "model_name": "MICN",
-        "conditions": 69,
-        "records": 69
-      },
-      {
-        "model_name": "ModernTCN",
-        "conditions": 69,
-        "records": 69
-      },
-      {
-        "model_name": "NonstationaryTransformer",
-        "conditions": 69,
-        "records": 69
-      },
-      {
-        "model_name": "PDF",
-        "conditions": 69,
-        "records": 69
-      },
-      {
-        "model_name": "PIR",
         "conditions": 69,
         "records": 69
       },
@@ -189,22 +214,7 @@
         "records": 69
       },
       {
-        "model_name": "SCINet",
-        "conditions": 69,
-        "records": 69
-      },
-      {
         "model_name": "SEMPO",
-        "conditions": 69,
-        "records": 69
-      },
-      {
-        "model_name": "SRSNet",
-        "conditions": 69,
-        "records": 69
-      },
-      {
-        "model_name": "SegRNN",
         "conditions": 69,
         "records": 69
       },
@@ -224,148 +234,138 @@
         "records": 69
       },
       {
-        "model_name": "TimeRecipe",
-        "conditions": 69,
-        "records": 69
-      },
-      {
-        "model_name": "xPatch",
-        "conditions": 69,
-        "records": 69
-      },
-      {
         "model_name": "NegativeBinomialGLM",
         "conditions": 21,
         "records": 21
       },
       {
         "model_name": "AutoFitV1",
-        "conditions": 12,
-        "records": 12
+        "conditions": 13,
+        "records": 13
       },
       {
         "model_name": "AutoFitV2",
-        "conditions": 12,
-        "records": 12
+        "conditions": 13,
+        "records": 13
       },
       {
         "model_name": "AutoFitV2E",
-        "conditions": 12,
-        "records": 12
+        "conditions": 13,
+        "records": 13
       },
       {
         "model_name": "AutoFitV3",
-        "conditions": 12,
-        "records": 12
+        "conditions": 13,
+        "records": 13
       },
       {
         "model_name": "AutoFitV3E",
-        "conditions": 12,
-        "records": 12
+        "conditions": 13,
+        "records": 13
       },
       {
         "model_name": "AutoFitV3Max",
-        "conditions": 12,
-        "records": 12
+        "conditions": 13,
+        "records": 13
       },
       {
         "model_name": "AutoFitV4",
-        "conditions": 12,
-        "records": 12
+        "conditions": 13,
+        "records": 13
       },
       {
         "model_name": "AutoFitV5",
-        "conditions": 12,
-        "records": 12
+        "conditions": 13,
+        "records": 13
       },
       {
         "model_name": "AutoFitV6",
-        "conditions": 12,
-        "records": 12
+        "conditions": 13,
+        "records": 13
       },
       {
         "model_name": "AutoFitV7",
-        "conditions": 12,
-        "records": 12
+        "conditions": 13,
+        "records": 13
       },
       {
         "model_name": "AutoFitV71",
-        "conditions": 12,
-        "records": 12
+        "conditions": 13,
+        "records": 13
       },
       {
         "model_name": "AutoFitV72",
-        "conditions": 12,
-        "records": 12
+        "conditions": 13,
+        "records": 13
       },
       {
         "model_name": "AutoFitV73",
-        "conditions": 12,
-        "records": 12
+        "conditions": 13,
+        "records": 13
       },
       {
         "model_name": "AutoFitV731",
-        "conditions": 12,
-        "records": 12
+        "conditions": 13,
+        "records": 13
       },
       {
         "model_name": "AutoFitV732",
-        "conditions": 12,
-        "records": 12
+        "conditions": 13,
+        "records": 13
       },
       {
         "model_name": "AutoFitV733",
-        "conditions": 12,
-        "records": 12
+        "conditions": 13,
+        "records": 13
       },
       {
         "model_name": "AutoFitV734",
-        "conditions": 12,
-        "records": 12
+        "conditions": 13,
+        "records": 13
       },
       {
         "model_name": "AutoFitV735",
-        "conditions": 12,
-        "records": 12
+        "conditions": 13,
+        "records": 13
       },
       {
         "model_name": "AutoFitV736",
-        "conditions": 12,
-        "records": 12
+        "conditions": 13,
+        "records": 13
       },
       {
         "model_name": "AutoFitV737",
-        "conditions": 12,
-        "records": 12
+        "conditions": 13,
+        "records": 13
       },
       {
         "model_name": "AutoFitV738",
-        "conditions": 12,
-        "records": 12
+        "conditions": 13,
+        "records": 13
       },
       {
         "model_name": "FusedChampion",
-        "conditions": 12,
-        "records": 12
+        "conditions": 13,
+        "records": 13
       },
       {
         "model_name": "NFAdaptiveChampion",
-        "conditions": 12,
-        "records": 12
+        "conditions": 13,
+        "records": 13
       }
     ],
     "raw_category_records": {
-      "autofit": 400,
+      "autofit": 424,
       "deep_classical": 1440,
       "foundation": 2240,
       "irregular": 640,
       "ml_tabular": 1617,
       "statistical": 2400,
       "transformer_sota": 3680,
-      "tslib_sota": 3333
+      "tslib_sota": 3423
     },
-    "v739_records": 124,
-    "v739_conditions_landed": 124,
+    "v739_records": 125,
+    "v739_conditions_landed": 125,
     "v739_condition_keys": [
       {
         "task": "task1_outcome",
@@ -969,6 +969,12 @@
       },
       {
         "task": "task3_risk_adjust",
+        "ablation": "core_edgar_seed2",
+        "target": "funding_raised_usd",
+        "horizon": 14
+      },
+      {
+        "task": "task3_risk_adjust",
         "ablation": "core_only",
         "target": "funding_raised_usd",
         "horizon": 1
@@ -1114,19 +1120,19 @@
     ]
   },
   "filtered": {
-    "filtered_records": 11927,
-    "filtered_models": 108,
+    "filtered_records": 12020,
+    "filtered_models": 107,
     "filtered_complete_models": 67,
-    "filtered_partial_models": 41,
+    "filtered_partial_models": 40,
     "filtered_categories": {
-      "autofit": 400,
+      "autofit": 424,
       "deep_classical": 1440,
       "foundation": 960,
       "irregular": 616,
-      "ml_tabular": 1537,
+      "ml_tabular": 1516,
       "statistical": 2240,
       "transformer_sota": 3040,
-      "tslib_sota": 1694
+      "tslib_sota": 1784
     },
     "filtered_autofit_models": [
       "AutoFitV1",
@@ -1156,17 +1162,17 @@
     ]
   },
   "slurm": {
-    "jobs_total": 54,
+    "jobs_total": 60,
     "state_counts": {
       "PENDING": 28,
-      "RUNNING": 26
+      "RUNNING": 32
     },
     "user_state_counts": {
       "npin|PENDING": 28,
-      "npin|RUNNING": 26
+      "npin|RUNNING": 32
     },
     "partition_state_counts": {
-      "gpu|RUNNING": 20,
+      "gpu|RUNNING": 26,
       "hopper|PENDING": 16,
       "hopper|RUNNING": 1,
       "l40s|PENDING": 12,
@@ -1177,7 +1183,7 @@
       "besteffort|RUNNING": 1,
       "iris-snt|PENDING": 12,
       "iris-snt|RUNNING": 5,
-      "normal|RUNNING": 20
+      "normal|RUNNING": 26
     },
     "pending_reasons": {
       "(Priority)": 27,
@@ -1210,6 +1216,54 @@
         "partition": "gpu",
         "qos": "normal",
         "reason": "iris-184"
+      },
+      {
+        "job_name": "af739_t1_s2",
+        "user": "npin",
+        "state": "RUNNING",
+        "partition": "gpu",
+        "qos": "normal",
+        "reason": "iris-185"
+      },
+      {
+        "job_name": "af739_t2_s2",
+        "user": "npin",
+        "state": "RUNNING",
+        "partition": "gpu",
+        "qos": "normal",
+        "reason": "iris-185"
+      },
+      {
+        "job_name": "af739_t2_e2",
+        "user": "npin",
+        "state": "RUNNING",
+        "partition": "gpu",
+        "qos": "normal",
+        "reason": "iris-175"
+      },
+      {
+        "job_name": "af739_t1_s2",
+        "user": "npin",
+        "state": "RUNNING",
+        "partition": "gpu",
+        "qos": "normal",
+        "reason": "iris-185"
+      },
+      {
+        "job_name": "af739_t2_s2",
+        "user": "npin",
+        "state": "RUNNING",
+        "partition": "gpu",
+        "qos": "normal",
+        "reason": "iris-175"
+      },
+      {
+        "job_name": "af739_t2_e2",
+        "user": "npin",
+        "state": "RUNNING",
+        "partition": "gpu",
+        "qos": "normal",
+        "reason": "iris-175"
       },
       {
         "job_name": "g2_ac_t2_fu",
@@ -1484,6 +1538,14 @@
         "reason": "iris-197"
       },
       {
+        "job_name": "l2_ac_t3_ct",
+        "user": "npin",
+        "state": "PENDING",
+        "partition": "l40s",
+        "qos": "iris-snt",
+        "reason": "(Priority)"
+      },
+      {
         "job_name": "l2_ac_t3_co",
         "user": "npin",
         "state": "PENDING",
@@ -1565,14 +1627,6 @@
       },
       {
         "job_name": "l2_ac_t3_e2",
-        "user": "npin",
-        "state": "PENDING",
-        "partition": "l40s",
-        "qos": "iris-snt",
-        "reason": "(Priority)"
-      },
-      {
-        "job_name": "l2_ac_t3_ct",
         "user": "npin",
         "state": "PENDING",
         "partition": "l40s",
