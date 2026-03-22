@@ -50,6 +50,14 @@ AUDIT_EXCLUDED_MODELS: dict[str, str] = {
     "MICN": "100% constant predictions (Finding G)",
     "MultiPatchFormer": "100% constant predictions (Finding G)",
     "TimeFilter": "100% constant predictions (Finding G)",
+    # Finding H — 100% constant predictions (Phase 15 TSLib, verified 2026-03-22)
+    "CFPT": "100% constant predictions, 0/67 fairness pass (Finding H)",
+    "DeformableTST": "100% constant predictions, 0/67 fairness pass (Finding H)",
+    "PathFormer": "100% constant predictions, 0/67 fairness pass (Finding H)",
+    "SEMPO": "100% constant predictions, 0/67 fairness pass (Finding H)",
+    "SparseTSF": "100% constant predictions, 0/67 fairness pass (Finding H)",
+    "TimeBridge": "100% constant predictions, 0/67 fairness pass (Finding H)",
+    "TimePerceiver": "100% constant predictions, 0/67 fairness pass (Finding H)",
 }
 
 
