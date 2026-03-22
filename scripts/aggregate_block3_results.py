@@ -58,6 +58,8 @@ AUDIT_EXCLUDED_MODELS: dict[str, str] = {
     "SparseTSF": "100% constant predictions, 0/67 fairness pass (Finding H)",
     "TimeBridge": "100% constant predictions, 0/67 fairness pass (Finding H)",
     "TimePerceiver": "100% constant predictions, 0/67 fairness pass (Finding H)",
+    # Structural failure
+    "NegativeBinomialGLM": "convergence failure, 21 records only (Structural)",
 }
 
 
