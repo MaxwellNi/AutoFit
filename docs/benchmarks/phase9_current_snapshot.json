@@ -1,11 +1,11 @@
 {
-  "generated_at_utc": "2026-03-22T19:20:39.856654+00:00",
+  "generated_at_utc": "2026-03-23T09:46:59.887681+00:00",
   "benchmark_dir": "runs/benchmarks/block3_phase9_fair",
   "filtered_csv": "runs/benchmarks/block3_phase9_fair/all_results.csv",
   "text_dir": "runs/text_embeddings",
   "raw": {
     "metrics_files": 137,
-    "raw_records": 15864,
+    "raw_records": 15888,
     "raw_models": 137,
     "raw_complete_models": 86,
     "raw_partial_models": 51,
@@ -240,122 +240,122 @@
       },
       {
         "model_name": "AutoFitV1",
-        "conditions": 13,
-        "records": 13
+        "conditions": 14,
+        "records": 14
       },
       {
         "model_name": "AutoFitV2",
-        "conditions": 13,
-        "records": 13
+        "conditions": 14,
+        "records": 14
       },
       {
         "model_name": "AutoFitV2E",
-        "conditions": 13,
-        "records": 13
+        "conditions": 14,
+        "records": 14
       },
       {
         "model_name": "AutoFitV3",
-        "conditions": 13,
-        "records": 13
+        "conditions": 14,
+        "records": 14
       },
       {
         "model_name": "AutoFitV3E",
-        "conditions": 13,
-        "records": 13
+        "conditions": 14,
+        "records": 14
       },
       {
         "model_name": "AutoFitV3Max",
-        "conditions": 13,
-        "records": 13
+        "conditions": 14,
+        "records": 14
       },
       {
         "model_name": "AutoFitV4",
-        "conditions": 13,
-        "records": 13
+        "conditions": 14,
+        "records": 14
       },
       {
         "model_name": "AutoFitV5",
-        "conditions": 13,
-        "records": 13
+        "conditions": 14,
+        "records": 14
       },
       {
         "model_name": "AutoFitV6",
-        "conditions": 13,
-        "records": 13
+        "conditions": 14,
+        "records": 14
       },
       {
         "model_name": "AutoFitV7",
-        "conditions": 13,
-        "records": 13
+        "conditions": 14,
+        "records": 14
       },
       {
         "model_name": "AutoFitV71",
-        "conditions": 13,
-        "records": 13
+        "conditions": 14,
+        "records": 14
       },
       {
         "model_name": "AutoFitV72",
-        "conditions": 13,
-        "records": 13
+        "conditions": 14,
+        "records": 14
       },
       {
         "model_name": "AutoFitV73",
-        "conditions": 13,
-        "records": 13
+        "conditions": 14,
+        "records": 14
       },
       {
         "model_name": "AutoFitV731",
-        "conditions": 13,
-        "records": 13
+        "conditions": 14,
+        "records": 14
       },
       {
         "model_name": "AutoFitV732",
-        "conditions": 13,
-        "records": 13
+        "conditions": 14,
+        "records": 14
       },
       {
         "model_name": "AutoFitV733",
-        "conditions": 13,
-        "records": 13
+        "conditions": 14,
+        "records": 14
       },
       {
         "model_name": "AutoFitV734",
-        "conditions": 13,
-        "records": 13
+        "conditions": 14,
+        "records": 14
       },
       {
         "model_name": "AutoFitV735",
-        "conditions": 13,
-        "records": 13
+        "conditions": 14,
+        "records": 14
       },
       {
         "model_name": "AutoFitV736",
-        "conditions": 13,
-        "records": 13
+        "conditions": 14,
+        "records": 14
       },
       {
         "model_name": "AutoFitV737",
-        "conditions": 13,
-        "records": 13
+        "conditions": 14,
+        "records": 14
       },
       {
         "model_name": "AutoFitV738",
-        "conditions": 13,
-        "records": 13
+        "conditions": 14,
+        "records": 14
       },
       {
         "model_name": "FusedChampion",
-        "conditions": 13,
-        "records": 13
+        "conditions": 14,
+        "records": 14
       },
       {
         "model_name": "NFAdaptiveChampion",
-        "conditions": 13,
-        "records": 13
+        "conditions": 14,
+        "records": 14
       }
     ],
     "raw_category_records": {
-      "autofit": 424,
+      "autofit": 448,
       "deep_classical": 1440,
       "foundation": 2240,
       "irregular": 640,
@@ -364,8 +364,8 @@
       "transformer_sota": 3680,
       "tslib_sota": 3423
     },
-    "v739_records": 125,
-    "v739_conditions_landed": 125,
+    "v739_records": 126,
+    "v739_conditions_landed": 126,
     "v739_condition_keys": [
       {
         "task": "task1_outcome",
@@ -450,6 +450,12 @@
         "ablation": "core_edgar_seed2",
         "target": "funding_raised_usd",
         "horizon": 7
+      },
+      {
+        "task": "task1_outcome",
+        "ablation": "core_edgar_seed2",
+        "target": "funding_raised_usd",
+        "horizon": 14
       },
       {
         "task": "task1_outcome",
@@ -1120,12 +1126,12 @@
     ]
   },
   "filtered": {
-    "filtered_records": 12020,
+    "filtered_records": 12044,
     "filtered_models": 107,
     "filtered_complete_models": 67,
     "filtered_partial_models": 40,
     "filtered_categories": {
-      "autofit": 424,
+      "autofit": 448,
       "deep_classical": 1440,
       "foundation": 960,
       "irregular": 616,
@@ -1162,31 +1168,31 @@
     ]
   },
   "slurm": {
-    "jobs_total": 60,
+    "jobs_total": 58,
     "state_counts": {
-      "PENDING": 28,
-      "RUNNING": 32
+      "PENDING": 31,
+      "RUNNING": 27
     },
     "user_state_counts": {
-      "npin|PENDING": 28,
-      "npin|RUNNING": 32
+      "npin|PENDING": 31,
+      "npin|RUNNING": 27
     },
     "partition_state_counts": {
-      "gpu|RUNNING": 26,
-      "hopper|PENDING": 16,
-      "hopper|RUNNING": 1,
+      "gpu|PENDING": 2,
+      "gpu|RUNNING": 22,
+      "hopper|PENDING": 17,
       "l40s|PENDING": 12,
       "l40s|RUNNING": 5
     },
     "qos_state_counts": {
-      "besteffort|PENDING": 16,
-      "besteffort|RUNNING": 1,
+      "besteffort|PENDING": 17,
       "iris-snt|PENDING": 12,
       "iris-snt|RUNNING": 5,
-      "normal|RUNNING": 26
+      "normal|PENDING": 2,
+      "normal|RUNNING": 22
     },
     "pending_reasons": {
-      "(Priority)": 27,
+      "(Priority)": 30,
       "(Resources)": 1
     },
     "v739_jobs": 0,
@@ -1196,10 +1202,18 @@
       {
         "job_name": "af739_t3_e2",
         "user": "npin",
-        "state": "RUNNING",
+        "state": "PENDING",
         "partition": "gpu",
         "qos": "normal",
-        "reason": "iris-176"
+        "reason": "(Priority)"
+      },
+      {
+        "job_name": "af739_t3_e2",
+        "user": "npin",
+        "state": "PENDING",
+        "partition": "gpu",
+        "qos": "normal",
+        "reason": "(Priority)"
       },
       {
         "job_name": "af739_t1_e2",
@@ -1232,30 +1246,6 @@
         "partition": "gpu",
         "qos": "normal",
         "reason": "iris-185"
-      },
-      {
-        "job_name": "af739_t2_e2",
-        "user": "npin",
-        "state": "RUNNING",
-        "partition": "gpu",
-        "qos": "normal",
-        "reason": "iris-175"
-      },
-      {
-        "job_name": "af739_t1_s2",
-        "user": "npin",
-        "state": "RUNNING",
-        "partition": "gpu",
-        "qos": "normal",
-        "reason": "iris-185"
-      },
-      {
-        "job_name": "af739_t2_s2",
-        "user": "npin",
-        "state": "RUNNING",
-        "partition": "gpu",
-        "qos": "normal",
-        "reason": "iris-175"
       },
       {
         "job_name": "af739_t2_e2",
@@ -1402,22 +1392,6 @@
         "reason": "iris-182"
       },
       {
-        "job_name": "h2_ac_t1_co",
-        "user": "npin",
-        "state": "PENDING",
-        "partition": "hopper",
-        "qos": "besteffort",
-        "reason": "(Priority)"
-      },
-      {
-        "job_name": "h2_ac_t1_ct",
-        "user": "npin",
-        "state": "PENDING",
-        "partition": "hopper",
-        "qos": "besteffort",
-        "reason": "(Priority)"
-      },
-      {
         "job_name": "h2_ac_t1_e2",
         "user": "npin",
         "state": "PENDING",
@@ -1532,10 +1506,26 @@
       {
         "job_name": "h2_ac_t1_ce",
         "user": "npin",
-        "state": "RUNNING",
+        "state": "PENDING",
         "partition": "hopper",
         "qos": "besteffort",
-        "reason": "iris-197"
+        "reason": "(Priority)"
+      },
+      {
+        "job_name": "h2_ac_t1_co",
+        "user": "npin",
+        "state": "PENDING",
+        "partition": "hopper",
+        "qos": "besteffort",
+        "reason": "(Priority)"
+      },
+      {
+        "job_name": "h2_ac_t1_ct",
+        "user": "npin",
+        "state": "PENDING",
+        "partition": "hopper",
+        "qos": "besteffort",
+        "reason": "(Priority)"
       },
       {
         "job_name": "l2_ac_t3_ct",

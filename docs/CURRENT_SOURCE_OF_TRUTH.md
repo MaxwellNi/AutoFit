@@ -1,6 +1,6 @@
 # Current Source of Truth
 
-> Last verified: 2026-03-22 20:15 CET
+> Last verified: 2026-03-23 10:45 CET
 > Verified by direct scans of `runs/benchmarks/block3_phase9_fair/`, `runs/text_embeddings/`, live `squeue -u npin`, and `sacct` for completed jobs.
 
 This file is the authoritative documentation entry point for the current Block 3 project state.
@@ -25,23 +25,23 @@ If any other document disagrees with this file, prefer this file and the evidenc
 | Fact | Current value | Evidence |
 | --- | --- | --- |
 | Canonical benchmark directory | `runs/benchmarks/block3_phase9_fair/` | direct scan |
-| Raw metric records | `15864` | direct scan 2026-03-22 20:12 |
+| Raw metric records | `15888` | direct scan 2026-03-23 10:40 |
 | Raw models materialized | `137` | direct scan (116 real + 21 retired AutoFit@1) |
 | Audit-excluded models | `24` | AUDIT_EXCLUDED_MODELS (17 old + 7 Finding H) |
 | Active (leaderboard) models | `92` | 116 raw - 24 excluded |
 | Raw complete models (`@160`) | `77` | direct scan (64 active + 13 excluded @160) |
 | Active complete models (`@160`) | `64` | 77 - 13 excluded@160 |
 | Incomplete active models | `28` | 92 - 64 |
-| Per-ablation | co=2849, s2=2176, ce=2780, e2=2786, ct=2640, fu=2633 | direct scan 2026-03-22 20:12 |
+| Per-ablation | co=2849, s2=2176, ce=2780, e2=2810, ct=2640, fu=2633 | direct scan 2026-03-23 10:40 |
 | Conditions per model | `160` | t1(72) + t2(48) + t3(40) |
 | Current AutoFit baseline | `AutoFitV739` only | Root `AGENTS.md` |
-| V739 landed conditions | `125/160` | co=28, ce=28, ct=28, fu=28, s2+e2 gap-filling (2R+3 resubmitted) |
+| V739 landed conditions | `126/160` | co=28, ce=28, ct=28, fu=28, s2+e2 gap-filling (5R+1PD) |
 | V739 quality | 0 NaN/Inf, 0 fallback, 100% fairness pass | direct scan |
 | V739 mean rank | **#13** (top 14%, 92 active models) | per-condition ranking (last computed) |
 | Text embedding artifacts | `AVAILABLE` | `runs/text_embeddings/embedding_metadata.json` |
 | Phase 12 text reruns | `48/48 COMPLETED` | core_text+full 91/91 models |
-| Phase 15 new models | 23 submitted, 15 valid, 8 excluded (Finding H), ~69/160 | direct scan |
-| Live jobs | `60` (28R + 32PD) | squeue 2026-03-22 20:12 |
+| Phase 15 new models | 23 submitted, 15 valid, 8 excluded (Finding H), ~75-81/160 | direct scan |
+| Live jobs | `58` (27R + 31PD) | squeue 2026-03-23 10:45 |
 
 ## What the Current Benchmark Means
 
@@ -60,34 +60,37 @@ If any other document disagrees with this file, prefer this file and the evidenc
 
 ## Current Execution Reality
 
-1. Live queue snapshot verified on 2026-03-22 20:10 CET:
-   - `29 RUNNING` (17 g2_ac_v2/gpu + 5 l2_ac_v2/l40s + 1 h2_ac_v2/hopper + 2 af739/gpu + 1 gpu_cos2_t2 + 3 af739 resubmit/gpu PD)
-   - `31 PENDING` (12 l2_ac_v2/l40s + 16 h2_ac_v2/hopper + 3 af739 resubmit)
-   - **60 total** (3 af739 TIMEOUT resubmitted today)
+1. Live queue snapshot verified on 2026-03-23 10:45 CET:
+   - `27 RUNNING` (17 g2_ac_v2/gpu + 5 l2_ac_v2/l40s + 2 af739/gpu + 1 gpu_cos2_t2 + 2 af739 resubmit/gpu)
+   - `31 PENDING` (12 l2_ac_v2/l40s + 17 h2_ac_v2/hopper + 1 af739_t3_e2 + 1 gpu PD)
+   - **58 total** (3 duplicate af739 cancelled, t3_e2 resubmitted)
    - Partition constraints (sinfo verified): L40S max 4-5 concurrent (2 nodes, CPU bottleneck), Hopper max 1 (1 node, 201G RAM)
    - **Critical fix**: `--requeue` alone does NOT auto-restart on TIMEOUT. Added `_requeue_handler()` trap to all 56 scripts.
+   - **ModernTCN bottleneck**: 20M params, ~40min/epoch — all non-e2 accel jobs stuck on this model.
+   - **Hopper preempted**: All 17 h2_ac jobs back to PENDING (besteffort QOS, priority=1).
 2. V739 status:
-   - **125/160 conditions landed** (+5 from 120, s2/e2 gap-filling)
-   - 2 af739 jobs RUNNING (t1_e2@32h, t3_e2@47h near timeout), 3 resubmitted (t1_s2, t2_s2, t2_e2)
-   - V739 gap: t1_s2(9), t1_e2(10), t2_s2(6), t2_e2(5), t3_e2(5) = 35 conditions missing
+   - **126/160 conditions landed** (+6 from 120, s2/e2 gap-filling)
+   - 5 af739 jobs RUNNING (t1_e2@46h near timeout, t1_s2/t2_s2/t2_e2@14h, t3_e2 resubmitted→5273998)
+   - V739 gap: t1_s2(9), t1_e2(9), t2_s2(6), t2_e2(5), t3_e2(5) = 34 conditions missing
+   - 3 duplicate af739 jobs cancelled (race condition on shared metrics.json)
    - V739 is empirically valid: 0 NaN/Inf, 0 fallback, 100% fairness pass
 3. Finding H (discovered 2026-03-22):
    - 8 P15 models produce 100% constant predictions (0% fairness pass)
    - CFPT, DeformableTST, MICN, PathFormer, SEMPO, SparseTSF, TimeBridge, TimePerceiver
    - Added to AUDIT_EXCLUDED_MODELS in aggregate_block3_results.py
    - Removed from accel_v2 scripts → ~30% faster per job
-4. accel_v2 progress (g2_ac GPU jobs, 18h into 2-day allocation):
-   - e2: 30/23 models started (near complete, processing CARD) → will complete ✓
-   - co: 5/23 → needs 1 requeue
-   - ct: 6/23 → needs 1 requeue
-   - s2: 5/23 → needs 1 requeue
-   - ce: 4/23 → needs 2+ requeues
-   - fu: 4/23 → needs 2+ requeues
-   - **Critical**: `--requeue + --signal=USR1@120` alone does NOT trigger auto-restart on TIMEOUT
+4. accel_v2 progress (g2_ac GPU jobs, 32h into 2-day allocation, ~16h remaining):
+   - e2: 33-34 new + 65 skip (near complete, processing FreTS/FilterTS) → will complete ✓
+   - co: 6 new + 98-121 skip → ALL stuck on ModernTCN (40min/epoch), needs 1-2 requeues
+   - ct: 9 new + 93 skip → on MSGNet, moderate progress, needs 1 requeue
+   - s2: 6 new + 98 skip → ALL stuck on ModernTCN, needs 1-2 requeues
+   - ce: 6 new + 98 skip → stuck on ModernTCN, needs 1-2 requeues
+   - fu: 7 new + 93 skip → on Fredformer, moderate progress, needs 1 requeue
+   - **ModernTCN universal bottleneck**: 20M params, ~40min/epoch — causes most TIMEOUT situations
    - **Fixed**: Added `_requeue_handler()` trap to all 56 scripts (2026-03-22 20:10)
 5. Critical gaps:
-   - s2 (core_only_seed2): 2176 records (↑172 from 2004), 27 models missing t2 s2 (gpu_cos2_t2 RUNNING 9/27)
-   - e2 (core_edgar_seed2): 2786 records (↑296 from 2490), ETSformer/LightTS/Pyraformer/Reformer gap covered by accel_v2
+   - s2 (core_only_seed2): 2176 records, 27 models missing t2 s2 (gpu_cos2_t2 RUNNING@46h near timeout)
+   - e2 (core_edgar_seed2): 2810 records (+24 from 2786), ETSformer/LightTS/Pyraformer/Reformer gap covered by accel_v2
    - V739: 35 missing s2+e2 conditions (2 af739 RUNNING + 3 resubmitted)
 6. Text embeddings:
    - `runs/text_embeddings/text_embeddings.parquet` — 5,774,931 rows, 64 PCA dims

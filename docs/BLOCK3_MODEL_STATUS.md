@@ -1,6 +1,6 @@
 # Block 3 Model Benchmark Status
 
-> Last updated: 2026-03-22 20:15 CET
+> Last updated: 2026-03-23 10:45 CET
 > Current authority: `docs/CURRENT_SOURCE_OF_TRUTH.md`
 > Evidence: direct scan of `runs/benchmarks/block3_phase9_fair/`
 
@@ -8,7 +8,7 @@
 
 | Metric | Value | Evidence |
 | --- | ---: | --- |
-| raw records | **15864** | direct scan 2026-03-22 20:12 (+256 from 15608) |
+| raw records | **15888** | direct scan 2026-03-23 10:40 (+24 from 15864) |
 | raw models (all) | 137 | direct scan (116 real + 21 retired AutoFit@1) |
 | audit-excluded models | **24** | AUDIT_EXCLUDED_MODELS in aggregate_block3_results.py (Finding A-H + Structural) |
 | active (leaderboard) models | **92** | 116 raw - 24 excluded |
@@ -17,7 +17,7 @@
 | incomplete active models | 28 | 92 - 64 |
 | unfixable gaps | 2 | XGBoost@159, XGBoostPoisson@157 (structural OOM) |
 | conditions per model | 160 | t1(72) + t2(48) + t3(40) |
-| live jobs | npin **28R + 32PD = 60** | squeue 2026-03-22 20:10 |
+| live jobs | npin **27R + 31PD = 58** | squeue 2026-03-23 10:43 |
 | Phase 12 text reruns | 48/48 COMPLETED | all categories |
 | Phase 15 new models | 23 submitted (15 valid + 8 broken excluded), accel_v2 scripts | `.slurm_scripts/phase15/accel_v2/` |
 
@@ -26,8 +26,8 @@
 | Fact | Value | Evidence |
 | --- | --- | --- |
 | current valid AutoFit line | `AutoFitV739` | Root `AGENTS.md` |
-| landed conditions | `125/160` | co=28, ce=28, ct=28, fu=28, s2/e2 progressing (+5 from 120) |
-| s2/e2 gap-fill | 2R + 3 resubmitted + 3PD | af739_t1_e2(32h) + t3_e2(47h) RUNNING; t1_s2/t2_s2/t2_e2 resubmitted |
+| landed conditions | `126/160` | co=28, ce=28, ct=28, fu=28, s2/e2 progressing (+6 from 120) |
+| s2/e2 gap-fill | 5R + 1PD | af739_t1_e2(46h near TO), t1_s2(14h), t2_s2(14h), t2_e2(14h) RUNNING; t3_e2 resubmitted |
 | quality | 0 NaN/Inf, 0 fallback, 100% fairness pass | direct scan |
 | mean rank (56 universal conditions) | **#13/80** (top 16%) | computed across 56 universal conditions shared by all 80 models |
 | V734-V738 | RETIRED | oracle test-set leakage |
@@ -38,7 +38,7 @@
 | --- | ---: | --- | --- |
 | XGBoost | 159/160 | ❌ structural OOM | Missing t1/full/is_funded. UNFIXABLE. |
 | XGBoostPoisson | 157/160 | ❌ structural OOM | Missing t1/full/is_funded h{7,14,30}. UNFIXABLE. |
-| AutoFitV739 | **125**/160 | ⏳ af739 2R+3PD @2d | Missing s2(~21)+e2(~14); 3 resubmitted, very slow ~3 conds/2d |
+| AutoFitV739 | **126**/160 | ⏳ af739 5R+1PD @2d | Missing s2(~19)+e2(~15); t3_e2 resubmitted, ~3-4 conds/2d |
 | ETSformer | 113/160 | ⏳ ALL33 accel RUNNING | Missing scattered s2/e2/ct/fu |
 | LightTS | 113/160 | ⏳ ALL33 accel RUNNING | same |
 | Pyraformer | 113/160 | ⏳ ALL33 accel RUNNING | same |
@@ -63,33 +63,42 @@
 | SRSNet | **75**/160 | ⏳ accel_v2 RUNNING | Phase 15 new model |
 | SegRNN | **75**/160 | ⏳ accel_v2 RUNNING | Phase 15 new model |
 
-## Live Queue Reality (2026-03-22 20:15 CET)
+## Live Queue Reality (2026-03-23 10:45 CET)
 
 | Queue slice | Value | Evidence |
 | --- | ---: | --- |
-| npin gpu RUNNING | 23 | 17 g2_ac_v2 (18h in) + af739_t1_e2(32h) + af739_t3_e2(47h) + gpu_cos2_t2(32h) + 3 af739 resubmit PD |
-| npin gpu PENDING | 3 | af739_t1_s2 + t2_s2 + t2_e2 (resubmitted) |
-| npin l40s RUNNING | 5 | l2_ac_t1_{ce,co,ct,e2,s2} (8.5h in) |
+| npin gpu RUNNING | 22 | 17 g2_ac_v2 (32h in) + af739_t1_e2(46h!) + af739_t1_s2/t2_s2/t2_e2(14h) + gpu_cos2_t2(46h!) |
+| npin gpu PENDING | 1 | af739_t3_e2 (resubmitted 5273998) |
+| npin l40s RUNNING | 5 | l2_ac_t1_{ce,co,ct,e2,s2} (23h in) |
 | npin l40s PENDING | 12 | l2_ac_v2 remaining (Priority/Resources) |
-| npin hopper RUNNING | 1 | h2_ac_t1_ce (8.5h in, besteffort) |
-| npin hopper PENDING | 16 | h2_ac_v2 remaining (Priority) |
-| **total** | **60** (29R + 31PD) | squeue 2026-03-22 20:10 |
+| npin hopper RUNNING | 0 | preempted (besteffort), returned to PENDING |
+| npin hopper PENDING | 17 | h2_ac_v2 all PENDING (Priority) |
+| **total** | **58** (27R + 31PD) | squeue 2026-03-23 10:43 |
 
-**Events since 2026-03-22 11:50**:
-- **Records +114**: 15,750→15,864 (全部来自 e2 ablation: 2672→2786)
-- **V739 +1**: 124→125 conditions
-- **P15 models +6 each**: 69→75/160 (all 15 valid P15 models)
-- **3 af739 resubmitted**: t1_s2 (5272199), t2_s2 (5272200), t2_e2 (5272201)
-- **关键发现: TIMEOUT 不触发 auto-requeue**: `--requeue` + `--signal=USR1@120` 需要 trap handler
-- **已修复**: 56 脚本添加 `_requeue_handler()` trap (对当前运行不生效，只在 requeue 后生效)
+**Events since 2026-03-22 20:15**:
+- **Records +24**: 15,864→15,888 (mainly e2: 2786→2810)
+- **V739 +1**: 125→126 conditions
+- **3 duplicate af739 CANCELLED**: 5272199/5272200/5272201 (race condition — same metrics.json)
+- **af739_t3_e2 TIMEOUT → resubmitted** (5273998)
+- **Hopper preempted**: h2_ac_t1_ce (besteffort) preempted back to PENDING
+- **af739_t1_e2 at 46h/48h**: will TIMEOUT soon, no trap handler (loaded before fix)
+- **gpu_cos2_t2 at 46h/48h**: will TIMEOUT soon, same issue
 
-**g2_ac v2 进度 (18h in, ~30h remaining)**:
-- e2 (3 jobs): 30 done, on CARD → WILL COMPLETE ✓
-- co (3 jobs): 5/23 → needs 1 requeue
-- ct (3 jobs): 6/23 → needs 1 requeue
-- s2 (3 jobs): 5/23 → needs 1 requeue
-- ce (3 jobs): 4/23, on FreTS → needs 2+ requeues
-- fu (3 jobs): 4/23, on ETSformer → needs 2+ requeues
+**g2_ac v2 进度 (32h in, ~16h remaining)**:
+- e2 (3 jobs): 34 new + 65 skip → nearly done (on FreTS/FilterTS) ✓
+- co (3 jobs): 6 new + 98-121 skip, ALL on ModernTCN (20M, 40min/epoch) → slow, needs requeue
+- ct (3 jobs): 9 new + 93 skip, on MSGNet → moderate, needs requeue
+- s2 (3 jobs): 6 new + 98 skip, ALL on ModernTCN → slow, needs requeue
+- ce (3 jobs): 6 new + 98 skip, on ModernTCN → slow, needs 2+ requeues
+- fu (3 jobs): 7 new + 93 skip, on Fredformer → moderate, needs 2+ requeues
+- **ModernTCN 是通用瓶颈**: 20M参数, ~40min/epoch, 所有非e2 jobs 都卡在这里
+
+**L40S 进度 (23h in)**:
+- l2_t1_e2: 34 new + skip, on FreTS ✓
+- l2_t1_co: 10 new, on SCINet
+- l2_t1_s2: 10 new, on SCINet
+- l2_t1_ct: 8 new, on LightTS
+- l2_t1_ce: 6 new, on ModernTCN
 
 ## Phase 15: New TSLib Model Expansion (23 models)
 

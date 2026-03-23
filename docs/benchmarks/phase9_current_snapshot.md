@@ -1,6 +1,6 @@
 # Phase 9 / V739 Current Snapshot
 
-> Generated: 2026-03-22T19:20:39.856654+00:00
+> Generated: 2026-03-23T09:46:59.887681+00:00
 > Canonical benchmark: `runs/benchmarks/block3_phase9_fair`
 
 ## Verified Current Facts
@@ -8,15 +8,15 @@
 | metric | value | evidence |
 | --- | --- | --- |
 | metrics_files | 137 | raw metrics scan |
-| raw_records | 15864 | raw metrics scan |
+| raw_records | 15888 | raw metrics scan |
 | raw_models | 137 | raw metrics scan |
 | raw_complete_models | 86 | raw metrics scan |
 | raw_partial_models | 51 | raw metrics scan |
-| filtered_records | 12020 | `all_results.csv` |
+| filtered_records | 12044 | `all_results.csv` |
 | filtered_models | 107 | `all_results.csv` |
 | filtered_complete_models | 67 | `all_results.csv` |
 | filtered_partial_models | 40 | `all_results.csv` |
-| v739_conditions_landed | 125 | raw metrics scan |
+| v739_conditions_landed | 126 | raw metrics scan |
 | v739_jobs_live | 0 | `squeue -u npin,cfisch` |
 | v739_canonical_phase9_scripts | 13 | V739 script scan |
 | v739_legacy_phase10_scripts | 32 | V739 script scan |
@@ -26,10 +26,10 @@
 
 | metric | value |
 | --- | --- |
-| jobs_total | 60 |
-| running | 32 |
-| pending | 28 |
-| npin_pending | 28 |
+| jobs_total | 58 |
+| running | 27 |
+| pending | 31 |
+| npin_pending | 31 |
 | cfisch_pending | 0 |
 | v739_pending | 0 |
 | v739_running | 0 |
@@ -38,7 +38,7 @@
 
 | reason | count |
 | --- | --- |
-| (Priority) | 27 |
+| (Priority) | 30 |
 | (Resources) | 1 |
 
 ## Text Embedding Artifacts
@@ -160,26 +160,26 @@
 | TimeBridge | 69 | 69 |
 | TimePerceiver | 69 | 69 |
 | NegativeBinomialGLM | 21 | 21 |
-| AutoFitV1 | 13 | 13 |
-| AutoFitV2 | 13 | 13 |
-| AutoFitV2E | 13 | 13 |
-| AutoFitV3 | 13 | 13 |
-| AutoFitV3E | 13 | 13 |
-| AutoFitV3Max | 13 | 13 |
-| AutoFitV4 | 13 | 13 |
-| AutoFitV5 | 13 | 13 |
-| AutoFitV6 | 13 | 13 |
-| AutoFitV7 | 13 | 13 |
-| AutoFitV71 | 13 | 13 |
-| AutoFitV72 | 13 | 13 |
-| AutoFitV73 | 13 | 13 |
-| AutoFitV731 | 13 | 13 |
-| AutoFitV732 | 13 | 13 |
-| AutoFitV733 | 13 | 13 |
-| AutoFitV734 | 13 | 13 |
-| AutoFitV735 | 13 | 13 |
-| AutoFitV736 | 13 | 13 |
-| AutoFitV737 | 13 | 13 |
-| AutoFitV738 | 13 | 13 |
-| FusedChampion | 13 | 13 |
-| NFAdaptiveChampion | 13 | 13 |
+| AutoFitV1 | 14 | 14 |
+| AutoFitV2 | 14 | 14 |
+| AutoFitV2E | 14 | 14 |
+| AutoFitV3 | 14 | 14 |
+| AutoFitV3E | 14 | 14 |
+| AutoFitV3Max | 14 | 14 |
+| AutoFitV4 | 14 | 14 |
+| AutoFitV5 | 14 | 14 |
+| AutoFitV6 | 14 | 14 |
+| AutoFitV7 | 14 | 14 |
+| AutoFitV71 | 14 | 14 |
+| AutoFitV72 | 14 | 14 |
+| AutoFitV73 | 14 | 14 |
+| AutoFitV731 | 14 | 14 |
+| AutoFitV732 | 14 | 14 |
+| AutoFitV733 | 14 | 14 |
+| AutoFitV734 | 14 | 14 |
+| AutoFitV735 | 14 | 14 |
+| AutoFitV736 | 14 | 14 |
+| AutoFitV737 | 14 | 14 |
+| AutoFitV738 | 14 | 14 |
+| FusedChampion | 14 | 14 |
+| NFAdaptiveChampion | 14 | 14 |

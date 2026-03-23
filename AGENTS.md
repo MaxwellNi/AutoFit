@@ -20,12 +20,12 @@ Every future contributor should read these files in order before making claims o
 8. `docs/PHASE12_TEXT_RERUN_EXECUTION.md`
 9. `docs/PHASE9_V739_LESSONS_LEARNED.md`
 
-## Verified Current State (2026-03-22 20:15)
+## Verified Current State (2026-03-23 10:45)
 
 - Freeze: complete and read-only
 - Canonical benchmark: `runs/benchmarks/block3_phase9_fair/`
-- Raw benchmark scan (2026-03-22 11:40):
-  - `15864` raw records in metrics.json (↑256 from 15608@2026-03-22 02:30)
+- Raw benchmark scan (2026-03-23 10:40):
+  - `15888` raw records in metrics.json (↑24 from 15864@2026-03-22 20:15)
   - `137` raw models in benchmark (116 real + 21 retired AutoFit @1 record each)
   - `24` audit-excluded models (see AUDIT_EXCLUDED_MODELS in aggregate_block3_results.py):
     - A: Sundial, TimesFM2, LagLlama, Moirai, MoiraiLarge, Moirai2 (silent fallback)
@@ -37,15 +37,15 @@ Every future contributor should read these files in order before making claims o
   - `92` active (leaderboard) models = 116 raw - 24 excluded
   - `77` raw models at 160/160, `64` active (leaderboard) models at 160/160
   - `28` incomplete active models
-  - P15 valid models: now at ~75/160 (+6 in 8h, all from e2)
+  - P15 valid models: now at ~75-81/160 (e2 completing, co/s2/ce/ct/fu stuck on ModernTCN)
   - `160` max per model: t1(72) + t2(48) + t3(40). task3 has no core_only_seed2.
-  - Per-ablation: co=2849, s2=2176, ce=2780, e2=2786, ct=2640, fu=2633
+  - Per-ablation: co=2849, s2=2176, ce=2780, e2=2810, ct=2640, fu=2633
   - `87%` task redundancy: ~72 truly unique evaluation cells
 - AutoFit:
   - V734-V738 are retired due to oracle test-set leakage
   - V739 is the only valid current AutoFit baseline
-  - V739 landed conditions: `125/160` (co=28,ce=28,ct=28,fu=28, s2/e2 gap-filling) (+5 from 120)
-  - V739 s2/e2 gap-fill: 2 af739 RUNNING (t1_e2@32h, t3_e2@47h), 3 resubmitted today (t1_s2, t2_s2, t2_e2)
+  - V739 landed conditions: `126/160` (co=28,ce=28,ct=28,fu=28, s2/e2 gap-filling) (+6 from 120)
+  - V739 s2/e2 gap-fill: 5R+1PD af739 — t1_e2(46h!), t1_s2/t2_s2/t2_e2(14h), t3_e2 resubmitted (5273998)
   - V739 quality: 0 NaN/Inf, 0 fallback, 100% fairness pass
 - Top-5 models by mean rank: PatchTST (4.28), NHITS (4.38), NBEATS (5.01), NBEATSx (5.81), ChronosBolt (7.42)
 - Dominant champion model: NBEATS — 65/160 conditions won (40.6%)
@@ -96,8 +96,11 @@ Every future contributor should read these files in order before making claims o
   - 8 old v1 jobs cancelled (2026-03-22 11:40): 5 l40s + 3 hopper (contained broken models, near timeout)
   - Admin Julien approved l40s/hopper usage ("as you have a rationale for this bigger cpu/gpu ratio this is not waste")
   - Partition limits verified (sinfo 2026-03-22): L40S=2 nodes/32c/503G (max 4 jobs), Hopper=1 node/112c/201G (max 1 job)
-  - Total active (2026-03-22 20:15): npin 29R+31PD = 60 jobs
+  - Total active (2026-03-23 10:45): npin 27R+31PD = 58 jobs (3 dup af739 cancelled, t3_e2 resubmitted)
   - Auto-requeue fix: `--requeue` alone does NOT auto-restart on TIMEOUT. Added trap handler to all 56 scripts (2026-03-22 20:10).
+  - Duplicate af739 discovery: 3 duplicate af739 jobs cancelled (race condition risk on same metrics.json).
+  - Hopper preempted: all h2_ac jobs back to PENDING (besteffort QOS).
+  - ModernTCN bottleneck: 20M params, 40min/epoch — all non-e2 accel jobs stuck on this model.
 
 ## Canonical Directories
 
