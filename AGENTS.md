@@ -20,32 +20,26 @@ Every future contributor should read these files in order before making claims o
 8. `docs/PHASE12_TEXT_RERUN_EXECUTION.md`
 9. `docs/PHASE9_V739_LESSONS_LEARNED.md`
 
-## Verified Current State (2026-03-23 10:45)
+## Verified Current State (2026-03-24 17:35)
 
 - Freeze: complete and read-only
 - Canonical benchmark: `runs/benchmarks/block3_phase9_fair/`
-- Raw benchmark scan (2026-03-23 10:40):
-  - `15888` raw records in metrics.json (↑24 from 15864@2026-03-22 20:15)
-  - `137` raw models in benchmark (116 real + 21 retired AutoFit @1 record each)
-  - `24` audit-excluded models (see AUDIT_EXCLUDED_MODELS in aggregate_block3_results.py):
-    - A: Sundial, TimesFM2, LagLlama, Moirai, MoiraiLarge, Moirai2 (silent fallback)
-    - B: AutoCES, xLSTM, TimeLLM, StemGNN, TimeXer (training crash fallback)
-    - C: TimeMoE, MOMENT (near-duplicate of Timer)
-    - G: MICN, MultiPatchFormer, TimeFilter (constant predictions)
-    - H: CFPT, DeformableTST, PathFormer, SEMPO, SparseTSF, TimeBridge, TimePerceiver (100% constant predictions, Phase 15)
-    - Structural: NegativeBinomialGLM (convergence failure, 21 records)
+- Raw benchmark scan (2026-03-24 17:30):
+  - `16023` raw records in metrics.json (↑135 from 15888@2026-03-23)
+  - `137` raw models in benchmark (116 real + 21 retired AutoFit)
+  - `24` audit-excluded models (unchanged)
   - `92` active (leaderboard) models = 116 raw - 24 excluded
   - `77` raw models at 160/160, `64` active (leaderboard) models at 160/160
   - `28` incomplete active models
-  - P15 valid models: now at ~75-81/160 (e2 completing, co/s2/ce/ct/fu stuck on ModernTCN)
+  - P15 valid models: at 76/160 (stuck on ModernTCN, g2_ac resubmitted after TIMEOUT)
   - `160` max per model: t1(72) + t2(48) + t3(40). task3 has no core_only_seed2.
-  - Per-ablation: co=2849, s2=2176, ce=2780, e2=2810, ct=2640, fu=2633
+  - Per-ablation: co=2849, s2=2139, ce=2780, e2=2724, ct=2764, fu=2767
   - `87%` task redundancy: ~72 truly unique evaluation cells
 - AutoFit:
   - V734-V738 are retired due to oracle test-set leakage
   - V739 is the only valid current AutoFit baseline
-  - V739 landed conditions: `126/160` (co=28,ce=28,ct=28,fu=28, s2/e2 gap-filling) (+6 from 120)
-  - V739 s2/e2 gap-fill: 5R+1PD af739 — t1_e2(46h!), t1_s2/t2_s2/t2_e2(14h), t3_e2 resubmitted (5273998)
+  - V739 landed conditions: `131/160` (+5 from 126, s2/e2 gap-filling)
+  - V739 s2/e2 gap-fill: 4R+1PD af739 — t1_s2/t2_s2/t2_e2(1d21h), t3_e2(1d7h), t1_e2 resubmitted
   - V739 quality: 0 NaN/Inf, 0 fallback, 100% fairness pass
 - Top-5 models by mean rank: PatchTST (4.28), NHITS (4.38), NBEATS (5.01), NBEATSx (5.81), ChronosBolt (7.42)
 - Dominant champion model: NBEATS — 65/160 conditions won (40.6%)
@@ -58,15 +52,16 @@ Every future contributor should read these files in order before making claims o
   - EDGAR mixed: wins 34.7% of pairs (target-dependent)
   - Full vs core_only: closest margin (45.0% vs 42.0%)
 - Model registry: `docs/references/MODEL_REGISTRY.md` — 152 registered, 117 active, 99 in benchmark
-- Model completion tiers (2026-03-22):
-  - @160 (complete): 64 active + 13 excluded = 77 raw
-  - @159: XGBoost (1 missing: t1/full/is_funded — structural OOM, UNFIXABLE)
-  - @157: XGBoostPoisson (3 missing: t1/full/h{7,14,30}/is_funded — structural OOM, UNFIXABLE)
-  - @124: AutoFitV739 (missing s2/e2 — 2 af739 RUNNING, 3 TIMEOUT today, very slow)
-  - @113: ETSformer/LightTS/Pyraformer/Reformer (covered by accel_v2, e2=0 critical gap)
-  - @109: Crossformer/MSGNet/MambaSimple/PAttn (covered by accel_v2)
-  - @69: 15 valid P15 new models + 8 excluded P15 (accel_v2 RUNNING)
-  - s2 gap: 27 models missing t2 s2 — gpu_cos2_t2 RUNNING (5268391, 6/27 models done)
+- Model completion tiers (2026-03-24):
+  - @160 (complete): 64 active + 13 excluded = 77 raw (unchanged)
+  - @159: XGBoost (structural OOM, UNFIXABLE)
+  - @157: XGBoostPoisson (structural OOM, UNFIXABLE)
+  - @131: AutoFitV739 (4R+1PD af739, ~3-5 conditions/2d)
+  - @113: ETSformer/LightTS/Pyraformer/Reformer (accel_v2 covering gaps)
+  - @109: Crossformer/MSGNet/MambaSimple/PAttn (accel_v2 covering gaps)
+  - @76: 15 valid P15 models (accel_v2 resubmitted after TIMEOUT wave)
+  - @69: 8 excluded P15 (Finding H)
+  - s2 gap: gpu_cos2_t2 TIMEOUT'd at 2d (stuck on ModernTCN), resubmitted with trap handler
   - NegativeBinomialGLM: excluded (structural failure, 21 records)
   - **8 P15 models EXCLUDED (Finding H)**: CFPT, DeformableTST, PathFormer, SEMPO, SparseTSF, TimeBridge, TimePerceiver — all 100% constant predictions
 - Phase 12 text reruns:
@@ -96,11 +91,12 @@ Every future contributor should read these files in order before making claims o
   - 8 old v1 jobs cancelled (2026-03-22 11:40): 5 l40s + 3 hopper (contained broken models, near timeout)
   - Admin Julien approved l40s/hopper usage ("as you have a rationale for this bigger cpu/gpu ratio this is not waste")
   - Partition limits verified (sinfo 2026-03-22): L40S=2 nodes/32c/503G (max 4 jobs), Hopper=1 node/112c/201G (max 1 job)
-  - Total active (2026-03-23 10:45): npin 27R+31PD = 58 jobs (3 dup af739 cancelled, t3_e2 resubmitted)
-  - Auto-requeue fix: `--requeue` alone does NOT auto-restart on TIMEOUT. Added trap handler to all 56 scripts (2026-03-22 20:10).
-  - Duplicate af739 discovery: 3 duplicate af739 jobs cancelled (race condition risk on same metrics.json).
-  - Hopper preempted: all h2_ac jobs back to PENDING (besteffort QOS).
-  - ModernTCN bottleneck: 20M params, 40min/epoch — all non-e2 accel jobs stuck on this model.
+  - Total active (2026-03-24 17:35): npin 11R+46PD = 57 jobs (21 TIMEOUT'd resubmitted, dup af739_t3_e2 cancelled)
+  - **21 TIMEOUT wave (2026-03-24)**: ALL 17 g2_ac GPU + af739_t1_e2 + gpu_cos2_t2 + 2 L40S — trap handler in scripts but jobs loaded before fix was applied. All 21 manually resubmitted.
+  - Auto-requeue fix: trap handler in all scripts. First-round jobs loaded before fix = trap never fired. Second-round (resubmitted) jobs WILL auto-requeue correctly.
+  - Duplicate af739_t3_e2: 3rd occurrence, cancelled newer copy (5273998).
+  - Hopper: 3 jobs RUNNING (h2_ac_t2_ce/co/ct on iris-197, 6.5h), besteffort intermittently available.
+  - ModernTCN bottleneck: 20M params, 30min/epoch — all non-e2 accel jobs stuck on this model.
 
 ## Canonical Directories
 
@@ -150,14 +146,14 @@ Every future contributor should read these files in order before making claims o
 3. ~~Run and land the real text-enabled reruns~~ ✅ Phase 12 COMPLETE.
 4. ~~Integrate 23 new TSLib models into benchmark~~ ✅ Phase 15 submitted. 15 valid + 8 excluded (Finding H).
 5. ~~Submit targeted reruns for 5 failed models~~ ✅ Fix11 GPU scripts completed.
-6. ~~Complete V739 s2/e2 gap-fill~~ ⏳ V739@124/160, 2 af739 RUNNING, 3 TIMEOUT today. ~3 conds per 2d.
+6. ~~Complete V739 s2/e2 gap-fill~~ ⏳ V739@131/160, 4R+1PD af739. ~3-5 conds per 2d.
 7. ~~Complete ml_tabular t1_fu fix~~ ❌ OOM at all memory levels. XGBoost@159, XGBoostPoisson@157 — structural limit.
 8. ~~Fix HPC admin complaints~~ ✅ All jobs migrated to 7-8 CPUs.
 9. ~~Chronos2+TTM seed2 gap-fill~~ ✅ All 5 gpu_fnd scripts COMPLETED.
 10. ~~Finding H: identify broken P15 models~~ ✅ 8 models excluded, accel_v2 scripts created.
 11. ~~Cancel old v1 jobs with broken models~~ ✅ 8 old v1 jobs cancelled (5 l40s + 3 hopper). Freed L40S for v2.
-12. Wait for 54 active jobs to complete (25 running + 29 pending across gpu+l40s+hopper).
-13. s2 gap-fill: gpu_cos2_t2 RUNNING (5268391) for 27 models missing t2 s2 (6/27 done).
+12. Wait for 57 active jobs to complete (11R + 46PD across gpu+l40s+hopper).
+13. s2 gap-fill: gpu_cos2_t2 resubmitted after TIMEOUT (stuck on ModernTCN).
 14. e2 gap: ETSformer/LightTS/Pyraformer/Reformer have 0/28 e2 — accel_v2 covers this.
-15. g2_ac_v2 auto-requeue: e2/ct will complete first run, co/s2/ce/fu need 2-3 requeues.
+15. g2_ac_v2 auto-requeue: second round resubmitted (2026-03-24). Trap handler NOW active. Will auto-requeue on future TIMEOUT.
 16. Only then start any V740+ iteration.

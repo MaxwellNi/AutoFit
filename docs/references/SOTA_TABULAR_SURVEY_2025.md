@@ -1,8 +1,8 @@
 # SOTA Tabular Data Techniques Survey (Jan 2025 -- Feb 2026)
 
-> **Purpose**: Identify the top 10 most impactful techniques from recent AI venues that can be incorporated into the AutoFit V7 ensemble system for Block 3 modeling.
+> **Purpose**: Identify the most impactful recent tabular-learning techniques that can still strengthen Block 3, either as benchmark additions, objective/covariate modules, or design signals for the single-model V740 direction.
 >
-> **Dataset characteristics**: 5.7M rows, 82 numeric features, 3 targets (`total_amount_sold`, `number_investors`, `days_to_close`), extreme heavy-tailed distributions (kurtosis >100, skew >10), 32/82 features >50% missing, cross-sectional panel data, mix of continuous and count targets, highly imbalanced binary classification (95% positive).
+> **Dataset characteristics (historical summary, pre-final rename cleanup)**: large-scale startup-financing panel data with millions of rows, heavy-tailed continuous and count targets, partial covariate coverage, strong missingness, heterogeneous entity structure, and one binary/event-style target. Read current operational truth from `docs/CURRENT_SOURCE_OF_TRUTH.md` rather than treating the field list below as canonical.
 >
 > **Date**: 2026-02-12
 

@@ -1,22 +1,30 @@
 # Block 3 Model Registry
 
-> Last updated: 2026-03-18
-> Source: `src/narrative/block3/models/registry.py` + benchmark scan of `runs/benchmarks/block3_phase9_fair/`
-> Total registered: 152 models | Active: 117 | In benchmark: 114 | Complete @160: 70 | SOTA coverage: 90%+
+> Last updated: 2026-03-23
+> Source: `src/narrative/block3/models/registry.py` + current Phase 9 fair benchmark scan
+> Registered in code: **153** models | Raw benchmark materialized: **137** | Active leaderboard models: **92** | Active complete models @160: **64**
 
 ## Summary
 
-| Category | Registered | Active | In Benchmark | Complete @160 | Library |
-|---|---:|---:|---:|---:|---|
-| statistical | 15 | 15 | 15 | 15 | StatsForecast |
-| deep_classical | 9 | 9 | 9 | 9 | NeuralForecast |
-| transformer_sota | 24 | 23 | 23 | 23 | NeuralForecast |
-| foundation | 14 | 14 | 14 | 14 | Custom wrappers (HF) |
-| irregular | 4 | 4 | 4 | 4 | PyPOTS |
-| ml_tabular | 12 | 11 | 11 | 0 | scikit-learn, XGBoost, LightGBM, CatBoost |
-| tslib_sota | 42 | 40 | 37 | 4 | TSLib (vendored) |
-| autofit | 24 | 1 | 1 | 0 | Custom (oracle router) |
-| **Total** | **152** | **117** | **114** | **69** | |
+The table below is intentionally registry-centric. Exact benchmark completeness
+and exclusion status continue to evolve as Phase 15+H jobs land, so the current
+authoritative benchmark counts should always be read from:
+
+- `docs/CURRENT_SOURCE_OF_TRUTH.md`
+- `docs/benchmarks/phase9_current_snapshot.md`
+- `runs/benchmarks/block3_phase9_fair/all_results.csv`
+
+| Category | Registered in code | Primary library / wrapper |
+|---|---:|---|
+| statistical | 15 | StatsForecast |
+| deep_classical | 9 | NeuralForecast |
+| transformer_sota | 24 | NeuralForecast |
+| foundation | 15 | Custom wrappers / HF |
+| irregular | 4 | PyPOTS |
+| ml_tabular | 20 | scikit-learn, XGBoost, LightGBM, CatBoost |
+| tslib_sota | 42 | TSLib (vendored) |
+| autofit | 24 | Custom AutoFit lines (historical retired + current V739) |
+| **Total** | **153** | |
 
 ## 1. Statistical Models (15 models — all @160 COMPLETE)
 
@@ -241,9 +249,9 @@ Covered by cos2 scripts (6 scripts in `.slurm_scripts/phase15/cos2/`).
 - **EDGAR effect**: MIXED (wins 34.7% of pairs, target-dependent)
 - **Seed stability**: avg |delta| = 0.138%, median = 0.000%
 
-## 11. SOTA Coverage Audit (2026-03-18)
+## 11. SOTA Coverage Audit (2026-03-23)
 
-Cross-referenced against TSLib, NeuralForecast, and top venues (NeurIPS/ICML/ICLR/AAAI/KDD 2024-2025).
+Cross-referenced against TSLib, NeuralForecast, and top venues (NeurIPS/ICML/ICLR/IJCAI/AAAI/KDD/ICDE/ACL/EMNLP 2024-2026).
 
 ### 11.1 Library Coverage
 | Library | Total Models | We Have | Excluded | Missing | Coverage |
@@ -260,20 +268,48 @@ Cross-referenced against TSLib, NeuralForecast, and top venues (NeurIPS/ICML/ICL
 | CycleNet / TQNet | Requires `cycle_index` feature engineering |
 | NegativeBinomialGLM | Structural OOM >640G |
 
-### 11.3 Potentially Missing Models (low priority — diminishing returns)
-| Model | Venue | Year | Status | Reason not added |
-|-------|-------|------|--------|-----------------|
-| SAMformer | ICML | 2024 | Has code | Sharpness-aware minimization wrapper, lightweight |
-| ElasTST | NeurIPS | 2024 | Has code | Elastic varied-horizon, Microsoft ProbTS codebase |
-| Peri-midFormer | NeurIPS | 2024 | Has code | Period-informed decomposition |
-| RAFT | ICML | 2025 | Has code | Retrieval-augmented forecasting — different paradigm |
-| TimeDART | ICML | 2025 | Has code | Diffusion auto-regressive transformer |
-| XLinear | NeuralForecast | 2026 | In NF | Trivial linear model, recently added to NF |
-| MambaSingleLayer | TSLib | 2026 | In TSLib | Likely requires `mamba_ssm` (same issue as Mamba) |
+### 11.3 Potentially Missing Models (updated 2026-03-23b)
+| Priority | Model | Venue | Year | Status | Why it now matters |
+|----------|-------|-------|------|--------|--------------------|
+| **HIGH** | LightGTS | ICML | 2025 | Has code | Lightweight general TS model; unusually well aligned with the V740 single-model efficiency goal |
+| **HIGH** | OLinear | NeurIPS | 2025 | Has code | Very strong low-cost orthogonal-domain linear baseline; could cover easy continuous/count cells cheaply |
+| **HIGH** | LiPFormer | ICDE | 2025 | Has code | Lightweight patch-wise transformer with weak data enriching; attractive efficient alternative to PatchTST |
+| **MEDIUM** | ElasTST | NeurIPS | 2024 | Has code | Elastic varied-horizon model; highly relevant to the ``one model for all horizons'' V740 constraint |
+| **MEDIUM** | DIAN | IJCAI | 2024 | Has code | Decoupled invariant/variant attention; directly relevant to heterogeneous panel forecasting |
+| **MEDIUM** | UniTS | NeurIPS | 2024 | Has code | Unified multi-task time-series model; important architectural reference for V740's condition-tokenized single-model design |
+| **MEDIUM** | CASA | IJCAI | 2025 | Has code | Efficient CNN-autoencoder + score-based attention; attractive efficiency-first benchmark candidate |
+| **MEDIUM** | Peri-midFormer | NeurIPS | 2024 | Has code | Period-informed decomposition; potentially useful decomposition-first baseline |
+| **LOW** | QuantileFormer | IJCAI | 2025 | Has code | Useful if V740 grows a serious probabilistic / calibrated quantile branch |
+| **LOW** | DERITS | IJCAI | 2024 | Has code | Non-stationarity via derivative-frequency transformation; more useful as a V740 module than as a must-have benchmark baseline |
+| **LOW** | RAFT | ICML | 2025 | Has code | Retrieval-augmented forecasting; useful scientifically but less aligned with single-model simplicity |
+| **LOW** | TimeDART | ICML | 2025 | Has code | Diffusion autoregressive transformer; likely too heavy for the current efficiency target |
+| **LOW** | XLinear | NeuralForecast | 2026 | In NF | Trivial to add, but expected incremental value is limited |
+| **LOW** | MambaSingleLayer | TSLib | 2026 | In TSLib | Still likely blocked by `mamba_ssm` dependency issues |
+
+### 11.3a No Longer Missing
+
+- **SAMformer (ICML 2024 oral)** is now locally integrated as a first custom lightweight wrapper:
+  - implementation path: `src/narrative/block3/models/samformer_model.py`
+  - registry path: `src/narrative/block3/models/deep_models.py`
+  - current status:
+    - import + synthetic `fit/predict` smoke passed
+    - direct harness smoke currently exits `137` in local interactive runs
+    - freeze-backed micro-smoke runs end-to-end but still shows constant-output risk on a tiny real slice
+
+### 11.3b Emerging But Not Yet Registry-Priority
+
+These directions are worth tracking for V740 methodology, but are not yet top benchmark-addition priorities:
+
+- **TimeEmb** (NeurIPS 2025): static-dynamic disentanglement, strong design signal for V740
+- **QDF** (ICLR 2026): quadratic-form weighted learning objective for harder long-horizon structure
+- **DistDF** (ICLR 2026): distribution-level alignment for multistep forecasting
+- **JAPAN** (ICLR 2026): density-aware conformal prediction regions, strong uncertainty/calibration signal
+- **TimeDiT** (2025): diffusion-style general TSFM, scientifically relevant but too heavy for alpha
+- **FLAIRR-TS** (Findings of EMNLP 2025): retrieval + iterative refinement, useful later as auxiliary memory rather than first-wave benchmark addition
+- **LightGTS-Cov** (2026 arXiv): promising covariate-aware extension, but not yet benchmark-priority until the paper/release stabilizes
 
 ### 11.4 Coverage Verdict
-**优秀覆盖** — 90%+ 两大主流库模型，顶会 2024-2025 论文基本全覆盖。
-缺失模型均为低优先级或依赖问题。当前 114 模型足够产生可靠的 benchmark 结论。
+**优秀覆盖，但不再意味着“可以停止扩展”**。当前主流库覆盖仍然很强，现有 benchmark 已足够支撑可靠结论；但从 V740 的单模型冠军目标来看，仍有几类高价值缺失基线值得补充，尤其是 `LightGTS`、`OLinear`、`LiPFormer`、`ElasTST`、`DIAN` 和 `UniTS`。`SAMformer` 已经从“缺失模型”变成了“已接入、待正式 benchmark”的第一批新增效率型基线。这些模型的价值不在于“再堆几个名字”，而在于它们更贴近 V740 想要达到的效率-精度 Pareto 前沿，或者直接为 V740 的单模型条件化设计提供结构启发。
 
 ## Code References
 

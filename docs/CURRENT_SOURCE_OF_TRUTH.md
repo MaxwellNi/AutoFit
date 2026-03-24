@@ -1,6 +1,6 @@
 # Current Source of Truth
 
-> Last verified: 2026-03-23 10:45 CET
+> Last verified: 2026-03-24 17:35 CET
 > Verified by direct scans of `runs/benchmarks/block3_phase9_fair/`, `runs/text_embeddings/`, live `squeue -u npin`, and `sacct` for completed jobs.
 
 This file is the authoritative documentation entry point for the current Block 3 project state.
@@ -25,23 +25,23 @@ If any other document disagrees with this file, prefer this file and the evidenc
 | Fact | Current value | Evidence |
 | --- | --- | --- |
 | Canonical benchmark directory | `runs/benchmarks/block3_phase9_fair/` | direct scan |
-| Raw metric records | `15888` | direct scan 2026-03-23 10:40 |
+| Raw metric records | `16023` | direct scan 2026-03-24 17:30 |
 | Raw models materialized | `137` | direct scan (116 real + 21 retired AutoFit@1) |
 | Audit-excluded models | `24` | AUDIT_EXCLUDED_MODELS (17 old + 7 Finding H) |
 | Active (leaderboard) models | `92` | 116 raw - 24 excluded |
 | Raw complete models (`@160`) | `77` | direct scan (64 active + 13 excluded @160) |
 | Active complete models (`@160`) | `64` | 77 - 13 excluded@160 |
 | Incomplete active models | `28` | 92 - 64 |
-| Per-ablation | co=2849, s2=2176, ce=2780, e2=2810, ct=2640, fu=2633 | direct scan 2026-03-23 10:40 |
+| Per-ablation | co=2849, s2=2139, ce=2780, e2=2724, ct=2764, fu=2767 | direct scan 2026-03-24 17:30 |
 | Conditions per model | `160` | t1(72) + t2(48) + t3(40) |
 | Current AutoFit baseline | `AutoFitV739` only | Root `AGENTS.md` |
-| V739 landed conditions | `126/160` | co=28, ce=28, ct=28, fu=28, s2+e2 gap-filling (5R+1PD) |
+| V739 landed conditions | `131/160` | co=28, ce=28, ct=28, fu=28, s2+e2 gap-filling (4R+1PD) |
 | V739 quality | 0 NaN/Inf, 0 fallback, 100% fairness pass | direct scan |
 | V739 mean rank | **#13** (top 14%, 92 active models) | per-condition ranking (last computed) |
 | Text embedding artifacts | `AVAILABLE` | `runs/text_embeddings/embedding_metadata.json` |
 | Phase 12 text reruns | `48/48 COMPLETED` | core_text+full 91/91 models |
-| Phase 15 new models | 23 submitted, 15 valid, 8 excluded (Finding H), ~75-81/160 | direct scan |
-| Live jobs | `58` (27R + 31PD) | squeue 2026-03-23 10:45 |
+| Phase 15 new models | 23 submitted, 15 valid, 8 excluded (Finding H), 76/160 | direct scan |
+| Live jobs | `57` (11R + 46PD) | squeue 2026-03-24 17:35 |
 
 ## What the Current Benchmark Means
 
@@ -60,19 +60,18 @@ If any other document disagrees with this file, prefer this file and the evidenc
 
 ## Current Execution Reality
 
-1. Live queue snapshot verified on 2026-03-23 10:45 CET:
-   - `27 RUNNING` (17 g2_ac_v2/gpu + 5 l2_ac_v2/l40s + 2 af739/gpu + 1 gpu_cos2_t2 + 2 af739 resubmit/gpu)
-   - `31 PENDING` (12 l2_ac_v2/l40s + 17 h2_ac_v2/hopper + 1 af739_t3_e2 + 1 gpu PD)
-   - **58 total** (3 duplicate af739 cancelled, t3_e2 resubmitted)
-   - Partition constraints (sinfo verified): L40S max 4-5 concurrent (2 nodes, CPU bottleneck), Hopper max 1 (1 node, 201G RAM)
-   - **Critical fix**: `--requeue` alone does NOT auto-restart on TIMEOUT. Added `_requeue_handler()` trap to all 56 scripts.
-   - **ModernTCN bottleneck**: 20M params, ~40min/epoch — all non-e2 accel jobs stuck on this model.
-   - **Hopper preempted**: All 17 h2_ac jobs back to PENDING (besteffort QOS, priority=1).
+1. Live queue snapshot verified on 2026-03-24 17:35 CET:
+   - `11 RUNNING` (4 af739/gpu + 4 l2_ac/l40s + 3 h2_ac/hopper)
+   - `46 PENDING` (19 gpu + 13 l40s + 14 hopper)
+   - **57 total** (21 TIMEOUT'd jobs resubmitted, duplicate af739_t3_e2 cancelled)
+   - Partition constraints (sinfo verified): L40S max 4 concurrent (2 nodes), Hopper max 1 (1 node, 201G RAM)
+   - **CRITICAL 2026-03-24**: 21 jobs TIMEOUT'd — ALL 17 g2_ac GPU + af739_t1_e2 + gpu_cos2_t2 + 2 L40S. Trap handler in files but jobs loaded before fix. All manually resubmitted. Second round WILL have working trap handler.
+   - **ModernTCN bottleneck**: 20M params, ~30min/epoch — all non-e2 accel jobs stuck on this model.
+   - **Hopper intermittently available**: 3 h2_ac_t2 jobs running 6.5h (contradicts earlier "fully preempted").
 2. V739 status:
-   - **126/160 conditions landed** (+6 from 120, s2/e2 gap-filling)
-   - 5 af739 jobs RUNNING (t1_e2@46h near timeout, t1_s2/t2_s2/t2_e2@14h, t3_e2 resubmitted→5273998)
-   - V739 gap: t1_s2(9), t1_e2(9), t2_s2(6), t2_e2(5), t3_e2(5) = 34 conditions missing
-   - 3 duplicate af739 jobs cancelled (race condition on shared metrics.json)
+   - **131/160 conditions landed** (+5 from 126, s2/e2 gap-filling)
+   - 4 af739 jobs RUNNING (t1_s2/t2_s2/t2_e2@1d21h, t3_e2@1d7h), t1_e2 PENDING (resubmitted)
+   - Duplicate af739_t3_e2 recurred (3rd time), newer copy cancelled
    - V739 is empirically valid: 0 NaN/Inf, 0 fallback, 100% fairness pass
 3. Finding H (discovered 2026-03-22):
    - 8 P15 models produce 100% constant predictions (0% fairness pass)

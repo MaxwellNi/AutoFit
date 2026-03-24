@@ -13,6 +13,7 @@ transformer_sota (NeuralForecast):
   - PatchTST, iTransformer, TimesNet, TSMixer
   - Informer, Autoformer, FEDformer, VanillaTransformer
   - TiDE, NBEATSx, BiTCN, KAN, RMoK, SOFTS, StemGNN
+  - SAMformer (custom lightweight ICML'24 oral wrapper)
 
 foundation:
   - Chronos (Amazon), Moirai (Salesforce), TimesFM (Google)
@@ -27,6 +28,7 @@ import numpy as np
 import pandas as pd
 
 from .base import ModelBase, ModelConfig
+from .samformer_model import create_samformer
 
 _logger = logging.getLogger(__name__)
 
@@ -1906,6 +1908,8 @@ TRANSFORMER_MODELS = {
     "xLSTM": create_xlstm,
     "TimeLLM": create_timellm,
     "DeepNPTS": create_deepnpts,
+    # 2026-03-23 benchmark expansion
+    "SAMformer": create_samformer,
 }
 
 FOUNDATION_MODELS = {

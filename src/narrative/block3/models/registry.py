@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 """
-Model Registry for Block 3 KDD'26 Benchmark — Phase 11 (14 new SOTA models).
+Model Registry for Block 3 KDD'26 Benchmark — Phase 15+H.
 
-Unified interface for all 141+ registered models across 8 categories:
+Unified interface for all 142+ registered models across 8 categories:
   - ml_tabular      (20): LogisticRegression, Ridge, Lasso, ElasticNet, SVR,
                            KNN, RandomForest, ExtraTrees, HistGradientBoosting,
                            LightGBM, XGBoost, CatBoost, XGBoostPoisson,
@@ -15,11 +15,11 @@ Unified interface for all 141+ registered models across 8 categories:
                            Naive, HistoricAverage, WindowAverage
   - deep_classical   (9): NBEATS, NHITS, TFT, DeepAR, GRU, LSTM, TCN, MLP,
                            DilatedRNN
-  - transformer_sota(23): PatchTST, iTransformer, TimesNet, TSMixer, Informer,
+  - transformer_sota(24): PatchTST, iTransformer, TimesNet, TSMixer, Informer,
                            Autoformer, FEDformer, VanillaTransformer, TiDE,
                            NBEATSx, BiTCN, KAN, RMoK, SOFTS, StemGNN, DLinear,
                            NLinear, TimeMixer, TimeXer, TSMixerx, xLSTM,
-                           TimeLLM, DeepNPTS
+                           TimeLLM, DeepNPTS, SAMformer
   - foundation      (15): Chronos, ChronosBolt, Chronos2, Moirai, MoiraiLarge,
                            Moirai2, Timer, TimeMoE, MOMENT, LagLlama, TimesFM,
                            Sundial, TTM, TimerXL, TimesFM2

@@ -1,25 +1,31 @@
 # Block 3 Champion Component Analysis
 
-> Date: 2026-03-18 (Phase 12+15 update, 14,418 records, 69 complete models, real text/EDGAR/seed2 ablations)
+> Date: 2026-03-23 (update from 2026-03-22; Phase 15+H, benchmark 15,888 raw records, 92 active models)
 > Scope: Research-grade dissection of 9 champion models across 160 evaluation cells
 > Purpose: Inform V740+ AutoFit design — core mechanism selection, routing logic, feature interaction
 
 > Previous version (2026-03-12): analyzed 8,660 records, 93 models, 104 conditions.
-> This update reflects the full 6-ablation benchmark surface with real text embeddings and seed2 replication.
+> Update 2026-03-18: full 6-ablation benchmark surface with real text embeddings and seed2 replication.
 > Update 2026-03-18b: 14,418 records (+66 from running jobs). Key finding: 87% task redundancy.
+> **Update 2026-03-23**: 15,888 raw records. Finding H remains active: 8 P15 models excluded (100% constant predictions). 24 total excluded models, 92 active leaderboard models. Champion distribution remains stable; the main change is that V740 should now be designed as a single-model synthesis system rather than a deterministic oracle router.
+> **Update 2026-03-24**: design implication tightened further. `core` should remain a regular state stream, but `edgar` and `text` should no longer be treated as ordinary dense columns in V740. The right next step is a source-aware dual-clock event-memory path: `core` on a daily state grid, `edgar/text` as sparse event memories with recent-token and recency-bucket views.
 
 ## 0. Benchmark Evolution: From Seed-Replication to Full 6-Ablation Surface
 
 ### Phase 9 → Phase 12+15 Changes
-| Metric | Phase 9 (2026-03-12) | Phase 12+15 (2026-03-18) | Change |
-|---|---|---|---|
-| Total records | 8,660 | 14,418 | +66.4% |
-| Complete models (@160) | 78 (93 incl. partial) | 69 | −9 (stricter: 160 not 104) |
-| Ablations | 4 (but core_text≡core_only, full≡core_edgar) | 6 (real text embeddings, real EDGAR, real seed2) |
-| Effective conditions | 104 (== 52 truly independent) | 160 (all independent) |
-| Text embeddings | absent (silent fallback) | real: 5.77M rows, 64 PCA dims, float32, 0 NaN |
-| Seed2 replication | derived from text≡core rename | independent SLURM seed2 runs |
-| Text effect | none (0 champion changes) | real: core_text wins 227 vs core_only wins 1,077 |
+| Metric | Phase 9 (2026-03-12) | Phase 12+15 (2026-03-18) | Phase 15+H (2026-03-23) | Change |
+|---|---|---|---|---|
+| Total records | 8,660 | 14,418 | 15,888 | +83.5% total |
+| Raw models in benchmark | 93 (incl. partial) | 114 | 137 (116 real + 21 retired) | +47.3% |
+| Excluded models | ~7 | ~17 | **24** (Finding A-H + structural) | +243% |
+| Active (leaderboard) models | ~86 | ~97 | **92** | net −5 (more exclusions) |
+| Complete models (@160) | 78 | 69 | **64** active + 13 excluded = 77 raw | stricter |
+| Ablations | 4 (but core_text≡core_only, full≡core_edgar) | 6 (real text embeddings, real EDGAR, real seed2) | 6 (unchanged) |
+| Effective conditions | 104 (== 52 truly independent) | 160 (all independent) | 160 (unchanged) |
+| Text embeddings | absent (silent fallback) | real: 5.77M rows, 64 PCA dims, float32, 0 NaN | real (unchanged) |
+| Seed2 replication | derived from text≡core rename | independent SLURM seed2 runs | independent (unchanged) |
+| Text effect | none (0 champion changes) | real: core_text wins 227 vs core_only wins 1,077 | unchanged |
+| P15 new models | n/a | 23 submitted | 15 valid + **8 excluded (Finding H)** |
 
 ### Current Ablation Structure
 - **core_only**: temporal features only (seed1)
@@ -35,11 +41,14 @@
 - task3_risk_adjust × 5 ablations = 5 conditions (40 per model; task3 has no core_only_seed2)
 - **Total: 17 conditions × 160 records = 160 evaluation cells per model**
 
-## 1. Champion Distribution Summary (Updated 2026-03-18, 69 Complete Models @ 160 Records)
+## 1. Champion Distribution Summary (Updated 2026-03-23, 64 Active Complete Models @ 160 Records)
 
-14,418 records across 114 models. 69 models complete at 160/160 records.
+15,888 raw records across 137 models (116 real + 21 retired AutoFit). 24 models excluded (Finding A-H + structural). 92 active leaderboard models.
+64 active models complete at 160/160 records (77 raw including 13 excluded@160).
 160 evaluation cells = 3 tasks × {6 ablations for task1/task2, 5 for task3} × 3 targets × 4 horizons.
-**Fair comparison uses only the 69 complete models (11,040 records).**
+**Fair comparison uses only the 64 active complete models.**
+
+> **Note (2026-03-23)**: Champion distribution is STABLE from 14,418→15,888 records. The newly landed records come from gap-fill jobs (especially seed2 / EDGAR) and partial Phase 15 completion. No champion changes observed. The 9-champion table below remains authoritative.
 
 | Rank | Model | Wins/160 | Pct | Category | Mean Rank | Primary Domain |
 |---:|---|---:|---:|---|---:|---|
@@ -327,7 +336,7 @@ Direct MAE comparison of overlapping cells (same target × horizon × ablation) 
 Despite 87% redundancy, DeepNPTS exhibits a genuine task anomaly:
 - DeepNPTS wins 16 conditions — ALL on task1_outcome, zero on task2/task3
 - For other champions (NBEATS, Chronos, NHITS, KAN), task invariance holds strongly
-- **V740 oracle must include task as routing dimension for binary targets only**
+- **V740 implication**: any clean adaptive system must treat task as a first-class conditioning signal for binary targets, even if most continuous/count cells remain largely task-invariant.
 
 **Observation 2: Text Embeddings are Mostly Harmful**
 With real text embeddings (64-dim PCA from business descriptions):
@@ -435,107 +444,208 @@ Mean rank by target:
 2. **EDGAR benefits are concentrated**: EDGAR helps primarily for binary (is_funded) predictions where SEC filing dates carry information about corporate activity. For continuous and count targets, EDGAR adds marginally useful or harmful information.
 3. **Seed2 confirms robustness**: The independent seed2 runs (different GPU, different SLURM allocation) confirm that champion designations are not artifacts of specific random seed choices.
 
-## 4. V740 Structural Oracle Router (Updated 2026-03-18)
+### 3.4 Finding H: Broken Phase 15 Models (2026-03-22)
 
-Based on 160-cell analysis with real ablation effects. The oracle now needs a
-4th dimension: **task** (due to DeepNPTS's task1-only behavior on is_funded).
+**8 out of 23 new TSLib models produce 100% constant predictions** — a systematic failure unrelated to data or hyperparameters.
 
-### 4.1 Why Not Blend
+| Model | Constant Prediction Warnings | Raw Records | Fairness Pass | Excluded Under |
+|---|---|---|---|---|
+| CFPT | 130 | partial | 0% | Finding H |
+| DeformableTST | 127 | partial | 0% | Finding H |
+| MICN | 105 | partial | 0% | Finding G (already) + H |
+| PathFormer | 92 | partial | 0% | Finding H |
+| SparseTSF | 91 | partial | 0% | Finding H (note: different from SparseTSF paper; implementation bug) |
+| SEMPO | 91 | partial | 0% | Finding H |
+| TimePerceiver | 85 | partial | 0% | Finding H |
+| TimeBridge | 85 | partial | 0% | Finding H |
 
-All champion models train on the same entity panel data, producing positively
-correlated prediction errors (rho > 0.9). Under positive correlation:
+**Root Causes Identified**:
+1. **CUDA OOM → degraded mode**: DeformableTST fails with "CUDA out of memory" on both V100 (20.69MiB free, 318MiB requested) and L40S (202.12MiB free, 634MiB requested). Even on H100, dimension mismatch (expected 60, got 169) causes silent degradation to constant output.
+2. **Architecture adaptation bugs**: TSLib models expect fixed input/output shapes. Our NeuralForecast wrapper adapts shapes, but some models (CFPT, SEMPO) produce shape-invariant constant outputs regardless of input.
+3. **Forward-only models (encoder-only)**: Despite our `forward(x)` patches for 8 encoder-only models, PathFormer and SparseTSF still collapse to constant predictions — the patch doesn't address deeper architectural incompatibilities with our panel data format.
 
-    MAE(a*y_A + (1-a)*y_B) ~ a*MAE(y_A) + (1-a)*MAE(y_B) >= min(MAE)
+**Impact on Champion Analysis**:
+- These 8 models were never competitive (all would rank last on any cell due to constant predictions)
+- Excluding them REMOVES noise from the benchmark surface and makes fair comparisons cleaner
+- Champion distribution (9 champions, 160-cell allocation) is completely UNAFFECTED by their removal
+- Active model count drops from 99→92 but complete@160 active models remain at 64
 
-The blend always falls *between* the best and worst constituent.
+**Lessons for V740**:
+- **Fairness check is mandatory**: Any model with >50% constant-prediction warnings should be automatically flagged and excluded
+- **TSLib integration is fragile**: 8/23 failure rate (35%) — TSLib adapters require per-model verification
+- **V740 model pool (7 models) is safe**: All 7 pool models (NBEATS, NHITS, Chronos, KAN, DeepNPTS, PatchTST, GRU) have 0% constant-prediction rate and pass all fairness checks
 
-### 4.2 Why Not Validate
+## 4. 2026-03-23 Superseding Interpretation: Beyond Structural Oracle Routing
 
-The champion mapping is a pure function of structural properties detectable
-at fit time: `(target_type, horizon, ablation_class, task)`. Validation-based
-selection adds noise (~10-20% wrong-model probability from small val sets)
-without information gain over the deterministic oracle.
+The 160-cell champion map is still extremely valuable, but it should no longer
+be interpreted as the final V740 recipe. What it gives us is a clean map of
+which **mechanisms** win where. What it does **not** justify anymore is ending
+the project with a deterministic structural router.
 
-**Caveat for V740**: The h=14/heavy_tail cell (GRU vs Chronos, ~0.04% margin)
-remains the weakest oracle entry. V740 should consider a lightweight validation
-gate specifically for this cell.
+The most important strategic shift on 2026-03-23 is:
 
-### 4.3 The Oracle Table (Updated 2026-03-18, expanded to include task dimension for binary targets)
+> the champion table should now be treated as a mechanism atlas for a
+> single-model V740 student, not as a hand-written deployment oracle.
 
-```
-target_type  | horizon | has_edgar | task       | Model
--------------|---------|-----------|------------|----------
-heavy_tail   |   h=1   | any       | any        | NBEATS
-heavy_tail   |   h=7   | any       | any        | NHITS
-heavy_tail   |  h=14   | no        | any        | GRU
-heavy_tail   |  h=14   | yes       | any        | Chronos
-heavy_tail   |  h=30   | any       | any        | Chronos
-count        |   h=1   | any       | any        | KAN
-count        |  h>=7   | any       | any        | NBEATS
-binary       | any     | no        | task1      | DeepNPTS
-binary       | any     | yes       | task1      | PatchTST (h=1,14) / NHITS (h=7,30)
-binary       | any     | no        | task2/3    | NBEATS (default, no specialist)
-binary       | any     | yes       | task2/3    | PatchTST (h=1,14) / NHITS (h=7,30)
-```
+### 4.1 What remains true from the champion map
 
-**Key changes from Phase 9 Oracle:**
-1. **Task dimension added**: DeepNPTS is task1-specialist only → task2/task3 binary needs different routing.
-2. **Text dimension REMOVED**: core_text ≡ core_only in practice (text hurts); no routing by text needed.
-3. **seed2 confirms stability**: oracle entries unchanged by seed — robust to random initialization.
+Several empirical patterns remain stable and should directly constrain V740:
 
-### 4.4 Component-Level Justification per Oracle Cell
+1. **Heavy-tail funding cells remain horizon-structured**
+   - `h=1`: NBEATS-like basis decomposition remains strongest
+   - `h=7`: NHITS-style multi-resolution interpolation remains strongest
+   - `h=14`: temporal-only cells remain compact-state sensitive (GRU-like), while richer EDGAR-conditioned cells shift toward Chronos-like long-horizon priors
+   - `h=30`: long-horizon prior strength remains the decisive factor
 
-| Cell | Primary | Why this component wins |
-|---|---|---|
-| heavy_tail h=1 | NBEATS | Polynomial trend basis = optimal 1-step extrapolation for slow USD amounts |
-| heavy_tail h=7 | NHITS | MaxPool at ~7-day scale captures weekly funding periodicity |
-| heavy_tail h=14 temporal | **GRU** [NEW] | Gated recurrence compresses 2-week dynamics into compact hidden state; fewer parameters than Chronos → better regularization on core_only |
-| heavy_tail h=14 exog | Chronos | EDGAR features shift information balance: pre-trained prior + rich conditioning > compact recurrence |
-| heavy_tail h=30 | Chronos | Pre-trained distributional priors anchor 30-day forecasts regardless of features |
-| count h=1 | KAN | B-spline activations handle discontinuous investor count jumps |
-| count h>=7 | NBEATS | Fourier seasonality captures weekly investor activity cycles |
-| binary temporal | DeepNPTS | Non-parametric weighting = distribution-free probability estimation |
-| binary exog h=1,14 | PatchTST | 16 attention heads capture EDGAR-filing to funding dependencies |
-| binary exog h=7,30 | NHITS | Hierarchical interpolation handles binary step-transitions |
+2. **Count forecasting remains split by horizon**
+   - `h=1`: KAN-like nonlinear response remains uniquely useful
+   - `h>=7`: NBEATS-style structured decomposition still dominates
 
-### 4.5 Execution Efficiency
+3. **Binary forecasting remains regime-dependent**
+   - pure temporal binary cells still favor DeepNPTS-like calibration behavior
+   - EDGAR-enriched binary cells still favor PatchTST/NHITS-like context sensitivity
 
-- **Oracle path**: 1 model training on full data = 5-8x faster than previous 5-model validation+refit
-- **No blending**: single model prediction with no correlated-error degradation
-- **Fallback safety**: validation path activates only on oracle failures or unseen conditions
+4. **Text embeddings remain harmful under the current pipeline**
+   - the current PCA text path should not be treated as a core V740 strength
+   - it is a candidate for redesign, not a component to preserve blindly
 
-### 4.6 V740 Design Recommendations (Updated 2026-03-18)
+5. **Seed2 stability remains strong**
+   - the champion map is not being driven by random initialization noise
+   - this makes it safe to design V740 around persistent champion mechanisms
 
-Based on the 160-cell analysis (87% task redundancy → ~72 truly unique cells) with real text and EDGAR ablation effects:
+### 4.2 Why a deterministic oracle is no longer the right end-state
 
-1. **Reduce model pool to 7**: NBEATS, NHITS, Chronos, KAN, DeepNPTS, PatchTST, GRU. Drop NBEATSx (tied with NBEATS) and DLinear (1 marginal win).
-2. **Drop text embeddings from V740**: core_text hurts 55.7% of pairs. PCA text embeddings add noise. Re-explore only if embedding method changes (e.g., fine-tuned LLM, temporal-aware embeddings).
-3. **h=14 decision gate**: Train both GRU and Chronos; pick winner via 10% temporal holdout.
-4. **Task-aware routing for binary targets**: DeepNPTS only works on task1; task2/task3 need a different default for is_funded.
-5. **EDGAR gate**: Binary is_funded targets show EDGAR-dependent champion switches (DeepNPTS → PatchTST/NHITS). Route by `has_edgar` flag.
-6. **PatchTST as universal fallback**: Best mean rank (4.28) despite few wins — the safest default when oracle routing fails.
-7. **ChronosBolt as consistent long-horizon pick**: Mean rank improves from 9.47→4.78 as horizon increases. Consider for h>=14 fallback.
-8. **Prioritize NBEATS components for V740 core engine**: 40.6% of all wins with a compact architecture. The basis expansion + double residual + robust scaler trio is the most transferable design pattern.
-9. **Exploit task redundancy**: 87% of task-overlapping cells produce identical MAE. V740 express benchmark can use task1 only as primary evaluation surface (72 cells), validate task2/task3 only for binary targets where DeepNPTS anomaly exists.
-10. **Horizon specialization is stronger than task specialization**:
-    - h=1: KAN dominates (40.0% of h=1 cells), NBEATS second (35.0%)
-    - h=7: NHITS dominates (45.0%), NBEATS second (42.5%)
-    - h=14: NBEATS (42.5%), GRU (27.5%), Chronos (15.0%)
-    - h=30: Chronos+NBEATS tied (42.5% each)
-    - Target specialization: investors_count → NBEATS (75.0%), is_funded → DeepNPTS (66.7%), funding_raised → Chronos (33.8%)
+The old structural-router framing is now too narrow for four reasons.
+
+1. **The current valid AutoFit line is already validation-based, not oracle-based**
+   - V739 no longer proves that a hard-coded table is the right answer
+   - it proves that clean adaptive selection is viable without test leakage
+
+2. **A deterministic router does not satisfy the real project objective**
+   - the target is no longer just ``pick the right specialist''
+   - the target is ``approach the specialist frontier with one efficient model''
+
+3. **Ambiguous cells remain genuinely ambiguous**
+   - the h=14 funding regime is still a close race between compact temporal regularization and stronger long-horizon prior structure
+   - a static table is a helpful summary, but too brittle to be the final intelligence layer
+
+4. **Task redundancy does not eliminate the need for internal conditioning**
+   - even if 87\% of overlapping cells are redundant at the MAE level,
+     target semantics, calibration needs, and feature interactions still differ
+   - V740 should compress this structure internally rather than flatten it away
+
+### 4.3 What V740 should do instead
+
+V740 should now be designed around the following principles:
+
+1. **single training graph**
+2. **single inference path**
+3. **condition-aware internal modulation**
+4. **offline champion distillation**
+5. **no runtime ensemble**
+6. **no test-derived routing**
+
+Concretely, the champion set now looks more like a decomposition of useful
+inductive biases than a menu of final models:
+
+| Champion family | Mechanism V740 should absorb |
+|---|---|
+| NBEATS / NBEATSx | basis decomposition, residual refinement, cheap short-horizon structure |
+| NHITS | multi-resolution interpolation and weekly-scale smoothing |
+| Chronos / ChronosBolt | robust long-horizon priors and scale-insensitive extrapolation |
+| KAN | highly nonlinear short-horizon count response |
+| DeepNPTS | binary/event-style calibration behavior |
+| GRU | compact temporal-state regularization |
+| PatchTST | EDGAR-sensitive local context mixing |
+
+### 4.4 New 2024-2026 Research Signals That Matter for V740
+
+The deeper post-2024 literature search strengthens this ``single-model
+mechanism synthesis'' direction rather than weakening it.
+
+1. **SAMformer (ICML 2024 oral)**
+   - strongest signal for a lightweight, efficient, attention-based forecaster
+   - relevant because V740 must be closer to a normal single model than to a multi-model controller
+   - now locally integrated as the first new efficiency-focused benchmark addition
+
+2. **UniTS (NeurIPS 2024)**
+   - supports the idea that one condition-aware model can span multiple tasks and settings
+   - directly relevant to V740's task/target/horizon/ablation token design
+
+3. **ElasTST (NeurIPS 2024)**
+   - strengthens the case for one model across multiple horizons rather than horizon-specific submodels
+
+4. **DIAN (IJCAI 2024) and TimeEmb (NeurIPS 2025)**
+   - both reinforce the need for invariant/variant and static/dynamic disentanglement
+   - this is highly aligned with our mixed panel, EDGAR, and entity-context structure
+
+5. **LightGTS (ICML 2025), OLinear (NeurIPS 2025), LiPFormer (ICDE 2025)**
+   - these are the most important missing efficiency-first benchmark additions
+   - all three are closer to the V740 target than another heavyweight foundation model
+
+6. **Time-o1, DistDF, QDF, Selective Learning, and Abstain-Mask-Retain-Core**
+   - these papers collectively suggest that the next gains may come as much from the objective as from the backbone
+   - V740 should therefore combine backbone synthesis with stronger heavy-tail and multistep training objectives
+
+7. **CASA / DERITS / QuantileFormer**
+   - not the first benchmark additions we should prioritize
+   - but they add useful signals for efficient attention, non-stationarity handling, and calibrated uncertainty
+
+### 4.5 Updated V740 Design Recommendations
+
+Based on the current 160-cell map, the current 15,888-record benchmark state,
+and the new 2024-2026 research layer:
+
+1. **Stop treating the deterministic oracle as the V740 end-state**
+   - keep it only as a historical compression of champion structure
+
+2. **Preserve the seven truly important champion mechanisms**
+   - NBEATS, NHITS, Chronos, KAN, DeepNPTS, GRU, PatchTST
+   - NBEATSx remains useful mainly as an exogenous variant of NBEATS, not as a separate essential family
+
+3. **Treat text as redesign territory, not as a current strength**
+   - current PCA text embeddings hurt too often to justify a first-class V740 branch
+
+4. **Make condition tokens a first-class part of the model**
+   - task, target, horizon, and ablation should modulate one shared trunk
+
+5. **Use target-specific heads**
+   - continuous head for funding
+   - count-aware head for investors
+   - explicitly calibrated binary head for is_funded
+
+6. **Add static-dynamic / invariant-variant factorization**
+   - this is now one of the strongest research-backed improvements for our data type
+
+7. **Upgrade the objective, not only the architecture**
+   - Time-o1 / DistDF / QDF-style components should be considered part of V740, not optional afterthoughts
+
+8. **Benchmark additions should prioritize efficiency-first missing models**
+   - first real addition: SAMformer
+   - then: OLinear preprocessing path
+   - then: LightGTS and LiPFormer
+   - then second-wave additions such as UniTS / CASA / DIAN-oriented baselines if needed
+
+9. **PatchTST remains the right generalist sanity anchor**
+   - best mean rank, few wins, very robust
+   - useful as the benchmark's generalist reference even if V740 should not merely imitate it
+
+10. **The final V740 target is not “oracle accuracy”**
+    - it is champion-level behavior under a single efficient forward path
 
 ---
 
-## 5. Evidence Summary (Updated 2026-03-18)
+## 5. Evidence Summary (Updated 2026-03-23)
 
 All quantitative observations are derived from:
 
 ### Primary Data Sources
-- **14,418 benchmark records** across 114 models via `scripts/aggregate_block3_results.py`
-- **69 complete models** (@160/160 records each) used for fair comparison
+- **15,888 raw benchmark records** across 137 models via `scripts/aggregate_block3_results.py`
+- **92 active (leaderboard) models** after 24 exclusions (Finding A-H + structural)
+- **64 active complete models** (@160/160 records each) used for fair comparison
 - **160 evaluation cells** = 3 tasks × {6/6/5 ablations} × 3 targets × 4 horizons (but ~72 truly unique due to 87% task redundancy)
-- **11,040 fair-comparison records** (69 complete × 160 cells)
 - **Canonical output**: `runs/benchmarks/block3_phase9_fair/`
+- **Champion analysis computed from**: 14,418 records / 69 complete@160 (as of 2026-03-18); stable through 15,888 records (2026-03-23)
 
 ### Ablation Effect Statistics (from 1,932 paired cells each)
 - **Text effect** (core_text vs core_only): core_text wins 227 (11.7%), core_only wins 1,077 (55.7%), ties 628 (32.5%)
@@ -560,45 +670,48 @@ All quantitative observations are derived from:
 
 ---
 
-## 6. Compute Cost Analysis & V740 Efficiency Design (Updated 2026-03-18)
+## 6. Compute Cost Analysis & V740 Efficiency Design (Updated 2026-03-23)
 
 ### 6.1 Phase 12+15 Compute Investment
 
-**Current benchmark surface**: 114 models × 17 conditions = 1,938 model-condition slots
-- 69 complete (@160): 11,040 records ✅
-- 10 ml_tabular (@157): 1,570 records (3 records short each, split-model job 5263582 PENDING)
-- 1 AutoFitV739 (@112): 5 seed2 conditions resubmitted
-- 22 P15 new models (@26): all missing seed2 ablations, covered by cos2 scripts
-- 11 partial models: various stages, covered by ALL33 accel scripts
+**Current benchmark surface (2026-03-23)**: 92 active models × 160 conditions = 14,720 model-condition slots
+- 64 active complete (@160): 10,240 records ✅
+- 1 AutoFitV739 (@120): 5 af739 s2/e2 gap-fill RUNNING (very slow, ~3 conds per 2d)
+- 4 models @113 (ETSformer/LightTS/Pyraformer/Reformer): covered by accel_v2, e2=0 critical gap
+- 4 models @109 (Crossformer/MSGNet/MambaSimple/PAttn): covered by accel_v2
+- 15 valid P15 models @~67: accel_v2 RUNNING (51 scripts across gpu/l40s/hopper)
+- XGBoost @159: 1 missing (t1/full/is_funded — structural OOM, UNFIXABLE)
+- XGBoostPoisson @157: 3 missing (structural OOM, UNFIXABLE)
+- 24 excluded models: NegativeBinomialGLM (structural), 7 Finding A-G models, 8 Finding H models, 8 other
 
-**Active compute (2026-03-18)**: 90 jobs (npin 69 + cfisch 21), ~26 GPUs
-- npin GPU (11 RUNNING): p15_new, fix11, gf_ts, af739
-- npin L40S (3 RUNNING): l40_fix11, l40_cos2 × 2
-- cfisch GPU (6 RUNNING): cf_p15_new ct/fu × 3 tasks
-- cfisch L40S (1 RUNNING): l40cf_ac_t1_fu
+**Active compute (2026-03-23)**: 58 jobs (27 RUNNING + 31 PENDING)
+- npin GPU: accel_v2, af739, gpu_cos2_t2
+- npin L40S: l2_ac_* scripts (17 total)
+- npin Hopper: h2_ac_* scripts (17 total)
 
-**Estimated total compute**: ~4,500 GPU-hours invested across Phase 9-15
-- Phase 12 text reruns: ~800 GPU-hours (48 scripts × ~16h avg)
-- Phase 15 new models: ~800 GPU-hours and counting (85+ jobs across 3 partitions)
-- ALL33 gap-fill: ~400 GPU-hours and counting
+**Estimated total compute**: ~5,500 GPU-hours invested across Phase 9-15
+- Phase 12 text reruns: ~800 GPU-hours (48 scripts)
+- Phase 15 new models: ~1,200 GPU-hours and counting (accel_v2: 51 optimized scripts)
+- Gap-fill (seed2, EDGAR): ~600 GPU-hours
 
 ### 6.2 V740 Fast Iteration Plan
 
-With the 160-cell champion analysis complete, V740 iteration can focus on:
+With the 160-cell champion analysis complete and stable (9 champions confirmed across 14,418→15,888 records), V740 iteration can focus on:
 
 **7-model express benchmark** (drop NBEATSx, DLinear):
 | Parameter | Full Benchmark | V740 Express | Savings |
 |---|---|---|---|
-| Models | 114 | 7 (NBEATS, NHITS, Chronos, KAN, DeepNPTS, PatchTST, GRU) | 94% |
+| Models | 92 active | 7 (NBEATS, NHITS, Chronos, KAN, DeepNPTS, PatchTST, GRU) | 92% |
 | Ablations | 6 | 2 (core_only + core_edgar) | 67% |
 | Conditions | 17 | ~6 (2 ablations × 3 tasks, skip seed2) | 65% |
 | Total cells | 160 | ~42 | **74% savings** |
 | Estimated time | 2-3 weeks | 4-8 hours | 50×+ faster |
 
 **When to expand**:
-1. V740 oracle router validated on 7-model × 2-ablation → if champion map changes, investigate
-2. Full 114-model benchmark only needed for final paper tables
-3. 22 new P15 models may reveal new champions → wait for completion before V740 finalization
+1. V740 single-model synthesis design validated on 7-model × 2-ablation express benchmark → if the champion map changes materially, re-open the mechanism set
+2. Full 92-model benchmark only needed for final paper tables
+3. 15 valid P15 models may reveal new champions → wait for completion before V740 finalization (Finding H removed 8 broken models, leaving 15 valid candidates)
+4. accel_v2 scripts (51 jobs) cover remaining gap-fill — estimated completion 5-7 days
 
 ### 6.3 Unstable Models: Current Population
 
@@ -609,10 +722,10 @@ Models with high training variance from seed2 analysis:
 
 ---
 
-## 7. Appendix: Full 104-Condition Champion Table
+## 7. Appendix: Full 160-Cell Champion Table
 
 | # | Task | Target | Ablation | Horizon | Champion | MAE | Runner-Up | Runner-Up MAE | Gap% |
 |---|---|---|---|---|---|---|---|---|---|
-| See `runs/benchmarks/block3_phase9_fair/` consolidated data — 104 rows generated by `scripts/consolidate_block3_results.py` |
+| See `runs/benchmarks/block3_phase9_fair/` consolidated data — 160 benchmark cells under the current 6-ablation Phase 12+15 surface |
 
-*Full table omitted for brevity. Run `python scripts/consolidate_block3_results.py --pivot champion` for the complete 104-row table.*
+*Full table omitted for brevity. Generate the current champion pivot from the canonical Phase 9 fair benchmark root rather than relying on older 104-condition historical exports.*

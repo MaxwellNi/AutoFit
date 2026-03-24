@@ -1,6 +1,6 @@
 # Block 3 Model Benchmark Status
 
-> Last updated: 2026-03-23 10:45 CET
+> Last updated: 2026-03-24 17:35 CET
 > Current authority: `docs/CURRENT_SOURCE_OF_TRUTH.md`
 > Evidence: direct scan of `runs/benchmarks/block3_phase9_fair/`
 
@@ -8,7 +8,7 @@
 
 | Metric | Value | Evidence |
 | --- | ---: | --- |
-| raw records | **15888** | direct scan 2026-03-23 10:40 (+24 from 15864) |
+| raw records | **16023** | direct scan 2026-03-24 17:30 (+135 from 15888) |
 | raw models (all) | 137 | direct scan (116 real + 21 retired AutoFit@1) |
 | audit-excluded models | **24** | AUDIT_EXCLUDED_MODELS in aggregate_block3_results.py (Finding A-H + Structural) |
 | active (leaderboard) models | **92** | 116 raw - 24 excluded |
@@ -17,7 +17,7 @@
 | incomplete active models | 28 | 92 - 64 |
 | unfixable gaps | 2 | XGBoost@159, XGBoostPoisson@157 (structural OOM) |
 | conditions per model | 160 | t1(72) + t2(48) + t3(40) |
-| live jobs | npin **27R + 31PD = 58** | squeue 2026-03-23 10:43 |
+| live jobs | npin **11R + 46PD = 57** | squeue 2026-03-24 17:35 |
 | Phase 12 text reruns | 48/48 COMPLETED | all categories |
 | Phase 15 new models | 23 submitted (15 valid + 8 broken excluded), accel_v2 scripts | `.slurm_scripts/phase15/accel_v2/` |
 
@@ -26,8 +26,8 @@
 | Fact | Value | Evidence |
 | --- | --- | --- |
 | current valid AutoFit line | `AutoFitV739` | Root `AGENTS.md` |
-| landed conditions | `126/160` | co=28, ce=28, ct=28, fu=28, s2/e2 progressing (+6 from 120) |
-| s2/e2 gap-fill | 5R + 1PD | af739_t1_e2(46h near TO), t1_s2(14h), t2_s2(14h), t2_e2(14h) RUNNING; t3_e2 resubmitted |
+| landed conditions | `131/160` | co=28, ce=28, ct=28, fu=28, s2/e2 progressing (+5 from 126) |
+| s2/e2 gap-fill | 4R + 1PD | af739_t1_s2/t2_s2/t2_e2(1d21h), t3_e2(1d7h) RUNNING; t1_e2 resubmitted |
 | quality | 0 NaN/Inf, 0 fallback, 100% fairness pass | direct scan |
 | mean rank (56 universal conditions) | **#13/80** (top 16%) | computed across 56 universal conditions shared by all 80 models |
 | V734-V738 | RETIRED | oracle test-set leakage |
@@ -38,7 +38,7 @@
 | --- | ---: | --- | --- |
 | XGBoost | 159/160 | ❌ structural OOM | Missing t1/full/is_funded. UNFIXABLE. |
 | XGBoostPoisson | 157/160 | ❌ structural OOM | Missing t1/full/is_funded h{7,14,30}. UNFIXABLE. |
-| AutoFitV739 | **126**/160 | ⏳ af739 5R+1PD @2d | Missing s2(~19)+e2(~15); t3_e2 resubmitted, ~3-4 conds/2d |
+| AutoFitV739 | **131**/160 | ⏳ af739 4R+1PD @2d | Missing s2+e2 ~29 conds; ~3-5 conds/2d |
 | ETSformer | 113/160 | ⏳ ALL33 accel RUNNING | Missing scattered s2/e2/ct/fu |
 | LightTS | 113/160 | ⏳ ALL33 accel RUNNING | same |
 | Pyraformer | 113/160 | ⏳ ALL33 accel RUNNING | same |
@@ -47,37 +47,39 @@
 | MSGNet | 109/160 | ⏳ ALL33 accel RUNNING | same |
 | MambaSimple | 109/160 | ⏳ ALL33 accel RUNNING | same |
 | PAttn | 109/160 | ⏳ ALL33 accel RUNNING | same |
-| DUET | **75**/160 | ⏳ accel_v2 RUNNING | Phase 15 fix11 model |
-| FilterTS | **75**/160 | ⏳ accel_v2 RUNNING | Phase 15 fix11 model |
-| ModernTCN | **75**/160 | ⏳ accel_v2 RUNNING | Phase 15 fix11, large model (12.5M params) |
-| PDF | **75**/160 | ⏳ accel_v2 RUNNING | Phase 15 fix11 model |
-| PIR | **75**/160 | ⏳ accel_v2 RUNNING | Phase 15 fix11 model |
-| TimeRecipe | **75**/160 | ⏳ accel_v2 RUNNING | Phase 15 fix11 model |
-| xPatch | **75**/160 | ⏳ accel_v2 RUNNING | Phase 15 fix11 model |
-| CARD | **75**/160 | ⏳ accel_v2 RUNNING | Phase 15 new model (speed bottleneck: ~17-50min/epoch) |
-| FiLM | **75**/160 | ⏳ accel_v2 RUNNING | Phase 15 new model |
-| FreTS | **75**/160 | ⏳ accel_v2 RUNNING | Phase 15 new model |
-| Fredformer | **75**/160 | ⏳ accel_v2 RUNNING | Phase 15 new model |
-| NonstationaryTransformer | **75**/160 | ⏳ accel_v2 RUNNING | Phase 15 new model |
-| SCINet | **75**/160 | ⏳ accel_v2 RUNNING | Phase 15 new model |
-| SRSNet | **75**/160 | ⏳ accel_v2 RUNNING | Phase 15 new model |
-| SegRNN | **75**/160 | ⏳ accel_v2 RUNNING | Phase 15 new model |
+| DUET | **76**/160 | ⏳ accel_v2 RUNNING | Phase 15 fix11 model |
+| FilterTS | **76**/160 | ⏳ accel_v2 RUNNING | Phase 15 fix11 model |
+| ModernTCN | **76**/160 | ⏳ accel_v2 RUNNING | Phase 15 fix11, large model (12.5M params) |
+| PDF | **76**/160 | ⏳ accel_v2 RUNNING | Phase 15 fix11 model |
+| PIR | **76**/160 | ⏳ accel_v2 RUNNING | Phase 15 fix11 model |
+| TimeRecipe | **76**/160 | ⏳ accel_v2 RUNNING | Phase 15 fix11 model |
+| xPatch | **76**/160 | ⏳ accel_v2 RUNNING | Phase 15 fix11 model |
+| CARD | **76**/160 | ⏳ accel_v2 RUNNING | Phase 15 new model (speed bottleneck: ~17-50min/epoch) |
+| FiLM | **76**/160 | ⏳ accel_v2 RUNNING | Phase 15 new model |
+| FreTS | **76**/160 | ⏳ accel_v2 RUNNING | Phase 15 new model |
+| Fredformer | **76**/160 | ⏳ accel_v2 RUNNING | Phase 15 new model |
+| NonstationaryTransformer | **76**/160 | ⏳ accel_v2 RUNNING | Phase 15 new model |
+| SCINet | **76**/160 | ⏳ accel_v2 RUNNING | Phase 15 new model |
+| SRSNet | **76**/160 | ⏳ accel_v2 RUNNING | Phase 15 new model |
+| SegRNN | **76**/160 | ⏳ accel_v2 RUNNING | Phase 15 new model |
 
-## Live Queue Reality (2026-03-23 10:45 CET)
+## Live Queue Reality (2026-03-24 17:35 CET)
 
 | Queue slice | Value | Evidence |
 | --- | ---: | --- |
-| npin gpu RUNNING | 22 | 17 g2_ac_v2 (32h in) + af739_t1_e2(46h!) + af739_t1_s2/t2_s2/t2_e2(14h) + gpu_cos2_t2(46h!) |
-| npin gpu PENDING | 1 | af739_t3_e2 (resubmitted 5273998) |
-| npin l40s RUNNING | 5 | l2_ac_t1_{ce,co,ct,e2,s2} (23h in) |
-| npin l40s PENDING | 12 | l2_ac_v2 remaining (Priority/Resources) |
-| npin hopper RUNNING | 0 | preempted (besteffort), returned to PENDING |
-| npin hopper PENDING | 17 | h2_ac_v2 all PENDING (Priority) |
-| **total** | **58** (27R + 31PD) | squeue 2026-03-23 10:43 |
+| npin gpu RUNNING | 4 | af739_t1_s2/t2_s2/t2_e2(1d21h) + af739_t3_e2(1d7h) |
+| npin gpu PENDING | 19 | 17 g2_ac_v2 + af739_t1_e2 + gpu_cos2_t2 (resubmitted 2026-03-24) |
+| npin l40s RUNNING | 4 | l2_ac_t2_e2/t2_fu/t3_ct/t3_e2 |
+| npin l40s PENDING | 13 | l2_ac_v2 remaining incl 2 resubmitted TIMEOUT'd |
+| npin hopper RUNNING | 3 | h2_ac_t2_ce/co/ct (6.5h on iris-197) |
+| npin hopper PENDING | 14 | h2_ac_v2 remaining (Priority) |
+| **total** | **57** (11R + 46PD) | squeue 2026-03-24 17:35 |
 
-**Events since 2026-03-22 20:15**:
-- **Records +24**: 15,864→15,888 (mainly e2: 2786→2810)
-- **V739 +1**: 125→126 conditions
+**Events since 2026-03-23 10:45**:
+- **Records +135**: 15,888→16,023 (ct +124, fu +134, e2 -86?, co stable)
+- **V739 +5**: 126→131 conditions
+- **21 TIMEOUT wave**: ALL 17 g2_ac + af739_t1_e2 + gpu_cos2_t2 + 2 L40S — trap in files but loaded before fix. All 21 resubmitted.
+- **Duplicate af739_t3_e2 recurred (3rd time)**, newer copy cancelled
 - **3 duplicate af739 CANCELLED**: 5272199/5272200/5272201 (race condition — same metrics.json)
 - **af739_t3_e2 TIMEOUT → resubmitted** (5273998)
 - **Hopper preempted**: h2_ac_t1_ce (besteffort) preempted back to PENDING
@@ -170,17 +172,15 @@ DeformableTST, Fredformer, ModernTCN, PDF, PathFormer, SparseTSF, TimeRecipe, xP
 
 ## Interpretation
 
-1. V739 partially landed: 124/160 (+4 today). 36 missing (s2+e2) covered by 2 af739 RUNNING (~3 conds per 2d job).
-2. Of 92 active models, 64 at 160/160. 28 incomplete covered by 54 SLURM jobs (25R + 29PD).
-3. P15 new models at 69/160 each. e2/ct will complete in first g2_ac_v2 run. co/s2/ce/fu need auto-requeue.
-4. Partition limits verified: L40S max 4 jobs (CPU), Hopper max 1 job (RAM), Hopper besteffort only.
-5. NegBinGLM now included in AUDIT_EXCLUDED_MODELS (24 total excluded).
-3. 2 models have unfixable structural OOM gaps: XGBoost@159, XGBoostPoisson@157.
-4. NegativeBinomialGLM: audit-excluded (21 records, structural failure).
-5. Phase 12 text reruns: 48/48 COMPLETED. core_text+full: 91/91 models.
-6. Phase 15: 15 valid + 8 excluded (Finding H), @67/160 each, accel_v2 RUNNING.
-7. **Finding H**: 8 P15 models produce 100% constant predictions. Added to AUDIT_EXCLUDED_MODELS.
-8. accel_v2 scripts: 23 models × 3 partitions × 17 scripts each = 51 new jobs (30% faster).
+1. V739 partially landed: 131/160 (+5 since last update). ~29 missing (s2+e2) covered by 4R+1PD af739 (~3-5 conds per 2d).
+2. Of 92 active models, 64 at 160/160. 28 incomplete covered by 57 SLURM jobs (11R + 46PD).
+3. P15 valid models at 76/160. 21 TIMEOUT'd jobs resubmitted 2026-03-24. Trap handler now active for auto-requeue.
+4. Partition limits verified: L40S max 4 jobs (CPU), Hopper max 1 job (RAM), Hopper besteffort intermittently available.
+5. NegBinGLM included in AUDIT_EXCLUDED_MODELS (24 total excluded).
+6. 2 models have unfixable structural OOM gaps: XGBoost@159, XGBoostPoisson@157.
+7. Phase 12 text reruns: 48/48 COMPLETED. core_text+full: 91/91 models.
+8. Phase 15: 15 valid + 8 excluded (Finding H), @76/160 each, accel_v2 resubmitted.
+9. **ModernTCN is global bottleneck**: 20M params, 30min/epoch. All non-e2 jobs stuck here.
 9. s2 (core_only_seed2) gap: gpu_cos2_t2 RUNNING (5268391). Key priority.
 10. e2 (core_edgar_seed2) gap: ETSformer/LightTS/Pyraformer/Reformer at 0/28 e2. accel_v2 covers this.
 11. Top-5 by mean rank: PatchTST(4.28), NHITS(4.38), NBEATS(5.01), NBEATSx(5.81), ChronosBolt(7.42).

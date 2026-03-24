@@ -1,5 +1,17 @@
 # SOTA Models for Time Series Forecasting
 
+> 2026-03-23 update:
+> This catalog is now best read as a historical integration overview plus a
+> reference shelf for benchmarked families. Its old AutoFit selection section
+> is **not** the current operational truth for Block 3. The current clean line
+> is `AutoFitV739` under `runs/benchmarks/block3_phase9_fair/`, and the active
+> V740 direction is a **single-model conditional forecaster**, not a
+> hand-written meta-feature router. See:
+> - `docs/CURRENT_SOURCE_OF_TRUTH.md`
+> - `docs/references/BLOCK3_CHAMPION_COMPONENT_ANALYSIS.md`
+> - `docs/references/V740_DESIGN_SPECIFICATION.md`
+> - `docs/references/V740_ALPHA_ENGINEERING_SPEC.md`
+
 This document catalogs the state-of-the-art models integrated into the Block 3 benchmark harness.
 
 ## Model Categories
@@ -69,7 +81,11 @@ This document catalogs the state-of-the-art models integrated into the Block 3 b
 
 ---
 
-## AutoFit Model Selection
+## Historical AutoFit Model Selection (Superseded)
+
+The table below describes an older design idea and should now be interpreted as
+historical background only. It is kept for traceability, but it is no longer
+the current Block 3 truth.
 
 Based on data profile meta-features, AutoFit selects the optimal backbone:
 
@@ -89,6 +105,35 @@ Based on data profile meta-features, AutoFit selects the optimal backbone:
 | Default | None | Endogenous only |
 
 ---
+
+## Current V740-Relevant Additions (2026-03-23)
+
+The most relevant missing-or-newly-added models for the current V740 goal are:
+
+| Model | Venue | Why it matters now | Current local status |
+|-------|-------|--------------------|----------------------|
+| SAMformer | ICML 2024 Oral | Efficient single-model transformer with SAM + channel-wise attention | **Integrated locally**; synthetic smoke passed, real benchmark smoke still blocked by local memory-path + constant-output audit |
+| LightGTS | ICML 2025 | Lightweight general TS model; highly aligned with V740 efficiency target | missing |
+| OLinear | NeurIPS 2025 | Strong low-cost orthogonal-domain linear baseline | missing, blocked by matrix artifacts |
+| LiPFormer | ICDE 2025 | Lightweight patch-based alternative to PatchTST | missing |
+| ElasTST | NeurIPS 2024 | One model for varied horizons; directly relevant to 160-cell coverage | missing |
+| DIAN | IJCAI 2024 | Invariant/variant decoupling for heterogeneous panels | missing |
+| UniTS | NeurIPS 2024 | Unified multi-task design reference for V740 conditioning | missing |
+
+### Fresh 2025-2026 Design Signals Worth Tracking
+
+These are not necessarily the next benchmark additions, but they matter for the
+V740 methodology direction:
+
+| Signal | Venue | Why it matters |
+|-------|-------|----------------|
+| CASA | IJCAI 2025 | Efficient score-attention design; relevant to V740's lightweight local-context branch |
+| TimeEmb | NeurIPS 2025 | Lightweight static-dynamic disentanglement for mixed panel data |
+| DistDF | ICLR 2026 | Direct distributional multistep objective; relevant to long-horizon stability |
+| QDF | ICLR 2026 | Hard-structure-aware weighting objective; useful for difficult cells |
+| JAPAN | ICLR 2026 | Density-aware conformal prediction sets; useful for calibrated uncertainty |
+| TimeDiT | 2025 | General-purpose diffusion-style TSFM; interesting but too heavy for alpha |
+| FLAIRR-TS | Findings of EMNLP 2025 | Retrieval + iterative refinement; promising as a later auxiliary memory signal |
 
 ## Installation Guide
 
