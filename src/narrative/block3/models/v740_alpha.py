@@ -34,11 +34,28 @@ from .samformer_model import (
 from .v740_multisource_features import (
     DualClockConfig,
     build_dual_clock_memory_for_entity,
+    build_source_native_edgar_memory,
     infer_edgar_columns,
     infer_text_columns,
 )
 
 logger = logging.getLogger(__name__)
+
+
+def _build_edgar_memory(
+    entity_df: pd.DataFrame,
+    prediction_time: pd.Timestamp,
+    source_cols: List[str],
+    cfg: DualClockConfig,
+) -> Dict[str, np.ndarray]:
+    if not source_cols:
+        return {
+            "recent_tokens": np.zeros((cfg.max_events, 3), dtype=np.float32),
+            "bucket_tokens": np.zeros((len(cfg.recency_buckets) + 1, 4), dtype=np.float32),
+        }
+    if "edgar_filed_date" in entity_df.columns or "cutoff_ts" in entity_df.columns:
+        return build_source_native_edgar_memory(entity_df, prediction_time, source_cols, cfg)
+    return build_dual_clock_memory_for_entity(entity_df, prediction_time, source_cols, cfg)
 
 
 @dataclass
@@ -57,6 +74,65 @@ class _V740Windows:
     val_text_bucket: List[np.ndarray]
     contexts: Dict[str, np.ndarray]
     context_memory: Dict[str, Dict[str, np.ndarray]]
+
+
+def _window_teacher_features(
+    windows: List[np.ndarray],
+    edgar_recent: List[np.ndarray],
+    edgar_bucket: List[np.ndarray],
+    text_recent: List[np.ndarray],
+    text_bucket: List[np.ndarray],
+) -> np.ndarray:
+    feats: List[np.ndarray] = []
+    for i, x_win in enumerate(windows):
+        target_hist = x_win[0].astype(np.float32, copy=False)
+        diffs = np.diff(target_hist) if len(target_hist) > 1 else np.zeros((1,), dtype=np.float32)
+        row = [
+            float(target_hist[-1]),
+            float(np.mean(target_hist)),
+            float(np.std(target_hist)),
+            float(np.min(target_hist)),
+            float(np.max(target_hist)),
+            float(target_hist[-1] - target_hist[0]),
+            float(np.mean(np.abs(diffs))) if len(diffs) else 0.0,
+            float(np.mean(target_hist > 0.0)),
+        ]
+        if x_win.shape[0] > 1:
+            cov_block = x_win[1:].astype(np.float32, copy=False)
+            row.extend([
+                float(np.mean(cov_block)),
+                float(np.std(cov_block)),
+                float(np.max(cov_block)),
+            ])
+        else:
+            row.extend([0.0, 0.0, 0.0])
+
+        er = edgar_recent[i] if i < len(edgar_recent) else None
+        eb = edgar_bucket[i] if i < len(edgar_bucket) else None
+        tr = text_recent[i] if i < len(text_recent) else None
+        tb = text_bucket[i] if i < len(text_bucket) else None
+        for recent, bucket in ((er, eb), (tr, tb)):
+            if recent is not None and recent.size:
+                row.extend([
+                    float(np.sum(recent[:, 2] > 0.0)),
+                    float(np.mean(recent[:, 0][recent[:, 2] > 0.0])) if np.any(recent[:, 2] > 0.0) else 0.0,
+                ])
+            else:
+                row.extend([0.0, 0.0])
+            if bucket is not None and bucket.size:
+                row.extend([
+                    float(np.sum(bucket[:, 0])),
+                    float(np.max(bucket[:, 0])),
+                    float(np.mean(bucket[:, 0])),
+                ])
+            else:
+                row.extend([0.0, 0.0, 0.0])
+        feats.append(np.asarray(row, dtype=np.float32))
+    if not feats:
+        return np.zeros((0, 1), dtype=np.float32)
+    arr = np.vstack(feats).astype(np.float32, copy=False)
+    arr = np.where(np.isfinite(arr), arr, 0.0)
+    return arr
 
 
 def _build_v740_windows(
@@ -120,15 +196,13 @@ def _build_v740_windows(
         contexts[str(eid)] = series[:, -input_size:].astype(np.float32, copy=False)
 
         last_time = times.iloc[-1]
+        edgar_context_mem = _build_edgar_memory(grp, last_time, edgar_cols, dual_clock_cfg)
+        text_context_mem = build_dual_clock_memory_for_entity(grp, last_time, text_cols, dual_clock_cfg)
         context_memory[str(eid)] = {
-            "edgar_recent": build_dual_clock_memory_for_entity(grp, last_time, edgar_cols, dual_clock_cfg)["recent_tokens"]
-            if edgar_cols else np.zeros((dual_clock_cfg.max_events, 3), dtype=np.float32),
-            "edgar_bucket": build_dual_clock_memory_for_entity(grp, last_time, edgar_cols, dual_clock_cfg)["bucket_tokens"]
-            if edgar_cols else np.zeros((len(dual_clock_cfg.recency_buckets) + 1, 4), dtype=np.float32),
-            "text_recent": build_dual_clock_memory_for_entity(grp, last_time, text_cols, dual_clock_cfg)["recent_tokens"]
-            if text_cols else np.zeros((dual_clock_cfg.max_events, 3), dtype=np.float32),
-            "text_bucket": build_dual_clock_memory_for_entity(grp, last_time, text_cols, dual_clock_cfg)["bucket_tokens"]
-            if text_cols else np.zeros((len(dual_clock_cfg.recency_buckets) + 1, 4), dtype=np.float32),
+            "edgar_recent": edgar_context_mem["recent_tokens"],
+            "edgar_bucket": edgar_context_mem["bucket_tokens"],
+            "text_recent": text_context_mem["recent_tokens"],
+            "text_bucket": text_context_mem["bucket_tokens"],
         }
 
         entity_x: List[np.ndarray] = []
@@ -150,7 +224,7 @@ def _build_v740_windows(
 
             prefix = grp.iloc[: end_idx + 1]
             if edgar_cols:
-                edgar_mem = build_dual_clock_memory_for_entity(prefix, pred_time, edgar_cols, dual_clock_cfg)
+                edgar_mem = _build_edgar_memory(prefix, pred_time, edgar_cols, dual_clock_cfg)
                 edgar_recent = edgar_mem["recent_tokens"]
                 edgar_bucket = edgar_mem["bucket_tokens"]
             else:
@@ -422,6 +496,34 @@ def _torch_imports():
             gate = self.cond_gate(cond).unsqueeze(-1)
             return inv + gate * var
 
+    class TaskSpecificModulator(nn.Module):
+        def __init__(self, hidden_dim: int):
+            super().__init__()
+            self.task_emb = nn.Embedding(4, hidden_dim)
+            self.scale = nn.Sequential(
+                nn.Linear(hidden_dim, hidden_dim),
+                nn.GELU(),
+                nn.Linear(hidden_dim, hidden_dim),
+                nn.Tanh(),
+            )
+            self.bias = nn.Sequential(
+                nn.Linear(hidden_dim, hidden_dim),
+                nn.GELU(),
+                nn.Linear(hidden_dim, hidden_dim),
+            )
+            self.residual = nn.Sequential(
+                nn.Linear(hidden_dim * 2, hidden_dim),
+                nn.GELU(),
+                nn.Linear(hidden_dim, hidden_dim),
+            )
+
+        def forward(self, pooled: torch.Tensor, task_idx: torch.Tensor) -> torch.Tensor:
+            task_vec = self.task_emb(task_idx)
+            scale = 0.2 * self.scale(task_vec)
+            bias = 0.1 * self.bias(task_vec)
+            mod = pooled * (1.0 + scale) + bias
+            return mod + 0.1 * self.residual(torch.cat([pooled, task_vec], dim=-1))
+
     class V740AlphaNet(nn.Module):
         def __init__(
             self,
@@ -434,6 +536,7 @@ def _torch_imports():
             super().__init__()
             self.seq_len = seq_len
             self.horizon = horizon
+            self.task_mod_enabled = True
             self.input_proj = nn.Conv1d(in_channels, hidden_dim, kernel_size=1)
             self.decomp = MovingAverageDecomposition(kernel_size=5)
             self.multi_res = MultiResolutionBlock(hidden_dim, hidden_dim)
@@ -444,6 +547,7 @@ def _torch_imports():
             self.edgar_memory = EventMemoryEncoder(hidden_dim)
             self.text_memory = EventMemoryEncoder(hidden_dim)
             self.fusion = InvariantVariantFusion(hidden_dim, cond_dim)
+            self.task_mod = TaskSpecificModulator(hidden_dim)
             self.static_proj = StaticSummaryProjector(max(1, in_channels - 1), hidden_dim)
             self.backbone_norm = nn.LayerNorm(hidden_dim)
             self.combine = nn.Sequential(
@@ -466,6 +570,15 @@ def _torch_imports():
                 nn.GELU(),
                 nn.Linear(hidden_dim, horizon),
             )
+            self.event_head = nn.Sequential(
+                nn.Linear(hidden_dim, hidden_dim),
+                nn.GELU(),
+                nn.Linear(hidden_dim, 1),
+            )
+            self.task_shared_bias = nn.Embedding(4, horizon)
+            self.task_count_bias = nn.Embedding(4, horizon)
+            self.task_binary_bias = nn.Embedding(4, horizon)
+            self.task_event_bias = nn.Embedding(4, 1)
             self.uncertainty_head = nn.Sequential(
                 nn.Linear(hidden_dim, hidden_dim),
                 nn.GELU(),
@@ -506,10 +619,22 @@ def _torch_imports():
             pooled = self.combine(torch.cat([
                 pooled, memory_feat, value_feat, static_feat, edgar_feat, text_feat, cond,
             ], dim=-1))
+            if self.task_mod_enabled:
+                pooled = self.task_mod(pooled, task_idx)
+                shared_bias = self.task_shared_bias(task_idx)
+                count_bias = self.task_count_bias(task_idx)
+                binary_bias = self.task_binary_bias(task_idx)
+                event_bias = self.task_event_bias(task_idx).squeeze(-1)
+            else:
+                shared_bias = torch.zeros((x.shape[0], self.horizon), device=x.device, dtype=pooled.dtype)
+                count_bias = torch.zeros((x.shape[0], self.horizon), device=x.device, dtype=pooled.dtype)
+                binary_bias = torch.zeros((x.shape[0], self.horizon), device=x.device, dtype=pooled.dtype)
+                event_bias = torch.zeros((x.shape[0],), device=x.device, dtype=pooled.dtype)
             return {
-                "continuous": self.shared_head(pooled),
-                "count": self.count_head(pooled),
-                "binary": self.binary_head(pooled),
+                "continuous": self.shared_head(pooled) + shared_bias,
+                "count": self.count_head(pooled) + count_bias,
+                "binary": self.binary_head(pooled) + binary_bias,
+                "event": self.event_head(pooled).squeeze(-1) + event_bias,
                 "uncertainty": torch.nn.functional.softplus(self.uncertainty_head(pooled)),
             }
 
@@ -548,6 +673,9 @@ class V740AlphaPrototypeWrapper(ModelBase):
         max_windows: int = 50000,
         patience: int = 4,
         max_event_tokens: int = 4,
+        enable_teacher_distill: bool = True,
+        enable_event_head: bool = True,
+        enable_task_modulation: bool = True,
         seed: int = 42,
         **kwargs,
     ):
@@ -569,6 +697,9 @@ class V740AlphaPrototypeWrapper(ModelBase):
         self.max_windows = max_windows
         self.patience = patience
         self.max_event_tokens = max_event_tokens
+        self.enable_teacher_distill = enable_teacher_distill
+        self.enable_event_head = enable_event_head
+        self.enable_task_modulation = enable_task_modulation
         self.seed = seed
         self._network = None
         self._device = None
@@ -580,6 +711,19 @@ class V740AlphaPrototypeWrapper(ModelBase):
         self._fallback_value = 0.0
         self._binary_target = False
         self._nonnegative_target = False
+        self._binary_train_rate = 0.5
+        self._binary_pos_weight = 1.0
+        self._binary_rate_floor = 0.05
+        self._binary_temperature = 1.0
+        self._binary_teacher_weight = 0.10
+        self._binary_event_weight = 0.15
+        self._teacher_logistic_mix = 0.4
+        self._teacher_tree_mix = 0.6
+        self._effective_task_modulation = enable_task_modulation
+        self._binary_event_rate = 0.5
+        self._binary_transition_rate = 0.5
+        self._edgar_source_density = 0.0
+        self._text_source_density = 0.0
         self._target_name = "funding_raised_usd"
         self._task_name = "task1_outcome"
         self._ablation_name = "core_only"
@@ -606,13 +750,113 @@ class V740AlphaPrototypeWrapper(ModelBase):
             arr = np.zeros((0, *default_shape), dtype=np.float32)
         return torch.tensor(arr, dtype=torch.float32)
 
-    def _loss(self, torch, outputs, target):
+    def _configure_binary_regime(self) -> None:
+        teacher_weight = 0.08
+        event_weight = 0.12
+        logistic_mix = 0.45
+        tree_mix = 0.55
+
+        pos_balance = 1.0 - abs(self._binary_train_rate - 0.5) / 0.5
+        event_sparsity = 1.0 - self._binary_event_rate
+        transition_sparsity = 1.0 - self._binary_transition_rate
+
+        teacher_weight += 0.03 * event_sparsity
+        teacher_weight += 0.02 * transition_sparsity
+        teacher_weight += 0.04 * self._edgar_source_density
+        teacher_weight -= 0.03 * self._text_source_density
+        teacher_weight += 0.01 * pos_balance
+
+        event_weight += 0.04 * transition_sparsity
+        event_weight += 0.02 * self._edgar_source_density
+        event_weight -= 0.03 * self._text_source_density
+        event_weight += 0.01 * pos_balance
+
+        logistic_mix += 0.25 * self._text_source_density
+        logistic_mix += 0.10 * pos_balance
+        logistic_mix -= 0.20 * self._edgar_source_density
+        logistic_mix = float(np.clip(logistic_mix, 0.20, 0.80))
+        tree_mix = 1.0 - logistic_mix
+
+        if self._task_name == "task2_forecast":
+            teacher_weight *= 0.95
+        elif self._task_name == "task3_risk_adjust":
+            teacher_weight *= 0.90
+            event_weight *= 0.90
+
+        if not self.enable_teacher_distill:
+            teacher_weight = 0.0
+        if not self.enable_event_head:
+            event_weight = 0.0
+
+        self._binary_teacher_weight = float(np.clip(teacher_weight, 0.0, 0.30))
+        self._binary_event_weight = float(np.clip(event_weight, 0.0, 0.30))
+        self._teacher_logistic_mix = float(logistic_mix)
+        self._teacher_tree_mix = float(tree_mix)
+
+    def _loss(self, torch, outputs, target, teacher_probs=None):
         if self._binary_target:
             logits = outputs["binary"]
             probs = torch.sigmoid(logits)
-            bce = torch.nn.functional.binary_cross_entropy_with_logits(logits, target)
+            pos_weight = torch.tensor(
+                self._binary_pos_weight,
+                dtype=target.dtype,
+                device=target.device,
+            )
+            bce_raw = torch.nn.functional.binary_cross_entropy_with_logits(
+                logits,
+                target,
+                pos_weight=pos_weight,
+                reduction="none",
+            )
+            pt = probs * target + (1.0 - probs) * (1.0 - target)
+            focal = ((1.0 - pt).clamp_min(1e-4) ** 1.5) * bce_raw
+            bce = focal.mean()
             brier = torch.mean((probs - target) ** 2)
-            return bce + 0.1 * brier
+            rate_ref = torch.tensor(
+                self._binary_train_rate,
+                dtype=target.dtype,
+                device=target.device,
+            )
+            rate_penalty = torch.nn.functional.smooth_l1_loss(
+                probs.mean(dim=0),
+                torch.full_like(probs.mean(dim=0), rate_ref),
+            )
+            std_penalty = torch.relu(self._binary_rate_floor - probs.std())
+            flat_target = target.reshape(-1)
+            flat_probs = probs.reshape(-1)
+            if bool((flat_target > 0.5).any()) and bool((flat_target < 0.5).any()):
+                pos_mean = flat_probs[flat_target > 0.5].mean()
+                neg_mean = flat_probs[flat_target < 0.5].mean()
+                separation = torch.relu(0.15 - (pos_mean - neg_mean))
+            else:
+                separation = torch.zeros((), dtype=target.dtype, device=target.device)
+            event_bce = torch.zeros((), dtype=target.dtype, device=target.device)
+            if self.enable_event_head:
+                event_target = (target.max(dim=1).values > 0.5).to(target.dtype)
+                event_logits = outputs["event"]
+                event_bce = torch.nn.functional.binary_cross_entropy_with_logits(
+                    event_logits,
+                    event_target,
+                    pos_weight=pos_weight,
+                )
+            teacher_align = torch.zeros((), dtype=target.dtype, device=target.device)
+            if teacher_probs is not None and self.enable_teacher_distill:
+                teacher_probs = teacher_probs.to(device=target.device, dtype=target.dtype).view(-1)
+                teacher_probs = teacher_probs.clamp(1e-4, 1.0 - 1e-4)
+                avg_probs = probs.mean(dim=1)
+                teacher_align = torch.nn.functional.mse_loss(avg_probs, teacher_probs)
+                if self.enable_event_head:
+                    event_probs = torch.sigmoid(outputs["event"])
+                    teacher_align = teacher_align + 0.5 * torch.nn.functional.mse_loss(event_probs, teacher_probs)
+            return (
+                bce
+                + 0.15 * brier
+                + 0.10 * rate_penalty
+                + 0.05 * std_penalty
+                + 0.10 * separation
+                + self._binary_event_weight * event_bce
+                + self._binary_teacher_weight * teacher_align
+            )
         if self._target_name == "investors_count":
             pred = torch.relu(outputs["count"])
             base = torch.nn.functional.smooth_l1_loss(pred, target)
@@ -650,6 +894,8 @@ class V740AlphaPrototypeWrapper(ModelBase):
         self._fallback_value = float(np.nanmedian(finite)) if len(finite) else 0.0
         self._binary_target = _detect_binary(y_arr)
         self._nonnegative_target = _detect_nonnegative(y_arr)
+        self._binary_temperature = 1.0
+        self._effective_task_modulation = self.enable_task_modulation and not self._binary_target
 
         if train_raw is None or "entity_id" not in train_raw.columns:
             logger.warning("  [V740-alpha] Missing train_raw/entity_id; fallback-only mode")
@@ -680,6 +926,30 @@ class V740AlphaPrototypeWrapper(ModelBase):
             logger.warning("  [V740-alpha] No windows; fallback-only mode")
             self._fitted = True
             return self
+
+        if self._binary_target:
+            train_window_y = np.stack(entity_windows.train_y).astype(np.float32, copy=False)
+            binary_train = np.isfinite(train_window_y)
+            if binary_train.any():
+                train_pos_rate = float(np.clip(np.nanmean(train_window_y[binary_train]), 1e-4, 1.0 - 1e-4))
+            else:
+                train_pos_rate = 0.5
+            self._binary_train_rate = train_pos_rate
+            self._binary_pos_weight = float(np.clip((1.0 - train_pos_rate) / train_pos_rate, 1.0, 25.0))
+            event_targets = (train_window_y.max(axis=1) > 0.5).astype(np.float32)
+            current_state = np.stack(entity_windows.train_x).astype(np.float32, copy=False)[:, 0, -1]
+            transition_targets = ((event_targets > 0.5) & (current_state <= 0.5)).astype(np.float32)
+            self._binary_event_rate = float(event_targets.mean()) if len(event_targets) else 0.5
+            self._binary_transition_rate = float(transition_targets.mean()) if len(transition_targets) else 0.5
+            if self._edgar_cols:
+                self._edgar_source_density = float(train_raw[self._edgar_cols].notna().any(axis=1).mean())
+            else:
+                self._edgar_source_density = 0.0
+            if self._text_cols:
+                self._text_source_density = float(train_raw[self._text_cols].notna().any(axis=1).mean())
+            else:
+                self._text_source_density = 0.0
+            self._configure_binary_regime()
 
         train_x = torch.tensor(np.stack(entity_windows.train_x), dtype=torch.float32)
         train_y = torch.tensor(np.stack(entity_windows.train_y), dtype=torch.float32)
@@ -726,28 +996,98 @@ class V740AlphaPrototypeWrapper(ModelBase):
             (len(self._dual_clock_cfg.recency_buckets) + 1, 4 + len(self._text_cols)),
         ) if entity_windows.val_text_bucket else None
 
+        train_teacher_probs = None
+        if self._binary_target and self.enable_teacher_distill and len(entity_windows.train_x) >= 16:
+            try:
+                from sklearn.ensemble import HistGradientBoostingClassifier
+                from sklearn.linear_model import LogisticRegression
+                from sklearn.pipeline import make_pipeline
+                from sklearn.preprocessing import StandardScaler
+
+                teacher_x = _window_teacher_features(
+                    entity_windows.train_x,
+                    entity_windows.train_edgar_recent,
+                    entity_windows.train_edgar_bucket,
+                    entity_windows.train_text_recent,
+                    entity_windows.train_text_bucket,
+                )
+                teacher_targets = np.stack(entity_windows.train_y).astype(np.float32, copy=False)
+                teacher_y = (teacher_targets.max(axis=1) > 0.5).astype(np.int64)
+                if len(np.unique(teacher_y)) > 1:
+                    class_counts = np.bincount(teacher_y, minlength=2).astype(np.float32)
+                    sample_weight = np.where(teacher_y > 0, 1.0 / max(class_counts[1], 1.0), 1.0 / max(class_counts[0], 1.0))
+                    teacher = make_pipeline(
+                        StandardScaler(),
+                        LogisticRegression(
+                            max_iter=300,
+                            class_weight="balanced",
+                            random_state=seed,
+                        ),
+                    )
+                    teacher.fit(teacher_x, teacher_y)
+                    teacher_log_probs = teacher.predict_proba(teacher_x)[:, 1].astype(np.float32)
+                    tree_teacher = HistGradientBoostingClassifier(
+                        learning_rate=0.05,
+                        max_depth=3,
+                        max_iter=120,
+                        min_samples_leaf=8,
+                        random_state=seed,
+                    )
+                    tree_teacher.fit(teacher_x, teacher_y, sample_weight=sample_weight)
+                    teacher_tree_probs = tree_teacher.predict_proba(teacher_x)[:, 1].astype(np.float32)
+                    train_teacher_probs = (
+                        self._teacher_logistic_mix * teacher_log_probs
+                        + self._teacher_tree_mix * teacher_tree_probs
+                    ).astype(np.float32)
+            except Exception as exc:
+                logger.warning(f"  [V740-alpha] binary teacher unavailable: {exc}")
+
+        train_teacher = torch.tensor(
+            train_teacher_probs if train_teacher_probs is not None else np.full((len(train_x),), 0.5, dtype=np.float32),
+            dtype=torch.float32,
+        )
+
         self._network = V740AlphaNet(
             in_channels=train_x.shape[1],
             seq_len=train_x.shape[2],
             horizon=self._horizon,
             hidden_dim=self.hidden_dim,
         ).to(self._device)
+        self._network.task_mod_enabled = self._effective_task_modulation
         optimizer = torch.optim.AdamW(
             self._network.parameters(),
             lr=self.learning_rate,
             weight_decay=self.weight_decay,
         )
+        train_dataset = torch.utils.data.TensorDataset(
+            train_x,
+            train_y,
+            train_edgar_recent,
+            train_edgar_bucket,
+            train_text_recent,
+            train_text_bucket,
+            train_teacher,
+        )
+        sampler = None
+        shuffle = True
+        if self._binary_target and len(train_dataset) > 1:
+            window_targets = train_y[:, -1].detach().cpu().numpy()
+            classes = (window_targets > 0.5).astype(np.int64)
+            class_counts = np.bincount(classes, minlength=2)
+            if np.all(class_counts > 0):
+                class_weights = 1.0 / class_counts
+                sample_weights = class_weights[classes]
+                sampler = torch.utils.data.WeightedRandomSampler(
+                    weights=torch.tensor(sample_weights, dtype=torch.double),
+                    num_samples=len(sample_weights),
+                    replacement=True,
+                )
+                shuffle = False
         loader = torch.utils.data.DataLoader(
-            torch.utils.data.TensorDataset(
-                train_x,
-                train_y,
-                train_edgar_recent,
-                train_edgar_bucket,
-                train_text_recent,
-                train_text_bucket,
-            ),
+            train_dataset,
             batch_size=self.batch_size,
-            shuffle=True,
+            shuffle=shuffle,
+            sampler=sampler,
             drop_last=False,
         )
 
@@ -757,13 +1097,14 @@ class V740AlphaPrototypeWrapper(ModelBase):
         for epoch in range(self.max_epochs):
             self._network.train()
             losses = []
-            for xb, yb, er, eb, tr, tb in loader:
+            for xb, yb, er, eb, tr, tb, tp in loader:
                 xb = xb.to(self._device)
                 yb = yb.to(self._device)
                 er = er.to(self._device)
                 eb = eb.to(self._device)
                 tr = tr.to(self._device)
                 tb = tb.to(self._device)
+                tp = tp.to(self._device)
                 task_idx, target_idx, horizon_idx, ablation_idx = self._token_tensor(torch, len(xb))
                 outputs = self._network(
                     xb,
@@ -776,7 +1117,7 @@ class V740AlphaPrototypeWrapper(ModelBase):
                     text_recent=tr,
                     text_bucket=tb,
                 )
-                loss = self._loss(torch, outputs, yb)
+                loss = self._loss(torch, outputs, yb, teacher_probs=tp if self._binary_target else None)
                 optimizer.zero_grad()
                 loss.backward()
                 torch.nn.utils.clip_grad_norm_(self._network.parameters(), 1.0)
@@ -800,7 +1141,7 @@ class V740AlphaPrototypeWrapper(ModelBase):
                     text_recent=val_text_recent.to(self._device) if val_text_recent is not None else None,
                     text_bucket=val_text_bucket.to(self._device) if val_text_bucket is not None else None,
                 )
-                val_loss = float(self._loss(torch, val_out, val_y.to(self._device)).cpu())
+                val_loss = float(self._loss(torch, val_out, val_y.to(self._device), teacher_probs=None).cpu())
 
             logger.info(
                 f"  [V740-alpha] epoch={epoch + 1}/{self.max_epochs} "
@@ -817,6 +1158,36 @@ class V740AlphaPrototypeWrapper(ModelBase):
 
         if best_state is not None:
             self._network.load_state_dict(best_state)
+
+        if self._binary_target and val_x is not None and val_y is not None and len(val_x) > 0:
+            self._network.eval()
+            with torch.no_grad():
+                task_idx, target_idx, horizon_idx, ablation_idx = self._token_tensor(torch, len(val_x))
+                val_out = self._network(
+                    val_x.to(self._device),
+                    task_idx,
+                    target_idx,
+                    horizon_idx,
+                    ablation_idx,
+                    edgar_recent=val_edgar_recent.to(self._device) if val_edgar_recent is not None else None,
+                    edgar_bucket=val_edgar_bucket.to(self._device) if val_edgar_bucket is not None else None,
+                    text_recent=val_text_recent.to(self._device) if val_text_recent is not None else None,
+                    text_bucket=val_text_bucket.to(self._device) if val_text_bucket is not None else None,
+                )
+                val_logits = val_out["binary"]
+                val_target = val_y.to(self._device)
+                best_temp = 1.0
+                best_score = float("inf")
+                for temp in (0.7, 0.85, 1.0, 1.2, 1.5, 2.0, 3.0):
+                    scaled = val_logits / temp
+                    probs = torch.sigmoid(scaled)
+                    bce = torch.nn.functional.binary_cross_entropy_with_logits(scaled, val_target)
+                    brier = torch.mean((probs - val_target) ** 2)
+                    score = float((bce + 0.2 * brier).cpu())
+                    if score < best_score:
+                        best_score = score
+                        best_temp = float(temp)
+                self._binary_temperature = best_temp
 
         self._fitted = True
         return self
@@ -917,7 +1288,7 @@ class V740AlphaPrototypeWrapper(ModelBase):
                     text_bucket=text_bucket,
                 )
             if self._binary_target:
-                raw = torch.sigmoid(outputs["binary"]).cpu().numpy()
+                raw = torch.sigmoid(outputs["binary"] / self._binary_temperature).cpu().numpy()
             elif self._target_name == "investors_count":
                 raw = torch.relu(outputs["count"]).cpu().numpy()
             else:

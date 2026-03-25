@@ -1,6 +1,21 @@
 # Block 3 Benchmark — Memory Requirements Reference
 
- > **Last updated:** 2026-03-19\n> **Source:** `sacct` actual OOM failures + completed job MaxRSS profiles + l40s DefMemPerCPU analysis\n> **Purpose:** 防止 OOM 导致的计算资源浪费，为未来任务提交提供内存需求参考
+> **Last updated:** 2026-03-25
+> **Source:** `sacct` actual OOM failures + completed job MaxRSS profiles + live `sinfo`/`squeue` verification
+> **Purpose:** 防止 OOM 和错误分区假设导致的资源浪费，为未来任务提交提供可执行的内存/CPU/GPU参考
+
+## 0. Superseding 2026-03-25 corrections
+
+This section overrides any older conflicting statements later in this file.
+
+1. `hopper` memory is **2063754 MB (~2.06TB)** from live `sinfo`, **not 201G**. Older `201G` claims came from a unit-reading error.
+2. `l40s` and `hopper` are **not globally forbidden**. Current best practice is:
+   - `gpu` as primary partition,
+   - `l40s` for overflow when the requested memory/CPU ratio is justified and the job is resume-safe,
+   - `hopper` for opportunistic overflow only (`besteffort`, preemptible), never as the sole critical path.
+3. `l40s` still has the hard `15G` per-CPU ceiling, so `120G @ 8 CPU` is the efficient setting for `co/s2`, while `200G @ 14 CPU` is justified for heavier ablations.
+4. `hopper` can support `150G→9 CPU`, `189G→11 CPU`, `200G→12 CPU` while still staying far below node RAM; the real risk there is **preemption/priority**, not memory exhaustion.
+5. `scripts/aggregate_block3_results.py` must be run with the insider Python (`/mnt/aiongpfs/projects/eint/envs/.micromamba/envs/insider/bin/python3`), not system Python 3.6.
 
 ---
 
@@ -159,18 +174,18 @@
 
 | 分区 | 节点数 | 每节点内存 | GPU | DefMemPerCPU | MaxMemPerCPU | 最佳用途 |
 |------|--------|-----------|-----|-------------|-------------|---------|
-| gpu | 24 | 756G | 4× V100 | 27G | UNLIMITED | **主要分区** — 所有GPU任务 |
-| l40s | 2 | 515G | 4× L40S | **15G** | **15G (hard!)** | ⛔ **不推荐** — 8c×15G=120G上限 |
-| hopper | 1 | 2TB | 4× H100 | 18G | ? | ⛔ **禁用** — admin 投诉CPU过度分配 |
+| gpu | 24 | 756G | 4× V100 | 27G | UNLIMITED | **主要分区** — 默认首选 |
+| l40s | 2 | 515G | 4× L40S | **15G** | **15G (hard!)** | 条件性可用 — `co/s2` 优先 120G/8c，重 ablation 可用 200G/14c |
+| hopper | 1 | 2063754MB (~2.06TB) | 4× H100 | 18G | ? | 条件性可用 — `besteffort`、可抢占，适合 checkpoint-safe overflow |
 | bigmem | 4 | 3TB | 无GPU | varies | varies | CPU-only (statistical, ml_tabular) |
 
-### ⚠️ l40s 内存陷阱 (2026-03-19 血泪教训)
+### ⚠️ l40s 内存陷阱 (2026-03-19, still true)
 - l40s 的 `MaxMemPerCPU=15G` 是**硬限制**，不可用 `--mem` 覆盖
 - SLURM 公式: `NumCPUs = max(cpus-per-task, ceil(mem_MB / DefMemPerCPU))`
 - 请求 200G → 需 ceil(204800/15000) = **14 CPUs** → admin 投诉原因
 - 8 cores × 15G = 120G → 仅能跑 core_only (115G peak，5G headroom，高风险)
 - 2 cores × 15G = 30G → **完全不可行**
-- **结论**: l40s 不适合我们的 benchmark 工作负载。全部用 gpu 分区。
+- **更新结论 (2026-03-25)**: l40s 不是“完全不能用”，但必须按 `120G/8c` 或 `200G/14c` 这类与 `15G/CPU` 严格对齐的配置来提交，并且只用于 resume-safe 的作业。
 
 ---
 
@@ -200,7 +215,7 @@ fu    → --mem=200G -p gpu
 # ml_tabular 拆分 (禁止全批次!)
 单模型 → --mem=200G -p gpu
 
-# ⛔ 禁止使用 l40s 和 hopper 提交新任务
+# 当前推荐：`gpu` 主跑，`l40s/hopper` 仅用于 resume-safe overflow，不再 blanket-ban
 # ⛔ 禁止 ml_tabular 全模型一次性 fu 任务
 
 # 如果 OOM → 升级路径:

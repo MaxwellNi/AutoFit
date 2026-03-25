@@ -10,6 +10,61 @@
 > value-space auxiliary branch, and source-specific EDGAR/text event-memory
 > encoders wired through the wrapper. This remains pre-benchmark and should be
 > treated as an audited prototype path, not as an active leaderboard model.
+>
+> 2026-03-25 smoke update:
+> first real freeze-backed narrow-slice smoke results are recorded in
+> `docs/references/V740_ALPHA_REAL_SMOKE_RESULTS_20260325.md`. The core
+> multisource wiring is now operational. Those first tiny binary slices did
+> collapse to constant predictions, but the newer audited matrix in
+> `docs/references/V740_ALPHA_SMOKE_MATRIX_20260325.md` now passes six
+> end-to-end cases and no longer shows constant prediction on the two binary
+> slices. The matrix has since been expanded to 10 audited cases including
+> representative `task2`, `task3`, and `seed2` slices, all of which now pass.
+> The remaining issue is model quality, not basic execution integrity, and the
+> latest smoke evidence suggests that task conditioning is stable but not yet
+> expressive enough to induce materially different behavior on shared funding
+> slices. A subsequent 2026-03-25 update added a stronger offline binary
+> teacher and explicit task-specific modulation/residual biases. That update
+> improved some hard slices further, especially `core_edgar + is_funded` and
+> `full + investors_count`, but the gains remain uneven, which reinforces that
+> alpha is now in a regime-quality optimization phase rather than a plumbing
+> phase. A follow-up component ablation then showed that task modulation is
+> currently helpful for the tested count slice but harmful on the tested binary
+> slices; accordingly, the prototype now bypasses task modulation for binary
+> targets by default while keeping it for continuous/count targets.
+>
+> A second 2026-03-25 audit then corrected an important local-evaluation bug:
+> the smoke path had been capping train rows with a global tail truncation,
+> which is inappropriate for source-sparse EDGAR/text regimes because it can
+> erase historical source coverage while leaving the join code itself intact.
+> The smoke runner now uses deterministic time-preserving downsampling instead.
+> After that correction, the 10-case audited matrix changed materially:
+> `core_edgar + is_funded + h=14` improved to `MAE = 0.1063`, `full +
+> is_funded + h=14` improved to `MAE = 0.1061`, `core_edgar + funding_raised`
+> task1 improved to `MAE = 308.5K`, and the task2/task3 EDGAR funding slices
+> also improved. This is a strong reminder that V740-alpha's local audit tools
+> must preserve source coverage and temporal diversity if they are to provide
+> trustworthy engineering feedback.
+
+> The pre-benchmark tooling has also been expanded with a benchmark-like local
+> comparison script, `scripts/run_v740_alpha_minibenchmark.py`, which compares
+> V740-alpha and V739 on identical freeze-backed local slices without touching
+> the live benchmark harness or writing under `runs/`.
+>
+> A corrected binary-only component ablation now also exists at
+> `docs/references/V740_ALPHA_COMPONENT_ABLATION_20260325_binary_refresh.md`.
+> After the downsampling fix, the key binary conclusion is sharper:
+> preserving source coverage drives the main gain, while teacher distillation
+> and the event head are currently second-order refinements on the audited
+> binary slices. The binary task-modulation bypass remains the safest default,
+> but it is no longer the dominant explanation for the corrected local gains.
+>
+> The first larger local mini-benchmark slice also provides an important
+> caution: scaling a binary EDGAR slice from the smallest audited smoke setting
+> to a `16 entity / 1600 row` local comparison pushes `core_edgar +
+> is_funded + h=14` back to `MAE = 0.3426`. So the corrected smoke matrix
+> should be interpreted as a strong local audit signal, not as a substitute for
+> harder benchmark-like local evaluation.
 
 ## 1. Purpose
 

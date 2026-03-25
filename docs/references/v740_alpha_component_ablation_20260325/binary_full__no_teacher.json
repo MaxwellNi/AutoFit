@@ -1,0 +1,33 @@
+{
+  "task": "task1_outcome",
+  "ablation": "full",
+  "target": "is_funded",
+  "horizon": 14,
+  "train_rows": 800,
+  "val_rows": 318,
+  "test_rows": 377,
+  "train_matrix_rows": 353,
+  "test_matrix_rows": 316,
+  "feature_count": 169,
+  "selected_entities": 8,
+  "edgar_cols_used": 39,
+  "text_cols_used": 64,
+  "coverage_ratio": 1.0,
+  "constant_prediction": false,
+  "prediction_std": 0.18571841264107353,
+  "binary_train_rate": 0.5,
+  "binary_pos_weight": 1.0,
+  "binary_temperature": 0.7,
+  "teacher_distill_enabled": false,
+  "event_head_enabled": true,
+  "task_mod_enabled": false,
+  "binary_teacher_weight": 0.0,
+  "binary_event_weight": 0.14,
+  "metrics": {
+    "mae": 0.6755154511030717,
+    "rmse": 0.7844324997645322,
+    "smape": 176.6246312547653,
+    "mape": 88.29863673669168
+  },
+  "wall_time_seconds": 17.223
+}

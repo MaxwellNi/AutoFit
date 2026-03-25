@@ -1,84 +1,98 @@
 # V739 Current Run Monitor and Landing Checklist
 
-> Last verified: 2026-03-15
-> Scope: current AutoFit V739 execution reality on the canonical clean benchmark line.
+> Last verified: 2026-03-25 14:13 CET
+> Scope: current AutoFit V739 execution reality on the canonical clean benchmark line only.
 
-## Current Verified Reality — V739 FULLY LANDED ✅
+## Current Verified Reality
 
-1. **V739 is COMPLETE: 112/112 conditions landed** in canonical `runs/benchmarks/block3_phase9_fair/`.
-2. All 12 V739 jobs completed successfully:
-   - 8 on l40s partition (npin, iris-snt QOS): t1_co, t1_ce, t2_co, t2_ce, t3_co, t3_ce, t1_ct, t2_ct
-   - 4 on gpu partition (cfisch): t3_ct, t1_fu, t2_fu, t3_fu
-3. V739 metrics.json files verified under:
-   - `runs/benchmarks/block3_phase9_fair/task1_outcome/autofit/core_only/metrics.json` (etc.)
-   - 12 files total: 3 tasks × 4 ablations
+1. **V739 is the only valid AutoFit baseline.** V734-V738 remain retired because of oracle test-set leakage.
+2. **V739 is not fully landed yet.** The current landed surface is **131/160** conditions on `runs/benchmarks/block3_phase9_fair/`.
+3. **V739 quality remains clean** on the landed surface:
+   - 0 NaN/Inf
+   - 0 fallback
+   - 100% fairness pass
+4. **Current live V739 queue state is 5 jobs total**:
+   - 4 RUNNING: `af739_t1_e2`, `af739_t1_s2`, `af739_t2_s2`, `af739_t2_e2`
+   - 1 PENDING: `af739_t3_e2`
+5. `af739_t3_e2` was confirmed missing from queue and was manually re-submitted on 2026-03-25 as job `5284506`.
 
-## V739 Quality Audit
+## Coverage Audit
 
 | Metric | Value |
 | --- | --- |
-| Total records | 112 |
-| Ablation coverage | core_only=28, core_edgar=28, core_text=28, full=28 |
-| Task coverage | task1=48, task2=32, task3=32 |
-| Horizons | [1, 7, 14, 30] |
-| Targets (task1) | funding_raised_usd, investors_count, is_funded |
-| Targets (task2/3) | funding_raised_usd, investors_count |
-| NaN/Inf in MAE | 0 |
-| NaN/Inf in RMSE | 0 |
-| Fairness pass | 112/112 (100%) |
-| Fallback fraction | 0.0 (no fallback used) |
-| MAE range | [0.034914, 388219.51] |
-| RMSE range | [0.152572, 1742470.54] |
+| Landed conditions | 131 / 160 |
+| Missing total | 29 |
+| Missing `task1_outcome / core_edgar_seed2` | 9 |
+| Missing `task1_outcome / core_only_seed2` | 8 |
+| Missing `task2_forecast / core_edgar_seed2` | 4 |
+| Missing `task2_forecast / core_only_seed2` | 4 |
+| Missing `task3_risk_adjust / core_edgar_seed2` | 4 |
+| NaN/Inf in landed metrics | 0 |
+| Fallback fraction | 0.0 |
+| Fairness pass | 131 / 131 (100%) |
 
-## V739 Benchmark Ranking
+### Exact Missing Cells
 
-**Per-condition mean rank (56 universal conditions — fairer metric):**
-- **#13 out of 80 complete models** (mean rank = 14.38)
-- Top 17% of all complete models
-- Won 3 champion conditions (1 per task)
-
-**Context:** V739 uses validation-based model selection (8 candidates, harness val_raw, temporal split with 7-day embargo). No oracle test-set leakage. A #13/80 ranking for a validation-based meta-learner among 80 diverse models is a strong result.
-
-**Benchmark top-5 by mean rank (56 universal conditions):**
-1. NHITS (4.21)
-2. PatchTST (4.36)
-3. NBEATS (4.77)
-4. NBEATSx (5.84)
-5. ChronosBolt (7.11)
-
-**Dominant champion model:** NBEATS — 24/56 conditions won (43%)
-**Per-task champion distribution:** NBEATS(8), NHITS(5+), KAN(5), DeepNPTS(4), GRU(3), V739(3), PatchTST(2), Chronos(2+)
-
-## V739 Ablation Note
-
-V739 uses ablation names `{core_only, core_edgar, core_text, full}` while standard models use `{core_only, core_edgar, core_only_seed2, core_edgar_seed2}`.
-
-**Pre-Phase 12 (historical):** `select_dtypes(include=[np.number])` dropped raw text strings → V739 core_text ≡ core_only, V739 full ≡ core_edgar. Comparison was fair since both had 2 unique feature sets × 2 replications.
-
-**Phase 12 (current):** PCA text embeddings (float32 columns `text_emb_0`..`text_emb_63`) now survive `select_dtypes(include=[np.number])`. Text ablation IS FUNCTIONAL. Phase 12 reruns will produce genuine core_text/full results for all models.
-
-## Monitoring Commands (Post-Landing)
-
-### Verify V739 metrics files
-```bash
-find runs/benchmarks/block3_phase9_fair -path '*/autofit/*/metrics.json' | sort
-```
-
-### Count V739 records
-```bash
-/mnt/aiongpfs/projects/eint/envs/.micromamba/envs/insider/bin/python3 -c "
-from pathlib import Path; import json
-root = Path('/work/projects/eint/repo_root/runs/benchmarks/block3_phase9_fair')
-total = sum(len(json.loads(mf.read_text())) for mf in root.rglob('metrics.json') if 'autofit' in str(mf))
-print(f'V739 total records: {total}')
-"
-```
-
-## Landing History
-
-| Date | Event | Job IDs |
+| Task | Ablation | Missing targets / horizons |
 | --- | --- | --- |
-| 2026-03-15 | V739 ALL 112 conditions landed | l40s: 5250853-5250868; gpu: 5250869-5250872 |
-3. confirm `AutoFitV739` rows appear in `all_results.csv`
-4. confirm `docs/benchmarks/phase9_current_snapshot.md` is rebuilt
-5. only then update any status document with V739 empirical claims
+| `task1_outcome` | `core_edgar_seed2` | `funding_raised_usd@30`, `investors_count@{1,7,14,30}`, `is_funded@{1,7,14,30}` |
+| `task1_outcome` | `core_only_seed2` | `investors_count@{1,7,14,30}`, `is_funded@{1,7,14,30}` |
+| `task2_forecast` | `core_edgar_seed2` | `investors_count@{1,7,14,30}` |
+| `task2_forecast` | `core_only_seed2` | `investors_count@{1,7,14,30}` |
+| `task3_risk_adjust` | `core_edgar_seed2` | `investors_count@{1,7,14,30}` |
+
+## Current Queue Monitor
+
+| Job | State | Partition | Notes |
+| --- | --- | --- | --- |
+| `af739_t1_e2` | RUNNING | `gpu` | task1 `core_edgar_seed2` gap-fill |
+| `af739_t1_s2` | RUNNING | `gpu` | task1 `core_only_seed2` gap-fill |
+| `af739_t2_s2` | RUNNING | `gpu` | task2 `core_only_seed2` gap-fill |
+| `af739_t2_e2` | RUNNING | `gpu` | task2 `core_edgar_seed2` gap-fill |
+| `af739_t3_e2` | PENDING | `gpu` | task3 `core_edgar_seed2` gap-fill, repaired 2026-03-25 |
+
+## What Changed on 2026-03-25
+
+1. `scripts/build_phase9_current_snapshot.py` was patched so V739 live-job counting matches both `v739_*` and `af739_*` job names.
+2. The queue gap for `af739_t3_e2` was repaired: the previous copies were `5273997` (TIMEOUT) and `5273998` (duplicate cancelled), and the current live replacement is `5284506`.
+3. `gpu_cos2_t2` was cancelled and re-submitted onto the trimmed 23-model working list so seed2 gap-fill stops wasting GPU time on excluded/broken models. That repair matters indirectly for V739 because it accelerates the remaining shared seed2 frontier.
+
+## Operational Interpretation
+
+- V739 is now in a **pure seed2/e2 gap-fill phase**. The original co/ce/ct/fu surface is complete.
+- The remaining 29 missing conditions are all known and localized; there is no longer any ambiguity about where the gaps are.
+- The dominant risk is now **throughput**, not correctness. The key bottlenecks are long validation-based candidate selection in AutoFit and the shared queue pressure from ModernTCN-heavy accel jobs.
+- There is currently **no uncovered mandatory V739 work outside the queue**.
+
+## Benchmark Position (Keep Using This Carefully)
+
+The last valid computed summary still places V739 at roughly **#13** on the stable shared comparison slice. That remains useful context, but any paper-facing statement must continue to describe V739 as the **current valid baseline under active gap-fill**, not as a fully finished 160/160 line.
+
+## Monitoring Commands
+
+### Live queue view
+```bash
+squeue -u npin -o '%.18i %.9P %.32j %.8T %.10M %.10l %.6D %R'
+```
+
+### V739-only queue view
+```bash
+squeue -u npin -h -o '%i|%j|%T|%P|%R' | rg 'af739|v739'
+```
+
+### Rebuild current snapshot
+```bash
+/mnt/aiongpfs/projects/eint/envs/.micromamba/envs/insider/bin/python3 scripts/build_phase9_current_snapshot.py
+```
+
+### Rebuild aggregated result table
+```bash
+/mnt/aiongpfs/projects/eint/envs/.micromamba/envs/insider/bin/python3 scripts/aggregate_block3_results.py
+```
+
+## Landing Checklist
+
+1. Confirm all 5 V739 gap-fill jobs are still present or safely requeued.
+2. Confirm newly landed rows increase `AutoFitV739` from `131` upward in `all_results.csv`.
+3. Confirm no NaN/Inf, no fallback, and fairness remains 100%.
+4. Only then update `docs/CURRENT_SOURCE_OF_TRUTH.md`, `docs/BLOCK3_MODEL_STATUS.md`, and paper-facing status notes.

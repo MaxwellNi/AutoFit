@@ -1,10 +1,12 @@
 # Block 3 Benchmark Results
 
-**Generated**: 2026-03-24 17:33:18
+**Generated**: 2026-03-25 14:12:53
 **Benchmark Dir**: `block3_phase9_fair`
 **Total Records (post-filter)**: 12178
 
 ## Overview
+
+> Note: the post-filter CSV still contains **21 retired AutoFit legacy lines** (`AutoFitV1, AutoFitV2, AutoFitV2E, AutoFitV3, AutoFitV3E` ...). For current clean benchmark interpretation, treat `AutoFitV739` as the only valid AutoFit baseline and use the `non-retired models` count below when comparing against the active frontier.
 
 | Metric | Value |
 |--------|-------|
@@ -12,6 +14,8 @@
 | Filtered records | 12178 |
 | Comparability filter | fairness_only=True, min_coverage=0.98 |
 | Models evaluated | 107 |
+| Non-retired models evaluated | 86 |
+| Retired AutoFit legacy lines still present | 21 |
 | Categories | autofit, deep_classical, foundation, irregular, ml_tabular, statistical, transformer_sota, tslib_sota |
 | Tasks | task1_outcome, task2_forecast, task3_risk_adjust |
 | Total evaluations | 12178 |
@@ -722,4 +726,4 @@ Shows which task/category/ablation combinations have results.
 | task3_risk_adjust | tslib_sota | full | 21 |
 
 ---
-_Last updated: 2026-03-24 17:33:19_
+_Last updated: 2026-03-25 14:12:53_

@@ -1,0 +1,242 @@
+#!/usr/bin/env python3
+"""
+Run component ablations for V740-alpha on a few audited smoke slices.
+
+This stays outside the live benchmark line. It compares the current default
+prototype against variants that disable:
+  - teacher distillation
+  - event head
+  - task modulation
+"""
+from __future__ import annotations
+
+import argparse
+import json
+import subprocess
+import sys
+from pathlib import Path
+from typing import Any, Dict, List
+
+
+REPO_ROOT = Path(__file__).resolve().parent.parent
+SMOKE_SLICE_SCRIPT = REPO_ROOT / "scripts" / "run_v740_alpha_smoke_slice.py"
+
+
+CASES: List[Dict[str, Any]] = [
+    {
+        "name": "binary_core_edgar",
+        "task": "task1_outcome",
+        "ablation": "core_edgar",
+        "target": "is_funded",
+        "horizon": 14,
+        "max_entities": 8,
+        "max_rows": 800,
+    },
+    {
+        "name": "binary_core_edgar_seed2",
+        "task": "task1_outcome",
+        "ablation": "core_edgar_seed2",
+        "target": "is_funded",
+        "horizon": 14,
+        "max_entities": 8,
+        "max_rows": 800,
+    },
+    {
+        "name": "binary_full",
+        "task": "task1_outcome",
+        "ablation": "full",
+        "target": "is_funded",
+        "horizon": 14,
+        "max_entities": 8,
+        "max_rows": 800,
+    },
+    {
+        "name": "investors_full",
+        "task": "task1_outcome",
+        "ablation": "full",
+        "target": "investors_count",
+        "horizon": 14,
+        "max_entities": 12,
+        "max_rows": 1200,
+    },
+    {
+        "name": "investors_core_only_seed2",
+        "task": "task1_outcome",
+        "ablation": "core_only_seed2",
+        "target": "investors_count",
+        "horizon": 14,
+        "max_entities": 12,
+        "max_rows": 1200,
+    },
+    {
+        "name": "funding_core_edgar_task1",
+        "task": "task1_outcome",
+        "ablation": "core_edgar",
+        "target": "funding_raised_usd",
+        "horizon": 30,
+        "max_entities": 12,
+        "max_rows": 1200,
+    },
+    {
+        "name": "funding_core_edgar_task3",
+        "task": "task3_risk_adjust",
+        "ablation": "core_edgar",
+        "target": "funding_raised_usd",
+        "horizon": 30,
+        "max_entities": 12,
+        "max_rows": 1200,
+    },
+]
+
+VARIANTS: List[Dict[str, Any]] = [
+    {"name": "default", "extra_args": []},
+    {"name": "no_teacher", "extra_args": ["--disable-teacher-distill"]},
+    {"name": "no_event", "extra_args": ["--disable-event-head"]},
+    {"name": "no_taskmod", "extra_args": ["--disable-task-modulation"]},
+]
+
+
+def _parse_args() -> argparse.Namespace:
+    ap = argparse.ArgumentParser(description=__doc__)
+    ap.add_argument(
+        "--output-dir",
+        type=Path,
+        default=REPO_ROOT / "docs" / "references" / "v740_alpha_component_ablation_20260325",
+    )
+    ap.add_argument(
+        "--summary-md",
+        type=Path,
+        default=REPO_ROOT / "docs" / "references" / "V740_ALPHA_COMPONENT_ABLATION_20260325.md",
+    )
+    ap.add_argument(
+        "--case-substr",
+        default="",
+        help="Optional substring filter over case names.",
+    )
+    ap.add_argument(
+        "--max-cases",
+        type=int,
+        default=0,
+        help="Optional limit on the number of cases to run after filtering.",
+    )
+    return ap.parse_args()
+
+
+def _run_one(case: Dict[str, Any], variant: Dict[str, Any], output_dir: Path) -> Dict[str, Any]:
+    out_json = output_dir / f"{case['name']}__{variant['name']}.json"
+    cmd = [
+        sys.executable,
+        str(SMOKE_SLICE_SCRIPT),
+        "--task", case["task"],
+        "--ablation", case["ablation"],
+        "--target", case["target"],
+        "--horizon", str(case["horizon"]),
+        "--max-entities", str(case["max_entities"]),
+        "--max-rows", str(case["max_rows"]),
+        "--output-json", str(out_json),
+    ] + list(variant["extra_args"])
+    proc = subprocess.run(cmd, cwd=REPO_ROOT, text=True, capture_output=True)
+    result = {
+        "case": case["name"],
+        "variant": variant["name"],
+        "exit_code": proc.returncode,
+        "json_path": str(out_json),
+        "stdout_tail": "\n".join(proc.stdout.strip().splitlines()[-12:]) if proc.stdout else "",
+        "stderr_tail": "\n".join(proc.stderr.strip().splitlines()[-12:]) if proc.stderr else "",
+    }
+    if proc.returncode == 0 and out_json.exists():
+        result["summary"] = json.loads(out_json.read_text(encoding="utf-8"))
+    return result
+
+
+def _fmt(x: Any) -> str:
+    if x is None:
+        return "-"
+    if isinstance(x, float):
+        return f"{x:.4f}"
+    return str(x)
+
+
+def _write_summary(path: Path, results: List[Dict[str, Any]]) -> None:
+    baseline: Dict[str, Dict[str, Any]] = {}
+    for row in results:
+        if row["variant"] == "default" and "summary" in row:
+            baseline[row["case"]] = row["summary"]
+
+    lines = [
+        "# V740 Alpha Component Ablation (2026-03-25)",
+        "",
+        "Generated by `scripts/run_v740_alpha_component_ablation.py`.",
+        "",
+        "## Summary",
+        "",
+        "| Case | Variant | Exit | MAE | Delta vs Default | PredStd | Teacher | Event | TaskMod | TeacherW | EventW | EventRate | TransRate | EdgarDens | TextDens |",
+        "|---|---|---:|---:|---:|---:|---|---|---|---:|---:|---:|---:|---:|---:|",
+    ]
+    for row in results:
+        summary = row.get("summary", {})
+        metrics = summary.get("metrics", {})
+        base = baseline.get(row["case"], {})
+        base_mae = base.get("metrics", {}).get("mae")
+        mae = metrics.get("mae")
+        delta = None
+        if base_mae is not None and mae is not None:
+            delta = mae - base_mae
+        lines.append(
+            "| {case} | {variant} | {exit_code} | {mae} | {delta} | {pred_std} | {teacher} | {event} | {task} | {tw} | {ew} | {er} | {tr} | {ed} | {td} |".format(
+                case=row["case"],
+                variant=row["variant"],
+                exit_code=row["exit_code"],
+                mae=_fmt(mae),
+                delta=_fmt(delta),
+                pred_std=_fmt(summary.get("prediction_std")),
+                teacher=summary.get("teacher_distill_enabled", "-"),
+                event=summary.get("event_head_enabled", "-"),
+                task=summary.get("task_mod_enabled", "-"),
+                tw=_fmt(summary.get("binary_teacher_weight")),
+                ew=_fmt(summary.get("binary_event_weight")),
+                er=_fmt(summary.get("binary_event_rate")),
+                tr=_fmt(summary.get("binary_transition_rate")),
+                ed=_fmt(summary.get("edgar_source_density")),
+                td=_fmt(summary.get("text_source_density")),
+            )
+        )
+
+    lines.extend(["", "## Raw Tails", ""])
+    for row in results:
+        lines.extend([
+            f"### {row['case']} / {row['variant']}",
+            "",
+            f"- Exit code: `{row['exit_code']}`",
+            f"- JSON artifact: `{row['json_path']}`",
+            "",
+            "```text",
+            row.get("stdout_tail", "").strip() or "(no stdout)",
+            "```",
+            "",
+        ])
+    path.write_text("\n".join(lines).rstrip() + "\n", encoding="utf-8")
+
+
+def main() -> int:
+    args = _parse_args()
+    args.output_dir.mkdir(parents=True, exist_ok=True)
+    cases = CASES
+    if args.case_substr:
+        cases = [c for c in cases if args.case_substr in c["name"]]
+    if args.max_cases and args.max_cases > 0:
+        cases = cases[: args.max_cases]
+    if not cases:
+        raise SystemExit("No ablation cases selected.")
+    results: List[Dict[str, Any]] = []
+    for case in cases:
+        for variant in VARIANTS:
+            print(f"[v740-ablation] running {case['name']} / {variant['name']}", flush=True)
+            results.append(_run_one(case, variant, args.output_dir))
+    _write_summary(args.summary_md, results)
+    print(f"[v740-ablation] wrote summary to {args.summary_md}", flush=True)
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

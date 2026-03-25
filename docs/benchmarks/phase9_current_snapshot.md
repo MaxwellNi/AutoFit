@@ -1,6 +1,6 @@
 # Phase 9 / V739 Current Snapshot
 
-> Generated: 2026-03-24T16:33:32.655258+00:00
+> Generated: 2026-03-25T13:17:43.209499+00:00
 > Canonical benchmark: `runs/benchmarks/block3_phase9_fair`
 
 ## Verified Current Facts
@@ -10,14 +10,18 @@
 | metrics_files | 137 | raw metrics scan |
 | raw_records | 16023 | raw metrics scan |
 | raw_models | 137 | raw metrics scan |
-| raw_complete_models | 86 | raw metrics scan |
-| raw_partial_models | 51 | raw metrics scan |
+| raw_nonretired_models | 116 | raw metrics scan minus retired AutoFit legacy lines |
+| raw_retired_autofit_models | 21 | raw metrics scan |
+| raw_complete_models | 75 | raw metrics scan |
+| raw_partial_models | 62 | raw metrics scan |
 | filtered_records | 12178 | `all_results.csv` |
-| filtered_models | 107 | `all_results.csv` |
-| filtered_complete_models | 67 | `all_results.csv` |
-| filtered_partial_models | 40 | `all_results.csv` |
+| filtered_models | 107 | `all_results.csv` (includes retired AutoFit legacy lines if they pass filters) |
+| filtered_nonretired_models | 86 | `all_results.csv` minus retired AutoFit legacy lines |
+| filtered_retired_autofit_models | 21 | `all_results.csv` |
+| filtered_complete_models | 55 | `all_results.csv` |
+| filtered_partial_models | 52 | `all_results.csv` |
 | v739_conditions_landed | 131 | raw metrics scan |
-| v739_jobs_live | 0 | `squeue -u npin,cfisch` |
+| v739_jobs_live | 5 | `squeue -u npin,cfisch` |
 | v739_canonical_phase9_scripts | 13 | V739 script scan |
 | v739_legacy_phase10_scripts | 32 | V739 script scan |
 | text_embeddings_artifacts_complete | True | `runs/text_embeddings/` |
@@ -27,18 +31,18 @@
 | metric | value |
 | --- | --- |
 | jobs_total | 57 |
-| running | 11 |
-| pending | 46 |
-| npin_pending | 46 |
+| running | 25 |
+| pending | 32 |
+| npin_pending | 32 |
 | cfisch_pending | 0 |
-| v739_pending | 0 |
-| v739_running | 0 |
+| v739_pending | 1 |
+| v739_running | 4 |
 
 ### Pending Reasons
 
 | reason | count |
 | --- | --- |
-| (Priority) | 45 |
+| (Priority) | 31 |
 | (Resources) | 1 |
 
 ## Text Embedding Artifacts
@@ -132,6 +136,17 @@
 
 | model_name | conditions | records |
 | --- | --- | --- |
+| XGBoost | 159 | 159 |
+| XGBoostPoisson | 157 | 157 |
+| AutoFitV739 | 131 | 131 |
+| Chronos2 | 114 | 160 |
+| TTM | 114 | 160 |
+| Crossformer | 105 | 109 |
+| MSGNet | 105 | 109 |
+| MambaSimple | 105 | 109 |
+| MultiPatchFormer | 105 | 109 |
+| PAttn | 105 | 109 |
+| TimeFilter | 105 | 109 |
 | ETSformer | 93 | 113 |
 | LightTS | 93 | 113 |
 | Pyraformer | 93 | 113 |
