@@ -1,6 +1,6 @@
 # Current Source of Truth
 
-> Last verified: 2026-03-26 11:43 CET
+> Last verified: 2026-03-26 11:49 CET
 > Verified by direct scans of `runs/benchmarks/block3_phase9_fair/`, live `squeue -u npin`, `sacct`, benchmark aggregation scripts.
 
 This file is the authoritative documentation entry point for the current Block 3 project state.
@@ -43,7 +43,7 @@ If any other document disagrees with this file, prefer this file and the evidenc
 | Text embedding artifacts | `AVAILABLE` | `runs/text_embeddings/embedding_metadata.json` |
 | Phase 12 text reruns | `48/48 COMPLETED` | core_text+full 91/91 models |
 | Phase 15 new models | 23 submitted, 15 valid, 8 excluded (Finding H), 78/160 | direct scan |
-| Live jobs | `57` (29R + 28PD) | squeue 2026-03-26 11:35: gpu 23R, l40s 3R+14PD, hopper 3R+14PD |
+| Live jobs | `58` (29R + 29PD) | squeue 2026-03-26 11:49: gpu 23R+1PD, l40s 3R+14PD, hopper 3R+14PD |
 
 ## What the Current Benchmark Means
 
@@ -62,11 +62,12 @@ If any other document disagrees with this file, prefer this file and the evidenc
 
 ## Current Execution Reality
 
-1. Live queue snapshot verified on 2026-03-26 11:35 CET:
+1. Live queue snapshot verified on 2026-03-26 11:49 CET:
    - `29 RUNNING` = `23 gpu + 3 l40s + 3 hopper`
-   - `28 PENDING` = `14 hopper + 14 l40s`
-   - **57 total**
+   - `29 PENDING` = `1 gpu + 14 hopper + 14 l40s`
+   - **58 total**
    - Current gpu runners: 17 `g2_ac_*` + 5 `af739_*` + 1 `gpu_cos2_t2`
+   - Current gpu pending: `v740_mb_case1_v739` (local-only resumable V740 compare, not part of canonical benchmark)
    - **ModernTCN bottleneck** remains the dominant throughput limiter for non-e2 accel jobs
    - Partition constraints (`sinfo` verified): `gpu=756G`, `l40s=515G`, `hopper=2063754MB (~2.06TB)`; the earlier `hopper=201G` claim was a unit-reading error
 2. V739 status:
@@ -109,7 +110,7 @@ If any other document disagrees with this file, prefer this file and the evidenc
 8. Complete e2 gap for ETSformer/LightTS/Pyraformer/Reformer (0/28 e2 each — covered by accel_v2).
 9. Complete P15 model gap-fill to 160/160 via accel_v2 (54 total jobs, auto-requeue).
 10. g2_ac_v2 auto-requeue: e2/ct complete first run; co/s2/ce/fu need 2-3 requeues, with `gpu_cos2_t2` now corrected to the trimmed 23-model list.
-11. Only after all jobs complete and coverage stable should V740+ work begin.
+11. Local-only V740 work is now permitted via resumable side-paths that do **not** touch the canonical benchmark harness; the first such job is `v740_mb_case1_v739`.
 
 ## What Is No Longer Current
 

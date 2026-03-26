@@ -186,11 +186,11 @@ def _run_squeue() -> Dict[str, Any]:
     partition_state_counts = Counter((r["partition"], r["state"]) for r in rows)
     qos_state_counts = Counter((r["qos"], r["state"]) for r in rows)
     pending_reasons = Counter(r["reason"] for r in rows if r["state"] == "PENDING")
-    v739_rows = [
-        r
-        for r in rows
-        if any(token in r["job_name"].lower() for token in ("v739", "af739", "autofitv739"))
-    ]
+    v739_rows = []
+    for r in rows:
+        job = r["job_name"].lower()
+        if job.startswith("af739_") or job.startswith("v739_") or job == "autofitv739":
+            v739_rows.append(r)
     text_rows = [r for r in rows if "text" in r["job_name"].lower() or "embed" in r["job_name"].lower()]
 
     return {
