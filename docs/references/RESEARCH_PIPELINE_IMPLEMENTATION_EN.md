@@ -136,6 +136,12 @@ The current local-only evidence is mixed rather than uniformly positive:
 - `task2_forecast / core_only / investors_count`
   - `h=30`: `MAE = 48.64`, non-constant
   - `h=60`: `MAE = 50.08`, constant prediction
+- `task2_forecast / core_edgar / funding_raised_usd`
+  - `h=30`: `MAE = 179797.74`, non-constant
+  - `h=60`: `MAE = 178084.08`, non-constant
+- `task2_forecast / core_edgar / investors_count`
+  - `h=30`: `MAE = 56.51`, non-constant
+  - `h=60`: `MAE = 57.06`, non-constant
 - `task2_forecast / core_only / funding_raised_usd`
   - `h=90`: fallback-only on the tested local slice
 - `task2_forecast / core_only / investors_count`
@@ -145,7 +151,8 @@ The correct current conclusion is therefore:
 
 > Longer horizon is now a real exercised V740 path, but it is not yet a free
 > gain. It may help on some funding slices, it currently hurts or collapses on
-> some count slices, and `h=90` is not yet properly supported on the tested
+> some count slices, EDGAR may stabilize some `h=60` behavior without making it
+> universally better, and `h=90` is not yet properly supported on the tested
 > narrow local slices because the windowing regime is still too short.
 
 ### 5.4 How longer entrepreneurial-finance horizons should be designed

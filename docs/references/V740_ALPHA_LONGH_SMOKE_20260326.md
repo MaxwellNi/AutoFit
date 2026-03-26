@@ -294,3 +294,57 @@ So the most truthful current statement is:
 > V740-alpha has now exercised `h = 60` and `h = 90` locally. `h = 60` shows
 > mixed but potentially useful behavior, while `h = 90` currently exposes a
 > window/context limitation rather than a mature long-horizon capability.
+
+## 10. Same-day `core_edgar` checks
+
+To test whether the first `core_only` signals were merely artifacts of the
+endogenous-only setup, the same local protocol was also applied to
+`task2_forecast / core_edgar` on the same day.
+
+Observed results:
+
+| Target | Horizon | Constant | MAE | RMSE | Wall time |
+|---|---:|---|---:|---:|---:|
+| `funding_raised_usd` | `30` | `false` | `179797.7425` | `359612.8705` | `51.257s` |
+| `funding_raised_usd` | `60` | `false` | `178084.0833` | `370856.7862` | `37.888s` |
+| `investors_count` | `30` | `false` | `56.5055` | `64.2714` | `49.867s` |
+| `investors_count` | `60` | `false` | `57.0610` | `64.7228` | `48.516s` |
+
+Artifacts:
+
+- `docs/references/v740_alpha_longh_smoke_20260326/t2_core_edgar_funding_h30.json`
+- `docs/references/v740_alpha_longh_smoke_20260326/t2_core_edgar_funding_h60.json`
+- `docs/references/v740_alpha_longh_smoke_20260326/t2_core_edgar_investors_h30.json`
+- `docs/references/v740_alpha_longh_smoke_20260326/t2_core_edgar_investors_h60.json`
+
+These checks matter for two reasons:
+
+1. unlike the `core_only / investors_count / h=60` slice, the `core_edgar`
+   count slice does **not** collapse to a constant prediction,
+2. but the target-dependent story remains: `h=60` is slightly better on the
+   tested funding slice and slightly worse on the tested count slice.
+
+So EDGAR currently looks more like a **stabilizer** of the longer-horizon path
+than a universal long-horizon booster.
+
+## 11. Updated best interpretation
+
+After the `core_only` and `core_edgar` checks together, the strongest truthful
+statement is now:
+
+> V740-alpha's local `h=60` path is real and increasingly credible on the
+> tested narrow slices, especially for funding targets. However, its benefit is
+> still target-dependent, and `h=90` remains immature because the current
+> window/context regime is too weak to support it reliably.
+
+That is a more defensible conclusion than either of the two naive extremes:
+
+- "`h>30` is always better", or
+- "`h>30` is pointless."
+
+At this stage, the right engineering target is:
+
+1. keep `h=60` under active local-only development,
+2. expand it across a few more representative slices,
+3. treat `h=90` as a context/window-design problem before treating it as a
+   forecasting benchmark problem.
