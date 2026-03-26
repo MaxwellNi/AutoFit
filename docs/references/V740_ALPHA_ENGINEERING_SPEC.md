@@ -89,6 +89,13 @@
 > `h=30` remains healthier (`MAE = 48.64`, non-constant) while `h=60`
 > collapses to a constant prediction (`MAE = 50.08`). So `h>30` is now a real
 > exercised path, but it is not yet uniformly helpful across targets.
+> A same-day `h=90` probe is now also recorded in
+> `docs/references/V740_ALPHA_LONGH_SMOKE_20260326.md`. On the tested narrow
+> local slices, both `funding_raised_usd` and `investors_count` fall back to
+> constant predictions there. That result is still useful because it shows that
+> alpha now has a real `90` token path, while also making clear that
+> longer-horizon behavior requires joint scaling of horizon, context length,
+> usable windows, and representative slice construction.
 
 ## 1. Purpose
 
@@ -111,6 +118,10 @@ Alpha therefore exists to answer one question rigorously:
 > EDGAR-sensitive cells, without giving back its strength on funding and count
 > targets?
 
+This is also an operational question. V739 is valid, but it is slow because it
+trains and evaluates an 8-model candidate pool per condition. Alpha only
+matters if it preserves the one-model cost profile that V739 does not have.
+
 ## 2. Non-Negotiable Constraints
 
 Alpha must satisfy all of the following.
@@ -131,6 +142,9 @@ Alpha must satisfy all of the following.
    heavyweight foundation model
 4. feasible on the current benchmark hardware allocations without special-case
    infrastructure
+5. no hidden reintroduction of candidate tournaments inside the training loop
+6. longer-horizon support must remain single-model and must not rely on
+   degenerate fallback behavior as the default explanation for `h>30` results
 
 ### 2.3 Modeling constraints
 

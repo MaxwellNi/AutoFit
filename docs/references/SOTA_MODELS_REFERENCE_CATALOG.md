@@ -135,6 +135,68 @@ V740 methodology direction:
 | TimeDiT | 2025 | General-purpose diffusion-style TSFM; interesting but too heavy for alpha |
 | FLAIRR-TS | Findings of EMNLP 2025 | Retrieval + iterative refinement; promising as a later auxiliary memory signal |
 
+### Heavy but still important public-comparison references
+
+These models are not the first additions we should prioritize for the
+efficiency-first V740 path, but they still matter as public-benchmark
+reference points and should stay visible in the literature audit:
+
+| Model | Venue | Why it still matters |
+|-------|-------|----------------------|
+| TimeMoE | ICLR 2025 | Already in our codebase and registry; important heavy foundation-model reference for zero-shot/full-shot comparisons |
+| TimerXL | ICLR 2025 | Already in our codebase and registry; strong long-context baseline for public generalization studies |
+| TimeDiT | 2025 | Useful upper-bound reference for "general TSFM" style modeling, even if too heavy for V740-alpha |
+
+## Recurring Public Benchmark Families in 2024-2026 Papers
+
+For future V740 generalization testing, we should not pick public datasets
+arbitrarily. The recurring families across recent top-venue forecasting papers
+and official repos cluster into the following groups.
+
+### 1. Canonical long-horizon multivariate forecasting
+
+- `ETTh1`, `ETTh2`
+- `ETTm1`, `ETTm2`
+- `Electricity` / `ECL`
+- `Traffic`
+- `Weather`
+- `Exchange`
+- `ILI` / `Illness`
+
+These remain the most common direct-comparison datasets for recent long-term
+forecasting papers and should form the default external evaluation pack.
+
+### 2. Traffic / graph-like temporal structure
+
+- `PEMS03`
+- `PEMS04`
+- `PEMS07`
+- `PEMS08`
+
+These are especially useful when auditing whether a mechanism transfers beyond
+our entrepreneurial-finance panel into strongly structured multivariate
+dynamics.
+
+### 3. Covariate-sensitive / exogenous forecasting
+
+- `Solar`
+- energy or load datasets with exogenous variables
+- market or electricity-price datasets used in covariate-aware forecasting
+
+These are the most relevant public tests for the EDGAR/text side of V740,
+because they stress exogenous usefulness and availability rather than purely
+endogenous trend fitting.
+
+### 4. Broader robustness suites
+
+- `M4`
+- `M5`
+- selected Monash Forecasting Repository datasets
+
+These are not close analogues of Block 3, but they remain useful for checking
+whether a candidate V740 line is becoming over-specialized to one proprietary
+panel domain.
+
 ## Installation Guide
 
 ### Core Dependencies

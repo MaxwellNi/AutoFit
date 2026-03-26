@@ -193,3 +193,104 @@ The next sensible steps are:
 2. only then consider whether `h=90` is worth testing,
 3. keep all such runs outside the official benchmark until the evidence is
    strong enough to justify a protocol expansion.
+
+## 8. First same-day `h=90` checks
+
+To avoid leaving `h=90` at the purely conceptual stage, two additional
+local-only runs were executed on the same day using the same narrow budget
+(`12 entities / 1500 train rows / 2 epochs`).
+
+### 8.1 `funding_raised_usd / core_only / task2 / h=90`
+
+Command:
+
+```bash
+/mnt/aiongpfs/projects/eint/envs/.micromamba/envs/insider/bin/python3 \
+  scripts/run_v740_alpha_smoke_slice.py \
+  --task task2_forecast \
+  --ablation core_only \
+  --target funding_raised_usd \
+  --horizon 90 \
+  --max-entities 12 \
+  --max-rows 1500 \
+  --max-epochs 2 \
+  --output-json docs/references/v740_alpha_longh_smoke_20260326/t2_core_only_funding_h90.json
+```
+
+Observed result:
+
+- constant prediction: `true`
+- prediction std: `0.0`
+- `MAE = 134873.4536`
+- `RMSE = 186562.7618`
+- wall time: `28.896s`
+- training mode: `fallback-only`
+
+Artifact:
+
+- `docs/references/v740_alpha_longh_smoke_20260326/t2_core_only_funding_h90.json`
+
+### 8.2 `investors_count / core_only / task2 / h=90`
+
+Command:
+
+```bash
+/mnt/aiongpfs/projects/eint/envs/.micromamba/envs/insider/bin/python3 \
+  scripts/run_v740_alpha_smoke_slice.py \
+  --task task2_forecast \
+  --ablation core_only \
+  --target investors_count \
+  --horizon 90 \
+  --max-entities 12 \
+  --max-rows 1500 \
+  --max-epochs 2 \
+  --output-json docs/references/v740_alpha_longh_smoke_20260326/t2_core_only_investors_h90.json
+```
+
+Observed result:
+
+- constant prediction: `true`
+- prediction std: `0.0`
+- `MAE = 23.7500`
+- `RMSE = 28.8227`
+- wall time: `31.025s`
+- training mode: `fallback-only`
+
+Artifact:
+
+- `docs/references/v740_alpha_longh_smoke_20260326/t2_core_only_investors_h90.json`
+
+### 8.3 What the `h=90` runs imply
+
+These first `h=90` checks are still useful, even though they are not yet good
+results. They show that, on the current narrow local slices:
+
+1. the `90` horizon token path is wired correctly end-to-end,
+2. but the tested slices do not yet produce enough usable windows for the main
+   learning path,
+3. so the prototype falls back to a degenerate prediction regime.
+
+This is exactly why longer-horizon work must be treated as a joint design
+problem:
+
+- longer forecast horizon,
+- sufficient input context,
+- sufficient per-entity sequence length,
+- and representative local sampling
+
+must all scale together. Simply adding a bigger horizon token is not enough.
+
+## 9. Updated best interpretation
+
+The current best interpretation is now stricter than Section 7 alone:
+
+- `h=60` is a real, partially promising prototype path,
+- but its benefit is target-dependent even on the tested core-only slices,
+- and `h=90` is not yet ready for meaningful engineering comparison on the
+  current narrow local setup because it falls back to constant predictions.
+
+So the most truthful current statement is:
+
+> V740-alpha has now exercised `h = 60` and `h = 90` locally. `h = 60` shows
+> mixed but potentially useful behavior, while `h = 90` currently exposes a
+> window/context limitation rather than a mature long-horizon capability.

@@ -22,14 +22,14 @@ The current clean facts are already strong enough to support a more serious
 design target:
 
 - canonical benchmark root: `runs/benchmarks/block3_phase9_fair/`
-- current raw benchmark surface: **15,888** records
+- current raw benchmark surface: **16,077** records
 - raw models materialized: **137**
 - audit-excluded models: **24**
 - active leaderboard models: **92**
-- active complete models: **64 @160/160**
+- active complete models: **62 @160/160**
 - only valid current AutoFit baseline: **AutoFitV739**
-- V739 landed coverage: **126/160**
-- V739 clean comparable slice: **126 conditions**, **56 comparable non-retired models**
+- V739 landed coverage: **132/160**
+- V739 clean comparable slice: **132 conditions**, **56 comparable non-retired models**
 - V739 current filtered-slice performance: mean rank **13.18**, rank position **14/56**,
   median gap **1.52%**, mean gap **3.91%**, wins **17**
 
@@ -63,6 +63,25 @@ In short, V740 should pursue the following Pareto point:
 - accuracy close to or above the best current specialists,
 - wall-clock closer to a single model than to V739-style validation selection,
 - and fairness identical to the current benchmark protocol.
+
+### 1.1 Why V739 is not the end-state
+
+V739 is scientifically valid, but operationally it is still too expensive to be
+the final AutoFit answer.
+
+The reason is structural. V739 does not train one model per condition. It
+trains and evaluates an 8-model candidate pool on the temporal validation split
+before committing to a winner. That is exactly why it remains a strong clean
+baseline and exactly why it remains slow in practice.
+
+So the V740 objective is not "make V739 route a bit better." The objective is:
+
+- preserve the leakage-free selection lesson,
+- preserve the useful champion mechanisms,
+- remove the runtime multi-candidate cost profile.
+
+If V740 ever regresses into hidden runtime model tournaments, then it has
+missed the point.
 
 ## 2. What the Current Benchmark Actually Teaches
 
@@ -374,6 +393,35 @@ Inputs should include:
 
 The input stage should remain intentionally small. Parameter budget should be
 spent on useful internal structure, not on oversized embeddings.
+
+### 5.2b Extended-horizon logic
+
+The next long-horizon expansion cannot be "just add 60 and 90 everywhere."
+That would confuse token support with true long-horizon competence.
+
+As of 2026-03-26, local-only V740-alpha evidence is already mixed:
+
+- `funding_raised_usd / core_only / task2`: `h=60` looks slightly healthier
+  than `h=30` on the tested slice,
+- `investors_count / core_only / task2`: `h=60` looks worse than `h=30`,
+- `h=90` on the same narrow slices currently falls back to constant predictions.
+
+So the correct V740 design principle is:
+
+> longer entrepreneurial-finance horizons must be logic-driven and jointly
+> engineered with context length, usable windows, and representative sampling.
+
+The candidate future research horizons worth auditing are:
+
+- `45` days: campaign follow-up / traction window
+- `60` days: medium fundraising evolution
+- `90` days: quarter-scale financing development
+- `180` days: half-year financing progression
+- `365` days: annual financing state change
+
+These are design targets, not active benchmark claims. They should remain
+local-only until the prototype demonstrates non-degenerate behavior and stable
+benefit across more than one target family.
 
 ### 5.3 Decomposition-first trunk
 
