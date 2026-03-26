@@ -105,6 +105,23 @@ champion set is compact:
 This means V740 does not need to absorb every benchmarked model. It needs to
 absorb the mechanisms that repeatedly produce wins.
 
+One important nuance is easy to miss:
+
+- `NBEATS`, `Chronos`, `NHITS`, `KAN`, `DeepNPTS`, `GRU`, and `PatchTST` are
+  the main repeated champion-mechanism sources on the current surface.
+- `NBEATSx` is best understood as an exogenous-support extension of the
+  `NBEATS` family rather than a completely separate primary mechanism source.
+- `ChronosBolt` is a very important rank-level and longer-horizon signal, but
+  in the current benchmark it behaves more like a close `Chronos` variant than
+  a separate dominant champion family.
+- `TimesNet` remains a useful candidate-pool and literature-reference model,
+  but the current 160-cell surface does not yet justify treating it as one of
+  the main mechanism anchors for V740.
+
+This distinction is central to keeping V740 elegant. The model should compress
+the mechanisms that repeatedly win, not merely the models that happen to be in
+the candidate pool.
+
 ### 2.2 The benchmark is regime-dependent
 
 The same model family does not dominate all targets, horizons, and feature
@@ -117,6 +134,45 @@ regimes.
 - `DeepNPTS` is a binary specialist, but only on a narrow task slice.
 - `PatchTST` wins few cells but has the best mean rank, making it the cleanest
   generalist sanity anchor.
+
+### 2.2b The deepest N-BEATS lesson for V740
+
+The current benchmark evidence and the original N-BEATS paper point to the
+same deeper design lesson:
+
+forecasting strength does not have to come from architectural novelty for its
+own sake. It can come from a very clean decomposition of the forecasting
+problem into:
+
+1. a shared coefficient generator,
+2. a structured basis space,
+3. iterative residual refinement,
+4. and direct horizon-wise forecasting.
+
+That is why `NBEATS` matters so much for V740. Its importance is not only that
+it wins `65/160` cells. Its importance is that it demonstrates a design style:
+
+- start from a simple and cheap shared trunk,
+- make the forecast additive and hierarchical,
+- let different blocks explain different residual structure,
+- and only add complexity where a clear regime-specific mechanism truly
+  demands it.
+
+So V740 should not try to become a giant “all tricks at once” architecture.
+It should start from a decomposition-first, direct-forecast, residual-refinement
+skeleton, and then add only the extra branches that are justified by the
+current benchmark:
+
+- `NHITS`-style multi-resolution structure,
+- `Chronos`/`ChronosBolt`-style value-space and longer-horizon robustness,
+- `GRU`-style compact state memory,
+- `DeepNPTS`-style binary/event calibration,
+- `KAN`-style local nonlinear response,
+- `PatchTST`-style EDGAR-sensitive local context mixing.
+
+This is the cleanest path toward a model that is still lightweight enough to
+behave like a single model, but rich enough to absorb the actual champion
+mechanisms.
 
 ### 2.3 The biggest remaining weakness is binary/event behavior
 
