@@ -404,7 +404,21 @@ As of 2026-03-26, local-only V740-alpha evidence is already mixed:
 - `funding_raised_usd / core_only / task2`: `h=60` looks slightly healthier
   than `h=30` on the tested slice,
 - `investors_count / core_only / task2`: `h=60` looks worse than `h=30`,
-- `h=90` on the same narrow slices currently falls back to constant predictions.
+- `funding_raised_usd / core_edgar / task2`: `h=60` is also slightly healthier
+  than `h=30` on the tested slice,
+- `investors_count / core_edgar / task2`: `h=60` is still slightly worse than
+  `h=30`,
+- the first viable `h=90` path now appears only on
+  `funding_raised_usd / core_edgar / input_size=120`,
+- `h=180 / core_edgar / funding_raised_usd / input_size=180` is still
+  fallback-only on the tested narrow slice.
+
+There is one more important caveat: the current long-horizon local slices still
+show `edgar_source_density = 0.0` and `text_source_density = 0.0` in the
+recorded artifacts. So current long-horizon gains must not yet be interpreted
+as proof that source-native sparse event-memory is already carrying the load.
+What the artifacts support today is a more limited statement about horizon
+conditioning, context length, and dense ablation-level feature regimes.
 
 So the correct V740 design principle is:
 
@@ -422,6 +436,13 @@ The candidate future research horizons worth auditing are:
 These are design targets, not active benchmark claims. They should remain
 local-only until the prototype demonstrates non-degenerate behavior and stable
 benefit across more than one target family.
+
+The engineering implication is straightforward:
+
+> V740 should not use a tiny hard-coded horizon lookup table. It should use a
+> mixed continuous-plus-bucket horizon encoding that can express both the
+> benchmark horizons and the longer entrepreneurial-finance research horizons
+> under one single-model path.
 
 ### 5.3 Decomposition-first trunk
 
@@ -518,7 +539,7 @@ Required modulation axes:
 
 - task (`task1`, `task2`, `task3`)
 - target (`funding_raised_usd`, `investors_count`, `is_funded`)
-- horizon (`1`, `7`, `14`, `30`)
+- horizon (official `1`, `7`, `14`, `30` plus research `45`, `60`, `90`, `180`, `365`)
 - ablation (`co`, `s2`, `ct`, `ce`, `e2`, `fu`)
 
 ### 5.10 Target-specific heads

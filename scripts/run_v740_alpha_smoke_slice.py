@@ -340,6 +340,13 @@ def _compute_metrics(y_true: np.ndarray, y_pred: np.ndarray) -> Dict[str, float]
     return metrics
 
 
+def _positive_int(value: str) -> int:
+    ivalue = int(value)
+    if ivalue <= 0:
+        raise argparse.ArgumentTypeError("value must be a positive integer")
+    return ivalue
+
+
 def _parse_args() -> argparse.Namespace:
     ap = argparse.ArgumentParser(description=__doc__)
     ap.add_argument("--task", required=True, choices=["task1_outcome", "task2_forecast", "task3_risk_adjust"])
@@ -347,7 +354,7 @@ def _parse_args() -> argparse.Namespace:
         "core_only", "core_only_seed2", "core_text", "core_edgar", "core_edgar_seed2", "full",
     ])
     ap.add_argument("--target", required=True, choices=["funding_raised_usd", "investors_count", "is_funded"])
-    ap.add_argument("--horizon", type=int, required=True, choices=[1, 7, 14, 30, 60, 90])
+    ap.add_argument("--horizon", type=_positive_int, required=True)
     ap.add_argument("--max-entities", type=int, default=256)
     ap.add_argument("--max-rows", type=int, default=20000)
     ap.add_argument("--input-size", type=int, default=60)
@@ -388,6 +395,8 @@ def _summarize_result(
         "ablation": args.ablation,
         "target": args.target,
         "horizon": args.horizon,
+        "input_size": args.input_size,
+        "horizon_to_context_ratio": float(args.horizon / max(1, args.input_size)),
         "train_rows": int(len(train)),
         "val_rows": int(len(val)),
         "test_rows": int(len(test)),

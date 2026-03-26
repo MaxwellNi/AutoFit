@@ -238,6 +238,83 @@ Given current effort-to-value tradeoffs:
 
 ### Track C: LightGTS / LiPFormer
 
+## 7. Public Generalization Benchmark Pack (Research-Driven)
+
+For the NeurIPS-2026-quality paper target, benchmark expansion should not stop
+at Block 3 alone. The external public evaluation pack should be chosen from the
+dataset families that recur across 2024-2026 top-venue forecasting papers.
+
+### 7.1 First public dataset pack
+
+These are the highest-priority public datasets to standardize first:
+
+- `ETTh1`, `ETTh2`
+- `ETTm1`, `ETTm2`
+- `Electricity` / `ECL`
+- `Traffic`
+- `Weather`
+- `Exchange`
+- `ILI`
+- `PEMS03`, `PEMS04`, `PEMS07`, `PEMS08`
+- `Solar`
+
+This pack is the most defensible starting point because it captures the
+long-horizon multivariate core, the traffic/spatiotemporal family, and the
+covariate-sensitive family that matter most for V740's projected generalization
+story.
+
+### 7.2 First public comparator pack
+
+When those datasets are activated, the default public comparator families
+should include:
+
+- linear / decomposition:
+  - `DLinear`, `RLinear`, `OLinear`
+- transformer / mixer:
+  - `PatchTST`, `iTransformer`, `TimesNet`, `TimeMixer`, `FEDformer`,
+    `Crossformer`
+- deep classical:
+  - `NBEATS`, `NHITS`, `TFT`, `TiDE`
+- foundation:
+  - `Chronos`, `Moirai`, `TimesFM`, `TimerXL`, `TimeMoE`, `Sundial`
+
+### 7.3 Why this matters for Block 3
+
+This external pack should not be treated as a side quest. It serves two
+purposes directly tied to V740:
+
+1. it tells us whether the mechanisms that seem promising on Block 3 are
+   general forecasting mechanisms or merely local artifacts,
+2. it defines the public-paper comparator surface that a NeurIPS oral-level
+   submission would be expected to address credibly.
+
+### 7.4 Highest-value next-wave additions after the current queue stabilizes
+
+Once the current Phase 15 / V739 queue pressure eases, the next benchmark
+additions should be chosen by their information value for V740, not by paper
+novelty alone. The current best next-wave order is:
+
+1. `LightGTS`
+   - strongest efficiency-first single-model reference
+   - most aligned with the V740 target profile
+2. `OLinear`
+   - still preprocessing-blocked, but strategically important because it
+     stress-tests whether a cheap decomposition/orthogonal baseline can cover a
+     large fraction of easy continuous/count cells
+3. `LiPFormer`
+   - efficient patch-wise alternative to PatchTST
+   - directly relevant to V740's local-context branch
+4. `UniTS`
+   - more important as a single-model conditioning reference than as a raw
+     leaderboard threat
+5. `CASA`
+   - useful efficiency-first attention reference once the lighter additions are
+     in place
+
+This order is intentionally not "all latest papers." It is the smallest
+credible next-wave pack that most directly improves both the Block 3 benchmark
+and the V740 design line.
+
 1. inspect upstream code organization
 2. estimate dependency and vendoring cost
 3. decide whether to vendor or re-implement core architecture

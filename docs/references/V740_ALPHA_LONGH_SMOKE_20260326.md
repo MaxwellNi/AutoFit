@@ -2,13 +2,14 @@
 
 > Date: 2026-03-26
 > Scope: local-only prototype expansion beyond the current benchmark horizon grid
-> Status: first real `h>30` V740-alpha evidence
+> Status: first real `h>30` V740-alpha evidence, now extended with `45` and `180`
 >
 > This note does **not** change the current clean benchmark protocol.
 > The official comparable benchmark surface remains `h in {1, 7, 14, 30}`.
 > The purpose of this note is to record the first verified local-only V740-alpha
-> run at a longer forecast horizon after explicitly wiring `60/90` support into
-> the prototype's horizon conditioning path.
+> runs at longer forecast horizons after moving the prototype away from a tiny
+> hard-coded horizon table and toward a mixed continuous-plus-bucket horizon
+> conditioning path.
 
 ## 1. Why this exists
 
@@ -24,17 +25,29 @@ This local-only experiment exists to answer the narrower engineering question:
 
 ## 2. Implementation change required
 
-Before this run, `V740AlphaPrototypeWrapper` only mapped horizon condition
-tokens for `{1, 7, 14, 30}`.
+Before this line of experiments, `V740AlphaPrototypeWrapper` only mapped a
+small discrete horizon table and the local smoke runner only accepted
+`{1, 7, 14, 30, 60, 90}`.
 
-On 2026-03-26 the local prototype was extended to support:
+On 2026-03-26 the local prototype was extended in two ways:
 
-- `60`
-- `90`
+1. the horizon conditioning path no longer depends on a tiny fixed lookup table;
+   instead it now uses:
+   - continuous horizon features
+   - coarse horizon buckets
+   - context-to-horizon ratio features
+2. the local smoke runner now accepts arbitrary positive integer horizons
+   rather than a short hard-coded choice list.
 
-at the horizon-token level in `src/narrative/block3/models/v740_alpha.py`, and
-the local smoke runner was updated to allow those horizons in
-`scripts/run_v740_alpha_smoke_slice.py`.
+This matters because the entrepreneurial-finance research horizons that are
+actually interesting are not limited to `60/90`. The intended research ladder
+now is:
+
+- `45` days: campaign follow-up / traction
+- `60` days: medium-term progression
+- `90` days: quarter-scale evolution
+- `180` days: half-year financing progression
+- `365` days: annual status change
 
 This remains a **local-only prototype extension**. It is not yet part of the
 official benchmark execution grid.
@@ -260,6 +273,173 @@ Artifact:
 
 - `docs/references/v740_alpha_longh_smoke_20260326/t2_core_only_investors_h90.json`
 
+## 9. `core_edgar` and `full` 30-vs-60 controls
+
+To avoid treating the first `core_only` result as representative, the same
+local-only protocol was extended to `core_edgar` and `full`.
+
+### 9.1 `core_edgar / funding_raised_usd`
+
+| Horizon | Constant | MAE | RMSE |
+|---|---:|---:|---:|
+| `30` | `false` | `179797.74` | `359612.87` |
+| `60` | `false` | `178084.08` | `370856.79` |
+
+Artifacts:
+
+- `docs/references/v740_alpha_longh_smoke_20260326/t2_core_edgar_funding_h30.json`
+- `docs/references/v740_alpha_longh_smoke_20260326/t2_core_edgar_funding_h60.json`
+
+### 9.2 `core_edgar / investors_count`
+
+| Horizon | Constant | MAE | RMSE |
+|---|---:|---:|---:|
+| `30` | `false` | `56.5055` | `64.2714` |
+| `60` | `false` | `57.0610` | `64.7228` |
+
+Artifacts:
+
+- `docs/references/v740_alpha_longh_smoke_20260326/t2_core_edgar_investors_h30.json`
+- `docs/references/v740_alpha_longh_smoke_20260326/t2_core_edgar_investors_h60.json`
+
+### 9.3 `full / funding_raised_usd`
+
+| Horizon | Constant | MAE | RMSE |
+|---|---:|---:|---:|
+| `30` | `false` | `179797.75` | `359612.87` |
+| `60` | `false` | `178084.08` | `370856.79` |
+
+Artifacts:
+
+- `docs/references/v740_alpha_longh_smoke_20260326/t2_full_funding_h30.json`
+- `docs/references/v740_alpha_longh_smoke_20260326/t2_full_funding_h60.json`
+
+### 9.4 `full / investors_count`
+
+| Horizon | Constant | MAE | RMSE |
+|---|---:|---:|---:|
+| `30` | `false` | `56.4737` | `64.2513` |
+| `60` | `false` | `57.0722` | `64.7305` |
+
+Artifacts:
+
+- `docs/references/v740_alpha_longh_smoke_20260326/t2_full_investors_h30.json`
+- `docs/references/v740_alpha_longh_smoke_20260326/t2_full_investors_h60.json`
+
+The important empirical point is that `full` is currently almost identical to
+`core_edgar` on these narrow long-horizon slices. On the tested local slices,
+the present text path is **not** producing a measurable additional benefit.
+
+## 10. Context-scaled `h=90` probes
+
+To test whether the earlier `h=90` failure was simply a context-length issue,
+two context-scaled local probes were run at `input_size=120`.
+
+### 10.1 `core_edgar / funding_raised_usd / h=90 / input_size=120`
+
+- constant prediction: `false`
+- `MAE = 175230.96`
+- `RMSE = 368945.47`
+
+Artifact:
+
+- `docs/references/v740_alpha_longh_smoke_20260326/t2_core_edgar_funding_h90_ctx120.json`
+
+### 10.2 `core_edgar / investors_count / h=90 / input_size=120`
+
+- constant prediction: `true`
+- `MAE = 21.8138`
+- `RMSE = 36.5540`
+
+Artifact:
+
+- `docs/references/v740_alpha_longh_smoke_20260326/t2_core_edgar_investors_h90_ctx120.json`
+
+### 10.3 `core_only / funding_raised_usd / h=90 / input_size=120`
+
+- constant prediction: `true`
+- `MAE = 134820.11`
+- fallback-only
+
+Artifact:
+
+- `docs/references/v740_alpha_longh_smoke_20260326/t2_core_only_funding_h90_ctx120.json`
+
+This sharpens the earlier interpretation:
+
+- the first viable `h=90` path currently appears only on a funding slice,
+- simply increasing context is not enough to rescue every target,
+- and count-like long horizons still look weaker than funding-like long
+  horizons in the current alpha.
+
+## 11. New entrepreneurial-finance horizon probes: `45` and `180`
+
+The updated horizon-conditioning path was then used to probe two more
+startup-financing-motivated horizons.
+
+### 11.1 `core_edgar / funding_raised_usd / h=45 / input_size=90`
+
+- constant prediction: `false`
+- `MAE = 230911.99`
+- `RMSE = 448447.85`
+- `horizon_to_context_ratio = 0.5`
+
+Artifact:
+
+- `docs/references/v740_alpha_longh_smoke_20260326/t2_core_edgar_funding_h45_ctx90.json`
+
+This is the first direct proof that V740-alpha can now exercise a
+non-benchmark entrepreneurial-finance horizon between `30` and `60` under the
+new continuous horizon-conditioning path.
+
+### 11.2 `core_edgar / funding_raised_usd / h=180 / input_size=180`
+
+- constant prediction: `true`
+- `MAE = 297084.33`
+- `RMSE = 505184.47`
+- fallback-only
+- `horizon_to_context_ratio = 1.0`
+
+Artifact:
+
+- `docs/references/v740_alpha_longh_smoke_20260326/t2_core_edgar_funding_h180_ctx180.json`
+
+This is useful negative evidence. It shows that simply matching context length
+to a half-year horizon is still not enough on a tiny local slice. The current
+prototype can represent the horizon, but it does not yet have enough effective
+windows or enough long-range skill to make `h=180` viable under this budget.
+
+## 12. A critical caution: current long-h gains are not yet source-native event-memory gains
+
+Across the current long-horizon local artifacts, the recorded
+`edgar_source_density` and `text_source_density` are effectively `0.0`.
+
+That means the current long-horizon improvements should **not** be described as
+proof that source-native EDGAR/text event memory is already driving the gain.
+The more truthful interpretation is:
+
+- horizon/context design is now beginning to matter,
+- richer ablation surfaces may still help through dense joined covariates,
+- but the source-native sparse event-memory path has not yet been validated as
+  the reason the long-h slices are improving.
+
+This distinction matters because V740's multisource story should only claim
+what the current artifacts actually support.
+
+## 13. Current bottom line
+
+The current honest bottom line is now:
+
+1. V740-alpha no longer has a hard-coded "small horizon table" limitation.
+2. `h=45`, `h=60`, `h=90`, and `h=180` are now real exercised local-only
+   prototype paths.
+3. `h=60` is promising on funding slices, but not uniformly on count slices.
+4. The first viable `h=90` path exists, but only on a funding slice with
+   longer context.
+5. `h=180` is still fallback-only on the tested narrow slice.
+6. Current text and source-native EDGAR event-memory gains are **not yet**
+   demonstrated on these long-horizon local slices.
+
 ### 8.3 What the `h=90` runs imply
 
 These first `h=90` checks are still useful, even though they are not yet good
@@ -327,9 +507,36 @@ These checks matter for two reasons:
 So EDGAR currently looks more like a **stabilizer** of the longer-horizon path
 than a universal long-horizon booster.
 
-## 11. Updated best interpretation
+## 11. Same-day `full` checks
 
-After the `core_only` and `core_edgar` checks together, the strongest truthful
+To test whether adding the current text pathway changes the local long-horizon
+picture, the same protocol was also applied to `task2_forecast / full`.
+
+Observed results:
+
+| Target | Horizon | Constant | MAE | RMSE | Wall time |
+|---|---:|---|---:|---:|---:|
+| `funding_raised_usd` | `30` | `false` | `179797.7506` | `359612.8716` | `44.630s` |
+| `funding_raised_usd` | `60` | `false` | `178084.0833` | `370856.7862` | `39.146s` |
+| `investors_count` | `30` | `false` | `56.4737` | `64.2513` | `54.674s` |
+| `investors_count` | `60` | `false` | `57.0722` | `64.7305` | `51.252s` |
+
+Artifacts:
+
+- `docs/references/v740_alpha_longh_smoke_20260326/t2_full_funding_h30.json`
+- `docs/references/v740_alpha_longh_smoke_20260326/t2_full_funding_h60.json`
+- `docs/references/v740_alpha_longh_smoke_20260326/t2_full_investors_h30.json`
+- `docs/references/v740_alpha_longh_smoke_20260326/t2_full_investors_h60.json`
+
+The important practical observation is that these `full` results are nearly
+identical to the matching `core_edgar` results on the same narrow local slices.
+On the currently tested local regime, the text pathway is therefore **not
+showing a measurable incremental long-horizon benefit**.
+
+## 12. Updated best interpretation
+
+After the `core_only`, `core_edgar`, and `full` checks together, the strongest
+truthful
 statement is now:
 
 > V740-alpha's local `h=60` path is real and increasingly credible on the
@@ -349,7 +556,15 @@ At this stage, the right engineering target is:
 3. treat `h=90` as a context/window-design problem before treating it as a
    forecasting benchmark problem.
 
-## 12. Same-day `h=90` context-scaling probes
+On the currently tested long-horizon local slices, the clearest structural
+pattern is:
+
+- `EDGAR` can stabilize some longer-horizon behavior,
+- `text` currently does not add a clear incremental gain,
+- and `funding_raised_usd` remains the most promising target for pushing the
+  first robust `h>30` capability.
+
+## 13. Same-day `h=90` context-scaling probes
 
 To test whether the `h=90` failure mode was mainly caused by the default short
 context, two additional narrow local-only probes were run with:
@@ -357,7 +572,7 @@ context, two additional narrow local-only probes were run with:
 - `input_size = 120`
 - `max_rows = 2000`
 
-### 12.1 `core_edgar / funding_raised_usd / h=90 / input_size=120`
+### 13.1 `core_edgar / funding_raised_usd / h=90 / input_size=120`
 
 Observed result:
 
@@ -371,7 +586,7 @@ Artifact:
 
 - `docs/references/v740_alpha_longh_smoke_20260326/t2_core_edgar_funding_h90_ctx120.json`
 
-### 12.2 `core_only / funding_raised_usd / h=90 / input_size=120`
+### 13.2 `core_only / funding_raised_usd / h=90 / input_size=120`
 
 Observed result:
 
@@ -386,7 +601,7 @@ Artifact:
 
 - `docs/references/v740_alpha_longh_smoke_20260326/t2_core_only_funding_h90_ctx120.json`
 
-### 12.3 What this isolates
+### 13.3 What this isolates
 
 These two probes are especially informative because they separate two possible
 stories:

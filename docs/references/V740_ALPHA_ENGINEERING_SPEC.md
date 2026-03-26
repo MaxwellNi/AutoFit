@@ -72,8 +72,10 @@
 >
 > 2026-03-26 long-horizon local-only update:
 > V740-alpha now has a real exercised `h>30` prototype path. The horizon
-> conditioning map has been extended locally to support `60` and `90`, and the
-> first verified `h=60` smoke result is recorded in
+> conditioning path has been upgraded from a tiny discrete lookup to a hybrid
+> continuous-plus-bucket horizon encoder, so local research is no longer
+> limited to a fixed `60/90` extension. The first verified `h=60` smoke result
+> is recorded in
 > `docs/references/V740_ALPHA_LONGH_SMOKE_20260326.md`. On a local
 > `task2_forecast / core_only / funding_raised_usd / h=60` slice
 > (`12 entities / 1500 train rows / 2 epochs`), the prototype runs end-to-end
@@ -91,11 +93,20 @@
 > exercised path, but it is not yet uniformly helpful across targets.
 > A same-day `h=90` probe is now also recorded in
 > `docs/references/V740_ALPHA_LONGH_SMOKE_20260326.md`. On the tested narrow
-> local slices, both `funding_raised_usd` and `investors_count` fall back to
-> constant predictions there. That result is still useful because it shows that
-> alpha now has a real `90` token path, while also making clear that
-> longer-horizon behavior requires joint scaling of horizon, context length,
-> usable windows, and representative slice construction.
+> local slices, `core_only` still falls back while the first viable `h=90`
+> behavior now appears on `core_edgar / funding_raised_usd / input_size=120`.
+> A new `h=45 / input_size=90` funding probe is also non-constant, while a
+> first `h=180 / input_size=180` funding probe remains fallback-only. These
+> results sharpen the implementation lesson: longer-horizon behavior depends on
+> joint scaling of horizon, context length, target type, and slice
+> representativeness, not just on adding more horizon IDs.
+>
+> One more caution is now explicit in the artifacts: the current long-horizon
+> local slices record `edgar_source_density = 0.0` and `text_source_density =
+> 0.0`. So the present long-h improvements must not yet be attributed to
+> source-native event-memory gains. At this stage they should be interpreted as
+> evidence about horizon/context design and ablation-level feature regimes, not
+> as proof that sparse-event memory is already carrying the longer-horizon load.
 
 ## 1. Purpose
 

@@ -147,6 +147,23 @@ reference points and should stay visible in the literature audit:
 | TimerXL | ICLR 2025 | Already in our codebase and registry; strong long-context baseline for public generalization studies |
 | TimeDiT | 2025 | Useful upper-bound reference for "general TSFM" style modeling, even if too heavy for V740-alpha |
 
+### Most relevant mechanism clusters for the next V740 step
+
+The literature pattern is now clear enough that we should stop thinking in
+terms of isolated paper names and instead track mechanism clusters:
+
+1. **single-model multi-task / multi-horizon conditioning**
+   - `UniTS`, `ElasTST`, `TimerXL`
+2. **lightweight long-horizon / local-context modeling**
+   - `LightGTS`, `LiPFormer`, `SAMformer`, `CASA`
+3. **distribution alignment and calibration**
+   - `DistDF`, `QDF`, `JAPAN`, `Time-o1`
+4. **heterogeneous covariate disentanglement**
+   - `DIAN`, `TimeEmb`
+
+This is the most useful reading order for V740 now. It matches both the Block
+3 champion analysis and the broader 2024-2026 public-paper comparator pattern.
+
 ## Recurring Public Benchmark Families in 2024-2026 Papers
 
 For future V740 generalization testing, we should not pick public datasets
@@ -196,6 +213,59 @@ endogenous trend fitting.
 These are not close analogues of Block 3, but they remain useful for checking
 whether a candidate V740 line is becoming over-specialized to one proprietary
 panel domain.
+
+## Common Comparator Families in 2024-2026 Papers
+
+The latest top-venue forecasting papers also keep returning to a relatively
+stable comparison pack. For our eventual public generalization benchmark, these
+families should be treated as the default external comparator set:
+
+### 1. Linear / decomposition baselines
+
+- `DLinear`
+- `RLinear`
+- `OLinear`
+
+These remain essential because they frequently stay competitive on stable
+continuous/count regimes and provide the strongest cheap sanity anchors.
+
+### 2. Transformer / mixer baselines
+
+- `PatchTST`
+- `iTransformer`
+- `TimesNet`
+- `TimeMixer`
+- `FEDformer`
+- `Crossformer`
+- `Informer`
+- `Autoformer`
+
+These are still the default modern long-horizon comparison family in many
+papers, even when the new method is not itself a Transformer.
+
+### 3. Deep classical / direct forecasters
+
+- `NBEATS`
+- `NHITS`
+- `TFT`
+- `TiDE`
+- `TCN`
+
+These matter especially for our data because Block 3 already shows that
+`NBEATS` and `NHITS` remain among the hardest champions to beat.
+
+### 4. Foundation / pretrained references
+
+- `Chronos`
+- `Moirai`
+- `TimesFM`
+- `TimerXL`
+- `TimeMoE`
+- `Sundial`
+
+These models are not always the most efficient local additions, but they are
+important for public-paper credibility because they recur in zero-shot /
+full-shot comparison packs across recent foundation-model papers.
 
 ## Installation Guide
 

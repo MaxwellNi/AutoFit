@@ -117,14 +117,22 @@ No public benchmark table should currently claim official results for
 
 ### 5.2 What is prototyped today
 
-As of 2026-03-26, the local-only V740 prototype has real horizon-token support
-for:
+As of 2026-03-26, the local-only V740 prototype no longer relies on a tiny
+fixed horizon lookup table. The current horizon-conditioning path now combines:
 
+- continuous horizon features,
+- coarse horizon buckets,
+- context-to-horizon ratio features.
+
+So the local V740 research tools can now exercise arbitrary positive integer
+horizons. The horizons already probed in real local artifacts include:
+
+- `45`
 - `60`
 - `90`
+- `180`
 
-Those paths are available only in local V740 research tools and remain outside
-the clean benchmark protocol.
+Those paths remain outside the clean benchmark protocol.
 
 ### 5.3 What the first real evidence says
 
@@ -142,23 +150,44 @@ The current local-only evidence is mixed rather than uniformly positive:
 - `task2_forecast / core_edgar / investors_count`
   - `h=30`: `MAE = 56.51`, non-constant
   - `h=60`: `MAE = 57.06`, non-constant
+- `task2_forecast / full / funding_raised_usd`
+  - `h=30`: `MAE = 179797.75`, non-constant
+  - `h=60`: `MAE = 178084.08`, non-constant
+- `task2_forecast / full / investors_count`
+  - `h=30`: `MAE = 56.47`, non-constant
+  - `h=60`: `MAE = 57.07`, non-constant
 - `task2_forecast / core_only / funding_raised_usd`
   - `h=90`: fallback-only on the tested local slice
 - `task2_forecast / core_only / investors_count`
   - `h=90`: fallback-only on the tested local slice
 - `task2_forecast / core_edgar / funding_raised_usd`
   - `h=90` with `input_size=120`: non-constant on the tested slice
+- `task2_forecast / core_edgar / investors_count`
+  - `h=90` with `input_size=120`: still constant on the tested slice
 - `task2_forecast / core_only / funding_raised_usd`
   - `h=90` with `input_size=120`: still fallback-only on the tested slice
+- `task2_forecast / core_edgar / funding_raised_usd`
+  - `h=45` with `input_size=90`: non-constant on the tested slice
+- `task2_forecast / core_edgar / funding_raised_usd`
+  - `h=180` with `input_size=180`: fallback-only on the tested slice
 
 The correct current conclusion is therefore:
 
 > Longer horizon is now a real exercised V740 path, but it is not yet a free
 > gain. It may help on some funding slices, it currently hurts or collapses on
 > some count slices, EDGAR may stabilize some `h=60` behavior without making it
-> universally better, and the first viable `h=90` behavior currently appears to
+> universally better, the current text pathway is not yet showing clear
+> incremental long-horizon benefit on the tested local slices, and the first
+> viable `h=90` behavior currently appears to
 > require both longer context and a richer source regime rather than a larger
 > horizon token alone.
+
+One more caveat is important for interpretation: on the currently tested
+long-horizon local slices, `edgar_source_density` and `text_source_density`
+remain `0.0`. So present long-horizon improvements should not yet be described
+as proof that source-native sparse event memory is already responsible for the
+gain. At this stage the evidence is mainly about horizon conditioning, context
+length, and dense ablation-level feature regimes.
 
 ### 5.4 How longer entrepreneurial-finance horizons should be designed
 
@@ -178,6 +207,14 @@ only be promoted after local-only evidence shows that:
 1. the prototype has enough effective windows,
 2. performance remains non-trivial across targets,
 3. the longer horizon adds real scientific value instead of just noise.
+
+The current best entrepreneurial-finance horizon ladder is therefore:
+
+- `45`: first research extension between `30` and `60`
+- `60`: first promising medium-term extension, especially for funding slices
+- `90`: next target only after context and usable-window scaling
+- `180`: half-year audit horizon, currently still fallback-only on tested narrow slices
+- `365`: annual horizon, to be attempted only after `180` becomes non-degenerate
 
 ## 6. Public generalization benchmark program
 
@@ -229,6 +266,91 @@ fitting.
 
 These are not perfect analogues of our panel problem, but they are still useful
 for checking whether V740 stays robust outside the specific Block 3 setting.
+
+## 6.5 Recurring comparator families in recent papers
+
+Across 2024-2026 forecasting papers, the recurrent comparison packs are also
+remarkably stable. The most common strong baselines still cluster into the
+following groups:
+
+- linear / decomposition:
+  - `DLinear`
+  - `RLinear`
+  - `OLinear`
+- transformer / mixer:
+  - `PatchTST`
+  - `iTransformer`
+  - `TimesNet`
+  - `TimeMixer`
+  - `FEDformer`
+  - `Crossformer`
+  - `Informer` / `Autoformer`
+- deep classical / direct forecasters:
+  - `NBEATS`
+  - `NHITS`
+  - `TFT`
+  - `TiDE`
+  - `TCN`
+- foundation / large pretrained references:
+  - `Chronos`
+  - `Moirai`
+  - `TimesFM`
+  - `TimerXL`
+  - `TimeMoE`
+  - `Sundial`
+
+This matters because our eventual public generalization benchmark should not be
+built around arbitrary model names. It should deliberately include the
+comparison families that top-venue papers repeatedly treat as serious
+competitive references.
+
+## 6.6 Most relevant 2024-2026 mechanism pack for V740
+
+The current literature audit points to a fairly compact set of mechanism
+families that matter most for V740's actual goal. The important point is not
+to imitate every paper. It is to identify which ideas are both repeatedly
+competitive in top-venue comparisons and structurally relevant to our panel,
+multisource, multi-horizon setting.
+
+### Single-model multi-task / multi-horizon conditioning
+
+- `UniTS`
+- `ElasTST`
+- `TimerXL`
+
+These matter because V740 must eventually cover both the current 160 official
+cells and a longer entrepreneurial-finance horizon ladder without turning into
+one separate model per target or per horizon.
+
+### Lightweight long-horizon and local-context modeling
+
+- `LightGTS`
+- `LiPFormer`
+- `SAMformer`
+- `CASA`
+
+These are the most relevant efficiency-first references when the goal is to
+challenge strong specialists without inheriting the cost profile of a runtime
+selector or a giant foundation model.
+
+### Distribution alignment, calibration, and hard-cell optimization
+
+- `DistDF`
+- `QDF`
+- `JAPAN`
+- `Time-o1`
+
+These matter because Block 3 is not only an architecture problem. It is also a
+heavy-tail, multistep, calibration-sensitive forecasting problem.
+
+### Heterogeneous covariates and mixed static/dynamic structure
+
+- `DIAN`
+- `TimeEmb`
+
+These are especially relevant for EDGAR/text design. They are strong signals
+that V740 should keep pushing toward invariant/variant and static/dynamic
+factorization instead of naive early concatenation.
 
 ## 7. Research-ingestion workflow for new papers
 

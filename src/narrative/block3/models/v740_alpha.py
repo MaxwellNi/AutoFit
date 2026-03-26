@@ -17,6 +17,7 @@ from __future__ import annotations
 
 import copy
 import logging
+import math
 import random
 from dataclasses import dataclass
 from typing import Dict, List, Optional
@@ -313,12 +314,24 @@ def _torch_imports():
     from torch import nn
 
     class ConditionEncoder(nn.Module):
-        def __init__(self, emb_dim: int = 16):
+        def __init__(self, emb_dim: int = 16, seq_len: int = 60, max_horizon: int = 365):
             super().__init__()
             self.task_emb = nn.Embedding(4, emb_dim)
             self.target_emb = nn.Embedding(4, emb_dim)
-            self.horizon_emb = nn.Embedding(6, emb_dim)
             self.ablation_emb = nn.Embedding(8, emb_dim)
+            self.seq_len = max(1, int(seq_len))
+            self.max_horizon = max(365, int(max_horizon))
+            self.register_buffer(
+                "horizon_bounds",
+                torch.tensor([1.0, 7.0, 14.0, 30.0, 45.0, 60.0, 90.0, 180.0, 365.0], dtype=torch.float32),
+                persistent=False,
+            )
+            self.horizon_bucket_emb = nn.Embedding(len(self.horizon_bounds) + 1, emb_dim)
+            self.horizon_proj = nn.Sequential(
+                nn.Linear(5, emb_dim),
+                nn.GELU(),
+                nn.Linear(emb_dim, emb_dim),
+            )
             self.proj = nn.Sequential(
                 nn.Linear(emb_dim * 4, emb_dim * 2),
                 nn.GELU(),
@@ -329,13 +342,26 @@ def _torch_imports():
             self,
             task_idx: torch.Tensor,
             target_idx: torch.Tensor,
-            horizon_idx: torch.Tensor,
+            horizon_value: torch.Tensor,
             ablation_idx: torch.Tensor,
         ) -> torch.Tensor:
+            horizon_value = horizon_value.float().clamp_min(1.0)
+            bucket_idx = torch.bucketize(horizon_value, self.horizon_bounds.to(horizon_value.device))
+            horizon_scaled = (horizon_value / float(self.max_horizon)).unsqueeze(-1)
+            horizon_log = (torch.log1p(horizon_value) / math.log1p(float(self.max_horizon))).unsqueeze(-1)
+            horizon_sqrt = (torch.sqrt(horizon_value) / math.sqrt(float(self.max_horizon))).unsqueeze(-1)
+            ratio_to_context = (horizon_value / float(self.seq_len)).clamp(0.0, 4.0).div(4.0).unsqueeze(-1)
+            context_to_h = (float(self.seq_len) / horizon_value).clamp(0.0, 4.0).div(4.0).unsqueeze(-1)
+            horizon_feat = self.horizon_proj(
+                torch.cat(
+                    [horizon_scaled, horizon_log, horizon_sqrt, ratio_to_context, context_to_h],
+                    dim=-1,
+                )
+            ) + self.horizon_bucket_emb(bucket_idx)
             x = torch.cat([
                 self.task_emb(task_idx),
                 self.target_emb(target_idx),
-                self.horizon_emb(horizon_idx),
+                horizon_feat,
                 self.ablation_emb(ablation_idx),
             ], dim=-1)
             return self.proj(x)
@@ -543,7 +569,7 @@ def _torch_imports():
             self.patch_mixer = PatchContextMixer(hidden_dim, patch_size=8)
             self.memory_branch = CompactTemporalMemory(hidden_dim)
             self.value_branch = ValueBucketEncoder(num_bins=32, hidden_dim=hidden_dim)
-            self.cond_encoder = ConditionEncoder(emb_dim=cond_dim)
+            self.cond_encoder = ConditionEncoder(emb_dim=cond_dim, seq_len=seq_len)
             self.edgar_memory = EventMemoryEncoder(hidden_dim)
             self.text_memory = EventMemoryEncoder(hidden_dim)
             self.fusion = InvariantVariantFusion(hidden_dim, cond_dim)
@@ -590,7 +616,7 @@ def _torch_imports():
             x: torch.Tensor,
             task_idx: torch.Tensor,
             target_idx: torch.Tensor,
-            horizon_idx: torch.Tensor,
+            horizon_value: torch.Tensor,
             ablation_idx: torch.Tensor,
             edgar_recent: Optional[torch.Tensor] = None,
             edgar_bucket: Optional[torch.Tensor] = None,
@@ -609,7 +635,7 @@ def _torch_imports():
             fused = self.patch_mixer(fused)
             memory_feat = self.memory_branch(fused)
             value_feat = self.value_branch(target_hist)
-            cond = self.cond_encoder(task_idx, target_idx, horizon_idx, ablation_idx)
+            cond = self.cond_encoder(task_idx, target_idx, horizon_value, ablation_idx)
             fused = self.fusion(fused, cond)
             pooled = fused.mean(dim=-1)
             static_feat = self.static_proj(static_summary)
@@ -650,7 +676,6 @@ class V740AlphaPrototypeWrapper(ModelBase):
 
     _TASK_MAP = {"task1_outcome": 0, "task2_forecast": 1, "task3_risk_adjust": 2}
     _TARGET_MAP = {"funding_raised_usd": 0, "investors_count": 1, "is_funded": 2}
-    _HORIZON_MAP = {1: 0, 7: 1, 14: 2, 30: 3, 60: 4, 90: 5}
     _ABLATION_MAP = {
         "core_only": 0,
         "core_only_seed2": 1,
@@ -733,9 +758,9 @@ class V740AlphaPrototypeWrapper(ModelBase):
     def _token_tensor(self, torch, batch_size: int):
         task_idx = torch.full((batch_size,), self._TASK_MAP.get(self._task_name, 0), dtype=torch.long, device=self._device)
         target_idx = torch.full((batch_size,), self._TARGET_MAP.get(self._target_name, 0), dtype=torch.long, device=self._device)
-        horizon_idx = torch.full((batch_size,), self._HORIZON_MAP.get(self._horizon, 0), dtype=torch.long, device=self._device)
+        horizon_value = torch.full((batch_size,), float(max(1, self._horizon)), dtype=torch.float32, device=self._device)
         ablation_idx = torch.full((batch_size,), self._ABLATION_MAP.get(self._ablation_name, 0), dtype=torch.long, device=self._device)
-        return task_idx, target_idx, horizon_idx, ablation_idx
+        return task_idx, target_idx, horizon_value, ablation_idx
 
     def _has_text_path(self) -> bool:
         return self._ablation_name in {"core_text", "full"}
@@ -1105,12 +1130,12 @@ class V740AlphaPrototypeWrapper(ModelBase):
                 tr = tr.to(self._device)
                 tb = tb.to(self._device)
                 tp = tp.to(self._device)
-                task_idx, target_idx, horizon_idx, ablation_idx = self._token_tensor(torch, len(xb))
+                task_idx, target_idx, horizon_value, ablation_idx = self._token_tensor(torch, len(xb))
                 outputs = self._network(
                     xb,
                     task_idx,
                     target_idx,
-                    horizon_idx,
+                    horizon_value,
                     ablation_idx,
                     edgar_recent=er,
                     edgar_bucket=eb,
@@ -1129,12 +1154,12 @@ class V740AlphaPrototypeWrapper(ModelBase):
 
             self._network.eval()
             with torch.no_grad():
-                task_idx, target_idx, horizon_idx, ablation_idx = self._token_tensor(torch, len(val_x))
+                task_idx, target_idx, horizon_value, ablation_idx = self._token_tensor(torch, len(val_x))
                 val_out = self._network(
                     val_x.to(self._device),
                     task_idx,
                     target_idx,
-                    horizon_idx,
+                    horizon_value,
                     ablation_idx,
                     edgar_recent=val_edgar_recent.to(self._device) if val_edgar_recent is not None else None,
                     edgar_bucket=val_edgar_bucket.to(self._device) if val_edgar_bucket is not None else None,
@@ -1162,12 +1187,12 @@ class V740AlphaPrototypeWrapper(ModelBase):
         if self._binary_target and val_x is not None and val_y is not None and len(val_x) > 0:
             self._network.eval()
             with torch.no_grad():
-                task_idx, target_idx, horizon_idx, ablation_idx = self._token_tensor(torch, len(val_x))
+                task_idx, target_idx, horizon_value, ablation_idx = self._token_tensor(torch, len(val_x))
                 val_out = self._network(
                     val_x.to(self._device),
                     task_idx,
                     target_idx,
-                    horizon_idx,
+                    horizon_value,
                     ablation_idx,
                     edgar_recent=val_edgar_recent.to(self._device) if val_edgar_recent is not None else None,
                     edgar_bucket=val_edgar_bucket.to(self._device) if val_edgar_bucket is not None else None,
@@ -1275,12 +1300,12 @@ class V740AlphaPrototypeWrapper(ModelBase):
                 device=self._device,
             )
             with torch.no_grad():
-                task_idx, target_idx, horizon_idx, ablation_idx = self._token_tensor(torch, len(unique_entities))
+                task_idx, target_idx, horizon_value, ablation_idx = self._token_tensor(torch, len(unique_entities))
                 outputs = self._network(
                     x_batch,
                     task_idx,
                     target_idx,
-                    horizon_idx,
+                    horizon_value,
                     ablation_idx,
                     edgar_recent=edgar_recent,
                     edgar_bucket=edgar_bucket,
