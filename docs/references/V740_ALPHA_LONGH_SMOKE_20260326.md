@@ -348,3 +348,61 @@ At this stage, the right engineering target is:
 2. expand it across a few more representative slices,
 3. treat `h=90` as a context/window-design problem before treating it as a
    forecasting benchmark problem.
+
+## 12. Same-day `h=90` context-scaling probes
+
+To test whether the `h=90` failure mode was mainly caused by the default short
+context, two additional narrow local-only probes were run with:
+
+- `input_size = 120`
+- `max_rows = 2000`
+
+### 12.1 `core_edgar / funding_raised_usd / h=90 / input_size=120`
+
+Observed result:
+
+- constant prediction: `false`
+- prediction std: `9596.17`
+- `MAE = 175230.9597`
+- `RMSE = 368945.4672`
+- wall time: `37.864s`
+
+Artifact:
+
+- `docs/references/v740_alpha_longh_smoke_20260326/t2_core_edgar_funding_h90_ctx120.json`
+
+### 12.2 `core_only / funding_raised_usd / h=90 / input_size=120`
+
+Observed result:
+
+- constant prediction: `true`
+- prediction std: `0.0`
+- `MAE = 134820.1141`
+- `RMSE = 186435.1094`
+- wall time: `27.23s`
+- training mode: `fallback-only`
+
+Artifact:
+
+- `docs/references/v740_alpha_longh_smoke_20260326/t2_core_only_funding_h90_ctx120.json`
+
+### 12.3 What this isolates
+
+These two probes are especially informative because they separate two possible
+stories:
+
+1. "`h=90` just needs a longer context", and
+2. "`h=90` needs a longer context plus a richer source regime."
+
+The evidence now supports the second interpretation more strongly.
+
+- Longer context alone is **not** enough on the tested `core_only` slice.
+- Longer context **plus** EDGAR produces a non-constant learned path on the
+  tested funding slice.
+
+So the current best engineering interpretation is:
+
+> the first viable `h=90` path in V740-alpha seems to require both more usable
+> context and richer source support. This is not yet a general long-horizon
+> capability; it is an early sign of where longer-horizon viability may come
+> from.

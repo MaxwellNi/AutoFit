@@ -146,14 +146,19 @@ The current local-only evidence is mixed rather than uniformly positive:
   - `h=90`: fallback-only on the tested local slice
 - `task2_forecast / core_only / investors_count`
   - `h=90`: fallback-only on the tested local slice
+- `task2_forecast / core_edgar / funding_raised_usd`
+  - `h=90` with `input_size=120`: non-constant on the tested slice
+- `task2_forecast / core_only / funding_raised_usd`
+  - `h=90` with `input_size=120`: still fallback-only on the tested slice
 
 The correct current conclusion is therefore:
 
 > Longer horizon is now a real exercised V740 path, but it is not yet a free
 > gain. It may help on some funding slices, it currently hurts or collapses on
 > some count slices, EDGAR may stabilize some `h=60` behavior without making it
-> universally better, and `h=90` is not yet properly supported on the tested
-> narrow local slices because the windowing regime is still too short.
+> universally better, and the first viable `h=90` behavior currently appears to
+> require both longer context and a richer source regime rather than a larger
+> horizon token alone.
 
 ### 5.4 How longer entrepreneurial-finance horizons should be designed
 
