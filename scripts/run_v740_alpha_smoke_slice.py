@@ -85,9 +85,7 @@ def _iter_entities_with_target_coverage(
     require_cik: bool = False,
 ) -> list[str]:
     pf = pq.ParquetFile(str(core_path))
-    qualified: list[str] = []
-    seen_qualified = set()
-    stats: Dict[str, Dict[str, bool]] = {}
+    stats: Dict[str, Dict[str, Any]] = {}
     train_end = pd.Timestamp(temporal_config.train_end)
     test_start = pd.Timestamp(temporal_config.val_end) + pd.Timedelta(days=temporal_config.embargo_days)
     test_end = pd.Timestamp(temporal_config.test_end)
@@ -101,27 +99,65 @@ def _iter_entities_with_target_coverage(
         batch_df["crawled_date_day"] = batch_df["crawled_date_day"].dt.tz_convert(None)
         for row in batch_df.itertuples(index=False):
             eid = str(row.entity_id)
-            st = stats.setdefault(eid, {"train": False, "test": False, "cik": False})
+            st = stats.setdefault(
+                eid,
+                {
+                    "train": False,
+                    "test": False,
+                    "cik": False,
+                    "train_count": 0,
+                    "test_count": 0,
+                    "train_pos": 0,
+                    "train_neg": 0,
+                    "test_pos": 0,
+                    "test_neg": 0,
+                },
+            )
             ts = getattr(row, "crawled_date_day")
             value = getattr(row, target)
             if pd.notna(value) and pd.notna(ts):
+                is_pos = bool(float(value) > 0.5) if target == "is_funded" else False
                 if ts <= train_end:
                     st["train"] = True
+                    st["train_count"] += 1
+                    if target == "is_funded":
+                        st["train_pos" if is_pos else "train_neg"] += 1
                 elif test_start < ts <= test_end:
                     st["test"] = True
+                    st["test_count"] += 1
+                    if target == "is_funded":
+                        st["test_pos" if is_pos else "test_neg"] += 1
             if require_cik and pd.notna(getattr(row, "cik", None)):
                 st["cik"] = True
-            if (
-                eid not in seen_qualified
-                and st["train"]
-                and st["test"]
-                and (not require_cik or st["cik"])
-            ):
-                seen_qualified.add(eid)
-                qualified.append(eid)
-                if len(qualified) >= limit:
-                    return qualified
-    return qualified
+
+    qualified = [
+        (eid, st)
+        for eid, st in stats.items()
+        if st["train"] and st["test"] and (not require_cik or st["cik"])
+    ]
+    if target == "is_funded":
+        def _binary_rank(item: tuple[str, Dict[str, Any]]) -> tuple[Any, ...]:
+            eid, st = item
+            total = st["train_count"] + st["test_count"]
+            total_pos = st["train_pos"] + st["test_pos"]
+            pos_rate = (total_pos / total) if total else 0.5
+            both_train_classes = st["train_pos"] > 0 and st["train_neg"] > 0
+            both_test_classes = st["test_pos"] > 0 and st["test_neg"] > 0
+            any_test_pos = st["test_pos"] > 0
+            any_test_neg = st["test_neg"] > 0
+            return (
+                0 if both_train_classes else 1,
+                0 if both_test_classes else 1,
+                0 if any_test_pos and any_test_neg else 1,
+                abs(pos_rate - 0.5),
+                -total,
+                eid,
+            )
+
+        qualified.sort(key=_binary_rank)
+    else:
+        qualified.sort(key=lambda item: (-(item[1]["train_count"] + item[1]["test_count"]), item[0]))
+    return [eid for eid, _ in qualified[:limit]]
 
 
 def _numeric_schema_columns(parquet_path: Path) -> list[str]:
@@ -260,6 +296,34 @@ def _downsample_preserve_time(df: pd.DataFrame, max_rows: int) -> pd.DataFrame:
     return sampled.sort_values(["entity_id", "crawled_date_day"], kind="mergesort").reset_index(drop=True)
 
 
+def _downsample_binary_preserve_time(df: pd.DataFrame, target: str, max_rows: int) -> pd.DataFrame:
+    if target != "is_funded" or max_rows <= 0 or len(df) <= max_rows:
+        return _downsample_preserve_time(df, max_rows)
+    ordered = df.sort_values(["crawled_date_day", "entity_id"], kind="mergesort").reset_index(drop=True)
+    labels = ordered[target].to_numpy(dtype=np.float64)
+    pos_idx = np.flatnonzero(labels > 0.5)
+    neg_idx = np.flatnonzero(labels <= 0.5)
+    if len(pos_idx) == 0 or len(neg_idx) == 0:
+        return _downsample_preserve_time(df, max_rows)
+
+    raw_pos_rate = float(len(pos_idx) / len(labels))
+    desired_pos_rate = min(0.75, max(0.25, raw_pos_rate))
+    pos_keep = min(len(pos_idx), max(1, int(round(max_rows * desired_pos_rate))))
+    neg_keep = min(len(neg_idx), max(1, max_rows - pos_keep))
+
+    chosen = set()
+    chosen.update(pos_idx[np.linspace(0, len(pos_idx) - 1, num=pos_keep, dtype=int)].tolist())
+    chosen.update(neg_idx[np.linspace(0, len(neg_idx) - 1, num=neg_keep, dtype=int)].tolist())
+    if len(chosen) < max_rows:
+        remaining = [i for i in range(len(ordered)) if i not in chosen]
+        if remaining:
+            extra = np.linspace(0, len(remaining) - 1, num=min(max_rows - len(chosen), len(remaining)), dtype=int)
+            chosen.update(remaining[i] for i in extra.tolist())
+
+    sampled = ordered.iloc[sorted(chosen)].copy()
+    return sampled.sort_values(["entity_id", "crawled_date_day"], kind="mergesort").reset_index(drop=True)
+
+
 def _compute_metrics(y_true: np.ndarray, y_pred: np.ndarray) -> Dict[str, float]:
     metrics: Dict[str, float] = {}
     mask = ~(np.isnan(y_true) | np.isnan(y_pred))
@@ -375,7 +439,7 @@ def main() -> int:
     df = _load_smoke_frame(args, temporal_config)
     train, val, test, _ = apply_temporal_split(df, temporal_config)
     if args.max_rows and len(train) > args.max_rows:
-        train = _downsample_preserve_time(train, args.max_rows)
+        train = _downsample_binary_preserve_time(train, args.target, args.max_rows)
     print(
         f"[v740-smoke] data loaded in {time.time() - t_load:.2f}s "
         f"(train={len(train):,} val={len(val):,} test={len(test):,})",

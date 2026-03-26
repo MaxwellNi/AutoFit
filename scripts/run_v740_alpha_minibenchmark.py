@@ -33,6 +33,7 @@ from src.narrative.block3.unified_protocol import (
 
 from scripts.run_v740_alpha_smoke_slice import (
     _compute_metrics,
+    _downsample_binary_preserve_time,
     _downsample_preserve_time,
     _load_smoke_frame,
     _prepare_features,
@@ -168,7 +169,7 @@ def _build_case_frame(case: Dict[str, Any], temporal_config: TemporalSplitConfig
     df = _load_smoke_frame(_Args, temporal_config)
     train, val, test, _ = apply_temporal_split(df, temporal_config)
     if case["max_rows"] and len(train) > case["max_rows"]:
-        train = _downsample_preserve_time(train, case["max_rows"])
+        train = _downsample_binary_preserve_time(train, case["target"], case["max_rows"])
     return train, val, test
 
 

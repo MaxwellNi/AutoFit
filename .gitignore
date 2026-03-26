@@ -23,3 +23,17 @@ scripts/auto_backup.sh
 !docs/benchmarks/block3_truth_pack/v73_reuse_manifest.csv
 !docs/benchmarks/block3_truth_pack/v73_champion_component_map.csv
 .local_mandatory_preexec.md
+
+# Internal agent-only docs (lessons, experience, handoffs, research notes)
+# Keep locally for agent context but never push to GitHub.
+docs/AGENTS.md
+docs/CLAUDE_MINIMAL_HANDOFF.md
+docs/ESSENTIAL_FILES.md
+docs/LEGACY_SCRIPT_SURFACES.md
+docs/*HANDOFF*
+docs/*LESSONS*
+docs/*FACT_ALIGNMENT*
+docs/references/MEMORY_REQUIREMENTS.md
+docs/references/MODEL_REGISTRY.md
+docs/references/deep-research-report.md
+docs/references/BLOCK3_CHAMPION_COMPONENT_ANALYSIS.md

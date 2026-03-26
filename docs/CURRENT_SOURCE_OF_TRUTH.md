@@ -1,7 +1,7 @@
 # Current Source of Truth
 
-> Last verified: 2026-03-25 14:13 CET
-> Verified by direct scans of `runs/benchmarks/block3_phase9_fair/`, `runs/text_embeddings/`, live `squeue -u npin,cfisch`, `sacct`, `sinfo`, and key Phase 15 logs.
+> Last verified: 2026-03-26 10:19 CET
+> Verified by direct scans of `runs/benchmarks/block3_phase9_fair/`, live `squeue -u npin`, `sacct`, benchmark aggregation scripts.
 
 This file is the authoritative documentation entry point for the current Block 3 project state.
 If any other document disagrees with this file, prefer this file and the evidence paths cited below.
@@ -25,25 +25,25 @@ If any other document disagrees with this file, prefer this file and the evidenc
 | Fact | Current value | Evidence |
 | --- | --- | --- |
 | Canonical benchmark directory | `runs/benchmarks/block3_phase9_fair/` | direct scan |
-| Raw metric records | `16023` | direct scan 2026-03-25 |
+| Raw metric records | `16077` | direct scan 2026-03-26 |
 | Raw models materialized | `137` | direct scan (116 real + 21 retired AutoFit@1) |
 | Audit-excluded models | `24` | AUDIT_EXCLUDED_MODELS (17 old + 7 Finding H) |
 | Active (leaderboard) models | `92` | 116 raw - 24 excluded |
 | Raw complete models (`@160`) | `75` | direct unique-condition scan |
 | Active complete models (`@160`) | `62` | 75 raw complete - 13 excluded complete models |
 | Incomplete active models | `30` | 92 - 62 |
-| Per-ablation | co=2849, s2=2139, ce=2780, e2=2724, ct=2764, fu=2767 | direct scan 2026-03-25 |
+| Per-ablation | co=2849, s2=2139, ce=2780, e2=2778, ct=2764, fu=2767 | direct scan 2026-03-26 |
 | Conditions per model | `160` | t1(72) + t2(48) + t3(40) |
 | Current AutoFit baseline | `AutoFitV739` only | Root `AGENTS.md` |
-| V739 landed conditions | `131/160` | co=28, ce=28, ct=28, fu=28, s2+e2 gap-filling (4R+1PD) |
+| V739 landed conditions | `132/160` | co=28, ce=28, ct=28, fu=28, s2/e2 gap-filling (5R) |
 | V739 quality | 0 NaN/Inf, 0 fallback, 100% fairness pass | direct scan |
 | V739 mean rank | **#13** (top 14%, 92 active models) | per-condition ranking (last computed) |
 | Post-filter distinct models in `all_results.csv` | `107` | includes 21 retired AutoFit legacy lines that still pass fairness/coverage filters |
 | Post-filter non-retired models | `86` | `all_results.csv` minus retired AutoFit legacy lines |
 | Text embedding artifacts | `AVAILABLE` | `runs/text_embeddings/embedding_metadata.json` |
 | Phase 12 text reruns | `48/48 COMPLETED` | core_text+full 91/91 models |
-| Phase 15 new models | 23 submitted, 15 valid, 8 excluded (Finding H), 76/160 | direct scan |
-| Live jobs | `57` (25R + 32PD) | squeue 2026-03-25 14:13 after resubmitting `af739_t3_e2` and trimmed `gpu_cos2_t2` |
+| Phase 15 new models | 23 submitted, 15 valid, 8 excluded (Finding H), 78/160 | direct scan |
+| Live jobs | `57` (30R + 27PD) | squeue 2026-03-26 10:19: gpu 23R, l40s 4R+13PD, hopper 3R+14PD |
 
 ## What the Current Benchmark Means
 
@@ -62,19 +62,17 @@ If any other document disagrees with this file, prefer this file and the evidenc
 
 ## Current Execution Reality
 
-1. Live queue snapshot verified on 2026-03-25 14:13 CET:
-   - `25 RUNNING` = `21 gpu + 4 l40s + 0 hopper`
-   - `32 PENDING` = `2 gpu + 17 hopper + 13 l40s`
+1. Live queue snapshot verified on 2026-03-26 10:19 CET:
+   - `30 RUNNING` = `23 gpu + 4 l40s + 3 hopper`
+   - `27 PENDING` = `14 hopper + 13 l40s`
    - **57 total**
-   - Current gpu runners are exactly: 17 `g2_ac_*` + 4 `af739_*`
-   - Current gpu pending jobs are exactly: trimmed `gpu_cos2_t2` and resubmitted `af739_t3_e2`
+   - Current gpu runners: 17 `g2_ac_*` + 5 `af739_*` + 1 `gpu_cos2_t2`
    - **ModernTCN bottleneck** remains the dominant throughput limiter for non-e2 accel jobs
    - Partition constraints (`sinfo` verified): `gpu=756G`, `l40s=515G`, `hopper=2063754MB (~2.06TB)`; the earlier `hopper=201G` claim was a unit-reading error
 2. V739 status:
-   - **131/160 conditions landed** (+5 from 126, s2/e2 gap-filling)
-   - 4 af739 jobs RUNNING: `t1_e2`, `t1_s2`, `t2_s2`, `t2_e2`
-   - 1 af739 job PENDING: `af739_t3_e2` (`5284506`), resubmitted after confirming it had dropped out of queue
-   - Missing structure: `t1_e2=9`, `t1_s2=8`, `t2_e2=4`, `t2_s2=4`, `t3_e2=4`
+   - **132/160 conditions landed** (+1 from 131, s2/e2 gap-filling)
+   - 5 af739 jobs RUNNING: `t1_e2`, `t1_s2`, `t2_s2`, `t2_e2`, `t3_e2`
+   - Missing structure: `t1_e2=9`, `t1_s2=8`, `t2_e2=4`, `t2_s2=4`, `t3_e2=3` (28 total)
    - V739 is empirically valid: 0 NaN/Inf, 0 fallback, 100% fairness pass
 3. Finding H (discovered 2026-03-22):
    - 8 P15 models produce 100% constant predictions (0% fairness pass)
@@ -92,7 +90,7 @@ If any other document disagrees with this file, prefer this file and the evidenc
    - **Fixed**: Added `_requeue_handler()` trap to all 56 scripts (2026-03-22 20:10)
 5. Critical gaps:
    - s2 (core_only_seed2): `gpu_cos2_t2` remains the canonical task2 seed2 gap-fill and has now been **cancelled/requeued onto the trimmed 23-model list** (`5284505`)
-   - e2 (core_edgar_seed2): 2810 records (+24 from 2786), ETSformer/LightTS/Pyraformer/Reformer gap covered by accel_v2
+   - e2 (core_edgar_seed2): 2778 records (+54 from 2724), accel_v2 e2 scripts producing the bulk of recent growth
    - V739: 29 missing s2+e2 conditions, and **all 5 required gap-fill jobs are now back in queue**
 6. Text embeddings:
    - `runs/text_embeddings/text_embeddings.parquet` — 5,774,931 rows, 64 PCA dims

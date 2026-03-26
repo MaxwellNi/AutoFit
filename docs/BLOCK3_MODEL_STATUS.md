@@ -1,24 +1,24 @@
 # Block 3 Model Benchmark Status
 
-> Last updated: 2026-03-25 14:13 CET
+> Last updated: 2026-03-26 10:19 CET
 > Current authority: `docs/CURRENT_SOURCE_OF_TRUTH.md`
-> Evidence: direct scan of `runs/benchmarks/block3_phase9_fair/`, `all_results.csv`, live `squeue`, `sacct`, `sinfo`, and key Phase 15 logs.
+> Evidence: direct scan of `runs/benchmarks/block3_phase9_fair/`, `all_results.csv`, live `squeue`, `sacct`, and benchmark aggregation scripts.
 
 ## Snapshot
 
 | Metric | Value | Evidence |
 | --- | ---: | --- |
-| raw records | **16023** | direct scan 2026-03-25 |
+| raw records | **16077** | direct scan 2026-03-26 |
 | raw models (all) | 137 | 116 non-retired + 21 retired AutoFit legacy lines |
 | raw complete @160 | 75 | direct unique-condition scan |
 | active leaderboard models | **92** | 116 non-retired raw models - 24 audit-excluded |
 | active complete @160 | **62** | 75 raw complete - 13 excluded complete models |
-| incomplete active models | **30** | 92 - 62 |
-| post-filter records in `all_results.csv` | **12178** | fairness_only=True, min_coverage=0.98 |
+| incomplete active models | **28** | 90 - 62 |
+| post-filter records in `all_results.csv` | **12230** | fairness_only=True, min_coverage=0.98 |
 | post-filter distinct models | 107 | includes 21 retired AutoFit legacy lines |
 | post-filter non-retired models | 86 | `all_results.csv` minus retired AutoFit legacy lines |
 | conditions per full model | 160 | t1(72) + t2(48) + t3(40) |
-| live jobs | **57** | 25R + 32PD after queue repairs |
+| live jobs | **57** | 30R + 27PD (gpu 23R, l40s 4R+13PD, hopper 3R+14PD) |
 | text embeddings | available | 5,774,931 rows, 64 PCA dims |
 
 ## V739 Status
@@ -26,10 +26,10 @@
 | Fact | Value | Evidence |
 | --- | --- | --- |
 | current valid AutoFit line | `AutoFitV739` | Root `AGENTS.md` |
-| landed conditions | `131/160` | co=28, ce=28, ct=28, fu=28, s2/e2 gap-filling |
-| missing total | `29` | direct `all_results.csv` diff against expected 160 cells |
-| missing breakdown | `t1_e2=9`, `t1_s2=8`, `t2_e2=4`, `t2_s2=4`, `t3_e2=4` | direct query |
-| live V739 jobs | `5` | 4 RUNNING + 1 PENDING |
+| landed conditions | `132/160` | co=28, ce=28, ct=28, fu=28, s2/e2 gap-filling |
+| missing total | `28` | direct `all_results.csv` diff against expected 160 cells |
+| missing breakdown | `t1_e2=9`, `t1_s2=8`, `t2_e2=4`, `t2_s2=4`, `t3_e2=3` | direct query |
+| live V739 jobs | `5` | 5 RUNNING |
 | quality | 0 NaN/Inf, 0 fallback, 100% fairness pass | direct scan |
 | mean rank (last computed stable slice) | **#13** | current valid AutoFit baseline only |
 | V734-V738 | retired | oracle test-set leakage |
@@ -42,7 +42,7 @@
 | `af739_t1_s2` | RUNNING | task1 `core_only_seed2` gap-fill |
 | `af739_t2_s2` | RUNNING | task2 `core_only_seed2` gap-fill |
 | `af739_t2_e2` | RUNNING | task2 `core_edgar_seed2` gap-fill |
-| `af739_t3_e2` | PENDING | task3 `core_edgar_seed2` gap-fill; manually re-submitted 2026-03-25 |
+| `af739_t3_e2` | RUNNING | task3 `core_edgar_seed2` gap-fill |
 
 ## Incomplete Active Models
 
@@ -51,7 +51,7 @@
 | structural OOM | `XGBoost@159`, `XGBoostPoisson@157` | known unfixable gaps |
 | AutoFit gap-fill | `AutoFitV739@131` | fully covered by 5 live af739 jobs |
 | old TSLib gap-fill | `ETSformer`, `LightTS`, `Pyraformer`, `Reformer`, `Crossformer`, `MSGNet`, `MambaSimple`, `PAttn` | covered by accel_v2 queue |
-| Phase 15 valid models | `CARD`, `DUET`, `FiLM`, `FilterTS`, `FreTS`, `Fredformer`, `ModernTCN`, `NonstationaryTransformer`, `PDF`, `PIR`, `SCINet`, `SRSNet`, `SegRNN`, `TimeRecipe`, `xPatch` | all at `76/160` or `72/160`, covered by accel_v2 queue |
+| Phase 15 valid models | `CARD`, `DUET`, `FiLM`, `FilterTS`, `FreTS`, `Fredformer`, `ModernTCN`, `NonstationaryTransformer`, `PDF`, `PIR`, `SCINet`, `SRSNet`, `SegRNN`, `TimeRecipe`, `xPatch` | all at `78/160`, covered by accel_v2 queue |
 
 **Operational conclusion:** aside from the two structural OOM tabular models, there is currently **no known mandatory non-structural gap that is completely unqueued**.
 
@@ -61,13 +61,13 @@ Detailed per-job progress/ETA snapshot: `docs/RUN_QUEUE_PROGRESS_CURRENT.md`
 
 | Slice | Value | Notes |
 | --- | ---: | --- |
-| gpu RUNNING | 21 | 17 `g2_ac_*` + 4 `af739_*` |
-| gpu PENDING | 2 | trimmed `gpu_cos2_t2` + repaired `af739_t3_e2` |
-| l40s RUNNING | 4 | `l2_ac_t1_ct`, `l2_ac_t2_e2`, `l2_ac_t3_ct`, `l2_ac_t3_e2` |
+| gpu RUNNING | 23 | 17 `g2_ac_*` + 5 `af739_*` + 1 `gpu_cos2_t2` |
+| gpu PENDING | 0 | — |
+| l40s RUNNING | 4 | `l2_ac_t1_co`, `l2_ac_t1_s2`, `l2_ac_t1_e2`, `l2_ac_t1_ct` |
 | l40s PENDING | 13 | overflow / resume-safe accel_v2 backlog |
-| hopper RUNNING | 0 | opportunistic only |
-| hopper PENDING | 17 | priority-limited overflow backlog |
-| **total** | **57** | **25 RUNNING + 32 PENDING** |
+| hopper RUNNING | 3 | `h2_ac_t1_e2`, `h2_ac_t1_fu`, `h2_ac_t1_s2` on iris-197 |
+| hopper PENDING | 14 | priority-limited overflow backlog |
+| **total** | **57** | **30 RUNNING + 27 PENDING** |
 
 ### Current Throughput Interpretation
 
