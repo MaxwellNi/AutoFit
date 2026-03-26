@@ -101,12 +101,16 @@
 > joint scaling of horizon, context length, target type, and slice
 > representativeness, not just on adding more horizon IDs.
 >
-> One more caution is now explicit in the artifacts: the current long-horizon
-> local slices record `edgar_source_density = 0.0` and `text_source_density =
-> 0.0`. So the present long-h improvements must not yet be attributed to
-> source-native event-memory gains. At this stage they should be interpreted as
-> evidence about horizon/context design and ablation-level feature regimes, not
-> as proof that sparse-event memory is already carrying the longer-horizon load.
+> One more caution is now explicit after a density-audit rerun: the earlier
+> `edgar_source_density = 0.0` / `text_source_density = 0.0` readings on
+> funding/count long-h slices were caused by a logging bug, not by genuine
+> source absence. Representative reruns now show `core_edgar` funding at
+> `h=60` with `edgar_source_density = 1.0`, and `full` funding at `h=60` with
+> both `edgar_source_density = 1.0` and `text_source_density = 1.0`.
+> Even so, the present long-h improvements should still be interpreted
+> carefully: they now show source-covered slices plus improved
+> horizon/context behavior, but they do not yet prove that source-native
+> sparse-event memory is already carrying the longer-horizon load.
 
 ## 1. Purpose
 

@@ -409,22 +409,40 @@ to a half-year horizon is still not enough on a tiny local slice. The current
 prototype can represent the horizon, but it does not yet have enough effective
 windows or enough long-range skill to make `h=180` viable under this budget.
 
-## 12. A critical caution: current long-h gains are not yet source-native event-memory gains
+## 12. A critical caution: the earlier source-density readings were a logging bug
 
-Across the current long-horizon local artifacts, the recorded
-`edgar_source_density` and `text_source_density` are effectively `0.0`.
+After the first long-horizon sweep, the source-density diagnostics in the
+funding/count artifacts were re-audited against the implementation. The root
+cause turned out to be a logging bug: `edgar_source_density` and
+`text_source_density` had been computed only inside the binary branch of
+`V740AlphaPrototypeWrapper.fit()`, so non-binary long-h artifacts falsely
+reported `0.0`.
 
-That means the current long-horizon improvements should **not** be described as
-proof that source-native EDGAR/text event memory is already driving the gain.
-The more truthful interpretation is:
+That bug is now fixed in `src/narrative/block3/models/v740_alpha.py`, and two
+representative reruns were executed to refresh the evidence:
 
-- horizon/context design is now beginning to matter,
-- richer ablation surfaces may still help through dense joined covariates,
-- but the source-native sparse event-memory path has not yet been validated as
-  the reason the long-h slices are improving.
+- `task2_forecast / core_edgar / funding_raised_usd / h=60`
+  - `edgar_source_density = 1.0`
+  - `MAE = 177810.09`
+- `task2_forecast / full / funding_raised_usd / h=60`
+  - `edgar_source_density = 1.0`
+  - `text_source_density = 1.0`
+  - `MAE = 177810.09`
 
-This distinction matters because V740's multisource story should only claim
-what the current artifacts actually support.
+So the correct interpretation is now narrower and more accurate:
+
+- the tested `core_edgar` and `full` long-h slices do contain source-covered
+  rows,
+- the current `h=60` funding path remains non-constant after the density fix,
+- but this still does **not** prove that the source-native sparse event-memory
+  path is already the dominant reason for the gain.
+
+What the refreshed artifacts support is:
+
+- horizon/context design is beginning to matter,
+- EDGAR/text-covered feature regimes are genuinely present on the tested slices,
+- but source-native sparse event-memory attribution still requires dedicated
+  ablation beyond these narrow local probes.
 
 ## 13. Current bottom line
 
@@ -437,8 +455,9 @@ The current honest bottom line is now:
 4. The first viable `h=90` path exists, but only on a funding slice with
    longer context.
 5. `h=180` is still fallback-only on the tested narrow slice.
-6. Current text and source-native EDGAR event-memory gains are **not yet**
-   demonstrated on these long-horizon local slices.
+6. Current long-h improvements should be interpreted as evidence about
+   horizon/context design on source-covered slices, not yet as proof that
+   source-native event memory itself is fully carrying the gain.
 
 ### 8.3 What the `h=90` runs imply
 

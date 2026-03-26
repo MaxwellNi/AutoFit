@@ -1,6 +1,6 @@
 # Current Source of Truth
 
-> Last verified: 2026-03-26 11:49 CET
+> Last verified: 2026-03-26 14:59 CET
 > Verified by direct scans of `runs/benchmarks/block3_phase9_fair/`, live `squeue -u npin`, `sacct`, benchmark aggregation scripts.
 
 This file is the authoritative documentation entry point for the current Block 3 project state.
@@ -43,7 +43,7 @@ If any other document disagrees with this file, prefer this file and the evidenc
 | Text embedding artifacts | `AVAILABLE` | `runs/text_embeddings/embedding_metadata.json` |
 | Phase 12 text reruns | `48/48 COMPLETED` | core_text+full 91/91 models |
 | Phase 15 new models | 23 submitted, 15 valid, 8 excluded (Finding H), 78/160 | direct scan |
-| Live jobs | `58` (29R + 29PD) | squeue 2026-03-26 11:49: gpu 23R+1PD, l40s 3R+14PD, hopper 3R+14PD |
+| Live jobs | `58` (27R + 31PD) | squeue 2026-03-26 14:59: gpu 23R+1PD, l40s 1R+16PD, hopper 3R+14PD |
 
 ## What the Current Benchmark Means
 
@@ -62,9 +62,9 @@ If any other document disagrees with this file, prefer this file and the evidenc
 
 ## Current Execution Reality
 
-1. Live queue snapshot verified on 2026-03-26 11:49 CET:
-   - `29 RUNNING` = `23 gpu + 3 l40s + 3 hopper`
-   - `29 PENDING` = `1 gpu + 14 hopper + 14 l40s`
+1. Live queue snapshot verified on 2026-03-26 14:59 CET:
+   - `27 RUNNING` = `23 gpu + 1 l40s + 3 hopper`
+   - `31 PENDING` = `1 gpu + 14 hopper + 16 l40s`
    - **58 total**
    - Current gpu runners: 17 `g2_ac_*` + 5 `af739_*` + 1 `gpu_cos2_t2`
    - Current gpu pending: `v740_mb_case1_v739` (local-only resumable V740 compare, not part of canonical benchmark)

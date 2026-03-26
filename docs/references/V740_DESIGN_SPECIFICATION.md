@@ -413,12 +413,19 @@ As of 2026-03-26, local-only V740-alpha evidence is already mixed:
 - `h=180 / core_edgar / funding_raised_usd / input_size=180` is still
   fallback-only on the tested narrow slice.
 
-There is one more important caveat: the current long-horizon local slices still
-show `edgar_source_density = 0.0` and `text_source_density = 0.0` in the
-recorded artifacts. So current long-horizon gains must not yet be interpreted
-as proof that source-native sparse event-memory is already carrying the load.
-What the artifacts support today is a more limited statement about horizon
-conditioning, context length, and dense ablation-level feature regimes.
+There is one more important caveat: the first `0.0` source-density readings on
+long-horizon funding/count slices were caused by a logging bug in
+`V740AlphaPrototypeWrapper.fit()`, not by genuine source absence. After fixing
+that bug and rerunning representative funding slices, `core_edgar` now records
+`edgar_source_density = 1.0`, and `full` records both
+`edgar_source_density = 1.0` and `text_source_density = 1.0`.
+
+That correction matters, but it still does not justify overclaiming. The
+refreshed artifacts show that source-covered regimes are present on the tested
+long-h slices; they do **not** yet prove that source-native sparse event-memory
+is already the dominant reason those slices improve. The strongest supported
+interpretation remains a joint one about horizon conditioning, context length,
+and richer feature regimes.
 
 So the correct V740 design principle is:
 
@@ -436,6 +443,13 @@ The candidate future research horizons worth auditing are:
 These are design targets, not active benchmark claims. They should remain
 local-only until the prototype demonstrates non-degenerate behavior and stable
 benefit across more than one target family.
+
+Recent long-horizon work on maximum effective window (MEW) reinforces why this
+discipline matters. Longer lookback is only useful when the model can actually
+convert it into a larger usable window instead of more redundancy and noise.
+That matches the current V740 evidence well: `h=90` only becomes viable after
+context scaling on a source-richer funding slice, while `h=180` still fails
+under a narrow effective-window budget.
 
 The engineering implication is straightforward:
 

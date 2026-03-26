@@ -182,12 +182,21 @@ The correct current conclusion is therefore:
 > require both longer context and a richer source regime rather than a larger
 > horizon token alone.
 
-One more caveat is important for interpretation: on the currently tested
-long-horizon local slices, `edgar_source_density` and `text_source_density`
-remain `0.0`. So present long-horizon improvements should not yet be described
-as proof that source-native sparse event memory is already responsible for the
-gain. At this stage the evidence is mainly about horizon conditioning, context
-length, and dense ablation-level feature regimes.
+One more caveat is important for interpretation: the first `0.0`
+`edgar_source_density` / `text_source_density` readings on non-binary long-h
+artifacts were caused by a logging bug. After fixing that path and rerunning
+representative funding slices, `core_edgar` now records
+`edgar_source_density = 1.0`, and `full` records both
+`edgar_source_density = 1.0` and `text_source_density = 1.0`.
+
+That correction removes a false negative, but it still does not justify
+overclaiming. The safer interpretation is that the current long-h artifacts now
+support a joint story about:
+
+- better horizon/context conditioning,
+- genuinely source-covered `core_edgar` and `full` local slices,
+- but not yet a fully isolated proof that source-native sparse event-memory is
+  the main driver of the gain.
 
 ### 5.4 How longer entrepreneurial-finance horizons should be designed
 
@@ -236,6 +245,17 @@ The recurring public benchmark families across recent papers and repos include:
 
 These remain the most common direct-comparison datasets in recent forecasting
 papers, especially for long-horizon multivariate forecasting.
+
+The recurring public horizon protocol on these datasets is also highly stable:
+
+- `96 / 192 / 336 / 720` for ETT, Weather, Electricity, Traffic, and similar
+  long-term multivariate benchmarks,
+- `12 / 24 / 48 / 96` for common PEMS traffic subsets.
+
+This matters for V740 because our eventual public generalization pack should
+not improvise horizon settings. It should inherit the horizon ladders that the
+recent literature repeatedly uses, then report our entrepreneurial-finance
+research horizons separately rather than conflating the two.
 
 ### 6.2 Spatiotemporal / traffic-heavy forecasting
 
@@ -328,10 +348,18 @@ one separate model per target or per horizon.
 - `LiPFormer`
 - `SAMformer`
 - `CASA`
+- `PIH` / maximum-effective-window modules
 
 These are the most relevant efficiency-first references when the goal is to
 challenge strong specialists without inheriting the cost profile of a runtime
 selector or a giant foundation model.
+
+Two especially useful current signals are:
+
+- MEW-oriented work such as PIH, which argues that longer lookback only helps
+  when the model can suppress redundancy and enlarge its effective window,
+- decomposition-efficiency results showing that decomposition-first designs can
+  improve both accuracy and cost rather than forcing a trade-off.
 
 ### Distribution alignment, calibration, and hard-cell optimization
 
@@ -339,6 +367,11 @@ selector or a giant foundation model.
 - `QDF`
 - `JAPAN`
 - `Time-o1`
+- `Selective Learning for Deep Time Series Forecasting`
+
+### Decomposition-first efficiency and compression
+
+- `Decomposition Delivers Both in Long-term Time Series Forecasting`
 
 These matter because Block 3 is not only an architecture problem. It is also a
 heavy-tail, multistep, calibration-sensitive forecasting problem.

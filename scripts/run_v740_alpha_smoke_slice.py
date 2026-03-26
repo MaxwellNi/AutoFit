@@ -370,6 +370,11 @@ def _parse_args() -> argparse.Namespace:
     ap.add_argument("--disable-task-modulation", action="store_true")
     ap.add_argument("--output-json", type=Path, default=None)
     ap.add_argument("--output-preds", type=Path, default=None)
+    ap.add_argument(
+        "--skip-if-output-exists",
+        action="store_true",
+        help="Exit successfully without re-running if output-json already exists.",
+    )
     return ap.parse_args()
 
 
@@ -431,6 +436,12 @@ def _summarize_result(
 
 def main() -> int:
     args = _parse_args()
+    if args.skip_if_output_exists and args.output_json is not None and args.output_json.exists():
+        print(
+            f"[v740-smoke] skip existing artifact: {args.output_json}",
+            flush=True,
+        )
+        return 0
     t0 = time.time()
     print(f"[v740-smoke] start task={args.task} ablation={args.ablation} target={args.target} h={args.horizon}", flush=True)
 

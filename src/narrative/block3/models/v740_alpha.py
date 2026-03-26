@@ -952,6 +952,15 @@ class V740AlphaPrototypeWrapper(ModelBase):
             self._fitted = True
             return self
 
+        if self._edgar_cols:
+            self._edgar_source_density = float(train_raw[self._edgar_cols].notna().any(axis=1).mean())
+        else:
+            self._edgar_source_density = 0.0
+        if self._text_cols:
+            self._text_source_density = float(train_raw[self._text_cols].notna().any(axis=1).mean())
+        else:
+            self._text_source_density = 0.0
+
         if self._binary_target:
             train_window_y = np.stack(entity_windows.train_y).astype(np.float32, copy=False)
             binary_train = np.isfinite(train_window_y)
@@ -966,14 +975,6 @@ class V740AlphaPrototypeWrapper(ModelBase):
             transition_targets = ((event_targets > 0.5) & (current_state <= 0.5)).astype(np.float32)
             self._binary_event_rate = float(event_targets.mean()) if len(event_targets) else 0.5
             self._binary_transition_rate = float(transition_targets.mean()) if len(transition_targets) else 0.5
-            if self._edgar_cols:
-                self._edgar_source_density = float(train_raw[self._edgar_cols].notna().any(axis=1).mean())
-            else:
-                self._edgar_source_density = 0.0
-            if self._text_cols:
-                self._text_source_density = float(train_raw[self._text_cols].notna().any(axis=1).mean())
-            else:
-                self._text_source_density = 0.0
             self._configure_binary_regime()
 
         train_x = torch.tensor(np.stack(entity_windows.train_x), dtype=torch.float32)

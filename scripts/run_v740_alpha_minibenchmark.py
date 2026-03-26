@@ -174,7 +174,10 @@ def _build_case_frame(case: Dict[str, Any], temporal_config: TemporalSplitConfig
     df = _load_smoke_frame(_Args, temporal_config)
     train, val, test, _ = apply_temporal_split(df, temporal_config)
     if case["max_rows"] and len(train) > case["max_rows"]:
-        train = _downsample_binary_preserve_time(train, case["target"], case["max_rows"])
+        if case["target"] == "is_funded":
+            train = _downsample_binary_preserve_time(train, case["target"], case["max_rows"])
+        else:
+            train = _downsample_preserve_time(train, case["max_rows"])
     return train, val, test
 
 

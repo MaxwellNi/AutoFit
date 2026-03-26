@@ -1,6 +1,6 @@
 # Block 3 Model Benchmark Status
 
-> Last updated: 2026-03-26 11:49 CET
+> Last updated: 2026-03-26 14:59 CET
 > Current authority: `docs/CURRENT_SOURCE_OF_TRUTH.md`
 > Evidence: direct scan of `runs/benchmarks/block3_phase9_fair/`, `all_results.csv`, live `squeue`, `sacct`, and benchmark aggregation scripts.
 
@@ -18,7 +18,7 @@
 | post-filter distinct models | 107 | includes 21 retired AutoFit legacy lines |
 | post-filter non-retired models | 86 | `all_results.csv` minus retired AutoFit legacy lines |
 | conditions per full model | 160 | t1(72) + t2(48) + t3(40) |
-| live jobs | **58** | 29R + 29PD (gpu 23R+1PD, l40s 3R+14PD, hopper 3R+14PD) |
+| live jobs | **58** | 27R + 31PD (gpu 23R+1PD, l40s 1R+16PD, hopper 3R+14PD) |
 | text embeddings | available | 5,774,931 rows, 64 PCA dims |
 
 ## V739 Status
@@ -63,11 +63,11 @@ Detailed per-job progress/ETA snapshot: `docs/RUN_QUEUE_PROGRESS_CURRENT.md`
 | --- | ---: | --- |
 | gpu RUNNING | 23 | 17 `g2_ac_*` + 5 `af739_*` + 1 `gpu_cos2_t2` |
 | gpu PENDING | 1 | local-only `v740_mb_case1_v739` compare job |
-| l40s RUNNING | 3 | `l2_ac_t1_ct`, `l2_ac_t1_e2`, `l2_ac_t2_s2` |
-| l40s PENDING | 14 | overflow / resume-safe accel_v2 backlog |
+| l40s RUNNING | 1 | `l2_ac_t2_s2` |
+| l40s PENDING | 16 | overflow / resume-safe accel_v2 backlog |
 | hopper RUNNING | 3 | `h2_ac_t1_e2`, `h2_ac_t1_fu`, `h2_ac_t1_s2` on iris-197 |
 | hopper PENDING | 14 | priority-limited overflow backlog |
-| **total** | **58** | **29 RUNNING + 29 PENDING** |
+| **total** | **58** | **27 RUNNING + 31 PENDING** |
 
 ### Current Throughput Interpretation
 

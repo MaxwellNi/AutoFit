@@ -132,6 +132,9 @@ V740 methodology direction:
 | DistDF | ICLR 2026 | Direct distributional multistep objective; relevant to long-horizon stability |
 | QDF | ICLR 2026 | Hard-structure-aware weighting objective; useful for difficult cells |
 | JAPAN | ICLR 2026 | Density-aware conformal prediction sets; useful for calibrated uncertainty |
+| PIH / MEW modules | ICLR 2026-under-review | Strong signal that longer horizons must be treated as an effective-window problem, not just a bigger horizon token |
+| Selective Learning | NeurIPS 2025 | Timestep-selective training to reduce noise-driven overfitting on hard temporal regions |
+| Decomposition Delivers Both | NeurIPS 2024 | Reinforces the decomposition-first path as an efficiency-preserving backbone choice |
 | TimeDiT | 2025 | General-purpose diffusion-style TSFM; interesting but too heavy for alpha |
 | FLAIRR-TS | Findings of EMNLP 2025 | Retrieval + iterative refinement; promising as a later auxiliary memory signal |
 
@@ -155,11 +158,13 @@ terms of isolated paper names and instead track mechanism clusters:
 1. **single-model multi-task / multi-horizon conditioning**
    - `UniTS`, `ElasTST`, `TimerXL`
 2. **lightweight long-horizon / local-context modeling**
-   - `LightGTS`, `LiPFormer`, `SAMformer`, `CASA`
+   - `LightGTS`, `LiPFormer`, `SAMformer`, `CASA`, `PIH`
 3. **distribution alignment and calibration**
-   - `DistDF`, `QDF`, `JAPAN`, `Time-o1`
+   - `DistDF`, `QDF`, `JAPAN`, `Time-o1`, `Selective Learning`
 4. **heterogeneous covariate disentanglement**
    - `DIAN`, `TimeEmb`
+5. **decomposition-first compression**
+   - `Decomposition Delivers Both`, `NBEATS`-family signals
 
 This is the most useful reading order for V740 now. It matches both the Block
 3 champion analysis and the broader 2024-2026 public-paper comparator pattern.
