@@ -361,6 +361,23 @@ Two especially useful current signals are:
 - decomposition-efficiency results showing that decomposition-first designs can
   improve both accuracy and cost rather than forcing a trade-off.
 
+In practice, the most useful public reference pattern here is not only the
+mechanism, but also the evaluation surface. PIH-style MEW work is reported on
+the standard long-horizon datasets:
+
+- `Weather`
+- `Traffic`
+- `Electricity`
+- `ETTh1`, `ETTh2`
+- `ETTm1`, `ETTm2`
+- `Solar`
+- `PEMS`
+
+and keeps its implementation tightly aligned to a strong baseline family
+(PatchTST-style hyperparameters plus direct comparisons to iTransformer-like
+variants). This makes it a useful template for how V740 should be audited on
+public data once the entrepreneurial-finance long-horizon path becomes stable.
+
 ### Distribution alignment, calibration, and hard-cell optimization
 
 - `DistDF`
@@ -368,6 +385,15 @@ Two especially useful current signals are:
 - `JAPAN`
 - `Time-o1`
 - `Selective Learning for Deep Time Series Forecasting`
+
+Selective Learning is especially relevant because its paper-level evidence does
+not just say "hard examples matter." It studies selective optimization on
+different temporal regimes, including non-stationary datasets such as `ETTh1`
+and `Exchange`, and more periodic settings such as `Weather`, while probing
+iTransformer backbones with different estimation heads (`DLinear`, `MLP`,
+`TimeMixer`, and iTransformer itself). For V740, that is a strong signal that
+window weighting and curriculum design may matter more than blindly inflating
+the backbone.
 
 ### Decomposition-first efficiency and compression
 

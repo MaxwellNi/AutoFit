@@ -311,6 +311,14 @@ V740 implication:
 window weighting and curriculum should be part of the method, especially under
 noise, regime shifts, and label instability.
 
+Additional public-benchmark relevance:
+the paper studies selective optimization under different temporal regimes,
+including non-stationary datasets such as `ETTh1` and `Exchange`, and more
+periodic settings such as `Weather`, while varying lightweight-to-heavier
+estimation heads on top of an iTransformer backbone. This matters for V740
+because it suggests that some of our hardest cells may be improved more by
+better window weighting than by a larger trunk.
+
 #### JAPAN (ICLR 2026)
 
 Key signal:

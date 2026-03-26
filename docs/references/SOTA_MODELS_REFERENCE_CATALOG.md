@@ -132,8 +132,8 @@ V740 methodology direction:
 | DistDF | ICLR 2026 | Direct distributional multistep objective; relevant to long-horizon stability |
 | QDF | ICLR 2026 | Hard-structure-aware weighting objective; useful for difficult cells |
 | JAPAN | ICLR 2026 | Density-aware conformal prediction sets; useful for calibrated uncertainty |
-| PIH / MEW modules | ICLR 2026-under-review | Strong signal that longer horizons must be treated as an effective-window problem, not just a bigger horizon token |
-| Selective Learning | NeurIPS 2025 | Timestep-selective training to reduce noise-driven overfitting on hard temporal regions |
+| PIH / MEW modules | ICLR 2026-under-review | Strong signal that longer horizons must be treated as an effective-window problem, not just a bigger horizon token; evaluated on the standard `Weather/Traffic/Electricity/ETT/Solar/PEMS` family |
+| Selective Learning | NeurIPS 2025 | Timestep-selective training to reduce noise-driven overfitting on hard temporal regions; especially relevant because it is examined across non-stationary (`ETTh1`, `Exchange`) and periodic (`Weather`) regimes |
 | Decomposition Delivers Both | NeurIPS 2024 | Reinforces the decomposition-first path as an efficiency-preserving backbone choice |
 | TimeDiT | 2025 | General-purpose diffusion-style TSFM; interesting but too heavy for alpha |
 | FLAIRR-TS | Findings of EMNLP 2025 | Retrieval + iterative refinement; promising as a later auxiliary memory signal |

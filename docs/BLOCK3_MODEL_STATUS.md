@@ -1,6 +1,6 @@
 # Block 3 Model Benchmark Status
 
-> Last updated: 2026-03-26 15:04 CET
+> Last updated: 2026-03-26 15:54 CET
 > Current authority: `docs/CURRENT_SOURCE_OF_TRUTH.md`
 > Evidence: direct scan of `runs/benchmarks/block3_phase9_fair/`, `all_results.csv`, live `squeue`, `sacct`, and benchmark aggregation scripts.
 
@@ -18,7 +18,7 @@
 | post-filter distinct models | 107 | includes 21 retired AutoFit legacy lines |
 | post-filter non-retired models | 86 | `all_results.csv` minus retired AutoFit legacy lines |
 | conditions per full model | 160 | t1(72) + t2(48) + t3(40) |
-| live jobs | **59** | 27R + 32PD (gpu 23R+2PD, l40s 1R+16PD, hopper 3R+14PD) |
+| live jobs | **62** | 27R + 35PD (gpu 23R+3PD, l40s 1R+17PD, hopper 3R+15PD) |
 | text embeddings | available | 5,774,931 rows, 64 PCA dims |
 
 ## V739 Status
@@ -62,17 +62,19 @@ Detailed per-job progress/ETA snapshot: `docs/RUN_QUEUE_PROGRESS_CURRENT.md`
 | Slice | Value | Notes |
 | --- | ---: | --- |
 | gpu RUNNING | 23 | 17 `g2_ac_*` + 5 `af739_*` + 1 `gpu_cos2_t2` |
-| gpu PENDING | 2 | local-only `v740_mb_case1_v739` and `v740_lh_fu_f90` research jobs |
+| gpu PENDING | 3 | local-only `v740_mb_case1_v739`, `v740_lh_fu_f90`, and `v740_mb_case1_v739_g4` research jobs |
 | l40s RUNNING | 1 | `l2_ac_t2_s2` |
-| l40s PENDING | 16 | overflow / resume-safe accel_v2 backlog |
+| l40s PENDING | 17 | overflow / resume-safe accel_v2 backlog plus `v740_mb_case1_v739_l2` |
 | hopper RUNNING | 3 | `h2_ac_t1_e2`, `h2_ac_t1_fu`, `h2_ac_t1_s2` on iris-197 |
-| hopper PENDING | 14 | priority-limited overflow backlog |
-| **total** | **59** | **27 RUNNING + 32 PENDING** |
+| hopper PENDING | 15 | priority-limited overflow backlog plus `v740_mb_case1_v739_h2` |
+| **total** | **62** | **27 RUNNING + 35 PENDING** |
 
 ### Current Throughput Interpretation
 
 - `gpu` remains the main critical path and is fully utilized.
-- one additional `gpu` pending slot now belongs to a local-only resumable V740 compare job (`v740_mb_case1_v739`), which stays outside the canonical benchmark harness.
+- three `gpu` pending slots now belong to local-only resumable V740 research jobs (`v740_mb_case1_v739`, `v740_lh_fu_f90`, `v740_mb_case1_v739_g4`), all of which stay outside the canonical benchmark harness.
+- one local-only resumable V740 compare duplicate is also queued on `l40s` (`v740_mb_case1_v739_l2`).
+- one local-only resumable V740 compare duplicate is also queued on `hopper` (`v740_mb_case1_v739_h2`).
 - `l40s` remains the best overflow partition when memory needs fit within the 15G/CPU rule and a resume-safe script exists.
 - `hopper` is not memory-constrained in the way older docs implied; the real limiter is priority/preemption. It should be treated as opportunistic overflow, not as the sole critical path.
 - `ModernTCN` remains the dominant throughput bottleneck for non-`e2` accel jobs.
@@ -94,7 +96,7 @@ Detailed per-job progress/ETA snapshot: `docs/RUN_QUEUE_PROGRESS_CURRENT.md`
 
 ## Immediate Next Actions
 
-1. Let the repaired `gpu_cos2_t2` and `af739_t3_e2` continue to drain while monitoring the new local-only `v740_mb_case1_v739` compare job separately from canonical benchmark jobs.
+1. Let the repaired `gpu_cos2_t2` and `af739_t3_e2` continue to drain while monitoring the five local-only V740 jobs separately from canonical benchmark jobs.
 2. Continue letting accel_v2 drain on `gpu + l40s + hopper`; do not touch the benchmark harness while the queue is active.
 3. Rebuild `docs/benchmarks/phase9_current_snapshot.*` and `docs/BLOCK3_RESULTS.md` again after the next meaningful landing increment.
 4. Only after V739 and the remaining incomplete active models stabilize should any benchmark-facing V740 evaluation begin.
