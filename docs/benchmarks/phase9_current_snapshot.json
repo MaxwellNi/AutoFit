@@ -1,5 +1,5 @@
 {
-  "generated_at_utc": "2026-03-26T09:17:56.834511+00:00",
+  "generated_at_utc": "2026-03-26T10:45:24.129976+00:00",
   "benchmark_dir": "runs/benchmarks/block3_phase9_fair",
   "filtered_csv": "runs/benchmarks/block3_phase9_fair/all_results.csv",
   "text_dir": "runs/text_embeddings",
@@ -1208,21 +1208,21 @@
     ]
   },
   "filtered": {
-    "filtered_records": 12178,
+    "filtered_records": 12230,
     "filtered_models": 107,
     "filtered_retired_autofit_models": 21,
     "filtered_nonretired_models": 86,
     "filtered_complete_models": 55,
     "filtered_partial_models": 52,
     "filtered_categories": {
-      "autofit": 568,
+      "autofit": 592,
       "deep_classical": 1440,
       "foundation": 960,
       "irregular": 616,
       "ml_tabular": 1516,
       "statistical": 2240,
       "transformer_sota": 3040,
-      "tslib_sota": 1798
+      "tslib_sota": 1826
     },
     "filtered_autofit_models": [
       "AutoFitV1",
@@ -1254,29 +1254,29 @@
   "slurm": {
     "jobs_total": 57,
     "state_counts": {
-      "PENDING": 27,
-      "RUNNING": 30
+      "PENDING": 28,
+      "RUNNING": 29
     },
     "user_state_counts": {
-      "npin|PENDING": 27,
-      "npin|RUNNING": 30
+      "npin|PENDING": 28,
+      "npin|RUNNING": 29
     },
     "partition_state_counts": {
       "gpu|RUNNING": 23,
       "hopper|PENDING": 14,
       "hopper|RUNNING": 3,
-      "l40s|PENDING": 13,
-      "l40s|RUNNING": 4
+      "l40s|PENDING": 14,
+      "l40s|RUNNING": 3
     },
     "qos_state_counts": {
       "besteffort|PENDING": 14,
       "besteffort|RUNNING": 3,
-      "iris-snt|PENDING": 13,
-      "iris-snt|RUNNING": 4,
+      "iris-snt|PENDING": 14,
+      "iris-snt|RUNNING": 3,
       "normal|RUNNING": 23
     },
     "pending_reasons": {
-      "(Priority)": 26,
+      "(Priority)": 27,
       "(Resources)": 1
     },
     "v739_jobs": 5,
@@ -1606,44 +1606,12 @@
         "reason": "iris-197"
       },
       {
-        "job_name": "l2_ac_t2_s2",
-        "user": "npin",
-        "state": "PENDING",
-        "partition": "l40s",
-        "qos": "iris-snt",
-        "reason": "(Priority)"
-      },
-      {
-        "job_name": "l2_ac_t2_ct",
-        "user": "npin",
-        "state": "PENDING",
-        "partition": "l40s",
-        "qos": "iris-snt",
-        "reason": "(Priority)"
-      },
-      {
-        "job_name": "l2_ac_t2_co",
-        "user": "npin",
-        "state": "PENDING",
-        "partition": "l40s",
-        "qos": "iris-snt",
-        "reason": "(Priority)"
-      },
-      {
-        "job_name": "l2_ac_t2_ce",
-        "user": "npin",
-        "state": "PENDING",
-        "partition": "l40s",
-        "qos": "iris-snt",
-        "reason": "(Resources)"
-      },
-      {
         "job_name": "l2_ac_t3_ce",
         "user": "npin",
         "state": "PENDING",
         "partition": "l40s",
         "qos": "iris-snt",
-        "reason": "(Priority)"
+        "reason": "(Resources)"
       },
       {
         "job_name": "l2_ac_t3_co",
@@ -1662,15 +1630,7 @@
         "reason": "(Priority)"
       },
       {
-        "job_name": "l2_ac_t3_e2",
-        "user": "npin",
-        "state": "PENDING",
-        "partition": "l40s",
-        "qos": "iris-snt",
-        "reason": "(Priority)"
-      },
-      {
-        "job_name": "l2_ac_t2_e2",
+        "job_name": "l2_ac_t2_fu",
         "user": "npin",
         "state": "PENDING",
         "partition": "l40s",
@@ -1686,7 +1646,15 @@
         "reason": "(Priority)"
       },
       {
-        "job_name": "l2_ac_t2_fu",
+        "job_name": "l2_ac_t3_e2",
+        "user": "npin",
+        "state": "PENDING",
+        "partition": "l40s",
+        "qos": "iris-snt",
+        "reason": "(Priority)"
+      },
+      {
+        "job_name": "l2_ac_t2_e2",
         "user": "npin",
         "state": "PENDING",
         "partition": "l40s",
@@ -1712,13 +1680,45 @@
       {
         "job_name": "l2_ac_t1_co",
         "user": "npin",
-        "state": "RUNNING",
+        "state": "PENDING",
         "partition": "l40s",
         "qos": "iris-snt",
-        "reason": "iris-198"
+        "reason": "(Priority)"
+      },
+      {
+        "job_name": "l2_ac_t2_ce",
+        "user": "npin",
+        "state": "PENDING",
+        "partition": "l40s",
+        "qos": "iris-snt",
+        "reason": "(Priority)"
       },
       {
         "job_name": "l2_ac_t1_s2",
+        "user": "npin",
+        "state": "PENDING",
+        "partition": "l40s",
+        "qos": "iris-snt",
+        "reason": "(Priority)"
+      },
+      {
+        "job_name": "l2_ac_t2_ct",
+        "user": "npin",
+        "state": "PENDING",
+        "partition": "l40s",
+        "qos": "iris-snt",
+        "reason": "(Priority)"
+      },
+      {
+        "job_name": "l2_ac_t2_co",
+        "user": "npin",
+        "state": "PENDING",
+        "partition": "l40s",
+        "qos": "iris-snt",
+        "reason": "(Priority)"
+      },
+      {
+        "job_name": "l2_ac_t2_s2",
         "user": "npin",
         "state": "RUNNING",
         "partition": "l40s",

@@ -1,6 +1,6 @@
 # Block 3 Model Benchmark Status
 
-> Last updated: 2026-03-26 10:19 CET
+> Last updated: 2026-03-26 11:43 CET
 > Current authority: `docs/CURRENT_SOURCE_OF_TRUTH.md`
 > Evidence: direct scan of `runs/benchmarks/block3_phase9_fair/`, `all_results.csv`, live `squeue`, `sacct`, and benchmark aggregation scripts.
 
@@ -13,12 +13,12 @@
 | raw complete @160 | 75 | direct unique-condition scan |
 | active leaderboard models | **92** | 116 non-retired raw models - 24 audit-excluded |
 | active complete @160 | **62** | 75 raw complete - 13 excluded complete models |
-| incomplete active models | **28** | 90 - 62 |
+| incomplete active models | **30** | 92 - 62 |
 | post-filter records in `all_results.csv` | **12230** | fairness_only=True, min_coverage=0.98 |
 | post-filter distinct models | 107 | includes 21 retired AutoFit legacy lines |
 | post-filter non-retired models | 86 | `all_results.csv` minus retired AutoFit legacy lines |
 | conditions per full model | 160 | t1(72) + t2(48) + t3(40) |
-| live jobs | **57** | 30R + 27PD (gpu 23R, l40s 4R+13PD, hopper 3R+14PD) |
+| live jobs | **57** | 29R + 28PD (gpu 23R, l40s 3R+14PD, hopper 3R+14PD) |
 | text embeddings | available | 5,774,931 rows, 64 PCA dims |
 
 ## V739 Status
@@ -49,7 +49,7 @@
 | Tier | Models | Current state |
 | --- | --- | --- |
 | structural OOM | `XGBoost@159`, `XGBoostPoisson@157` | known unfixable gaps |
-| AutoFit gap-fill | `AutoFitV739@131` | fully covered by 5 live af739 jobs |
+| AutoFit gap-fill | `AutoFitV739@132` | fully covered by 5 live af739 jobs |
 | old TSLib gap-fill | `ETSformer`, `LightTS`, `Pyraformer`, `Reformer`, `Crossformer`, `MSGNet`, `MambaSimple`, `PAttn` | covered by accel_v2 queue |
 | Phase 15 valid models | `CARD`, `DUET`, `FiLM`, `FilterTS`, `FreTS`, `Fredformer`, `ModernTCN`, `NonstationaryTransformer`, `PDF`, `PIR`, `SCINet`, `SRSNet`, `SegRNN`, `TimeRecipe`, `xPatch` | all at `78/160`, covered by accel_v2 queue |
 
@@ -63,11 +63,11 @@ Detailed per-job progress/ETA snapshot: `docs/RUN_QUEUE_PROGRESS_CURRENT.md`
 | --- | ---: | --- |
 | gpu RUNNING | 23 | 17 `g2_ac_*` + 5 `af739_*` + 1 `gpu_cos2_t2` |
 | gpu PENDING | 0 | — |
-| l40s RUNNING | 4 | `l2_ac_t1_co`, `l2_ac_t1_s2`, `l2_ac_t1_e2`, `l2_ac_t1_ct` |
-| l40s PENDING | 13 | overflow / resume-safe accel_v2 backlog |
+| l40s RUNNING | 3 | `l2_ac_t1_ct`, `l2_ac_t1_e2`, `l2_ac_t2_s2` |
+| l40s PENDING | 14 | overflow / resume-safe accel_v2 backlog |
 | hopper RUNNING | 3 | `h2_ac_t1_e2`, `h2_ac_t1_fu`, `h2_ac_t1_s2` on iris-197 |
 | hopper PENDING | 14 | priority-limited overflow backlog |
-| **total** | **57** | **30 RUNNING + 27 PENDING** |
+| **total** | **57** | **29 RUNNING + 28 PENDING** |
 
 ### Current Throughput Interpretation
 

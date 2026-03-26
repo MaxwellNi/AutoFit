@@ -347,7 +347,7 @@ def _parse_args() -> argparse.Namespace:
         "core_only", "core_only_seed2", "core_text", "core_edgar", "core_edgar_seed2", "full",
     ])
     ap.add_argument("--target", required=True, choices=["funding_raised_usd", "investors_count", "is_funded"])
-    ap.add_argument("--horizon", type=int, required=True, choices=[1, 7, 14, 30])
+    ap.add_argument("--horizon", type=int, required=True, choices=[1, 7, 14, 30, 60, 90])
     ap.add_argument("--max-entities", type=int, default=256)
     ap.add_argument("--max-rows", type=int, default=20000)
     ap.add_argument("--input-size", type=int, default=60)

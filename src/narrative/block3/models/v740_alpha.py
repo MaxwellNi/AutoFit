@@ -317,7 +317,7 @@ def _torch_imports():
             super().__init__()
             self.task_emb = nn.Embedding(4, emb_dim)
             self.target_emb = nn.Embedding(4, emb_dim)
-            self.horizon_emb = nn.Embedding(5, emb_dim)
+            self.horizon_emb = nn.Embedding(6, emb_dim)
             self.ablation_emb = nn.Embedding(8, emb_dim)
             self.proj = nn.Sequential(
                 nn.Linear(emb_dim * 4, emb_dim * 2),
@@ -650,7 +650,7 @@ class V740AlphaPrototypeWrapper(ModelBase):
 
     _TASK_MAP = {"task1_outcome": 0, "task2_forecast": 1, "task3_risk_adjust": 2}
     _TARGET_MAP = {"funding_raised_usd": 0, "investors_count": 1, "is_funded": 2}
-    _HORIZON_MAP = {1: 0, 7: 1, 14: 2, 30: 3}
+    _HORIZON_MAP = {1: 0, 7: 1, 14: 2, 30: 3, 60: 4, 90: 5}
     _ABLATION_MAP = {
         "core_only": 0,
         "core_only_seed2": 1,

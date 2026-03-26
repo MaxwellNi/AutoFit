@@ -1,6 +1,6 @@
 # Phase 9 / V739 Current Snapshot
 
-> Generated: 2026-03-26T09:17:56.834511+00:00
+> Generated: 2026-03-26T10:45:24.129976+00:00
 > Canonical benchmark: `runs/benchmarks/block3_phase9_fair`
 
 ## Verified Current Facts
@@ -14,7 +14,7 @@
 | raw_retired_autofit_models | 21 | raw metrics scan |
 | raw_complete_models | 75 | raw metrics scan |
 | raw_partial_models | 62 | raw metrics scan |
-| filtered_records | 12178 | `all_results.csv` |
+| filtered_records | 12230 | `all_results.csv` |
 | filtered_models | 107 | `all_results.csv` (includes retired AutoFit legacy lines if they pass filters) |
 | filtered_nonretired_models | 86 | `all_results.csv` minus retired AutoFit legacy lines |
 | filtered_retired_autofit_models | 21 | `all_results.csv` |
@@ -31,9 +31,9 @@
 | metric | value |
 | --- | --- |
 | jobs_total | 57 |
-| running | 30 |
-| pending | 27 |
-| npin_pending | 27 |
+| running | 29 |
+| pending | 28 |
+| npin_pending | 28 |
 | cfisch_pending | 0 |
 | v739_pending | 0 |
 | v739_running | 5 |
@@ -42,7 +42,7 @@
 
 | reason | count |
 | --- | --- |
-| (Priority) | 26 |
+| (Priority) | 27 |
 | (Resources) | 1 |
 
 ## Text Embedding Artifacts

@@ -143,6 +143,11 @@ def _parse_args() -> argparse.Namespace:
         default=0,
         help="Optional limit on the number of cases to run after filtering.",
     )
+    ap.add_argument(
+        "--skip-existing",
+        action="store_true",
+        help="Skip a case/model pair when its JSON artifact already exists.",
+    )
     return ap.parse_args()
 
 
@@ -367,10 +372,25 @@ def main() -> int:
                 "target": case["target"],
                 "horizon": case["horizon"],
             }
+            out_path = args.output_dir / f"{case['name']}__{model_id}.json"
+            if args.skip_existing and out_path.exists():
+                try:
+                    existing = json.loads(out_path.read_text(encoding="utf-8"))
+                    existing.setdefault("json_path", str(out_path))
+                    results.append(existing)
+                    print(
+                        f"[v740-mini] skip-existing {case['name']} / {model_id}",
+                        flush=True,
+                    )
+                    continue
+                except Exception as exc:
+                    print(
+                        f"[v740-mini] skip-existing read failed for {case['name']} / {model_id}: {exc}; recomputing",
+                        flush=True,
+                    )
             try:
                 summary = _run_model(model_id, case, train, val, test)
                 row.update(summary)
-                out_path = args.output_dir / f"{case['name']}__{model_id}.json"
                 out_path.write_text(json.dumps(row, indent=2, sort_keys=True), encoding="utf-8")
                 row["json_path"] = str(out_path)
                 print(

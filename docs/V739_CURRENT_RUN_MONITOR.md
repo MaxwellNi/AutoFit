@@ -1,32 +1,31 @@
 # V739 Current Run Monitor and Landing Checklist
 
-> Last verified: 2026-03-25 14:13 CET
+> Last verified: 2026-03-26 11:43 CET
 > Scope: current AutoFit V739 execution reality on the canonical clean benchmark line only.
 
 ## Current Verified Reality
 
 1. **V739 is the only valid AutoFit baseline.** V734-V738 remain retired because of oracle test-set leakage.
-2. **V739 is not fully landed yet.** The current landed surface is **131/160** conditions on `runs/benchmarks/block3_phase9_fair/`.
+2. **V739 is not fully landed yet.** The current landed surface is **132/160** conditions on `runs/benchmarks/block3_phase9_fair/`.
 3. **V739 quality remains clean** on the landed surface:
    - 0 NaN/Inf
    - 0 fallback
    - 100% fairness pass
 4. **Current live V739 queue state is 5 jobs total**:
-   - 4 RUNNING: `af739_t1_e2`, `af739_t1_s2`, `af739_t2_s2`, `af739_t2_e2`
-   - 1 PENDING: `af739_t3_e2`
-5. `af739_t3_e2` was confirmed missing from queue and was manually re-submitted on 2026-03-25 as job `5284506`.
+   - 5 RUNNING: `af739_t1_e2`, `af739_t1_s2`, `af739_t2_s2`, `af739_t2_e2`, `af739_t3_e2`
+5. `af739_t3_e2` is no longer pending; the repaired re-submission is now running as job `5284506`.
 
 ## Coverage Audit
 
 | Metric | Value |
 | --- | --- |
-| Landed conditions | 131 / 160 |
-| Missing total | 29 |
+| Landed conditions | 132 / 160 |
+| Missing total | 28 |
 | Missing `task1_outcome / core_edgar_seed2` | 9 |
 | Missing `task1_outcome / core_only_seed2` | 8 |
 | Missing `task2_forecast / core_edgar_seed2` | 4 |
 | Missing `task2_forecast / core_only_seed2` | 4 |
-| Missing `task3_risk_adjust / core_edgar_seed2` | 4 |
+| Missing `task3_risk_adjust / core_edgar_seed2` | 3 |
 | NaN/Inf in landed metrics | 0 |
 | Fallback fraction | 0.0 |
 | Fairness pass | 131 / 131 (100%) |
@@ -49,18 +48,18 @@
 | `af739_t1_s2` | RUNNING | `gpu` | task1 `core_only_seed2` gap-fill |
 | `af739_t2_s2` | RUNNING | `gpu` | task2 `core_only_seed2` gap-fill |
 | `af739_t2_e2` | RUNNING | `gpu` | task2 `core_edgar_seed2` gap-fill |
-| `af739_t3_e2` | PENDING | `gpu` | task3 `core_edgar_seed2` gap-fill, repaired 2026-03-25 |
+| `af739_t3_e2` | RUNNING | `gpu` | task3 `core_edgar_seed2` gap-fill, repaired 2026-03-25 |
 
-## What Changed on 2026-03-25
+## What Changed on 2026-03-26
 
 1. `scripts/build_phase9_current_snapshot.py` was patched so V739 live-job counting matches both `v739_*` and `af739_*` job names.
-2. The queue gap for `af739_t3_e2` was repaired: the previous copies were `5273997` (TIMEOUT) and `5273998` (duplicate cancelled), and the current live replacement is `5284506`.
+2. The queue gap for `af739_t3_e2` remains repaired: the previous copies were `5273997` (TIMEOUT) and `5273998` (duplicate cancelled), and the current live replacement `5284506` is now RUNNING.
 3. `gpu_cos2_t2` was cancelled and re-submitted onto the trimmed 23-model working list so seed2 gap-fill stops wasting GPU time on excluded/broken models. That repair matters indirectly for V739 because it accelerates the remaining shared seed2 frontier.
 
 ## Operational Interpretation
 
 - V739 is now in a **pure seed2/e2 gap-fill phase**. The original co/ce/ct/fu surface is complete.
-- The remaining 29 missing conditions are all known and localized; there is no longer any ambiguity about where the gaps are.
+- The remaining 28 missing conditions are all known and localized; there is no longer any ambiguity about where the gaps are.
 - The dominant risk is now **throughput**, not correctness. The key bottlenecks are long validation-based candidate selection in AutoFit and the shared queue pressure from ModernTCN-heavy accel jobs.
 - There is currently **no uncovered mandatory V739 work outside the queue**.
 
@@ -93,6 +92,6 @@ squeue -u npin -h -o '%i|%j|%T|%P|%R' | rg 'af739|v739'
 ## Landing Checklist
 
 1. Confirm all 5 V739 gap-fill jobs are still present or safely requeued.
-2. Confirm newly landed rows increase `AutoFitV739` from `131` upward in `all_results.csv`.
+2. Confirm newly landed rows increase `AutoFitV739` from `132` upward in `all_results.csv`.
 3. Confirm no NaN/Inf, no fallback, and fairness remains 100%.
 4. Only then update `docs/CURRENT_SOURCE_OF_TRUTH.md`, `docs/BLOCK3_MODEL_STATUS.md`, and paper-facing status notes.

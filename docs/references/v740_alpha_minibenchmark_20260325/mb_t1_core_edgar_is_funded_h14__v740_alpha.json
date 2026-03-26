@@ -5,7 +5,7 @@
   "case": "mb_t1_core_edgar_is_funded_h14",
   "constant_prediction": false,
   "feature_count": 105,
-  "fit_seconds": 119.42341113090515,
+  "fit_seconds": 38.89088416099548,
   "horizon": 14,
   "metrics": {
     "mae": 0.20160665796012492,
@@ -14,7 +14,7 @@
     "smape": 36.591969287240985
   },
   "model_id": "v740_alpha",
-  "predict_seconds": 1.2124228477478027,
+  "predict_seconds": 0.28438663482666016,
   "prediction_std": 0.05019248464229118,
   "routing_info": null,
   "selected_model": null,

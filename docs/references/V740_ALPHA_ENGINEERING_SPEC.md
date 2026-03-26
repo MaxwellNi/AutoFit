@@ -61,10 +61,34 @@
 >
 > The first larger local mini-benchmark slice also provides an important
 > caution: scaling a binary EDGAR slice from the smallest audited smoke setting
-> to a `16 entity / 1600 row` local comparison pushes `core_edgar +
-> is_funded + h=14` back to `MAE = 0.3426`. So the corrected smoke matrix
-> should be interpreted as a strong local audit signal, not as a substitute for
-> harder benchmark-like local evaluation.
+> to a `16 entity / 1600 row` local comparison initially pushed `core_edgar +
+> is_funded + h=14` back to `MAE = 0.3426`. After the corrected binary
+> representative-sampling path was wired into the mini-benchmark runner, the
+> current V740-only result on the same case improved to `MAE = 0.2016`; the
+> paired corrected `V739` comparison is still pending because that workload was
+> moved off the iris access server and into a resumable SLURM path. The right
+> takeaway is that corrected local comparison is now more credible, but the
+> head-to-head evidence is not complete yet.
+>
+> 2026-03-26 long-horizon local-only update:
+> V740-alpha now has a real exercised `h>30` prototype path. The horizon
+> conditioning map has been extended locally to support `60` and `90`, and the
+> first verified `h=60` smoke result is recorded in
+> `docs/references/V740_ALPHA_LONGH_SMOKE_20260326.md`. On a local
+> `task2_forecast / core_only / funding_raised_usd / h=60` slice
+> (`12 entities / 1500 train rows / 2 epochs`), the prototype runs end-to-end
+> without constant collapse and reaches `MAE = 360123.84` in `42.14s`.
+> A same-slice `h=30` control on the same day is actually slightly worse and
+> collapses to a constant prediction (`MAE = 361820.06`), which is weak but
+> still important evidence that `h>30` should not be dismissed a priori on the
+> current V740 prototype.
+> This is still local-only evidence and must not be interpreted as an official
+> benchmark expansion or as proof that `h>30` is already beneficial.
+> A second same-day `investors_count` check now also exists and points in the
+> opposite direction: on `task2_forecast / core_only / investors_count`,
+> `h=30` remains healthier (`MAE = 48.64`, non-constant) while `h=60`
+> collapses to a constant prediction (`MAE = 50.08`). So `h>30` is now a real
+> exercised path, but it is not yet uniformly helpful across targets.
 
 ## 1. Purpose
 
