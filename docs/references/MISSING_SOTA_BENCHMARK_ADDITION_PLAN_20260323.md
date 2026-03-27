@@ -4,6 +4,11 @@
 > Status: implementation planning (updated after first local SAMformer integration)
 > Scope: high-priority missing models for Block 3 benchmark expansion
 >
+> 2026-03-27 superseding note:
+> for the latest source-verification, code/package availability, and proposed
+> search-space map, read
+> `docs/references/BLOCK3_MISSING_SOTA_SOURCE_MAP_20260327.md` first.
+>
 > 2026-03-24 note:
 > V740-alpha now has a first source-aware EDGAR/text event-memory path.
 > This slightly raises the value of efficient single-model additions that can be
