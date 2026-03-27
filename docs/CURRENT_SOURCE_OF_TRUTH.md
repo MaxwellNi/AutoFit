@@ -1,6 +1,6 @@
 # Current Source of Truth
 
-> Last verified: 2026-03-27 14:12 CET
+> Last verified: 2026-03-27 17:10 CET
 > Verified by direct scans of `runs/benchmarks/block3_phase9_fair/`, live `squeue -u npin`, `sacct`, benchmark aggregation scripts.
 
 This file is the authoritative documentation entry point for the current Block 3 project state.
@@ -43,7 +43,8 @@ If any other document disagrees with this file, prefer this file and the evidenc
 | Text embedding artifacts | `AVAILABLE` | `runs/text_embeddings/embedding_metadata.json` |
 | Phase 12 text reruns | `48/48 COMPLETED` | core_text+full 91/91 models |
 | Phase 15 new models | 23 submitted, 15 valid, 8 excluded (Finding H), 78/160 | direct scan |
-| Live jobs | `40` (7R + 33PD) | squeue 2026-03-27 14:12: gpu 2R+4PD, l40s 3R+14PD, hopper 2R+15PD |
+| Live jobs | `40` (5R + 35PD) | squeue 2026-03-27 17:10: gpu 0R+6PD, l40s 3R+14PD, hopper 2R+15PD |
+| Clean full comparable frontier | `55` models @ shared `160/160` | post-filter `all_results.csv`, non-retired only |
 
 ## What the Current Benchmark Means
 
@@ -62,41 +63,43 @@ If any other document disagrees with this file, prefer this file and the evidenc
 
 ## Current Execution Reality
 
-1. Live queue snapshot verified on 2026-03-27 14:12 CET:
-   - `7 RUNNING` = `2 gpu + 3 l40s + 2 hopper`
-   - `33 PENDING` = `4 gpu + 14 l40s + 15 hopper`
+1. Live queue snapshot verified on 2026-03-27 17:10 CET:
+   - `5 RUNNING` = `0 gpu + 3 l40s + 2 hopper`
+   - `35 PENDING` = `6 gpu + 14 l40s + 15 hopper`
    - **40 total**
-   - Current gpu runners: `af739_t3_e2` + `gpu_cos2_t2`
-   - Current gpu pending: `af739_t1_e2`, `af739_t1_s2`, `af739_t2_e2`, `af739_t2_s2`
+   - Current gpu runners: none
+   - Current gpu pending: `af739_t1_e2`, `af739_t1_s2`, `af739_t2_e2`, `af739_t2_s2`, `af739_t3_e2`, `gpu_cos2_t2`
    - No local-only V740 jobs are currently live in queue; the most recent corrected local compare and larger-slice `h=90` audit both completed successfully outside the canonical benchmark
    - **ModernTCN bottleneck** remains the dominant throughput limiter for non-e2 accel jobs
    - Partition constraints (`sinfo` verified): `gpu=756G`, `l40s=515G`, `hopper=2063754MB (~2.06TB)`; the earlier `hopper=201G` claim was a unit-reading error
 2. V739 status:
    - **132/160 conditions landed** (+1 from 131, s2/e2 gap-filling)
-   - 5 af739 jobs live: `1 RUNNING + 4 PENDING`
-   - RUNNING: `t3_e2`
-   - PENDING (resubmitted 2026-03-27 after timeout/OOM): `t1_e2`, `t1_s2`, `t2_e2`, `t2_s2`
+   - 5 af739 jobs live: `0 RUNNING + 5 PENDING`
+   - PENDING: `t1_e2`, `t1_s2`, `t2_e2`, `t2_s2`, `t3_e2`
    - Missing structure: `t1_e2=9`, `t1_s2=8`, `t2_e2=4`, `t2_s2=4`, `t3_e2=3` (28 total)
    - V739 is empirically valid: 0 NaN/Inf, 0 fallback, 100% fairness pass
    - The two seed2 jobs (`t1_s2`, `t2_s2`) previously OOMed at `150G` with observed `MaxRSS ≈ 157.3G`; they have now been requeued at `189G`
+   - `t3_e2` and `gpu_cos2_t2` both timed out in their previous copies on 2026-03-27 and were explicitly resubmitted as `5290366` and `5290365`
 3. Finding H (discovered 2026-03-22):
    - 8 P15 models produce 100% constant predictions (0% fairness pass)
    - CFPT, DeformableTST, MICN, PathFormer, SEMPO, SparseTSF, TimeBridge, TimePerceiver
    - Added to AUDIT_EXCLUDED_MODELS in aggregate_block3_results.py
    - Removed from accel_v2 scripts → ~30% faster per job
-4. accel_v2 progress (g2_ac GPU jobs, 32h into 2-day allocation, ~16h remaining):
-   - e2: 33-34 new + 65 skip (near complete, processing FreTS/FilterTS) → will complete ✓
-   - co: 6 new + 98-121 skip → ALL stuck on ModernTCN (40min/epoch), needs 1-2 requeues
-   - ct: 9 new + 93 skip → on MSGNet, moderate progress, needs 1 requeue
-   - s2: 6 new + 98 skip → ALL stuck on ModernTCN, needs 1-2 requeues
-   - ce: 6 new + 98 skip → stuck on ModernTCN, needs 1-2 requeues
-   - fu: 7 new + 93 skip → on Fredformer, moderate progress, needs 1 requeue
-   - **ModernTCN universal bottleneck**: 20M params, ~40min/epoch — causes most TIMEOUT situations
-   - **Fixed**: Added `_requeue_handler()` trap to all 56 scripts (2026-03-22 20:10)
+4. accel_v2 progress (current live reality):
+   - there are **no active gpu accel_v2 runners** at this moment; the gpu critical path is currently `gpu_cos2_t2` plus the five af739 gap-fill jobs, all pending
+   - active accel_v2 runtime is currently concentrated on `l40s` and `hopper`
+   - live runners at this moment are:
+     - `l2_ac_t2_s2`
+     - `l2_ac_t2_e2`
+     - `l2_ac_t3_ct`
+     - `h2_ac_t3_ct`
+     - `h2_ac_t1_co`
+   - **ModernTCN remains the universal bottleneck** for non-`e2` accel paths and is still the main reason resumable copies keep timing out before the backlog clears
+   - `_requeue_handler()` remains present in the script surface; current progress still depends on partition availability more than on correctness bugs
 5. Critical gaps:
-   - s2 (core_only_seed2): `gpu_cos2_t2` remains the canonical task2 seed2 gap-fill and has now been **cancelled/requeued onto the trimmed 23-model list** (`5284505`)
+   - s2 (core_only_seed2): `gpu_cos2_t2` remains the canonical task2 seed2 gap-fill and has now been **resubmitted again** as `5290365` after the latest 2-day timeout on `5284505`
    - e2 (core_edgar_seed2): 2778 records (+54 from 2724), accel_v2 e2 scripts producing the bulk of recent growth
-   - V739: 28 missing s2+e2 conditions, and **all 5 required gap-fill jobs are now live** (`1 RUNNING + 4 PENDING`)
+   - V739: 28 missing s2+e2 conditions, and **all 5 required gap-fill jobs are now live** (`0 RUNNING + 5 PENDING`)
 6. Text embeddings:
    - `runs/text_embeddings/text_embeddings.parquet` — 5,774,931 rows, 64 PCA dims
    - Phase 12 all 48/48 complete. core_text+full coverage: 91/91 models
@@ -117,7 +120,7 @@ If any other document disagrees with this file, prefer this file and the evidenc
 4. ~~Phase 12 text reruns to land.~~ ✅ DONE. core_text+full 91/91 models.
 5. ~~Phase 15 new TSLib models.~~ ✅ Submitted. 15 valid, 8 excluded (Finding H).
 6. ~~Cancel old v1 l40s/hopper jobs.~~ ✅ DONE. 8 old v1 jobs cancelled, freed L40S for v2.
-7. Complete V739 s2/e2 gap-fill (currently `1 RUNNING + 4 PENDING`, all 5 live).
+7. Complete V739 s2/e2 gap-fill (currently `0 RUNNING + 5 PENDING`, all 5 live).
 8. Complete e2 gap for ETSformer/LightTS/Pyraformer/Reformer (0/28 e2 each — covered by accel_v2).
 9. Complete P15 model gap-fill to 160/160 via accel_v2 (54 total jobs, auto-requeue).
 10. g2_ac_v2 auto-requeue: e2/ct complete first run; co/s2/ce/fu need 2-3 requeues, with `gpu_cos2_t2` now corrected to the trimmed 23-model list.

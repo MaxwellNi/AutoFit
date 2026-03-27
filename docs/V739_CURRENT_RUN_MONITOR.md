@@ -1,6 +1,6 @@
 # V739 Current Run Monitor and Landing Checklist
 
-> Last verified: 2026-03-27 14:12 CET
+> Last verified: 2026-03-27 17:10 CET
 > Scope: current AutoFit V739 execution reality on the canonical clean benchmark line only.
 
 ## Current Verified Reality
@@ -11,10 +11,9 @@
    - 0 NaN/Inf
    - 0 fallback
    - 100% fairness pass
-4. **Current live V739 queue state is still 5 jobs total, but no longer 5 RUNNING**:
-   - 1 RUNNING: `af739_t3_e2`
-   - 4 PENDING: `af739_t1_e2`, `af739_t1_s2`, `af739_t2_s2`, `af739_t2_e2`
-5. `af739_t3_e2` remains the only actively running V739 copy at the moment, now in its final ~20 minutes before the 2-day limit.
+4. **Current live V739 queue state is 5 jobs total, all now PENDING**:
+   - `af739_t1_e2`, `af739_t1_s2`, `af739_t2_s2`, `af739_t2_e2`, `af739_t3_e2`
+5. `af739_t3_e2` is no longer running. Its previous copy (`5284506`) hit the 2-day wall and was resubmitted as `5290366`.
 
 ## Coverage Audit
 
@@ -29,7 +28,7 @@
 | Missing `task3_risk_adjust / core_edgar_seed2` | 3 |
 | NaN/Inf in landed metrics | 0 |
 | Fallback fraction | 0.0 |
-| Fairness pass | 131 / 131 (100%) |
+| Fairness pass | 132 / 132 (100%) |
 
 ### Exact Missing Cells
 
@@ -49,7 +48,7 @@
 | `af739_t1_s2` | PENDING | `gpu` | task1 `core_only_seed2` gap-fill, resubmitted as `5290111` at `189G` |
 | `af739_t2_s2` | PENDING | `gpu` | task2 `core_only_seed2` gap-fill, resubmitted as `5290113` at `189G` |
 | `af739_t2_e2` | PENDING | `gpu` | task2 `core_edgar_seed2` gap-fill, resubmitted as `5290112` |
-| `af739_t3_e2` | RUNNING | `gpu` | task3 `core_edgar_seed2` gap-fill, repaired 2026-03-25 |
+| `af739_t3_e2` | PENDING | `gpu` | task3 `core_edgar_seed2` gap-fill, timeout-repaired as `5290366` |
 
 ## What Changed on 2026-03-27
 
@@ -64,7 +63,7 @@
    - `5290112 af739_t2_e2`
    - `5290113 af739_t2_s2`
 3. The two seed2 jobs were escalated from `150G` to `189G` because the failed copies exceeded the original memory budget by ~7G.
-4. The queue gap for `af739_t3_e2` remains repaired: the current live replacement `5284506` is still RUNNING.
+4. `af739_t3_e2` also hit `TIMEOUT` in its repaired copy (`5284506`) and has now been requeued as `5290366`.
 
 ## Operational Interpretation
 

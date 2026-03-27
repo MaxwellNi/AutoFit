@@ -1,12 +1,14 @@
 # Block 3 Benchmark Results
 
-**Generated**: 2026-03-27 14:10:05
+**Generated**: 2026-03-27 17:10:47
 **Benchmark Dir**: `block3_phase9_fair`
 **Total Records (post-filter)**: 12272
 
 ## Overview
 
 > Note: the post-filter CSV still contains **21 retired AutoFit legacy lines** (`AutoFitV1, AutoFitV2, AutoFitV2E, AutoFitV3, AutoFitV3E` ...). For current clean benchmark interpretation, treat `AutoFitV739` as the only valid AutoFit baseline and use the `non-retired models` count below when comparing against the active frontier.
+
+> The current **full clean comparable leaderboard** for all non-retired shared-160 models now lives in `docs/BLOCK3_FULL_SOTA_BENCHMARK.md`. That file is the right place to read the currently landed fully comparable frontier.
 
 | Metric | Value |
 |--------|-------|
@@ -726,4 +728,4 @@ Shows which task/category/ablation combinations have results.
 | task3_risk_adjust | tslib_sota | full | 21 |
 
 ---
-_Last updated: 2026-03-27 14:10:06_
+_Last updated: 2026-03-27 17:10:47_
