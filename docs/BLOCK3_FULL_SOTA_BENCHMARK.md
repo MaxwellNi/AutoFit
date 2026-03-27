@@ -4,6 +4,22 @@
 > Source: `runs/benchmarks/block3_phase9_fair/all_results.csv`
 > Scope: **current clean shared leaderboard** over all **non-retired**, **post-filter**, **160/160 complete** models.
 
+## Ranking Rule
+
+All rankings in this file are computed on a **shared-condition surface**:
+
+- first define the shared evaluation cells,
+- then rank models by per-cell `MAE`,
+- then average those per-cell ranks into a final **mean rank**.
+
+This is the fairest current like-for-like ordering because every listed model is
+being compared on exactly the same cells.
+
+- Lower `Mean Rank` is better.
+- `Wins` means champion-count on that same shared surface.
+- When two models have exactly the same `Mean Rank`, they should be read as a
+  practical tie even if the table prints them on adjacent lines.
+
 ## Interpretation Rule
 
 This file is the current benchmark-facing view of the **fully landed clean frontier**.
@@ -19,6 +35,98 @@ It is narrower than the raw benchmark scan on purpose.
 So the right reading is:
 - `62` = raw active complete models from the physical benchmark scan.
 - `55` = current **post-filter clean comparable leaderboard** used for like-for-like ranking.
+
+## Main-Result Surface Without Seed2
+
+If we exclude both replication ablations:
+
+- `core_only_seed2`
+- `core_edgar_seed2`
+
+then the current post-filter non-retired benchmark has a broader main-result
+surface:
+
+- **58 fully comparable models**
+- **112 shared conditions**
+
+The 3 models that are complete on the non-seed main-result surface but not yet
+complete on the full 160-cell surface are:
+
+- `AutoFitV739`
+- `Chronos2`
+- `TTM`
+
+So for paper writing and benchmark interpretation:
+
+- use **55 models / 160 cells** when you want the strictest full clean table,
+- use **58 models / 112 cells** when you want the widest current non-seed main
+  comparison surface.
+
+## Current Main-Result Leaderboard Without Seed2
+
+This is the broadest current clean main-result table when both replication
+ablations are excluded:
+
+| Rank | Model | Mean Rank | Wins | Shared Conditions |
+| --- | --- | ---: | ---: | ---: |
+| 1 | PatchTST | 4.616 | 2 | 112 |
+| 2 | NHITS | 4.710 | 12 | 112 |
+| 3 | NBEATS | 5.670 | 45 | 112 |
+| 4 | NBEATSx | 5.804 | 41 | 112 |
+| 5 | ChronosBolt | 7.973 | 0 | 112 |
+| 6 | TCN | 10.777 | 0 | 112 |
+| 7 | Chronos | 10.911 | 7 | 112 |
+| 8 | KAN | 11.143 | 11 | 112 |
+| 9 | MLP | 11.304 | 0 | 112 |
+| 10 | TimesNet | 11.536 | 0 | 112 |
+| 11 | GRU | 12.286 | 6 | 112 |
+| 12 | LSTM | 12.455 | 0 | 112 |
+| 13 | AutoFitV739 | 12.772 | 17 | 112 |
+| 14 | TFT | 12.839 | 0 | 112 |
+| 15 | DeepAR | 14.545 | 0 | 112 |
+| 16 | NLinear | 15.170 | 0 | 112 |
+| 17 | Informer | 15.420 | 0 | 112 |
+| 18 | DilatedRNN | 15.643 | 0 | 112 |
+| 19 | DeepNPTS | 17.759 | 12 | 112 |
+| 20 | BiTCN | 18.545 | 0 | 112 |
+| 21 | DLinear | 19.661 | 0 | 112 |
+| 22 | TiDE | 20.009 | 0 | 112 |
+| 23 | FEDformer | 27.223 | 0 | 112 |
+| 24 | Autoformer | 28.661 | 0 | 112 |
+| 25 | TTM | 28.829 | 0 | 112 |
+| 26 | Timer | 28.996 | 0 | 112 |
+| 27 | Chronos2 | 30.212 | 0 | 112 |
+| 28 | TimeMixer | 31.750 | 0 | 112 |
+| 29 | RMoK | 33.152 | 0 | 112 |
+| 30 | TSMixer | 36.768 | 0 | 112 |
+| 31 | iTransformer | 36.991 | 0 | 112 |
+| 32 | SOFTS | 37.250 | 0 | 112 |
+| 33 | WindowAverage | 37.902 | 0 | 112 |
+| 34 | SF_SeasonalNaive | 38.250 | 0 | 112 |
+| 35 | MSTL | 38.777 | 0 | 112 |
+| 36 | RandomForest | 39.071 | 0 | 112 |
+| 37 | AutoETS | 40.071 | 0 | 112 |
+| 38 | Naive | 40.196 | 0 | 112 |
+| 39 | CrostonOptimized | 40.357 | 0 | 112 |
+| 40 | CrostonClassic | 42.071 | 0 | 112 |
+| 41 | DynamicOptimizedTheta | 42.607 | 0 | 112 |
+| 42 | LightGBMTweedie | 42.996 | 0 | 112 |
+| 43 | VanillaTransformer | 43.554 | 0 | 112 |
+| 44 | TSMixerx | 43.696 | 0 | 112 |
+| 45 | AutoARIMA | 43.902 | 0 | 112 |
+| 46 | ExtraTrees | 43.946 | 0 | 112 |
+| 47 | HistoricAverage | 43.964 | 0 | 112 |
+| 48 | Holt | 44.098 | 0 | 112 |
+| 49 | CrostonSBA | 45.143 | 0 | 112 |
+| 50 | LightGBM | 45.397 | 0 | 112 |
+| 51 | TimesFM | 45.714 | 0 | 112 |
+| 52 | AutoTheta | 46.080 | 0 | 112 |
+| 53 | HoltWinters | 46.188 | 0 | 112 |
+| 54 | HistGradientBoosting | 48.205 | 0 | 112 |
+| 55 | CatBoost | 50.125 | 0 | 112 |
+| 56 | GRU-D | 50.268 | 0 | 112 |
+| 57 | BRITS | 50.500 | 0 | 112 |
+| 58 | SAITS | 51.170 | 0 | 112 |
 
 ## Current Clean Full Leaderboard
 
