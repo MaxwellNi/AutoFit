@@ -1,8 +1,8 @@
 # Block 3 Benchmark Results
 
-**Generated**: 2026-03-26 15:48:22
+**Generated**: 2026-03-27 14:10:05
 **Benchmark Dir**: `block3_phase9_fair`
-**Total Records (post-filter)**: 12230
+**Total Records (post-filter)**: 12272
 
 ## Overview
 
@@ -10,17 +10,17 @@
 
 | Metric | Value |
 |--------|-------|
-| Raw records | 16077 |
-| Filtered records | 12230 |
+| Raw records | 16122 |
+| Filtered records | 12272 |
 | Comparability filter | fairness_only=True, min_coverage=0.98 |
 | Models evaluated | 107 |
 | Non-retired models evaluated | 86 |
 | Retired AutoFit legacy lines still present | 21 |
 | Categories | autofit, deep_classical, foundation, irregular, ml_tabular, statistical, transformer_sota, tslib_sota |
 | Tasks | task1_outcome, task2_forecast, task3_risk_adjust |
-| Total evaluations | 12230 |
-| Real results | 12154 |
-| Fallback (mean) | 76 |
+| Total evaluations | 12272 |
+| Real results | 12195 |
+| Fallback (mean) | 77 |
 
 ## task1_outcome
 
@@ -150,7 +150,7 @@
 | Model | H=1 | H=7 | H=14 | H=30 | Status |
 |-------|-------:|-------:|-------:|-------:|--------|
 | Crossformer | 674.4K | 679.1K | 695.5K | 678.4K | ⚠️ fallback |
-| FreTS | 734.2K | 3.52M | 4.41M | 4.46M | ✅ |
+| FreTS | 734.2K | 3.52M | 4.41M | 4.46M | ⚠️ fallback |
 | Reformer | 777.2K | 681.9K | 1.14M | 685.2K | ⚠️ fallback |
 | MambaSimple | 800.2K | 990.1K | 1.48M | 1.09M | ⚠️ fallback |
 | MSGNet | 989.2K | 712.6K | 926.7K | 1.05M | ✅ |
@@ -477,10 +477,10 @@
 | MambaSimple | 12549.3 | 865.8 | 49536.0 |
 | AutoFitV73 | 9873.9 | 8622.1 | 11439.7 |
 | AutoFitV731 | 9801.8 | 8645.2 | 11468.4 |
-| ModernTCN | 7785.1 | 788.0 | 31210.8 |
-| CARD | 6840.6 | 570.7 | 23557.2 |
-| FiLM | 6390.6 | 1584.7 | 22418.7 |
-| Fredformer | 6228.2 | 695.6 | 18666.2 |
+| ModernTCN | 8008.6 | 788.0 | 31210.8 |
+| CARD | 7096.1 | 570.7 | 23557.2 |
+| FiLM | 6570.7 | 1584.7 | 22418.7 |
+| Fredformer | 6263.6 | 695.6 | 18666.2 |
 | AutoFitV2 | 5703.1 | 5289.7 | 6442.9 |
 | AutoFitV3E | 5694.0 | 5297.2 | 6440.6 |
 | AutoFitV2E | 5661.1 | 5312.1 | 6142.5 |
@@ -488,30 +488,30 @@
 | AutoFitV1 | 5327.1 | 4909.0 | 5738.7 |
 | AutoFitV3 | 5303.4 | 5035.0 | 5686.4 |
 | AutoFitV3Max | 5265.3 | 5008.3 | 5585.4 |
+| SCINet | 5231.4 | 274.2 | 25886.3 |
 | AutoFitV71 | 4852.1 | 4100.9 | 6149.3 |
 | AutoFitV72 | 4803.3 | 4169.5 | 5792.6 |
-| SCINet | 4706.8 | 274.2 | 25886.3 |
 | Reformer | 4124.2 | 926.5 | 17614.9 |
 | AutoFitV7 | 4062.8 | 3402.6 | 4780.2 |
 | AutoFitV6 | 3940.7 | 3597.3 | 4253.1 |
-| PIR | 3899.6 | 335.9 | 16062.2 |
-| FreTS | 3684.3 | 307.8 | 13755.7 |
+| PIR | 3847.2 | 335.9 | 16062.2 |
+| FreTS | 3792.5 | 307.8 | 13755.7 |
 | Crossformer | 3135.9 | 277.7 | 9227.3 |
 | PAttn | 2812.8 | 283.1 | 14803.5 |
+| xPatch | 1956.5 | 207.0 | 11008.1 |
 | AutoFitV5 | 1824.4 | 1396.0 | 2267.0 |
-| xPatch | 1739.4 | 207.0 | 9113.2 |
 | BRITS | 1526.4 | 349.2 | 2770.7 |
 | iTransformer | 1466.2 | 927.9 | 1806.3 |
+| PDF | 1364.9 | 78.1 | 3909.5 |
 | DUET | 1343.8 | 79.7 | 4508.6 |
-| PDF | 1320.5 | 78.1 | 3909.5 |
 | MSTL | 1157.4 | 112.0 | 1982.0 |
-| NonstationaryTransformer | 957.8 | 61.9 | 7899.8 |
-| FilterTS | 915.3 | 163.7 | 3209.7 |
+| NonstationaryTransformer | 1111.6 | 61.9 | 7899.8 |
+| FilterTS | 955.0 | 163.7 | 3535.8 |
 | LightTS | 866.9 | 137.8 | 3222.8 |
+| SegRNN | 828.9 | 98.5 | 4057.0 |
+| SRSNet | 785.8 | 136.4 | 2852.6 |
 | RandomForest | 776.4 | 224.6 | 4432.2 |
-| SegRNN | 771.0 | 98.5 | 2189.0 |
-| SRSNet | 750.1 | 136.4 | 2852.6 |
-| TimeRecipe | 655.0 | 31.0 | 2343.5 |
+| TimeRecipe | 669.4 | 31.0 | 2343.5 |
 | AutoARIMA | 639.3 | 213.1 | 1179.2 |
 | ExtraTrees | 613.7 | 71.5 | 3940.6 |
 | SOFTS | 466.8 | 329.9 | 708.1 |
@@ -726,4 +726,4 @@ Shows which task/category/ablation combinations have results.
 | task3_risk_adjust | tslib_sota | full | 21 |
 
 ---
-_Last updated: 2026-03-26 15:48:22_
+_Last updated: 2026-03-27 14:10:06_

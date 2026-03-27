@@ -24,23 +24,33 @@ Artifact:
 
 - `docs/references/v740_alpha_minibenchmark_20260325/mb_t1_core_edgar_is_funded_h14__v740_alpha.json`
 
-The matching `V739` corrected local compare is still pending; it was moved off
-the access server and into a resumable SLURM path to comply with the HPC admin
-warning against heavy compute on the shared iris entry node.
+The matching `V739` corrected local compare has now landed through that
+resumable SLURM path and provides the first real head-to-head result on this
+audited slice.
 
 ## Summary
 
 | Case | Model | Task | Ablation | Target | H | MAE | RMSE | Fit(s) | Pred(s) | Const | PredStd | SelectedModel | TaskMod | TeacherW | EventW |
 |---|---|---|---|---|---:|---:|---:|---:|---:|---|---:|---|---|---:|---:|
-| mb_t1_core_edgar_is_funded_h14 | v740_alpha | task1_outcome | core_edgar | is_funded | 14 | 0.2016 | 0.4077 | 38.8909 | 0.2844 | False | 0.0502 | - | False | 0.1405 | 0.1794 |
+| mb_t1_core_edgar_is_funded_h14 | v739 | task1_outcome | core_edgar | is_funded | 14 | **0.1623** | **0.4025** | 301.3160 | 0.0839 | False | 0.0003 | PatchTST | False | - | - |
+| mb_t1_core_edgar_is_funded_h14 | v740_alpha | task1_outcome | core_edgar | is_funded | 14 | 0.2016 | 0.4077 | **38.8909** | 0.2844 | False | 0.0502 | - | False | 0.1405 | 0.1794 |
 
-## Current Interim Reading
+## Current Reading
 
-- `mb_t1_core_edgar_is_funded_h14 / v740_alpha` currently stands at `MAE = 0.2016`
-- the corrected `V739` side of the same local compare is still pending
-- until that paired result lands, this file should be treated as a **local
-  V740 progress note**, not a completed head-to-head victory claim
+- the first corrected local head-to-head is now complete
+- on this slice, `V739` wins with `MAE = 0.1623` versus `V740-alpha = 0.2016`
+- `V739` selected `PatchTST` through validation-based routing
+- `V740-alpha` is still materially cheaper on fit time (`38.9s` vs `301.3s`)
+- the right current conclusion is therefore:
+  - V740-alpha is already much lighter,
+  - but it is **not yet** strong enough to beat the current valid baseline on
+    this representative binary EDGAR case
+
+## Per-Case Winner
+
+- `mb_t1_core_edgar_is_funded_h14`: winner=`v739` mae=`0.1623`
 
 ## Raw JSON Artifacts
 
+- `mb_t1_core_edgar_is_funded_h14 / v739`: `/home/users/npin/repo_root/docs/references/v740_alpha_minibenchmark_20260325_gpu4h/mb_t1_core_edgar_is_funded_h14__v739.json`
 - `mb_t1_core_edgar_is_funded_h14 / v740_alpha`: `/mnt/aiongpfs/projects/eint/repo_root/docs/references/v740_alpha_minibenchmark_20260325/mb_t1_core_edgar_is_funded_h14__v740_alpha.json`

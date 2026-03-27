@@ -518,6 +518,52 @@ Artifacts:
 
 These checks matter for two reasons:
 
+## 14. Larger-slice `full / funding_raised_usd / h=90` result
+
+After the earlier narrow `h=90` probes and the context-scaled `core_edgar`
+funding success, the next useful question was whether a richer `full` slice
+could also run cleanly at `h=90` when given more entities and more rows.
+
+That larger local-only SLURM audit has now completed with:
+
+- task: `task2_forecast`
+- ablation: `full`
+- target: `funding_raised_usd`
+- horizon: `90`
+- input size: `120`
+- train rows: `3000`
+- val rows: `2016`
+- test rows: `1944`
+- train matrix rows: `1080`
+- test matrix rows: `1944`
+- feature count: `169`
+- selected entities: `24`
+- `edgar_source_density = 0.9997`
+- `text_source_density = 1.0`
+- constant prediction: `false`
+- prediction std: `5611.63`
+- `MAE = 397737.1872`
+- `RMSE = 993272.4963`
+- wall time: `35.581s`
+
+Artifact:
+
+- `docs/references/v740_alpha_longh_smoke_20260326/t2_full_funding_h90_ctx120_rows3000.json`
+
+This result is valuable, but only in a narrow sense:
+
+1. it confirms that a larger, source-covered `full / h=90` path now executes
+   cleanly and non-degenerately;
+2. it does **not** yet show that text improves long-horizon performance;
+3. it should not be directly compared with the earlier smaller-slice `h=90`
+   probes without noting the slice-size change.
+
+The right interpretation is therefore:
+
+> V740-alpha now has a bigger `full / funding / h=90` path that is stable
+> enough to study. That is an engineering milestone, not yet a performance
+> victory claim.
+
 1. unlike the `core_only / investors_count / h=60` slice, the `core_edgar`
    count slice does **not** collapse to a constant prediction,
 2. but the target-dependent story remains: `h=60` is slightly better on the

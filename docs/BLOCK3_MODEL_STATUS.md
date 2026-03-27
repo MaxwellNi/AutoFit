@@ -1,6 +1,6 @@
 # Block 3 Model Benchmark Status
 
-> Last updated: 2026-03-26 15:54 CET
+> Last updated: 2026-03-27 14:12 CET
 > Current authority: `docs/CURRENT_SOURCE_OF_TRUTH.md`
 > Evidence: direct scan of `runs/benchmarks/block3_phase9_fair/`, `all_results.csv`, live `squeue`, `sacct`, and benchmark aggregation scripts.
 
@@ -8,17 +8,17 @@
 
 | Metric | Value | Evidence |
 | --- | ---: | --- |
-| raw records | **16077** | direct scan 2026-03-26 |
+| raw records | **16122** | direct scan 2026-03-27 |
 | raw models (all) | 137 | 116 non-retired + 21 retired AutoFit legacy lines |
 | raw complete @160 | 75 | direct unique-condition scan |
 | active leaderboard models | **92** | 116 non-retired raw models - 24 audit-excluded |
 | active complete @160 | **62** | 75 raw complete - 13 excluded complete models |
 | incomplete active models | **30** | 92 - 62 |
-| post-filter records in `all_results.csv` | **12230** | fairness_only=True, min_coverage=0.98 |
+| post-filter records in `all_results.csv` | **12272** | fairness_only=True, min_coverage=0.98 |
 | post-filter distinct models | 107 | includes 21 retired AutoFit legacy lines |
 | post-filter non-retired models | 86 | `all_results.csv` minus retired AutoFit legacy lines |
 | conditions per full model | 160 | t1(72) + t2(48) + t3(40) |
-| live jobs | **62** | 27R + 35PD (gpu 23R+3PD, l40s 1R+17PD, hopper 3R+15PD) |
+| live jobs | **40** | 7R + 33PD (gpu 2R+4PD, l40s 3R+14PD, hopper 2R+15PD) |
 | text embeddings | available | 5,774,931 rows, 64 PCA dims |
 
 ## V739 Status
@@ -29,7 +29,7 @@
 | landed conditions | `132/160` | co=28, ce=28, ct=28, fu=28, s2/e2 gap-filling |
 | missing total | `28` | direct `all_results.csv` diff against expected 160 cells |
 | missing breakdown | `t1_e2=9`, `t1_s2=8`, `t2_e2=4`, `t2_s2=4`, `t3_e2=3` | direct query |
-| live V739 jobs | `5` | 5 RUNNING |
+| live V739 jobs | `5` | 1 RUNNING + 4 PENDING |
 | quality | 0 NaN/Inf, 0 fallback, 100% fairness pass | direct scan |
 | mean rank (last computed stable slice) | **#13** | current valid AutoFit baseline only |
 | V734-V738 | retired | oracle test-set leakage |
@@ -38,10 +38,10 @@
 
 | Job | State | Purpose |
 | --- | --- | --- |
-| `af739_t1_e2` | RUNNING | task1 `core_edgar_seed2` gap-fill |
-| `af739_t1_s2` | RUNNING | task1 `core_only_seed2` gap-fill |
-| `af739_t2_s2` | RUNNING | task2 `core_only_seed2` gap-fill |
-| `af739_t2_e2` | RUNNING | task2 `core_edgar_seed2` gap-fill |
+| `af739_t1_e2` | PENDING | task1 `core_edgar_seed2` gap-fill, resubmitted 2026-03-27 |
+| `af739_t1_s2` | PENDING | task1 `core_only_seed2` gap-fill, OOM-fixed to `189G` |
+| `af739_t2_s2` | PENDING | task2 `core_only_seed2` gap-fill, OOM-fixed to `189G` |
+| `af739_t2_e2` | PENDING | task2 `core_edgar_seed2` gap-fill, resubmitted 2026-03-27 |
 | `af739_t3_e2` | RUNNING | task3 `core_edgar_seed2` gap-fill |
 
 ## Incomplete Active Models
@@ -49,7 +49,7 @@
 | Tier | Models | Current state |
 | --- | --- | --- |
 | structural OOM | `XGBoost@159`, `XGBoostPoisson@157` | known unfixable gaps |
-| AutoFit gap-fill | `AutoFitV739@132` | fully covered by 5 live af739 jobs |
+| AutoFit gap-fill | `AutoFitV739@132` | fully covered by 5 live af739 jobs (`1R + 4PD`) |
 | old TSLib gap-fill | `ETSformer`, `LightTS`, `Pyraformer`, `Reformer`, `Crossformer`, `MSGNet`, `MambaSimple`, `PAttn` | covered by accel_v2 queue |
 | Phase 15 valid models | `CARD`, `DUET`, `FiLM`, `FilterTS`, `FreTS`, `Fredformer`, `ModernTCN`, `NonstationaryTransformer`, `PDF`, `PIR`, `SCINet`, `SRSNet`, `SegRNN`, `TimeRecipe`, `xPatch` | all at `78/160`, covered by accel_v2 queue |
 
@@ -61,30 +61,33 @@ Detailed per-job progress/ETA snapshot: `docs/RUN_QUEUE_PROGRESS_CURRENT.md`
 
 | Slice | Value | Notes |
 | --- | ---: | --- |
-| gpu RUNNING | 23 | 17 `g2_ac_*` + 5 `af739_*` + 1 `gpu_cos2_t2` |
-| gpu PENDING | 3 | local-only `v740_mb_case1_v739`, `v740_lh_fu_f90`, and `v740_mb_case1_v739_g4` research jobs |
-| l40s RUNNING | 1 | `l2_ac_t2_s2` |
-| l40s PENDING | 17 | overflow / resume-safe accel_v2 backlog plus `v740_mb_case1_v739_l2` |
-| hopper RUNNING | 3 | `h2_ac_t1_e2`, `h2_ac_t1_fu`, `h2_ac_t1_s2` on iris-197 |
-| hopper PENDING | 15 | priority-limited overflow backlog plus `v740_mb_case1_v739_h2` |
-| **total** | **62** | **27 RUNNING + 35 PENDING** |
+| gpu RUNNING | 2 | `af739_t3_e2` + `gpu_cos2_t2` |
+| gpu PENDING | 4 | resubmitted `af739_t1_e2`, `af739_t1_s2`, `af739_t2_e2`, `af739_t2_s2` |
+| l40s RUNNING | 3 | `l2_ac_t2_s2`, `l2_ac_t2_e2`, `l2_ac_t3_ct` |
+| l40s PENDING | 14 | overflow / resume-safe accel_v2 backlog |
+| hopper RUNNING | 2 | `h2_ac_t1_fu`, `h2_ac_t1_s2` on iris-197 |
+| hopper PENDING | 15 | priority-limited overflow backlog |
+| **total** | **40** | **7 RUNNING + 33 PENDING** |
 
 ### Current Throughput Interpretation
 
-- `gpu` remains the main critical path and is fully utilized.
-- three `gpu` pending slots now belong to local-only resumable V740 research jobs (`v740_mb_case1_v739`, `v740_lh_fu_f90`, `v740_mb_case1_v739_g4`), all of which stay outside the canonical benchmark harness.
-- one local-only resumable V740 compare duplicate is also queued on `l40s` (`v740_mb_case1_v739_l2`).
-- one local-only resumable V740 compare duplicate is also queued on `hopper` (`v740_mb_case1_v739_h2`).
+- `gpu` remains the main critical path, but the live surface has now narrowed to the truly essential jobs: `gpu_cos2_t2`, `af739_t3_e2`, and four resubmitted V739 gap-fill jobs.
+- there are currently **no** live local-only V740 jobs in queue; the first corrected local compare and the larger-slice `h=90` audit both completed successfully.
 - `l40s` remains the best overflow partition when memory needs fit within the 15G/CPU rule and a resume-safe script exists.
 - `hopper` is not memory-constrained in the way older docs implied; the real limiter is priority/preemption. It should be treated as opportunistic overflow, not as the sole critical path.
 - `ModernTCN` remains the dominant throughput bottleneck for non-`e2` accel jobs.
 
-## Queue Repairs Executed on 2026-03-25
+## Queue Repairs Executed on 2026-03-27
 
-1. **Patched `scripts/build_phase9_current_snapshot.py`** so live V739 jobs are counted from both `v739_*` and `af739_*` names. The old logic falsely reported `v739_jobs_live=0`.
-2. **Cancelled and resubmitted `gpu_cos2_t2`** onto the trimmed 23-model working list. The old live copy still carried excluded/broken models and was wasting GPU time on invalid candidates.
-3. **Resubmitted `af739_t3_e2`** after confirming it had dropped out of queue (`5273997` TIMEOUT, `5273998` duplicate cancelled).
-4. **Rebuilt** `docs/benchmarks/phase9_current_snapshot.{json,md}` and `docs/BLOCK3_RESULTS.md` using the insider Python environment.
+1. **Read `sacct` before trusting old queue docs.** The earlier “5 af739 RUNNING” statement had already gone stale: `af739_t1_e2` and `af739_t2_e2` had TIMEOUTed, while `af739_t1_s2` and `af739_t2_s2` had OOMed.
+2. **Resubmitted all four missing V739 jobs**:
+   - `5290110` `af739_t1_e2`
+   - `5290111` `af739_t1_s2`
+   - `5290112` `af739_t2_e2`
+   - `5290113` `af739_t2_s2`
+3. **Raised both seed2 jobs to `189G`** after observing `MaxRSS ≈ 157.3G` on the failed `150G` attempts.
+4. **Rebuilt** `docs/benchmarks/phase9_current_snapshot.{json,md}` and `docs/BLOCK3_RESULTS.md` using the insider Python environment after the new landings.
+5. **Recovered the first corrected local V739 vs V740 compare** (`mb_t1_core_edgar_is_funded_h14`), which currently favors V739/`PatchTST` over V740-alpha on that audited binary EDGAR slice.
 
 ## Resource Policy (Current)
 
@@ -96,7 +99,7 @@ Detailed per-job progress/ETA snapshot: `docs/RUN_QUEUE_PROGRESS_CURRENT.md`
 
 ## Immediate Next Actions
 
-1. Let the repaired `gpu_cos2_t2` and `af739_t3_e2` continue to drain while monitoring the five local-only V740 jobs separately from canonical benchmark jobs.
-2. Continue letting accel_v2 drain on `gpu + l40s + hopper`; do not touch the benchmark harness while the queue is active.
+1. Let `gpu_cos2_t2` and `af739_t3_e2` finish their final ~20-22 minute stretch while the four resubmitted af739 jobs wait for GPU slots.
+2. Continue letting accel_v2 drain on `gpu + l40s + hopper`; do not touch the canonical benchmark harness beyond necessary resubmissions.
 3. Rebuild `docs/benchmarks/phase9_current_snapshot.*` and `docs/BLOCK3_RESULTS.md` again after the next meaningful landing increment.
-4. Only after V739 and the remaining incomplete active models stabilize should any benchmark-facing V740 evaluation begin.
+4. Keep V740 work on the local-only audited side path until it can beat V739 on more than one corrected representative slice.

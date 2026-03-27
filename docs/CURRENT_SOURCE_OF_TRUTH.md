@@ -1,6 +1,6 @@
 # Current Source of Truth
 
-> Last verified: 2026-03-26 15:54 CET
+> Last verified: 2026-03-27 14:12 CET
 > Verified by direct scans of `runs/benchmarks/block3_phase9_fair/`, live `squeue -u npin`, `sacct`, benchmark aggregation scripts.
 
 This file is the authoritative documentation entry point for the current Block 3 project state.
@@ -25,7 +25,7 @@ If any other document disagrees with this file, prefer this file and the evidenc
 | Fact | Current value | Evidence |
 | --- | --- | --- |
 | Canonical benchmark directory | `runs/benchmarks/block3_phase9_fair/` | direct scan |
-| Raw metric records | `16077` | direct scan 2026-03-26 |
+| Raw metric records | `16122` | direct scan 2026-03-27 |
 | Raw models materialized | `137` | direct scan (116 real + 21 retired AutoFit@1) |
 | Audit-excluded models | `24` | AUDIT_EXCLUDED_MODELS (17 old + 7 Finding H) |
 | Active (leaderboard) models | `92` | 116 raw - 24 excluded |
@@ -35,7 +35,7 @@ If any other document disagrees with this file, prefer this file and the evidenc
 | Per-ablation | co=2849, s2=2139, ce=2780, e2=2778, ct=2764, fu=2767 | direct scan 2026-03-26 |
 | Conditions per model | `160` | t1(72) + t2(48) + t3(40) |
 | Current AutoFit baseline | `AutoFitV739` only | Root `AGENTS.md` |
-| V739 landed conditions | `132/160` | co=28, ce=28, ct=28, fu=28, s2/e2 gap-filling (5R) |
+| V739 landed conditions | `132/160` | co=28, ce=28, ct=28, fu=28, s2/e2 gap-filling still in progress |
 | V739 quality | 0 NaN/Inf, 0 fallback, 100% fairness pass | direct scan |
 | V739 mean rank | **#13** (top 14%, 92 active models) | per-condition ranking (last computed) |
 | Post-filter distinct models in `all_results.csv` | `107` | includes 21 retired AutoFit legacy lines that still pass fairness/coverage filters |
@@ -43,7 +43,7 @@ If any other document disagrees with this file, prefer this file and the evidenc
 | Text embedding artifacts | `AVAILABLE` | `runs/text_embeddings/embedding_metadata.json` |
 | Phase 12 text reruns | `48/48 COMPLETED` | core_text+full 91/91 models |
 | Phase 15 new models | 23 submitted, 15 valid, 8 excluded (Finding H), 78/160 | direct scan |
-| Live jobs | `62` (27R + 35PD) | squeue 2026-03-26 15:54: gpu 23R+3PD, l40s 1R+17PD, hopper 3R+15PD |
+| Live jobs | `40` (7R + 33PD) | squeue 2026-03-27 14:12: gpu 2R+4PD, l40s 3R+14PD, hopper 2R+15PD |
 
 ## What the Current Benchmark Means
 
@@ -62,22 +62,23 @@ If any other document disagrees with this file, prefer this file and the evidenc
 
 ## Current Execution Reality
 
-1. Live queue snapshot verified on 2026-03-26 15:54 CET:
-   - `27 RUNNING` = `23 gpu + 1 l40s + 3 hopper`
-   - `35 PENDING` = `3 gpu + 15 hopper + 17 l40s`
-   - **62 total**
-   - Current gpu runners: 17 `g2_ac_*` + 5 `af739_*` + 1 `gpu_cos2_t2`
-   - Current gpu pending: `v740_mb_case1_v739`, `v740_lh_fu_f90`, and `v740_mb_case1_v739_g4` (local-only resumable V740 research jobs, not part of the canonical benchmark)
-   - Current additional V740 compare overflow jobs:
-     - `v740_mb_case1_v739_l2` on `l40s`
-     - `v740_mb_case1_v739_h2` on `hopper`
+1. Live queue snapshot verified on 2026-03-27 14:12 CET:
+   - `7 RUNNING` = `2 gpu + 3 l40s + 2 hopper`
+   - `33 PENDING` = `4 gpu + 14 l40s + 15 hopper`
+   - **40 total**
+   - Current gpu runners: `af739_t3_e2` + `gpu_cos2_t2`
+   - Current gpu pending: `af739_t1_e2`, `af739_t1_s2`, `af739_t2_e2`, `af739_t2_s2`
+   - No local-only V740 jobs are currently live in queue; the most recent corrected local compare and larger-slice `h=90` audit both completed successfully outside the canonical benchmark
    - **ModernTCN bottleneck** remains the dominant throughput limiter for non-e2 accel jobs
    - Partition constraints (`sinfo` verified): `gpu=756G`, `l40s=515G`, `hopper=2063754MB (~2.06TB)`; the earlier `hopper=201G` claim was a unit-reading error
 2. V739 status:
    - **132/160 conditions landed** (+1 from 131, s2/e2 gap-filling)
-   - 5 af739 jobs RUNNING: `t1_e2`, `t1_s2`, `t2_s2`, `t2_e2`, `t3_e2`
+   - 5 af739 jobs live: `1 RUNNING + 4 PENDING`
+   - RUNNING: `t3_e2`
+   - PENDING (resubmitted 2026-03-27 after timeout/OOM): `t1_e2`, `t1_s2`, `t2_e2`, `t2_s2`
    - Missing structure: `t1_e2=9`, `t1_s2=8`, `t2_e2=4`, `t2_s2=4`, `t3_e2=3` (28 total)
    - V739 is empirically valid: 0 NaN/Inf, 0 fallback, 100% fairness pass
+   - The two seed2 jobs (`t1_s2`, `t2_s2`) previously OOMed at `150G` with observed `MaxRSS ≈ 157.3G`; they have now been requeued at `189G`
 3. Finding H (discovered 2026-03-22):
    - 8 P15 models produce 100% constant predictions (0% fairness pass)
    - CFPT, DeformableTST, MICN, PathFormer, SEMPO, SparseTSF, TimeBridge, TimePerceiver
@@ -95,11 +96,18 @@ If any other document disagrees with this file, prefer this file and the evidenc
 5. Critical gaps:
    - s2 (core_only_seed2): `gpu_cos2_t2` remains the canonical task2 seed2 gap-fill and has now been **cancelled/requeued onto the trimmed 23-model list** (`5284505`)
    - e2 (core_edgar_seed2): 2778 records (+54 from 2724), accel_v2 e2 scripts producing the bulk of recent growth
-   - V739: 28 missing s2+e2 conditions, and **all 5 required gap-fill jobs are now running**
+   - V739: 28 missing s2+e2 conditions, and **all 5 required gap-fill jobs are now live** (`1 RUNNING + 4 PENDING`)
 6. Text embeddings:
    - `runs/text_embeddings/text_embeddings.parquet` — 5,774,931 rows, 64 PCA dims
    - Phase 12 all 48/48 complete. core_text+full coverage: 91/91 models
 7. Audit-excluded models: 24 total (was 23, added NegativeBinomialGLM as Structural)
+
+8. Local-only V740 truth that is now settled enough to cite:
+   - the first corrected local head-to-head for `mb_t1_core_edgar_is_funded_h14` has landed
+   - `V739` beats `V740-alpha` on that slice:
+     - `V739`: `MAE = 0.1623`, selected model `PatchTST`, fit time `301.3s`
+     - `V740-alpha`: `MAE = 0.2016`, fit time `38.9s`
+   - interpretation: `V740-alpha` is still much cheaper, but it is **not yet** strong enough to replace V739 on this audited binary EDGAR slice
 
 ## Current Priorities
 
@@ -109,23 +117,21 @@ If any other document disagrees with this file, prefer this file and the evidenc
 4. ~~Phase 12 text reruns to land.~~ ✅ DONE. core_text+full 91/91 models.
 5. ~~Phase 15 new TSLib models.~~ ✅ Submitted. 15 valid, 8 excluded (Finding H).
 6. ~~Cancel old v1 l40s/hopper jobs.~~ ✅ DONE. 8 old v1 jobs cancelled, freed L40S for v2.
-7. Complete V739 s2/e2 gap-fill (5 af739 RUNNING).
+7. Complete V739 s2/e2 gap-fill (currently `1 RUNNING + 4 PENDING`, all 5 live).
 8. Complete e2 gap for ETSformer/LightTS/Pyraformer/Reformer (0/28 e2 each — covered by accel_v2).
 9. Complete P15 model gap-fill to 160/160 via accel_v2 (54 total jobs, auto-requeue).
 10. g2_ac_v2 auto-requeue: e2/ct complete first run; co/s2/ce/fu need 2-3 requeues, with `gpu_cos2_t2` now corrected to the trimmed 23-model list.
-11. Local-only V740 work is now permitted via resumable side-paths that do **not** touch the canonical benchmark harness. The current active local-only queue surface is:
-   - `v740_mb_case1_v739` (`gpu`, 8h)
-   - `v740_mb_case1_v739_g4` (`gpu`, 4h backfill-oriented duplicate)
-   - `v740_mb_case1_v739_l2` (`l40s`, 8h)
-   - `v740_mb_case1_v739_h2` (`hopper`, 8h)
-   - `v740_lh_fu_f90` (`gpu`, larger-slice `full / funding / h=90` audit)
+11. Local-only V740 work is now permitted via resumable side-paths that do **not** touch the canonical benchmark harness. The current completed local-only milestones are:
+   - first corrected local `V739 vs V740` head-to-head (`mb_t1_core_edgar_is_funded_h14`)
+   - larger-slice `full / funding_raised_usd / h=90 / input_size=120` audit
+   Both completed successfully on 2026-03-27 and are now recorded in the V740 research notes.
 
 ## What Is No Longer Current
 
 1. Everything under `docs/_legacy_repo/` is historical archive material.
 2. The old V72/V73 truth-pack line under `docs/benchmarks/LEGACY__block3_truth_pack__v72_v73/` is historical evidence, not the current operational truth for Phase 9 / V739.
 3. Research/reference notes under `docs/references/` are background knowledge only. They are useful for design, but they are not status documents.
-4. The archived full local checklist at `docs/_legacy_repo/local_mandatory_preexec_full_20260313.md` is preserved for history, not for current execution truth.
+4. Any archived local checklist copies under `docs/_legacy_repo/` are historical only and must not be treated as current execution truth.
 5. The archived large result table at `docs/_legacy_repo/BLOCK3_RESULTS_table_20260314.md` is preserved for traceability, not for current operational reading.
 
 ## Validation Commands

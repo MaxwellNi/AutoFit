@@ -1,6 +1,6 @@
 # V739 Current Run Monitor and Landing Checklist
 
-> Last verified: 2026-03-26 14:59 CET
+> Last verified: 2026-03-27 14:12 CET
 > Scope: current AutoFit V739 execution reality on the canonical clean benchmark line only.
 
 ## Current Verified Reality
@@ -11,9 +11,10 @@
    - 0 NaN/Inf
    - 0 fallback
    - 100% fairness pass
-4. **Current live V739 queue state is 5 jobs total**:
-   - 5 RUNNING: `af739_t1_e2`, `af739_t1_s2`, `af739_t2_s2`, `af739_t2_e2`, `af739_t3_e2`
-5. `af739_t3_e2` is no longer pending; the repaired re-submission is now running as job `5284506`.
+4. **Current live V739 queue state is still 5 jobs total, but no longer 5 RUNNING**:
+   - 1 RUNNING: `af739_t3_e2`
+   - 4 PENDING: `af739_t1_e2`, `af739_t1_s2`, `af739_t2_s2`, `af739_t2_e2`
+5. `af739_t3_e2` remains the only actively running V739 copy at the moment, now in its final ~20 minutes before the 2-day limit.
 
 ## Coverage Audit
 
@@ -44,23 +45,32 @@
 
 | Job | State | Partition | Notes |
 | --- | --- | --- | --- |
-| `af739_t1_e2` | RUNNING | `gpu` | task1 `core_edgar_seed2` gap-fill |
-| `af739_t1_s2` | RUNNING | `gpu` | task1 `core_only_seed2` gap-fill |
-| `af739_t2_s2` | RUNNING | `gpu` | task2 `core_only_seed2` gap-fill |
-| `af739_t2_e2` | RUNNING | `gpu` | task2 `core_edgar_seed2` gap-fill |
+| `af739_t1_e2` | PENDING | `gpu` | task1 `core_edgar_seed2` gap-fill, resubmitted as `5290110` |
+| `af739_t1_s2` | PENDING | `gpu` | task1 `core_only_seed2` gap-fill, resubmitted as `5290111` at `189G` |
+| `af739_t2_s2` | PENDING | `gpu` | task2 `core_only_seed2` gap-fill, resubmitted as `5290113` at `189G` |
+| `af739_t2_e2` | PENDING | `gpu` | task2 `core_edgar_seed2` gap-fill, resubmitted as `5290112` |
 | `af739_t3_e2` | RUNNING | `gpu` | task3 `core_edgar_seed2` gap-fill, repaired 2026-03-25 |
 
-## What Changed on 2026-03-26
+## What Changed on 2026-03-27
 
-1. `scripts/build_phase9_current_snapshot.py` was patched so V739 live-job counting matches both `v739_*` and `af739_*` job names.
-2. The queue gap for `af739_t3_e2` remains repaired: the previous copies were `5273997` (TIMEOUT) and `5273998` (duplicate cancelled), and the current live replacement `5284506` is now RUNNING.
-3. `gpu_cos2_t2` was cancelled and re-submitted onto the trimmed 23-model working list so seed2 gap-fill stops wasting GPU time on excluded/broken models. That repair matters indirectly for V739 because it accelerates the remaining shared seed2 frontier.
+1. `sacct` shows that the earlier “all 5 running” state has already ended:
+   - `5279082 af739_t1_e2` → `TIMEOUT`
+   - `5280104 af739_t1_s2` → `OUT_OF_MEMORY` (`MaxRSS=157290792K`)
+   - `5280105 af739_t2_s2` → `OUT_OF_MEMORY` (`MaxRSS=157284604K`)
+   - `5280106 af739_t2_e2` → `TIMEOUT`
+2. All four missing jobs were resubmitted immediately:
+   - `5290110 af739_t1_e2`
+   - `5290111 af739_t1_s2`
+   - `5290112 af739_t2_e2`
+   - `5290113 af739_t2_s2`
+3. The two seed2 jobs were escalated from `150G` to `189G` because the failed copies exceeded the original memory budget by ~7G.
+4. The queue gap for `af739_t3_e2` remains repaired: the current live replacement `5284506` is still RUNNING.
 
 ## Operational Interpretation
 
 - V739 is now in a **pure seed2/e2 gap-fill phase**. The original co/ce/ct/fu surface is complete.
 - The remaining 28 missing conditions are all known and localized; there is no longer any ambiguity about where the gaps are.
-- The dominant risk is now **throughput**, not correctness. The key bottlenecks are long validation-based candidate selection in AutoFit and the shared queue pressure from ModernTCN-heavy accel jobs.
+- The dominant risk is now **throughput plus queue churn**, not correctness. The key bottlenecks are long validation-based candidate selection in AutoFit, the shared queue pressure from ModernTCN-heavy accel jobs, and the need to resubmit long-running seed2/e2 jobs cleanly after timeout/OOM.
 - There is currently **no uncovered mandatory V739 work outside the queue**.
 
 ## Benchmark Position (Keep Using This Carefully)

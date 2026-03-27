@@ -1,90 +1,57 @@
 # Current Queue Progress
 
-> Snapshot time: 2026-03-26 15:54:14 CET
-> Source: live `squeue -u npin`.
+> Snapshot time: 2026-03-27 14:12:54 CET
+> Source: live `squeue -u npin`, `squeue --start -u npin`, and `sacct -u npin -S 2026-03-26T00:00:00`
 
 ## Summary
 
 | Metric | Value |
 | --- | ---: |
-| Total jobs | 62 |
-| Running | 27 |
-| Pending | 35 |
-| gpu running | 23 |
-| gpu pending | 3 |
-| l40s running | 1 |
-| l40s pending | 17 |
-| hopper running | 3 |
+| Total jobs | 40 |
+| Running | 7 |
+| Pending | 33 |
+| gpu running | 2 |
+| gpu pending | 4 |
+| l40s running | 3 |
+| l40s pending | 14 |
+| hopper running | 2 |
 | hopper pending | 15 |
 
 ## Running Jobs
 
-| jobid | job | partition | elapsed | limit | progress | time left | node |
+| jobid | job | partition | elapsed | limit | progress | time_left | reason/node |
 | --- | --- | --- | --- | --- | ---: | --- | --- |
-| 5279065 | g2_ac_t1_ce | gpu | 1-20:31:39 | 2-00:00:00 | 92.8% | 3h28m | iris-179 |
-| 5279066 | g2_ac_t1_co | gpu | 1-20:26:39 | 2-00:00:00 | 92.6% | 3h33m | iris-179 |
-| 5279067 | g2_ac_t1_ct | gpu | 1-20:15:39 | 2-00:00:00 | 92.2% | 3h44m | iris-185 |
-| 5279068 | g2_ac_t1_e2 | gpu | 1-19:36:37 | 2-00:00:00 | 90.9% | 4h23m | iris-175 |
-| 5279069 | g2_ac_t1_fu | gpu | 1-19:36:37 | 2-00:00:00 | 90.9% | 4h23m | iris-185 |
-| 5279070 | g2_ac_t1_s2 | gpu | 1-19:36:37 | 2-00:00:00 | 90.9% | 4h23m | iris-185 |
-| 5279071 | g2_ac_t2_ce | gpu | 1-19:10:36 | 2-00:00:00 | 90.0% | 4h49m | iris-184 |
-| 5279072 | g2_ac_t2_co | gpu | 1-18:37:35 | 2-00:00:00 | 88.8% | 5h22m | iris-183 |
-| 5279073 | g2_ac_t2_ct | gpu | 1-18:15:34 | 2-00:00:00 | 88.0% | 5h44m | iris-175 |
-| 5279074 | g2_ac_t2_e2 | gpu | 1-16:54:30 | 2-00:00:00 | 85.2% | 7h05m | iris-178 |
-| 5279075 | g2_ac_t2_fu | gpu | 1-15:50:28 | 2-00:00:00 | 83.0% | 8h09m | iris-196 |
-| 5279076 | g2_ac_t2_s2 | gpu | 1-15:02:26 | 2-00:00:00 | 81.3% | 8h57m | iris-171 |
-| 5279077 | g2_ac_t3_ce | gpu | 1-13:54:24 | 2-00:00:00 | 79.0% | 10h05m | iris-191 |
-| 5279078 | g2_ac_t3_co | gpu | 1-13:54:24 | 2-00:00:00 | 79.0% | 10h05m | iris-186 |
-| 5279079 | g2_ac_t3_ct | gpu | 1-12:46:22 | 2-00:00:00 | 76.6% | 11h13m | iris-186 |
-| 5279080 | g2_ac_t3_e2 | gpu | 1-11:11:20 | 2-00:00:00 | 73.3% | 12h48m | iris-195 |
-| 5279081 | g2_ac_t3_fu | gpu | 1-10:58:20 | 2-00:00:00 | 72.9% | 13h01m | iris-178 |
-| 5279082 | af739_t1_e2 | gpu | 1-10:19:19 | 2-00:00:00 | 71.5% | 13h40m | iris-177 |
-| 5280104 | af739_t1_s2 | gpu | 1-08:41:16 | 2-00:00:00 | 68.1% | 15h18m | iris-175 |
-| 5280105 | af739_t2_s2 | gpu | 1-08:35:16 | 2-00:00:00 | 67.9% | 15h24m | iris-186 |
-| 5280106 | af739_t2_e2 | gpu | 1-08:32:16 | 2-00:00:00 | 67.8% | 15h27m | iris-177 |
-| 5284505 | gpu_cos2_t2 | gpu | 1-01:21:05 | 2-00:00:00 | 52.8% | 22h38m | iris-169 |
-| 5284506 | af739_t3_e2 | gpu | 1-01:19:05 | 2-00:00:00 | 52.7% | 22h40m | iris-179 |
-| 5269768 | h2_ac_t1_e2 | hopper | 1-01:13:04 | 2-00:00:00 | 52.5% | 22h46m | iris-197 |
-| 5269769 | h2_ac_t1_fu | hopper | 1-01:13:04 | 2-00:00:00 | 52.5% | 22h46m | iris-197 |
-| 5269770 | h2_ac_t1_s2 | hopper | 1-01:13:04 | 2-00:00:00 | 52.5% | 22h46m | iris-197 |
-| 5269759 | l2_ac_t2_s2 | l40s | 5:14:07 | 2-00:00:00 | 10.9% | 1d18h45m | iris-198 |
+| 5284506 | af739_t3_e2 | gpu | 1-23:37:04 | 2-00:00:00 | 99.2% | 22m | iris-179 |
+| 5284505 | gpu_cos2_t2 | gpu | 1-23:39:04 | 2-00:00:00 | 99.3% | 20m | iris-169 |
+| 5269769 | h2_ac_t1_fu | hopper | 1-23:31:03 | 2-00:00:00 | 99.0% | 28m | iris-197 |
+| 5269770 | h2_ac_t1_s2 | hopper | 1-23:31:03 | 2-00:00:00 | 99.0% | 28m | iris-197 |
+| 5269762 | l2_ac_t3_ct | l40s | 14:47:30 | 2-00:00:00 | 30.8% | 1d9h12m | iris-199 |
+| 5269759 | l2_ac_t2_s2 | l40s | 1-03:32:06 | 2-00:00:00 | 57.4% | 20h27m | iris-198 |
+| 5269757 | l2_ac_t2_e2 | l40s | 14:47:30 | 2-00:00:00 | 30.8% | 1d9h12m | iris-199 |
 
-## Pending Jobs
+## Highest-Value Pending Jobs
 
-| jobid | job | partition | state | limit | reason |
+| jobid | job | partition | planned_start | reason | notes |
 | --- | --- | --- | --- | --- | --- |
-| 5287457 | v740_mb_case1_v739 | gpu | PENDING | 8:00:00 | (Priority) |
-| 5287932 | v740_lh_fu_f90 | gpu | PENDING | 8:00:00 | (Priority) |
-| 5288073 | v740_mb_case1_v739_g4 | gpu | PENDING | 4:00:00 | (Priority) |
-| 5269765 | h2_ac_t1_ce | hopper | PENDING | 2-00:00:00 | (Priority) |
-| 5269766 | h2_ac_t1_co | hopper | PENDING | 2-00:00:00 | (Priority) |
-| 5269767 | h2_ac_t1_ct | hopper | PENDING | 2-00:00:00 | (Priority) |
-| 5269771 | h2_ac_t2_ce | hopper | PENDING | 2-00:00:00 | (Priority) |
-| 5269772 | h2_ac_t2_co | hopper | PENDING | 2-00:00:00 | (Priority) |
-| 5269773 | h2_ac_t2_ct | hopper | PENDING | 2-00:00:00 | (Priority) |
-| 5269774 | h2_ac_t2_e2 | hopper | PENDING | 2-00:00:00 | (Priority) |
-| 5269775 | h2_ac_t2_fu | hopper | PENDING | 2-00:00:00 | (Priority) |
-| 5269776 | h2_ac_t2_s2 | hopper | PENDING | 2-00:00:00 | (Priority) |
-| 5269777 | h2_ac_t3_ce | hopper | PENDING | 2-00:00:00 | (Priority) |
-| 5269778 | h2_ac_t3_co | hopper | PENDING | 2-00:00:00 | (Priority) |
-| 5269779 | h2_ac_t3_ct | hopper | PENDING | 2-00:00:00 | (Priority) |
-| 5269780 | h2_ac_t3_e2 | hopper | PENDING | 2-00:00:00 | (Priority) |
-| 5269781 | h2_ac_t3_fu | hopper | PENDING | 2-00:00:00 | (Priority) |
-| 5288066 | v740_mb_case1_v739_h2 | hopper | PENDING | 8:00:00 | (Priority) |
-| 5269748 | l2_ac_t1_ce | l40s | PENDING | 2-00:00:00 | (Priority) |
-| 5269749 | l2_ac_t1_co | l40s | PENDING | 2-00:00:00 | (Priority) |
-| 5269752 | l2_ac_t1_fu | l40s | PENDING | 2-00:00:00 | (Priority) |
-| 5269753 | l2_ac_t1_s2 | l40s | PENDING | 2-00:00:00 | (Priority) |
-| 5269754 | l2_ac_t2_ce | l40s | PENDING | 2-00:00:00 | (Priority) |
-| 5269755 | l2_ac_t2_co | l40s | PENDING | 2-00:00:00 | (Priority) |
-| 5269756 | l2_ac_t2_ct | l40s | PENDING | 2-00:00:00 | (Priority) |
-| 5269757 | l2_ac_t2_e2 | l40s | PENDING | 2-00:00:00 | (Priority) |
-| 5269758 | l2_ac_t2_fu | l40s | PENDING | 2-00:00:00 | (Priority) |
-| 5269760 | l2_ac_t3_ce | l40s | PENDING | 2-00:00:00 | (Priority) |
-| 5269761 | l2_ac_t3_co | l40s | PENDING | 2-00:00:00 | (Priority) |
-| 5269762 | l2_ac_t3_ct | l40s | PENDING | 2-00:00:00 | (Resources) |
-| 5269763 | l2_ac_t3_e2 | l40s | PENDING | 2-00:00:00 | (Priority) |
-| 5269764 | l2_ac_t3_fu | l40s | PENDING | 2-00:00:00 | (Priority) |
-| 5279084 | l2_ac_t1_ct | l40s | PENDING | 2-00:00:00 | (Priority) |
-| 5279085 | l2_ac_t1_e2 | l40s | PENDING | 2-00:00:00 | (Priority) |
-| 5288065 | v740_mb_case1_v739_l2 | l40s | PENDING | 8:00:00 | (Priority) |
+| 5290110 | af739_t1_e2 | gpu | 2026-03-28 21:44:42 | Priority | V739 task1 `core_edgar_seed2` resubmission after TIMEOUT |
+| 5290111 | af739_t1_s2 | gpu | 2026-03-28 21:50:42 | Priority | V739 task1 `core_only_seed2` resubmission, memory raised to `189G` after OOM |
+| 5290112 | af739_t2_e2 | gpu | 2026-03-28 22:20:00 | Priority | V739 task2 `core_edgar_seed2` resubmission after TIMEOUT |
+| 5290113 | af739_t2_s2 | gpu | 2026-03-28 22:59:50 | Priority | V739 task2 `core_only_seed2` resubmission, memory raised to `189G` after OOM |
+| 5269763 | l2_ac_t3_e2 | l40s | 2026-03-28 10:40:07 | Resources | l40s overflow backlog |
+| 5269765 | h2_ac_t1_ce | hopper | 2026-03-27 14:41:10 | Priority | opportunistic overflow backlog |
+
+## Pending Breakdown
+
+| partition | pending_jobs | notes |
+| --- | ---: | --- |
+| gpu | 4 | all four are mandatory V739 gap-fill resubmissions |
+| l40s | 14 | accel_v2 overflow backlog only |
+| hopper | 15 | accel_v2 overflow backlog only |
+
+## Canonical Benchmark Recovery Notes
+
+1. The previous queue snapshot that showed five live `af739_*` jobs as RUNNING is now stale.
+2. `af739_t1_e2` and `af739_t2_e2` both hit `TIMEOUT` at the 2-day wall.
+3. `af739_t1_s2` and `af739_t2_s2` both hit `OUT_OF_MEMORY` at `150G`, with observed peaks around `157.3G`.
+4. All four missing V739 jobs have now been resubmitted and are safely back in queue.
+5. There are currently no live local-only V740 jobs in the queue; the latest high-value V740 local jobs already completed and their results have been harvested into the research docs.

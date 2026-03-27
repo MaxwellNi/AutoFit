@@ -111,6 +111,20 @@
 > carefully: they now show source-covered slices plus improved
 > horizon/context behavior, but they do not yet prove that source-native
 > sparse-event memory is already carrying the longer-horizon load.
+>
+> 2026-03-27 local-compare update:
+> the first corrected local head-to-head is no longer pending.
+> On `mb_t1_core_edgar_is_funded_h14`, `V739` currently beats `V740-alpha`
+> (`MAE = 0.1623` vs `0.2016`) and does so by selecting `PatchTST`.
+> That result is important because it sharpens the current engineering target:
+> V740-alpha is already dramatically cheaper on fit time (`38.9s` vs `301.3s`)
+> but still lags the valid baseline on an audited binary EDGAR slice.
+> The same day also added a larger-slice `full / funding_raised_usd / h=90 /
+> input_size=120 / 24 entities / 3000 train rows` audit, which completed
+> cleanly and non-constantly (`MAE = 397737.19`, `edgar_source_density ≈ 1.0`,
+> `text_source_density = 1.0`) but should not be over-read as proof that text
+> already improves long-horizon behavior. It mainly confirms that the bigger
+> `h=90` path now executes cleanly on a richer local slice.
 
 ## 1. Purpose
 
