@@ -137,6 +137,16 @@ This is also an operational question. V739 is valid, but it is slow because it
 trains and evaluates an 8-model candidate pool per condition. Alpha only
 matters if it preserves the one-model cost profile that V739 does not have.
 
+One design clarification is now explicit:
+
+> Alpha should be understood as a **N-BEATS-like decomposition-first skeleton
+> with only the minimum additional branches needed to absorb the benchmark's
+> other repeated champion mechanisms**.
+
+This matters because Block 3 no longer needs a vague “unified model.” It needs
+a model with a clean forecasting backbone and a disciplined policy for where
+extra complexity is allowed.
+
 ## 2. Non-Negotiable Constraints
 
 Alpha must satisfy all of the following.
@@ -302,6 +312,25 @@ The purpose is to absorb the strongest parts of:
 - `NBEATSx`
 - `OLinear`
 - decomposition-oriented 2024–2025 literature
+
+This trunk is not just one branch among many. It is the **default explanation
+path** for the model. In practical terms, alpha should first try to solve a
+cell with:
+
+1. coefficient generation,
+2. basis-style forecast construction,
+3. residual refinement,
+4. and direct horizon-wise prediction.
+
+Only after this backbone is in place should the model rely on the more
+specialized side branches for:
+
+- multi-resolution structure (`NHITS`),
+- long-horizon value robustness (`Chronos` / `ChronosBolt`),
+- compact temporal memory (`GRU`),
+- binary/event calibration (`DeepNPTS`),
+- local EDGAR-sensitive context (`PatchTST`),
+- and local short-horizon count nonlinearity (`KAN`).
 
 Implementation target:
 

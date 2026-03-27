@@ -16,6 +16,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 import sys
 import time
 from pathlib import Path
@@ -70,7 +71,36 @@ _ALWAYS_DROP = {
     "entity_id", "crawled_date_day", "cik", "date",
     "offer_id", "snapshot_ts", "crawled_date", "processed_datetime",
 }
-_TEXT_EMB_PATH = REPO_ROOT / "runs" / "text_embeddings" / "text_embeddings.parquet"
+def _candidate_repo_roots() -> list[Path]:
+    roots: list[Path] = [REPO_ROOT]
+    env_root = os.environ.get("BLOCK3_CANONICAL_REPO_ROOT")
+    if env_root:
+        roots.append(Path(env_root).expanduser())
+    roots.append(Path.home() / "repo_root")
+    roots.append(Path("/work/projects/eint/repo_root"))
+    deduped: list[Path] = []
+    seen: set[str] = set()
+    for root in roots:
+        key = str(root.resolve()) if root.exists() else str(root)
+        if key in seen:
+            continue
+        seen.add(key)
+        deduped.append(root)
+    return deduped
+
+
+def _resolve_repo_relative(path_like: str | Path) -> Path:
+    path = Path(path_like)
+    if path.is_absolute():
+        return path
+    for root in _candidate_repo_roots():
+        candidate = root / path
+        if candidate.exists():
+            return candidate
+    return REPO_ROOT / path
+
+
+_TEXT_EMB_PATH = _resolve_repo_relative("runs/text_embeddings/text_embeddings.parquet")
 
 
 def _load_pointer() -> Dict[str, Any]:
@@ -180,7 +210,7 @@ def _read_parquet_filtered(path: Path, columns: list[str], filters: list[tuple[s
 
 
 def _load_core_slice(pointer: Dict[str, Any], entity_ids: list[str]) -> pd.DataFrame:
-    core_path = Path(pointer["offers_core_daily"]["dir"]) / "offers_core_daily.parquet"
+    core_path = _resolve_repo_relative(pointer["offers_core_daily"]["dir"]) / "offers_core_daily.parquet"
     numeric_cols = _numeric_schema_columns(core_path)
     keep = ["entity_id", "crawled_date_day", "cik", "snapshot_ts"]
     keep += [c for c in ["funding_raised_usd", "investors_count", "is_funded"] if c not in keep]
@@ -194,8 +224,9 @@ def _load_text_slice(entity_ids: list[str]) -> pd.DataFrame:
 
 
 def _load_edgar_slice(pointer: Dict[str, Any], cik_values: list[str]) -> pd.DataFrame:
-    ed_dir = Path(pointer["edgar_store_full_daily"]["dir"]) / "edgar_features"
-    ed_path = ed_dir if ed_dir.exists() else Path(pointer["edgar_store_full_daily"]["dir"])
+    base_dir = _resolve_repo_relative(pointer["edgar_store_full_daily"]["dir"])
+    ed_dir = base_dir / "edgar_features"
+    ed_path = ed_dir if ed_dir.exists() else base_dir
     cols = ["cik", "crawled_date_day", "cutoff_ts", "edgar_filed_date"] + [c for c in KNOWN_EDGAR_COLUMNS if c not in {"snapshot_year"}]
     cols += ["snapshot_year"]
     cols = list(dict.fromkeys(cols))
@@ -242,7 +273,7 @@ def _join_edgar_asof(core_df: pd.DataFrame, edgar_df: pd.DataFrame) -> pd.DataFr
 
 def _load_smoke_frame(args: argparse.Namespace, temporal_config: TemporalSplitConfig) -> pd.DataFrame:
     pointer = _load_pointer()
-    core_path = Path(pointer["offers_core_daily"]["dir"]) / "offers_core_daily.parquet"
+    core_path = _resolve_repo_relative(pointer["offers_core_daily"]["dir"]) / "offers_core_daily.parquet"
     entity_ids = _iter_entities_with_target_coverage(
         core_path,
         args.target,
