@@ -2,17 +2,17 @@
 """
 Model Registry for Block 3 KDD'26 Benchmark — Phase 15+H.
 
-Unified interface for all 142+ registered models across 8 categories:
+Unified interface for all 143+ registered models across 8 categories:
   - ml_tabular      (20): LogisticRegression, Ridge, Lasso, ElasticNet, SVR,
                            KNN, RandomForest, ExtraTrees, HistGradientBoosting,
                            LightGBM, XGBoost, CatBoost, XGBoostPoisson,
                            LightGBMTweedie, NegativeBinomialGLM, TabPFNRegressor,
                            TabPFNClassifier, QuantileRegressor, SeasonalNaive,
                            MeanPredictor
-  - statistical     (15): AutoARIMA, AutoETS, AutoTheta, MSTL, SF_SeasonalNaive,
+  - statistical     (16): AutoARIMA, AutoETS, AutoTheta, MSTL, SF_SeasonalNaive,
                            CrostonClassic, CrostonOptimized, CrostonSBA,
                            DynamicOptimizedTheta, AutoCES, Holt, HoltWinters,
-                           Naive, HistoricAverage, WindowAverage
+                           Naive, HistoricAverage, WindowAverage, Prophet
   - deep_classical   (9): NBEATS, NHITS, TFT, DeepAR, GRU, LSTM, TCN, MLP,
                            DilatedRNN
   - transformer_sota(24): PatchTST, iTransformer, TimesNet, TSMixer, Informer,

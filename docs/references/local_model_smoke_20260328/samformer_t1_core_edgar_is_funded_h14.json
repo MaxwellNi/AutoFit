@@ -1,0 +1,30 @@
+{
+  "model": "SAMformer",
+  "model_kwargs": {
+    "max_epochs": 1,
+    "batch_size": 32,
+    "hidden_size": 16,
+    "max_entities": 64,
+    "max_windows": 2000
+  },
+  "task": "task1_outcome",
+  "ablation": "core_edgar",
+  "target": "is_funded",
+  "horizon": 14,
+  "train_rows": 300,
+  "val_rows": 260,
+  "test_rows": 213,
+  "train_matrix_rows": 300,
+  "test_matrix_rows": 213,
+  "feature_count": 105,
+  "fit_seconds": 11.612102746963501,
+  "predict_seconds": 0.002167224884033203,
+  "prediction_std": 0.12536716140972395,
+  "constant_prediction": false,
+  "metrics": {
+    "mae": 0.3863222408742412,
+    "rmse": 0.568820801892018,
+    "smape": 70.01288462765268,
+    "mape": 12.272910821038261
+  }
+}

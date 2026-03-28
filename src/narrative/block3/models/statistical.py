@@ -2,8 +2,8 @@
 """
 Statistical Forecasting Models for Block 3 KDD'26 Benchmark.
 
-Uses Nixtla StatsForecast:
-  AutoARIMA, AutoETS, AutoTheta, MSTL, SeasonalNaive
+Uses Nixtla StatsForecast plus selected standalone statistical baselines:
+  AutoARIMA, AutoETS, AutoTheta, MSTL, SeasonalNaive, Prophet
 """
 from __future__ import annotations
 
@@ -219,6 +219,161 @@ class StatsForecastWrapper(ModelBase):
 
 
 # ============================================================================
+# Prophet wrapper
+# ============================================================================
+
+class ProphetWrapper(ModelBase):
+    """Per-entity Prophet wrapper for business-time-series sanity checks.
+
+    This is intentionally conservative:
+    - one Prophet model per entity
+    - no hidden test-set routing
+    - optional dependency guard
+    - fallback to training mean when entity-level fitting fails
+
+    It is not expected to be fast enough to become a first-wave all-cells
+    benchmark workhorse.  Its value is as a recognizable business forecasting
+    baseline and a local/bounded canonical comparator.
+    """
+
+    def __init__(
+        self,
+        changepoint_prior_scale: float = 0.05,
+        seasonality_prior_scale: float = 10.0,
+        seasonality_mode: str = "additive",
+        yearly_seasonality: str | bool = "auto",
+        weekly_seasonality: str | bool = "auto",
+        daily_seasonality: bool = False,
+        min_history: int = 20,
+        max_entities_fit: Optional[int] = None,
+        **kwargs,
+    ):
+        config = ModelConfig(
+            name="Prophet",
+            model_type="forecasting",
+            params={
+                "changepoint_prior_scale": changepoint_prior_scale,
+                "seasonality_prior_scale": seasonality_prior_scale,
+                "seasonality_mode": seasonality_mode,
+                "yearly_seasonality": yearly_seasonality,
+                "weekly_seasonality": weekly_seasonality,
+                "daily_seasonality": daily_seasonality,
+                "min_history": min_history,
+                "max_entities_fit": max_entities_fit,
+                **kwargs,
+            },
+            optional_dependency="prophet",
+        )
+        super().__init__(config)
+        self._prophet_kwargs = {
+            "changepoint_prior_scale": changepoint_prior_scale,
+            "seasonality_prior_scale": seasonality_prior_scale,
+            "seasonality_mode": seasonality_mode,
+            "yearly_seasonality": yearly_seasonality,
+            "weekly_seasonality": weekly_seasonality,
+            "daily_seasonality": daily_seasonality,
+            **kwargs,
+        }
+        self._min_history = int(min_history)
+        self._max_entities_fit = max_entities_fit
+        self._models: Dict[str, Any] = {}
+        self._fallback_value = 0.0
+
+    def fit(self, X: pd.DataFrame, y: pd.Series, **kwargs) -> "ProphetWrapper":
+        try:
+            from prophet import Prophet
+        except ImportError:
+            raise ImportError("prophet not installed. Run: pip install prophet")
+
+        train_raw = kwargs.get("train_raw")
+        target = kwargs.get("target")
+        self._fallback_value = float(np.nanmean(y.values)) if len(y) else 0.0
+        self._models = {}
+
+        if train_raw is None or target is None or "entity_id" not in train_raw.columns:
+            _logger.warning("  [Prophet] Missing train_raw/entity_id, using fallback-only mode")
+            self._fitted = True
+            return self
+
+        raw = train_raw[["entity_id", "crawled_date_day", target]].dropna(subset=[target]).copy()
+        raw["crawled_date_day"] = pd.to_datetime(raw["crawled_date_day"], errors="coerce")
+        raw = raw.dropna(subset=["crawled_date_day"]).sort_values(["entity_id", "crawled_date_day"])
+        counts = raw.groupby("entity_id").size()
+        valid_entities = counts[counts >= self._min_history].index.tolist()
+        if self._max_entities_fit:
+            valid_entities = valid_entities[: self._max_entities_fit]
+
+        for entity_id in valid_entities:
+            sdf = raw.loc[raw["entity_id"] == entity_id, ["crawled_date_day", target]].copy()
+            sdf.rename(columns={"crawled_date_day": "ds", target: "y"}, inplace=True)
+            sdf["y"] = sdf["y"].astype(float)
+            try:
+                model = Prophet(**self._prophet_kwargs)
+                model.fit(sdf)
+                self._models[str(entity_id)] = {
+                    "model": model,
+                    "last_ds": pd.Timestamp(sdf["ds"].max()),
+                }
+            except Exception as exc:
+                _logger.warning("  [Prophet] fit failed for entity %s: %s", entity_id, exc)
+                continue
+
+        _logger.info(
+            "  [Prophet] fitted %d/%d eligible entities (min_history=%d)",
+            len(self._models),
+            len(valid_entities),
+            self._min_history,
+        )
+        self._fitted = True
+        return self
+
+    def predict(self, X: pd.DataFrame, **kwargs) -> np.ndarray:
+        if not self._fitted:
+            raise ValueError("ProphetWrapper is not fitted")
+
+        n_test = len(X)
+        if not self._models:
+            return np.full(n_test, self._fallback_value, dtype=float)
+
+        test_raw = kwargs.get("test_raw")
+        horizon = int(kwargs.get("horizon", 1))
+        if test_raw is None or "entity_id" not in test_raw.columns:
+            return np.full(n_test, self._fallback_value, dtype=float)
+
+        if "entity_id" not in X.columns and len(test_raw) != n_test:
+            return np.full(n_test, self._fallback_value, dtype=float)
+
+        if len(test_raw) == n_test:
+            entity_series = test_raw["entity_id"].astype(str).to_numpy()
+        else:
+            entity_series = X["entity_id"].astype(str).to_numpy() if "entity_id" in X.columns else np.array([], dtype=str)
+            if len(entity_series) != n_test:
+                return np.full(n_test, self._fallback_value, dtype=float)
+
+        entity_cache: Dict[str, float] = {}
+        out = np.full(n_test, self._fallback_value, dtype=float)
+        for idx, entity_id in enumerate(entity_series):
+            if entity_id in entity_cache:
+                out[idx] = entity_cache[entity_id]
+                continue
+            payload = self._models.get(str(entity_id))
+            if payload is None:
+                pred_value = self._fallback_value
+            else:
+                try:
+                    model = payload["model"]
+                    future = model.make_future_dataframe(periods=max(1, horizon), freq="D", include_history=False)
+                    fcst = model.predict(future)
+                    pred_value = float(fcst["yhat"].iloc[-1])
+                except Exception as exc:
+                    _logger.warning("  [Prophet] predict failed for entity %s: %s", entity_id, exc)
+                    pred_value = self._fallback_value
+            entity_cache[entity_id] = pred_value
+            out[idx] = pred_value
+        return out
+
+
+# ============================================================================
 # Factory functions
 # ============================================================================
 
@@ -249,6 +404,10 @@ create_historic_average = _sf_factory("HistoricAverage")
 create_window_average = _sf_factory("WindowAverage")
 
 
+def create_prophet(**kwargs) -> ModelBase:
+    return ProphetWrapper(**kwargs)
+
+
 STATISTICAL_MODELS = {
     "AutoARIMA": create_auto_arima,
     "AutoETS": create_auto_ets,
@@ -266,6 +425,7 @@ STATISTICAL_MODELS = {
     "Naive": create_naive,
     "HistoricAverage": create_historic_average,
     "WindowAverage": create_window_average,
+    "Prophet": create_prophet,
 }
 
 

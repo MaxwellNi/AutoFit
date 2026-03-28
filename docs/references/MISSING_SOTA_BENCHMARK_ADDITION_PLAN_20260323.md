@@ -85,13 +85,60 @@ Why:
   - registry import succeeded
   - synthetic entity-panel `fit/predict` smoke succeeded
   - freeze-backed micro-smoke on a tiny real subset ran end-to-end without crash
+  - new generic local smoke runner `scripts/run_block3_local_model_smoke.py` passed on:
+    - `task1_outcome / core_edgar / is_funded / h=14`
+    - `MAE = 0.3863`
+    - `fit_seconds = 11.6`
+    - `constant_prediction = false`
 - real-benchmark status:
   - first two direct harness smoke attempts were **killed with exit 137**
   - current evidence suggests the blocker is the local benchmark memory path, not an immediate model-logic failure
-  - the tiny freeze-backed real-data micro-smoke currently produced near-constant outputs, so the model is **not yet cleared** as a healthy benchmark addition
+  - earlier tiny freeze-backed micro-smokes had shown near-constant behavior, but the new generic smoke confirms the wrapper can produce non-constant real outputs on a narrow audited slice
+  - the model is still **not yet canonical-benchmark-cleared**
 - not yet done:
   - canonical Block 3 smoke benchmark completion
   - fairness / constant-prediction audit on real benchmark outputs
+
+## 3.5 Prophet
+
+### Value
+
+- cheap reviewer-recognizable sanity baseline
+- especially useful for business / finance forecasting narratives
+- low engineering burden once dependency is available
+
+### Current local status
+
+- wrapper now exists in `src/narrative/block3/models/statistical.py`
+- registered through `STATISTICAL_MODELS`
+- current blocker is environment, not wrapper absence:
+  - insider env raises `ModuleNotFoundError: No module named 'prophet'`
+
+### Recommended action
+
+1. install `prophet` into the benchmark-capable env
+2. run one narrow local smoke via `scripts/run_block3_local_model_smoke.py`
+3. if healthy, add a narrow canonical benchmark slice before any larger grid
+
+## 3.6 TabPFN-TS
+
+### Value
+
+- very high information-gain efficient baseline
+- directly relevant to the claim that V740 should remain single-model and lightweight
+
+### Current local status
+
+- local generic wrappers already exist in `src/narrative/block3/models/traditional_ml.py`
+- current blocker is environment/runtime compatibility:
+  - insider env import fails with
+    `libstdc++.so.6: version 'GLIBCXX_3.4.31' not found`
+
+### Recommended action
+
+1. fix the `tabpfn` runtime/toolchain compatibility first
+2. then run a narrow local smoke through `scripts/run_block3_local_model_smoke.py`
+3. only after that decide whether a full Block 3 benchmark lane is worth the GPU budget
 
 ## 3.2 OLinear
 
