@@ -154,6 +154,9 @@ Why:
 
 1. use the official latest 2.6 line rather than the older 2.5 default
 2. the first narrow benchmark-harness probe (`5294255`, `v740_tpfn26c`) has now completed successfully
+3. the next two narrow probes are now queued:
+   - `5294259` `v740_tpfn26r_fu` (`TabPFNRegressor`, funding, `task2/core_edgar/h=30`)
+   - `5294260` `v740_tpfn26r_inv` (`TabPFNRegressor`, investors, `task2/core_edgar/h=14`)
 3. the next decision is whether TabPFN’s strong narrow binary result merits wider canonical benchmark expansion
 
 ## 3.2 OLinear

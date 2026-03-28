@@ -1,5 +1,5 @@
 {
-  "generated_at_utc": "2026-03-28T16:00:09.109009+00:00",
+  "generated_at_utc": "2026-03-28T16:07:59.491269+00:00",
   "benchmark_dir": "runs/benchmarks/block3_phase9_fair",
   "filtered_csv": "runs/benchmarks/block3_phase9_fair/all_results.csv",
   "text_dir": "runs/text_embeddings",
@@ -1252,17 +1252,17 @@
     ]
   },
   "slurm": {
-    "jobs_total": 40,
+    "jobs_total": 42,
     "state_counts": {
       "PENDING": 31,
-      "RUNNING": 9
+      "RUNNING": 11
     },
     "user_state_counts": {
       "npin|PENDING": 31,
-      "npin|RUNNING": 9
+      "npin|RUNNING": 11
     },
     "partition_state_counts": {
-      "gpu|RUNNING": 6,
+      "gpu|RUNNING": 8,
       "hopper|PENDING": 17,
       "l40s|PENDING": 14,
       "l40s|RUNNING": 3
@@ -1271,7 +1271,7 @@
       "besteffort|PENDING": 17,
       "iris-snt|PENDING": 14,
       "iris-snt|RUNNING": 3,
-      "normal|RUNNING": 6
+      "normal|RUNNING": 8
     },
     "pending_reasons": {
       "(Priority)": 30,
@@ -1330,6 +1330,22 @@
         "partition": "gpu",
         "qos": "normal",
         "reason": "iris-170"
+      },
+      {
+        "job_name": "v740_tpfn26r_fu",
+        "user": "npin",
+        "state": "RUNNING",
+        "partition": "gpu",
+        "qos": "normal",
+        "reason": "iris-183"
+      },
+      {
+        "job_name": "v740_tpfn26r_inv",
+        "user": "npin",
+        "state": "RUNNING",
+        "partition": "gpu",
+        "qos": "normal",
+        "reason": "iris-183"
       },
       {
         "job_name": "h2_ac_t1_e2",

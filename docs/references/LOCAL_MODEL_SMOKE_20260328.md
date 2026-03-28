@@ -202,3 +202,19 @@ These are resumable SLURM jobs under
 `runs/benchmarks/block3_phase9_localclear_20260328/`. They are intended to
 clear the models against the real benchmark harness without polluting the
 canonical leaderboard.
+
+## 5. Next Narrow-Clear Queue
+
+The next two highest-value follow-up probes are now queued so that `TabPFN 2.6`
+is not judged only from a single binary slice:
+
+- `5294259` `v740_tpfn26r_fu`
+  - `TabPFNRegressor`
+  - `task2_forecast / core_edgar / funding_raised_usd / h=30`
+- `5294260` `v740_tpfn26r_inv`
+  - `TabPFNRegressor`
+  - `task2_forecast / core_edgar / investors_count / h=14`
+
+Both use the latest-source vendor runtime (`tabpfn 7.0.1`) plus the official
+`tabpfn_2_6` regressor checkpoint and write to isolated local-clear output
+roots outside the canonical leaderboard.

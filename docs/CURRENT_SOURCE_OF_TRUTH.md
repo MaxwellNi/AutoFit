@@ -115,7 +115,8 @@ If any other document disagrees with this file, prefer this file and the evidenc
    - `5294243` `v740_prop_clr` **failed before model execution** because `quick` preset does not support `h=30`
    - `5294254` `v740_prop_std` **completed successfully** as the corrected `Prophet` resubmission on `bigmem`
    - `5294255` `v740_tpfn26c` **completed successfully** as the first narrow `TabPFNClassifier` + official 2.6 checkpoint benchmark-clear probe
-   - there are currently **no live local-only model-clear jobs** left in queue
+   - `5294259` `v740_tpfn26r_fu` is now **queued** as the first narrow `TabPFNRegressor` funding clear
+   - `5294260` `v740_tpfn26r_inv` is now **queued** as the first narrow `TabPFNRegressor` investors-count clear
    - all of these write to isolated output roots under `runs/benchmarks/block3_phase9_localclear_20260328/` and do **not** count as canonical benchmark results
 
 ## Current Priorities
