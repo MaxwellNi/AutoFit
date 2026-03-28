@@ -1,7 +1,7 @@
 # Missing SOTA Benchmark Addition Plan (2026-03-23)
 
 > Date: 2026-03-23
-> Status: implementation planning (updated after first local SAMformer integration)
+> Status: implementation planning (updated after first local SAMformer integration; queue state refreshed 2026-03-28)
 > Scope: high-priority missing models for Block 3 benchmark expansion
 >
 > 2026-03-27 superseding note:
@@ -73,6 +73,7 @@ Why:
 ### Recommended action
 
 1. ~~implement a `SAMformerWrapper`~~ ✅ local wrapper added on 2026-03-23
+2. narrow benchmark-clear probe now queued as `5294242` (`v740_samf_clr`)
 2. ~~train on panel windows extracted from the current entity histories~~ ✅ synthetic panel smoke passed
 3. benchmark first on a narrow real smoke slice before full expansion
 
@@ -122,6 +123,7 @@ Why:
 ### Recommended action
 
 1. keep Prophet on the user-local vendor path instead of mutating the shared env
+2. narrow benchmark-clear probe now queued as `5294243` (`v740_prop_clr`)
 2. run one narrow canonical smoke slice before any larger grid
 3. if healthy, add it as a cheap business-sanity comparator in the benchmark pack
 
@@ -140,6 +142,8 @@ Why:
 - current blocker is model access:
   - tiny local smoke reaches model initialization, then fails because
     `Prior-Labs/tabpfn_2_5` is gated on Hugging Face
+    and a successful `hf auth login` is still insufficient unless the active
+    account has accepted the repo terms
 - wrapper now supports a local checkpoint path via `model_path` or
   `BLOCK3_TABPFN_MODEL_PATH`
 

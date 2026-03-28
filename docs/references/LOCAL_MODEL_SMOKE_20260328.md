@@ -107,5 +107,24 @@ mutating the shared insider env.
 ### Interpretation
 
 TabPFN is no longer blocked by runtime/toolchain compatibility. It is currently
-blocked by **gated model-weight access** unless a local checkpoint path or HF
-token is provided.
+blocked by **gated model-weight access** unless a local checkpoint path is
+provided or the active Hugging Face account has actually accepted the
+`Prior-Labs/tabpfn_2_5` access terms. A successful `hf auth login` by itself is
+not enough if the account still lacks the repo-level gated approval.
+
+## 4. Narrow benchmark-clear queue status
+
+As of 2026-03-28, two local-only narrow benchmark-clear jobs are now queued
+through the canonical harness with isolated output roots:
+
+- `5294242` `v740_samf_clr`
+  - `SAMformer`
+  - `task1_outcome / core_edgar / is_funded / h=14`
+- `5294243` `v740_prop_clr`
+  - `Prophet`
+  - `task2_forecast / core_only / funding_raised_usd / h=30`
+
+These are resumable SLURM jobs under
+`runs/benchmarks/block3_phase9_localclear_20260328/`. They are intended to
+clear the models against the real benchmark harness without polluting the
+canonical leaderboard.

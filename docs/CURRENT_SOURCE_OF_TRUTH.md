@@ -1,6 +1,6 @@
 # Current Source of Truth
 
-> Last verified: 2026-03-27 17:10 CET
+> Last verified: 2026-03-28 15:45 CET
 > Verified by direct scans of `runs/benchmarks/block3_phase9_fair/`, live `squeue -u npin`, `sacct`, benchmark aggregation scripts.
 
 This file is the authoritative documentation entry point for the current Block 3 project state.
@@ -43,7 +43,7 @@ If any other document disagrees with this file, prefer this file and the evidenc
 | Text embedding artifacts | `AVAILABLE` | `runs/text_embeddings/embedding_metadata.json` |
 | Phase 12 text reruns | `48/48 COMPLETED` | core_text+full 91/91 models |
 | Phase 15 new models | 23 submitted, 15 valid, 8 excluded (Finding H), 78/160 | direct scan |
-| Live jobs | `40` (5R + 35PD) | squeue 2026-03-27 17:10: gpu 0R+6PD, l40s 3R+14PD, hopper 2R+15PD |
+| Live jobs | `42` (9R + 33PD) | squeue 2026-03-28 15:45: gpu 6R+2PD, l40s 3R+14PD, hopper 0R+17PD |
 | Clean full comparable frontier | `55` models @ shared `160/160` | post-filter `all_results.csv`, non-retired only |
 
 ## What the Current Benchmark Means
@@ -63,43 +63,43 @@ If any other document disagrees with this file, prefer this file and the evidenc
 
 ## Current Execution Reality
 
-1. Live queue snapshot verified on 2026-03-27 17:10 CET:
-   - `5 RUNNING` = `0 gpu + 3 l40s + 2 hopper`
-   - `35 PENDING` = `6 gpu + 14 l40s + 15 hopper`
-   - **40 total**
-   - Current gpu runners: none
-   - Current gpu pending: `af739_t1_e2`, `af739_t1_s2`, `af739_t2_e2`, `af739_t2_s2`, `af739_t3_e2`, `gpu_cos2_t2`
-   - No local-only V740 jobs are currently live in queue; the most recent corrected local compare and larger-slice `h=90` audit both completed successfully outside the canonical benchmark
+1. Live queue snapshot verified on 2026-03-28 15:45 CET:
+   - `9 RUNNING` = `6 gpu + 3 l40s + 0 hopper`
+   - `33 PENDING` = `2 gpu + 14 l40s + 17 hopper`
+   - **42 total**
+   - Current gpu runners: `af739_t1_e2`, `af739_t1_s2`, `af739_t2_e2`, `af739_t2_s2`, `af739_t3_e2`, `gpu_cos2_t2`
+   - Current gpu pending (local-only, outside the canonical benchmark): `v740_samf_clr`, `v740_prop_clr`
+   - Current l40s runners: `l2_ac_t2_e2`, `l2_ac_t3_co`, `l2_ac_t3_ct`
+   - Current hopper runners: none; hopper is pure overflow backlog right now
    - **ModernTCN bottleneck** remains the dominant throughput limiter for non-e2 accel jobs
    - Partition constraints (`sinfo` verified): `gpu=756G`, `l40s=515G`, `hopper=2063754MB (~2.06TB)`; the earlier `hopper=201G` claim was a unit-reading error
 2. V739 status:
    - **132/160 conditions landed** (+1 from 131, s2/e2 gap-filling)
-   - 5 af739 jobs live: `0 RUNNING + 5 PENDING`
-   - PENDING: `t1_e2`, `t1_s2`, `t2_e2`, `t2_s2`, `t3_e2`
+   - 5 af739 jobs live: `5 RUNNING + 0 PENDING`
+   - RUNNING: `t1_e2`, `t1_s2`, `t2_e2`, `t2_s2`, `t3_e2`
    - Missing structure: `t1_e2=9`, `t1_s2=8`, `t2_e2=4`, `t2_s2=4`, `t3_e2=3` (28 total)
    - V739 is empirically valid: 0 NaN/Inf, 0 fallback, 100% fairness pass
    - The two seed2 jobs (`t1_s2`, `t2_s2`) previously OOMed at `150G` with observed `MaxRSS ≈ 157.3G`; they have now been requeued at `189G`
-   - `t3_e2` and `gpu_cos2_t2` both timed out in their previous copies on 2026-03-27 and were explicitly resubmitted as `5290366` and `5290365`
+   - `t3_e2` and `gpu_cos2_t2` both timed out in their previous copies on 2026-03-27 and were explicitly resubmitted as `5290366` and `5290365`; both are now running
 3. Finding H (discovered 2026-03-22):
    - 8 P15 models produce 100% constant predictions (0% fairness pass)
    - CFPT, DeformableTST, MICN, PathFormer, SEMPO, SparseTSF, TimeBridge, TimePerceiver
    - Added to AUDIT_EXCLUDED_MODELS in aggregate_block3_results.py
    - Removed from accel_v2 scripts → ~30% faster per job
 4. accel_v2 progress (current live reality):
-   - there are **no active gpu accel_v2 runners** at this moment; the gpu critical path is currently `gpu_cos2_t2` plus the five af739 gap-fill jobs, all pending
-   - active accel_v2 runtime is currently concentrated on `l40s` and `hopper`
+   - the gpu critical path is now actively running again: `gpu_cos2_t2` plus the five af739 gap-fill jobs are all back on live GPU nodes
+   - active accel_v2 runtime is currently concentrated on `l40s`; hopper is queued but not live
    - live runners at this moment are:
-     - `l2_ac_t2_s2`
      - `l2_ac_t2_e2`
+     - `l2_ac_t3_co`
      - `l2_ac_t3_ct`
-     - `h2_ac_t3_ct`
-     - `h2_ac_t1_co`
+   - `l2_ac_t2_s2` timed out at the 2-day wall on 2026-03-28 after advancing into the `investors_count` section and was immediately resubmitted as `5294241`
    - **ModernTCN remains the universal bottleneck** for non-`e2` accel paths and is still the main reason resumable copies keep timing out before the backlog clears
    - `_requeue_handler()` remains present in the script surface; current progress still depends on partition availability more than on correctness bugs
 5. Critical gaps:
    - s2 (core_only_seed2): `gpu_cos2_t2` remains the canonical task2 seed2 gap-fill and has now been **resubmitted again** as `5290365` after the latest 2-day timeout on `5284505`
    - e2 (core_edgar_seed2): 2778 records (+54 from 2724), accel_v2 e2 scripts producing the bulk of recent growth
-   - V739: 28 missing s2+e2 conditions, and **all 5 required gap-fill jobs are now live** (`0 RUNNING + 5 PENDING`)
+   - V739: 28 missing s2+e2 conditions, and **all 5 required gap-fill jobs are now live** (`5 RUNNING + 0 PENDING`)
 6. Text embeddings:
    - `runs/text_embeddings/text_embeddings.parquet` — 5,774,931 rows, 64 PCA dims
    - Phase 12 all 48/48 complete. core_text+full coverage: 91/91 models
@@ -111,6 +111,10 @@ If any other document disagrees with this file, prefer this file and the evidenc
      - `V739`: `MAE = 0.1623`, selected model `PatchTST`, fit time `301.3s`
      - `V740-alpha`: `MAE = 0.2016`, fit time `38.9s`
    - interpretation: `V740-alpha` is still much cheaper, but it is **not yet** strong enough to replace V739 on this audited binary EDGAR slice
+9. Local-only model-clear queue state:
+   - `5294242` `v740_samf_clr` is now pending on `gpu` for a narrow `SAMformer` benchmark-clear probe
+   - `5294243` `v740_prop_clr` is now pending on `gpu` for a narrow `Prophet` benchmark-clear probe
+   - both write to isolated output roots under `runs/benchmarks/block3_phase9_localclear_20260328/` and do **not** count as canonical benchmark results
 
 ## Current Priorities
 
@@ -120,7 +124,7 @@ If any other document disagrees with this file, prefer this file and the evidenc
 4. ~~Phase 12 text reruns to land.~~ ✅ DONE. core_text+full 91/91 models.
 5. ~~Phase 15 new TSLib models.~~ ✅ Submitted. 15 valid, 8 excluded (Finding H).
 6. ~~Cancel old v1 l40s/hopper jobs.~~ ✅ DONE. 8 old v1 jobs cancelled, freed L40S for v2.
-7. Complete V739 s2/e2 gap-fill (currently `0 RUNNING + 5 PENDING`, all 5 live).
+7. Complete V739 s2/e2 gap-fill (currently `5 RUNNING + 0 PENDING`, all 5 live).
 8. Complete e2 gap for ETSformer/LightTS/Pyraformer/Reformer (0/28 e2 each — covered by accel_v2).
 9. Complete P15 model gap-fill to 160/160 via accel_v2 (54 total jobs, auto-requeue).
 10. g2_ac_v2 auto-requeue: e2/ct complete first run; co/s2/ce/fu need 2-3 requeues, with `gpu_cos2_t2` now corrected to the trimmed 23-model list.
