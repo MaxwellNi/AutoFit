@@ -18,6 +18,40 @@ This document is intentionally strict about status labels:
 - `docs-only`: tracked in research docs, not yet integrated
 - `not integrated`: no local registry entry and no runnable benchmark path yet
 
+## 0. Strict Verdict
+
+As of **2026-03-28**, the answer to
+
+> "Are these stacks and repo families already fully registered, integrated,
+> tuned, and adapted to Block 3?"
+
+is **no**.
+
+More precisely:
+
+1. **The current Block 3 benchmark is already large and serious, but not fully
+   exhaustive across the 2024-2026 frontier.**
+2. **Only a minority of the named stack families are active current lanes.**
+3. **Many named foundation / official repos are only in one of these states:**
+   - registered only,
+   - partial benchmark,
+   - local-only clear,
+   - docs-only,
+   - or not integrated.
+4. **“Fully tuned and adapted” is not an honest claim for most of the listed
+   repos.**
+   For many of them there is:
+   - no active wrapper,
+   - no canonical benchmark row,
+   - no audited hyperparameter sweep on Block 3,
+   - and no clean completion proof on the shared benchmark surface.
+
+The strongest honest statement today is:
+
+> Block 3 already has a meaningful benchmark frontier, but the full stack /
+> repo universe listed by the user has **not** been fully integrated or fully
+> tuned yet.
+
 ## 1. Layer 1: Skeleton Libraries
 
 | Stack | Current local reality | Benchmark role today |
@@ -84,6 +118,21 @@ This document is intentionally strict about status labels:
 | `FreqLLM` | not integrated |
 | `LLM-TPF` | not integrated |
 
+## 4b. Long-term Index Repos and Benchmark Infrastructure
+
+These matter for horizon scanning and public-dataset generalization planning,
+but they are **not** current benchmark entrants by themselves.
+
+| Direction | Current local status |
+| --- | --- |
+| `TongjiFinLab/awesome-time-series-forecasting` | docs-only tracking reference |
+| `ddz16/TSFpaper` | docs-only tracking reference |
+| `hushuguo/awesome-time-series-papers` | docs-only tracking reference |
+| `LLMs4TS` resource index | docs-only tracking reference |
+| `SalesforceAIResearch/GIFT-Eval` | docs-only benchmark-infra reference |
+| `TimeCopilot` | docs-only benchmark-infra reference |
+| `TimeSeriesGym` | docs-only benchmark-infra reference |
+
 ## 5. Immediate Comparator Status for the Current Missing High-value Wave
 
 | Model | Local status today | Best next action |
@@ -111,3 +160,69 @@ This document is intentionally strict about status labels:
    - `Prophet`
    - `TabPFN-TS`
    before the project spends effort on the heavier second wave.
+4. The user-provided stack/repo list is therefore **not yet fully covered**.
+   The clearest current gaps are:
+   - Layer 1 skeleton libraries beyond `TSLib` / `NeuralForecast` /
+     `StatsForecast`
+   - multiple foundation repos that are registered-only but not benchmark-landed
+   - multiple 2025-2026 supervised repos that are still not integrated at all
+   - the entire LLM / multimodal layer, which is still docs-only / not integrated
+
+## 7. Frontier Beyond the User's List
+
+The user also asked whether there are **more** advanced / high-value directions
+beyond the explicit repo list. The answer is **yes**.
+
+The most important currently tracked additions beyond the user's enumerated
+repo list are:
+
+### 7.1 Highest-value standalone missing comparators
+
+- `LightGTS`
+- `OLinear`
+- `ElasTST`
+- `UniTS`
+- `SAMformer` (now local-clear, but still not canonical-landed)
+- `TEMPO`
+
+These are the strongest current additions because they directly address one or
+more of the project's demonstrated needs:
+
+- lightweight single-model forecasting,
+- varied-horizon / arbitrary-horizon behavior,
+- decomposition-first efficiency,
+- or a strong non-ensemble comparator against the current V740 ambition.
+
+### 7.2 Highest-value mechanism papers that should shape V740
+
+- `CASA`
+- `DistDF`
+- `Selective Learning`
+- `TimeEmb`
+- `QDF`
+- `JAPAN`
+- `Time-o1`
+
+These are not all best treated as standalone benchmark entrants. Several are
+more valuable as:
+
+- loss functions,
+- sample weighting schemes,
+- calibration layers,
+- or static/dynamic fusion mechanisms inside V740.
+
+## 8. Current Practical Answer
+
+If the user asks:
+
+> "Have we already deeply studied and fully integrated all these stacks and
+> their latest time-series models?"
+
+the factual answer today is:
+
+- **No, not fully.**
+- We have a **strong current benchmark core**.
+- We have **partial integration** for a meaningful subset.
+- We have **local-clear evidence** for `SAMformer`, `Prophet`, and `TabPFN 2.6`.
+- But we do **not** yet have full integration + audited tuning + canonical
+  benchmark landing for the full four-layer list the user provided.
