@@ -21,7 +21,11 @@ import pandas as pd
 
 logger = logging.getLogger(__name__)
 
-from .optional_runtime import ensure_insider_libstdcpp, ensure_optional_vendor_on_path
+from .optional_runtime import (
+    ensure_insider_libstdcpp,
+    ensure_optional_vendor_on_path,
+    ensure_tabpfn_vendor_on_path,
+)
 from .base import (
     ModelBase, ModelConfig, SklearnModelWrapper,
     GradientBoostingWrapper, NaiveForecaster,
@@ -412,8 +416,11 @@ class TabPFNRegressorWrapper(ModelBase):
     def __init__(self, **kwargs):
         kwargs = dict(kwargs)
         env_model_path = os.getenv("BLOCK3_TABPFN_MODEL_PATH")
+        env_regressor_model_path = os.getenv("BLOCK3_TABPFN_REGRESSOR_MODEL_PATH")
         if env_model_path and "model_path" not in kwargs:
             kwargs["model_path"] = env_model_path
+        if env_regressor_model_path and "model_path" not in kwargs:
+            kwargs["model_path"] = env_regressor_model_path
         config = ModelConfig(
             name="TabPFNRegressor",
             model_type="regression",
@@ -424,8 +431,24 @@ class TabPFNRegressorWrapper(ModelBase):
         self._init_kwargs = kwargs
         self._feature_names: list[str] = []
 
+    @staticmethod
+    def _resolve_latest_model_path() -> Optional[str]:
+        try:
+            from huggingface_hub import hf_hub_download
+        except ImportError:
+            return None
+        try:
+            return hf_hub_download(
+                repo_id="Prior-Labs/tabpfn_2_6",
+                filename="tabpfn-v2.6-regressor-v2.6_default.ckpt",
+            )
+        except Exception as e:
+            _logger.info(f"  [TabPFNRegressor] Latest v2.6 checkpoint unavailable: {e}")
+            return None
+
     def fit(self, X: pd.DataFrame, y: pd.Series, **kwargs) -> "TabPFNRegressorWrapper":
         ensure_optional_vendor_on_path()
+        ensure_tabpfn_vendor_on_path()
         ensure_insider_libstdcpp()
         try:
             from tabpfn import TabPFNRegressor
@@ -444,15 +467,29 @@ class TabPFNRegressorWrapper(ModelBase):
 
         Xf = X.fillna(0)
         self._feature_names = list(Xf.columns)
-        self.model = TabPFNRegressor(**self._init_kwargs)
+        init_kwargs = dict(self._init_kwargs)
+        if "model_path" not in init_kwargs:
+            latest_path = self._resolve_latest_model_path()
+            if latest_path:
+                init_kwargs["model_path"] = latest_path
+        self.model = TabPFNRegressor(**init_kwargs)
         try:
             self.model.fit(Xf.values, y.values)
+        except KeyError as e:
+            if "tabpfn_v2_6" in str(e):
+                raise RuntimeError(
+                    "Current TabPFN runtime does not yet understand the v2.6 architecture. "
+                    "Install the latest official GitHub source into the isolated vendor path "
+                    "with `scripts/bootstrap_optional_model_deps.py --group tabpfn_latest`, "
+                    "or provide a compatible local checkpoint/runtime pair."
+                ) from e
+            raise
         except RuntimeError as e:
             msg = str(e)
             if "gated" in msg or "HuggingFace authentication error" in msg:
                 raise RuntimeError(
                     "TabPFN weights are gated. Accept the terms at "
-                    "https://huggingface.co/Prior-Labs/tabpfn_2_5 and provide "
+                    "https://huggingface.co/Prior-Labs/tabpfn_2_6 and provide "
                     "access via `hf auth login`, `HF_TOKEN`, or a local "
                     "`BLOCK3_TABPFN_MODEL_PATH` checkpoint."
                 ) from e
@@ -473,8 +510,11 @@ class TabPFNClassifierWrapper(ModelBase):
     def __init__(self, **kwargs):
         kwargs = dict(kwargs)
         env_model_path = os.getenv("BLOCK3_TABPFN_MODEL_PATH")
+        env_classifier_model_path = os.getenv("BLOCK3_TABPFN_CLASSIFIER_MODEL_PATH")
         if env_model_path and "model_path" not in kwargs:
             kwargs["model_path"] = env_model_path
+        if env_classifier_model_path and "model_path" not in kwargs:
+            kwargs["model_path"] = env_classifier_model_path
         config = ModelConfig(
             name="TabPFNClassifier",
             model_type="classification",
@@ -485,8 +525,24 @@ class TabPFNClassifierWrapper(ModelBase):
         self._init_kwargs = kwargs
         self._feature_names: list[str] = []
 
+    @staticmethod
+    def _resolve_latest_model_path() -> Optional[str]:
+        try:
+            from huggingface_hub import hf_hub_download
+        except ImportError:
+            return None
+        try:
+            return hf_hub_download(
+                repo_id="Prior-Labs/tabpfn_2_6",
+                filename="tabpfn-v2.6-classifier-v2.6_default.ckpt",
+            )
+        except Exception as e:
+            _logger.info(f"  [TabPFNClassifier] Latest v2.6 checkpoint unavailable: {e}")
+            return None
+
     def fit(self, X: pd.DataFrame, y: pd.Series, **kwargs) -> "TabPFNClassifierWrapper":
         ensure_optional_vendor_on_path()
+        ensure_tabpfn_vendor_on_path()
         ensure_insider_libstdcpp()
         try:
             from tabpfn import TabPFNClassifier
@@ -506,15 +562,29 @@ class TabPFNClassifierWrapper(ModelBase):
         Xf = X.fillna(0)
         yb = (y.values > 0.5).astype(int)
         self._feature_names = list(Xf.columns)
-        self.model = TabPFNClassifier(**self._init_kwargs)
+        init_kwargs = dict(self._init_kwargs)
+        if "model_path" not in init_kwargs:
+            latest_path = self._resolve_latest_model_path()
+            if latest_path:
+                init_kwargs["model_path"] = latest_path
+        self.model = TabPFNClassifier(**init_kwargs)
         try:
             self.model.fit(Xf.values, yb)
+        except KeyError as e:
+            if "tabpfn_v2_6" in str(e):
+                raise RuntimeError(
+                    "Current TabPFN runtime does not yet understand the v2.6 architecture. "
+                    "Install the latest official GitHub source into the isolated vendor path "
+                    "with `scripts/bootstrap_optional_model_deps.py --group tabpfn_latest`, "
+                    "or provide a compatible local checkpoint/runtime pair."
+                ) from e
+            raise
         except RuntimeError as e:
             msg = str(e)
             if "gated" in msg or "HuggingFace authentication error" in msg:
                 raise RuntimeError(
                     "TabPFN weights are gated. Accept the terms at "
-                    "https://huggingface.co/Prior-Labs/tabpfn_2_5 and provide "
+                    "https://huggingface.co/Prior-Labs/tabpfn_2_6 and provide "
                     "access via `hf auth login`, `HF_TOKEN`, or a local "
                     "`BLOCK3_TABPFN_MODEL_PATH` checkpoint."
                 ) from e

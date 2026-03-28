@@ -1,6 +1,6 @@
 # Block 3 Model Benchmark Status
 
-> Last updated: 2026-03-28 15:45 CET
+> Last updated: 2026-03-28 17:10 CET
 > Current authority: `docs/CURRENT_SOURCE_OF_TRUTH.md`
 > Evidence: direct scan of `runs/benchmarks/block3_phase9_fair/`, `all_results.csv`, live `squeue`, `sacct`, and benchmark aggregation scripts.
 
@@ -18,7 +18,7 @@
 | post-filter distinct models | 107 | includes 21 retired AutoFit legacy lines |
 | post-filter non-retired models | 86 | `all_results.csv` minus retired AutoFit legacy lines |
 | conditions per full model | 160 | t1(72) + t2(48) + t3(40) |
-| live jobs | **42** | 9R + 33PD (gpu 6R+2PD, l40s 3R+14PD, hopper 0R+17PD) |
+| live jobs | **40** | 9R + 31PD (gpu 6R+0PD, l40s 3R+14PD, hopper 0R+17PD) |
 | clean full comparable frontier | **55** | post-filter non-retired models at shared 160/160 |
 | text embeddings | available | 5,774,931 rows, 64 PCA dims |
 
@@ -63,19 +63,21 @@ Detailed per-job progress/ETA snapshot: `docs/RUN_QUEUE_PROGRESS_CURRENT.md`
 | Slice | Value | Notes |
 | --- | ---: | --- |
 | gpu RUNNING | 6 | `af739_t1_e2`, `af739_t1_s2`, `af739_t2_e2`, `af739_t2_s2`, `af739_t3_e2`, `gpu_cos2_t2` |
-| gpu PENDING | 2 | local-only `v740_samf_clr`, `v740_prop_clr` |
+| gpu PENDING | 0 | no local-only jobs remain queued on gpu |
 | l40s RUNNING | 3 | `l2_ac_t2_e2`, `l2_ac_t3_co`, `l2_ac_t3_ct` |
 | l40s PENDING | 14 | overflow / resume-safe accel_v2 backlog |
 | hopper RUNNING | 0 | no current hopper jobs are running for `npin` |
 | hopper PENDING | 17 | priority-limited overflow backlog |
-| **total** | **42** | **9 RUNNING + 33 PENDING** |
+| bigmem RUNNING | 0 | no current bigmem benchmark-side work |
+| **total** | **40** | **9 RUNNING + 31 PENDING** |
 
 ### Current Throughput Interpretation
 
 - `gpu` is again the live critical path: all five V739 gap-fill jobs plus `gpu_cos2_t2` are currently running.
-- there are now **two pending local-only model-clear jobs** outside the canonical benchmark:
-  - `5294242` `v740_samf_clr`
-  - `5294243` `v740_prop_clr`
+- local-only model-clear surface has advanced:
+  - `5294242` `v740_samf_clr` completed successfully
+  - `5294254` `v740_prop_std` completed successfully on `bigmem`
+  - `5294255` `v740_tpfn26c` completed successfully on `gpu`
 - `l40s` remains the best overflow partition when memory needs fit within the 15G/CPU rule and a resume-safe script exists.
 - `hopper` is not memory-constrained in the way older docs implied; the real limiter is priority/preemption. It should be treated as opportunistic overflow, not as the sole critical path.
 - `ModernTCN` remains the dominant throughput bottleneck for non-`e2` accel jobs.
@@ -95,9 +97,11 @@ Detailed per-job progress/ETA snapshot: `docs/RUN_QUEUE_PROGRESS_CURRENT.md`
 5. **Resubmitted the timed-out `l40s` overflow job**:
    - `5294241` `l2_ac_t2_s2`
    - the direct log shows it progressed into `investors_count` work and died at the 2-day wall, so this is a throughput continuation, not a structural failure
-6. **Queued two narrow local-only model-clear jobs**:
-   - `5294242` `v740_samf_clr` (`SAMformer`)
-   - `5294243` `v740_prop_clr` (`Prophet`)
+6. **Advanced the local-only model-clear lane**:
+   - `5294242` `v740_samf_clr` (`SAMformer`) → completed successfully
+   - `5294243` `v740_prop_clr` (`Prophet`) → failed due invalid `quick+h30` preset/horizon combination
+   - `5294254` `v740_prop_std` (`Prophet`) → corrected CPU-only resubmission completed successfully
+   - `5294255` `v740_tpfn26c` (`TabPFNClassifier`) → first latest-source 2.6 narrow clear completed successfully
 7. **Rebuilt** `docs/benchmarks/phase9_current_snapshot.{json,md}` and `docs/BLOCK3_RESULTS.md` using the insider Python environment after the new landings.
 8. **Recovered the first corrected local V739 vs V740 compare** (`mb_t1_core_edgar_is_funded_h14`), which currently favors V739/`PatchTST` over V740-alpha on that audited binary EDGAR slice.
 
@@ -114,4 +118,4 @@ Detailed per-job progress/ETA snapshot: `docs/RUN_QUEUE_PROGRESS_CURRENT.md`
 1. Let the six running gpu jobs (`af739_t1_e2`, `af739_t1_s2`, `af739_t2_e2`, `af739_t2_s2`, `af739_t3_e2`, `gpu_cos2_t2`) keep draining in place.
 2. Continue letting accel_v2 drain on `gpu + l40s + hopper`; do not touch the canonical benchmark harness beyond necessary resubmissions.
 3. Rebuild `docs/benchmarks/phase9_current_snapshot.*` and `docs/BLOCK3_RESULTS.md` again after the next meaningful landing increment.
-4. Let the two pending local-only model-clear jobs (`v740_samf_clr`, `v740_prop_clr`) clear first, then decide whether `SAMformer` or `Prophet` is the next realistic canonical addition.
+4. Use the newly completed local-only model-clear results (`SAMformer`, `Prophet`, `TabPFN 2.6`) to decide which comparator deserves the next canonical expansion step.

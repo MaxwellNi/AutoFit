@@ -73,9 +73,9 @@ Why:
 ### Recommended action
 
 1. ~~implement a `SAMformerWrapper`~~ ✅ local wrapper added on 2026-03-23
-2. narrow benchmark-clear probe now queued as `5294242` (`v740_samf_clr`)
-2. ~~train on panel windows extracted from the current entity histories~~ ✅ synthetic panel smoke passed
-3. benchmark first on a narrow real smoke slice before full expansion
+2. ~~narrow benchmark-clear probe now queued as `5294242` (`v740_samf_clr`)~~ ✅ completed on 2026-03-28
+3. ~~train on panel windows extracted from the current entity histories~~ ✅ synthetic panel smoke passed
+4. next step is no longer “first clear”, but “decide whether to promote SAMformer into a wider canonical benchmark lane”
 
 ### Current local status
 
@@ -123,9 +123,9 @@ Why:
 ### Recommended action
 
 1. keep Prophet on the user-local vendor path instead of mutating the shared env
-2. narrow benchmark-clear probe now queued as `5294243` (`v740_prop_clr`)
-2. run one narrow canonical smoke slice before any larger grid
-3. if healthy, add it as a cheap business-sanity comparator in the benchmark pack
+2. first narrow benchmark-clear probe (`5294243`) failed before model execution because `quick` preset does not support `h=30`
+3. corrected resubmission `5294254` (`v740_prop_std`) on `bigmem` with `standard` preset has now completed successfully
+4. next decision is no longer “can Prophet clear the harness?”, but whether its weak narrow-slice quality still justifies a canonical sanity-baseline lane
 
 ## 3.6 TabPFN-TS
 
@@ -139,19 +139,22 @@ Why:
 - local generic wrappers already exist in `src/narrative/block3/models/traditional_ml.py`
 - runtime compatibility is now fixable in-code by preloading the insider env
   `libstdc++.so.6.0.34`
-- current blocker is model access:
-  - tiny local smoke reaches model initialization, then fails because
-    `Prior-Labs/tabpfn_2_5` is gated on Hugging Face
-    and a successful `hf auth login` is still insufficient unless the active
-    account has accepted the repo terms
-- wrapper now supports a local checkpoint path via `model_path` or
-  `BLOCK3_TABPFN_MODEL_PATH`
+- the real situation is now more specific:
+  - HF auth works and official `Prior-Labs/tabpfn_2_6` checkpoints are
+    locally cached
+  - the shared `tabpfn 6.3.2` runtime was too old for 2.6 and failed with
+    `KeyError: 'tabpfn_v2_6'`
+  - a latest-source vendor runtime (`tabpfn 7.0.1`) is now installed in
+    `~/.cache/block3_optional_pydeps/py312_tabpfn_latest`
+- wrapper now supports:
+  - local checkpoint paths via `model_path` / `BLOCK3_TABPFN_MODEL_PATH`
+  - latest-source vendor override via `BLOCK3_TABPFN_VENDOR`
 
 ### Recommended action
 
-1. obtain authorized access to the gated TabPFN weights or provide a local checkpoint
-2. then rerun a narrow local smoke through `scripts/run_block3_local_model_smoke.py`
-3. only after that decide whether a full Block 3 benchmark lane is worth the GPU budget
+1. use the official latest 2.6 line rather than the older 2.5 default
+2. the first narrow benchmark-harness probe (`5294255`, `v740_tpfn26c`) has now completed successfully
+3. the next decision is whether TabPFN’s strong narrow binary result merits wider canonical benchmark expansion
 
 ## 3.2 OLinear
 

@@ -10,13 +10,23 @@ from pathlib import Path
 REPO_ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(REPO_ROOT))
 
-from src.narrative.block3.models.optional_runtime import get_optional_vendor_dir
+from src.narrative.block3.models.optional_runtime import (
+    get_optional_vendor_dir,
+    get_tabpfn_vendor_dir,
+)
 
 PACKAGE_GROUPS = {
     # Install the minimal runtime set explicitly and rely on the canonical
     # insider env for numpy/pandas/matplotlib/tqdm. This avoids shadowing the
     # benchmark environment with a second scientific stack in the vendor dir.
     "prophet": ["prophet", "cmdstanpy", "holidays", "stanio", "importlib_resources"],
+    # Install the latest official TabPFN source tree into an isolated vendor dir
+    # and keep dependencies in the canonical insider env.
+    "tabpfn_latest": ["git+https://github.com/PriorLabs/TabPFN.git"],
+}
+
+GROUP_TARGETS = {
+    "tabpfn_latest": get_tabpfn_vendor_dir,
 }
 
 
@@ -59,7 +69,24 @@ def main() -> int:
     if not packages:
         raise SystemExit("No packages requested. Use --group prophet and/or --package ...")
 
-    target = (args.target or get_optional_vendor_dir()).expanduser().resolve()
+    target_factory = None
+    if args.group:
+        requested_group_targets = {
+            GROUP_TARGETS[g]
+            for g in args.group
+            if g in GROUP_TARGETS
+        }
+        if len(requested_group_targets) > 1:
+            raise SystemExit(
+                "Requested groups require different vendor roots; install them separately."
+            )
+        if requested_group_targets:
+            target_factory = requested_group_targets.pop()
+
+    target = (
+        args.target
+        or (target_factory() if target_factory is not None else get_optional_vendor_dir())
+    ).expanduser().resolve()
     target.mkdir(parents=True, exist_ok=True)
     cmd = [
         sys.executable,

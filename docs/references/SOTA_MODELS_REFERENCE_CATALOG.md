@@ -112,15 +112,15 @@ The most relevant missing-or-newly-added models for the current V740 goal are:
 
 | Model | Venue | Why it matters now | Current local status |
 |-------|-------|--------------------|----------------------|
-| SAMformer | ICML 2024 Oral | Efficient single-model transformer with SAM + channel-wise attention | **Integrated locally**; synthetic smoke passed, and a generic freeze-backed local smoke now passes on `task1_outcome/core_edgar/is_funded/h=14` (`MAE=0.3863`, non-constant). Still not canonical-benchmark-cleared |
+| SAMformer | ICML 2024 Oral | Efficient single-model transformer with SAM + channel-wise attention | **Integrated locally**; generic smoke passed, and the first real narrow benchmark-clear on `task1_outcome/core_edgar/is_funded/h=14` now completed successfully (`MAE=0.3485`, fairness pass true). Still not canonical-benchmark-landed |
 | LightGTS | ICML 2025 | Lightweight general TS model; highly aligned with V740 efficiency target | missing |
 | OLinear | NeurIPS 2025 | Strong low-cost orthogonal-domain linear baseline | missing, blocked by matrix artifacts |
 | LiPFormer | ICDE 2025 | Lightweight patch-based alternative to PatchTST | missing |
 | ElasTST | NeurIPS 2024 | One model for varied horizons; directly relevant to 160-cell coverage | missing |
 | DIAN | IJCAI 2024 | Invariant/variant decoupling for heterogeneous panels | missing |
 | UniTS | NeurIPS 2024 | Unified multi-task design reference for V740 conditioning | missing |
-| Prophet | classic business TS baseline | Cheap reviewer-recognizable sanity line for finance-style forecasting | wrapper exists locally; user-local vendor install works; generic real-data smoke now passes |
-| TabPFN-TS | NeurIPS 2024 workshop line | Ultra-fast zero-shot TS baseline; very high information-gain comparator | local wrappers already exist; `GLIBCXX` import blocker is resolved, current blocker is gated HF model access |
+| Prophet | classic business TS baseline | Cheap reviewer-recognizable sanity line for finance-style forecasting | wrapper exists locally; user-local vendor install works; generic real-data smoke passes; corrected `bigmem` narrow clear now completed successfully, but quality on the audited funding slice is weak |
+| TabPFN-TS | NeurIPS 2024 workshop line | Ultra-fast zero-shot TS baseline; very high information-gain comparator | local wrappers already exist; `GLIBCXX` import blocker is resolved; latest official `tabpfn_2_6` checkpoints are cached; latest-source vendor runtime (`tabpfn 7.0.1`) is installed locally; first narrow clear now completed successfully with a strong binary result |
 
 ### Fresh 2025-2026 Design Signals Worth Tracking
 

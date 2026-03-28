@@ -1,6 +1,6 @@
 # Current Source of Truth
 
-> Last verified: 2026-03-28 15:45 CET
+> Last verified: 2026-03-28 17:10 CET
 > Verified by direct scans of `runs/benchmarks/block3_phase9_fair/`, live `squeue -u npin`, `sacct`, benchmark aggregation scripts.
 
 This file is the authoritative documentation entry point for the current Block 3 project state.
@@ -43,7 +43,7 @@ If any other document disagrees with this file, prefer this file and the evidenc
 | Text embedding artifacts | `AVAILABLE` | `runs/text_embeddings/embedding_metadata.json` |
 | Phase 12 text reruns | `48/48 COMPLETED` | core_text+full 91/91 models |
 | Phase 15 new models | 23 submitted, 15 valid, 8 excluded (Finding H), 78/160 | direct scan |
-| Live jobs | `42` (9R + 33PD) | squeue 2026-03-28 15:45: gpu 6R+2PD, l40s 3R+14PD, hopper 0R+17PD |
+| Live jobs | `40` (9R + 31PD) | squeue 2026-03-28 17:10: gpu 6R+0PD, l40s 3R+14PD, hopper 0R+17PD |
 | Clean full comparable frontier | `55` models @ shared `160/160` | post-filter `all_results.csv`, non-retired only |
 
 ## What the Current Benchmark Means
@@ -63,12 +63,11 @@ If any other document disagrees with this file, prefer this file and the evidenc
 
 ## Current Execution Reality
 
-1. Live queue snapshot verified on 2026-03-28 15:45 CET:
+1. Live queue snapshot verified on 2026-03-28 17:10 CET:
    - `9 RUNNING` = `6 gpu + 3 l40s + 0 hopper`
-   - `33 PENDING` = `2 gpu + 14 l40s + 17 hopper`
-   - **42 total**
+   - `31 PENDING` = `0 gpu + 14 l40s + 17 hopper`
+   - **40 total**
    - Current gpu runners: `af739_t1_e2`, `af739_t1_s2`, `af739_t2_e2`, `af739_t2_s2`, `af739_t3_e2`, `gpu_cos2_t2`
-   - Current gpu pending (local-only, outside the canonical benchmark): `v740_samf_clr`, `v740_prop_clr`
    - Current l40s runners: `l2_ac_t2_e2`, `l2_ac_t3_co`, `l2_ac_t3_ct`
    - Current hopper runners: none; hopper is pure overflow backlog right now
    - **ModernTCN bottleneck** remains the dominant throughput limiter for non-e2 accel jobs
@@ -112,9 +111,12 @@ If any other document disagrees with this file, prefer this file and the evidenc
      - `V740-alpha`: `MAE = 0.2016`, fit time `38.9s`
    - interpretation: `V740-alpha` is still much cheaper, but it is **not yet** strong enough to replace V739 on this audited binary EDGAR slice
 9. Local-only model-clear queue state:
-   - `5294242` `v740_samf_clr` is now pending on `gpu` for a narrow `SAMformer` benchmark-clear probe
-   - `5294243` `v740_prop_clr` is now pending on `gpu` for a narrow `Prophet` benchmark-clear probe
-   - both write to isolated output roots under `runs/benchmarks/block3_phase9_localclear_20260328/` and do **not** count as canonical benchmark results
+   - `5294242` `v740_samf_clr` **completed successfully** for a narrow `SAMformer` benchmark-clear probe
+   - `5294243` `v740_prop_clr` **failed before model execution** because `quick` preset does not support `h=30`
+   - `5294254` `v740_prop_std` **completed successfully** as the corrected `Prophet` resubmission on `bigmem`
+   - `5294255` `v740_tpfn26c` **completed successfully** as the first narrow `TabPFNClassifier` + official 2.6 checkpoint benchmark-clear probe
+   - there are currently **no live local-only model-clear jobs** left in queue
+   - all of these write to isolated output roots under `runs/benchmarks/block3_phase9_localclear_20260328/` and do **not** count as canonical benchmark results
 
 ## Current Priorities
 

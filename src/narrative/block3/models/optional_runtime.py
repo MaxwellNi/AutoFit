@@ -21,6 +21,15 @@ def get_optional_vendor_dir() -> Path:
     return Path.home() / ".cache" / "block3_optional_pydeps" / py_tag
 
 
+def get_tabpfn_vendor_dir() -> Path:
+    """Return the preferred override path for a latest-source TabPFN install."""
+    env_override = os.getenv("BLOCK3_TABPFN_VENDOR")
+    if env_override:
+        return Path(env_override).expanduser().resolve()
+    py_tag = f"py{sys.version_info.major}{sys.version_info.minor}"
+    return Path.home() / ".cache" / "block3_optional_pydeps" / f"{py_tag}_tabpfn_latest"
+
+
 def ensure_optional_vendor_on_path() -> Path:
     """Add the optional vendor directory to sys.path when it exists."""
     vendor = get_optional_vendor_dir()
@@ -31,6 +40,23 @@ def ensure_optional_vendor_on_path() -> Path:
         # Append to the end so core env packages (numpy/pandas/torch/etc.)
         # continue to come from the canonical insider environment.
         sys.path.append(str(vendor))
+    return vendor
+
+
+def ensure_tabpfn_vendor_on_path() -> Path:
+    """Prepend a latest-source TabPFN vendor dir if it exists.
+
+    This is intentionally more aggressive than ``ensure_optional_vendor_on_path``:
+    the current shared insider environment may carry an older ``tabpfn`` wheel,
+    while we sometimes need to override only that package with a newer official
+    GitHub install without mutating the shared env.
+    """
+    vendor = get_tabpfn_vendor_dir()
+    if vendor.exists():
+        site.addsitedir(str(vendor))
+        if str(vendor) in sys.path:
+            sys.path.remove(str(vendor))
+        sys.path.insert(0, str(vendor))
     return vendor
 
 
@@ -69,5 +95,7 @@ def ensure_insider_libstdcpp() -> Path | None:
 __all__ = [
     "ensure_insider_libstdcpp",
     "ensure_optional_vendor_on_path",
+    "ensure_tabpfn_vendor_on_path",
     "get_optional_vendor_dir",
+    "get_tabpfn_vendor_dir",
 ]

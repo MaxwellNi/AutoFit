@@ -42,12 +42,27 @@ Supporting implementation added in this round:
 - `MAE = 0.3863`
 - `RMSE = 0.5688`
 
+### Narrow benchmark-clear update
+
+- job: `5294242` `v740_samf_clr`
+- status: **COMPLETED**
+- output root:
+  - `runs/benchmarks/block3_phase9_localclear_20260328/samformer/`
+
+Benchmark-harness metrics on the narrow audited slice:
+
+- `MAE = 0.3485`
+- `RMSE = 0.3893`
+- `prediction_coverage_ratio = 1.0`
+- `fairness_pass = true`
+- `peak_rss_gb = 49.16`
+
 ### Interpretation
 
-This upgrades SAMformer from “wrapper exists” to “wrapper plus generic
-freeze-backed local smoke passes on a real slice.” It is still **not**
-canonical-benchmark-cleared. The next step should be a narrow benchmark-clear
-path, not a large submission.
+SAMformer is now past the “wrapper exists” stage and past the “generic local
+smoke only” stage. It has a first **real benchmark-harness narrow clear** on a
+freeze-backed audited slice. It is still **not** a canonical benchmark entrant
+yet, but it now has a credible path to the next integration step.
 
 ## 2. Prophet
 
@@ -82,11 +97,39 @@ path, not a large submission.
 - `MAE = 5300.86`
 - `RMSE = 7245.31`
 
+### Narrow benchmark-clear update
+
+- first SLURM probe: `5294243` `v740_prop_clr`
+- status: **FAILED**
+- real root cause:
+  - `--preset quick` only allows horizons `[7, 14]`
+  - the job requested `--horizons-filter 30`
+  - harness aborted before model execution with:
+    `No horizons left after applying horizons filter: [30]`
+- corrected follow-up:
+  - `5294254` `v740_prop_std`
+  - `bigmem`, `4 CPU`, `64G`, `2h`
+  - status: **COMPLETED**
+  - output root:
+    `runs/benchmarks/block3_phase9_localclear_20260328/prophet_standard_h30/`
+
+Benchmark-harness metrics on the narrow audited slice:
+
+- `MAE = 1599245.3772`
+- `RMSE = 2134851.9455`
+- `prediction_coverage_ratio = 1.0`
+- `fairness_pass = true`
+- `peak_rss_gb = 47.81`
+
 ### Interpretation
 
 Prophet is no longer blocked by wrapper absence or dependency availability.
 The current practical path is a **repo/user-local vendor install**, not
-mutating the shared insider env.
+mutating the shared insider env. The first narrow benchmark-clear failed for a
+submission-surface reason, not a model/runtime reason, and the corrected
+CPU-only resubmission has now completed cleanly. The conclusion is therefore
+clear: Prophet is benchmark-harness-compatible on a narrow audited slice, but
+its performance on this specific Block 3 funding task is weak.
 
 ## 3. TabPFN / TabPFN-TS
 
@@ -95,34 +138,65 @@ mutating the shared insider env.
 - local generic wrappers: **already exist**
   - `src/narrative/block3/models/traditional_ml.py`
 - `GLIBCXX_3.4.31` blocker: **resolved**
-  - preloading the insider env `libstdc++.so.6.0.34` makes `tabpfn 6.3.2`
-    importable
-- wrapper support added:
-  - `BLOCK3_TABPFN_MODEL_PATH` may now be used to point to a local checkpoint
-- current blocker:
-  - official model download is **gated**
-  - tiny local smoke now reaches model loading, then fails with
-    Hugging Face access-control instructions for `Prior-Labs/tabpfn_2_5`
+  - preloading the insider env `libstdc++.so.6.0.34` fixes the runtime loader
+- Hugging Face access: **working**
+  - authenticated account resolves both `Prior-Labs/tabpfn_2_5` and
+    `Prior-Labs/tabpfn_2_6`
+- official latest checkpoint line: **2.6**
+  - classifier:
+    `tabpfn-v2.6-classifier-v2.6_default.ckpt`
+  - regressor:
+    `tabpfn-v2.6-regressor-v2.6_default.ckpt`
+- shared env package was too old:
+  - shared `insider` runtime had `tabpfn 6.3.2`
+  - that runtime only knew `V2` / `V2.5`
+  - trying to load 2.6 checkpoints there produced `KeyError: 'tabpfn_v2_6'`
+- latest-source runtime is now installed locally:
+  - vendor path:
+    `~/.cache/block3_optional_pydeps/py312_tabpfn_latest`
+  - installed version:
+    `tabpfn 7.0.1`
+- current next step:
+  - the first narrow benchmark-clear probe `5294255` `v740_tpfn26c` has now
+    **completed successfully**
+  - it used the local 2.6 classifier checkpoint plus the latest-source vendor
+    runtime
+
+Benchmark-harness metrics on the narrow audited slice:
+
+- `MAE = 0.1611`
+- `RMSE = 0.2621`
+- `prediction_coverage_ratio = 1.0`
+- `fairness_pass = true`
+- `peak_rss_gb = 47.84`
 
 ### Interpretation
 
-TabPFN is no longer blocked by runtime/toolchain compatibility. It is currently
-blocked by **gated model-weight access** unless a local checkpoint path is
-provided or the active Hugging Face account has actually accepted the
-`Prior-Labs/tabpfn_2_5` access terms. A successful `hf auth login` by itself is
-not enough if the account still lacks the repo-level gated approval.
+TabPFN is no longer blocked by runtime/toolchain compatibility, and it is no
+longer blocked by Hugging Face authentication. The important correction is
+that the current target should be **TabPFN 2.6**, not the older 2.5 default.
+That proof has now been obtained: the latest-source vendor runtime plus the
+cached 2.6 checkpoint clear a real narrow benchmark slice cleanly. The
+remaining question is no longer “can it run?”, but whether it deserves wider
+canonical benchmark expansion.
 
-## 4. Narrow benchmark-clear queue status
+## 4. Narrow benchmark-clear status
 
-As of 2026-03-28, two local-only narrow benchmark-clear jobs are now queued
-through the canonical harness with isolated output roots:
+As of 2026-03-28, the first three local-only narrow benchmark-clear jobs have
+all completed through the real benchmark harness with isolated output roots:
 
 - `5294242` `v740_samf_clr`
   - `SAMformer`
   - `task1_outcome / core_edgar / is_funded / h=14`
-- `5294243` `v740_prop_clr`
+  - **completed successfully**
+- `5294254` `v740_prop_std`
   - `Prophet`
   - `task2_forecast / core_only / funding_raised_usd / h=30`
+  - **completed successfully**
+- `5294255` `v740_tpfn26c`
+  - `TabPFNClassifier`
+  - `task1_outcome / core_edgar / is_funded / h=14`
+  - **completed successfully**
 
 These are resumable SLURM jobs under
 `runs/benchmarks/block3_phase9_localclear_20260328/`. They are intended to
