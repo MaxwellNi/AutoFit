@@ -111,14 +111,19 @@ Why:
 
 - wrapper now exists in `src/narrative/block3/models/statistical.py`
 - registered through `STATISTICAL_MODELS`
-- current blocker is environment, not wrapper absence:
-  - insider env raises `ModuleNotFoundError: No module named 'prophet'`
+- user-local vendor install path works:
+  - `~/.cache/block3_optional_pydeps/py312`
+- generic local smoke now passes on:
+  - `task2_forecast / core_only / funding_raised_usd / h=30`
+  - `MAE = 5300.86`
+  - `fit_seconds = 5.24`
+  - `constant_prediction = false`
 
 ### Recommended action
 
-1. install `prophet` into the benchmark-capable env
-2. run one narrow local smoke via `scripts/run_block3_local_model_smoke.py`
-3. if healthy, add a narrow canonical benchmark slice before any larger grid
+1. keep Prophet on the user-local vendor path instead of mutating the shared env
+2. run one narrow canonical smoke slice before any larger grid
+3. if healthy, add it as a cheap business-sanity comparator in the benchmark pack
 
 ## 3.6 TabPFN-TS
 
@@ -130,14 +135,18 @@ Why:
 ### Current local status
 
 - local generic wrappers already exist in `src/narrative/block3/models/traditional_ml.py`
-- current blocker is environment/runtime compatibility:
-  - insider env import fails with
-    `libstdc++.so.6: version 'GLIBCXX_3.4.31' not found`
+- runtime compatibility is now fixable in-code by preloading the insider env
+  `libstdc++.so.6.0.34`
+- current blocker is model access:
+  - tiny local smoke reaches model initialization, then fails because
+    `Prior-Labs/tabpfn_2_5` is gated on Hugging Face
+- wrapper now supports a local checkpoint path via `model_path` or
+  `BLOCK3_TABPFN_MODEL_PATH`
 
 ### Recommended action
 
-1. fix the `tabpfn` runtime/toolchain compatibility first
-2. then run a narrow local smoke through `scripts/run_block3_local_model_smoke.py`
+1. obtain authorized access to the gated TabPFN weights or provide a local checkpoint
+2. then rerun a narrow local smoke through `scripts/run_block3_local_model_smoke.py`
 3. only after that decide whether a full Block 3 benchmark lane is worth the GPU budget
 
 ## 3.2 OLinear

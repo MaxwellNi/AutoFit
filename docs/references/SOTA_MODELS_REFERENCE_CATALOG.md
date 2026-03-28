@@ -119,8 +119,8 @@ The most relevant missing-or-newly-added models for the current V740 goal are:
 | ElasTST | NeurIPS 2024 | One model for varied horizons; directly relevant to 160-cell coverage | missing |
 | DIAN | IJCAI 2024 | Invariant/variant decoupling for heterogeneous panels | missing |
 | UniTS | NeurIPS 2024 | Unified multi-task design reference for V740 conditioning | missing |
-| Prophet | classic business TS baseline | Cheap reviewer-recognizable sanity line for finance-style forecasting | wrapper now exists locally; current env missing `prophet` package |
-| TabPFN-TS | NeurIPS 2024 workshop line | Ultra-fast zero-shot TS baseline; very high information-gain comparator | local wrappers already exist, but current env import is blocked by `GLIBCXX_3.4.31` mismatch |
+| Prophet | classic business TS baseline | Cheap reviewer-recognizable sanity line for finance-style forecasting | wrapper exists locally; user-local vendor install works; generic real-data smoke now passes |
+| TabPFN-TS | NeurIPS 2024 workshop line | Ultra-fast zero-shot TS baseline; very high information-gain comparator | local wrappers already exist; `GLIBCXX` import blocker is resolved, current blocker is gated HF model access |
 
 ### Fresh 2025-2026 Design Signals Worth Tracking
 

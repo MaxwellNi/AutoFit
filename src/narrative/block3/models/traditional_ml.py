@@ -13,6 +13,7 @@ KDD'26 publication-quality hyperparameters:
 from __future__ import annotations
 
 import logging
+import os
 from typing import Any, Dict, Optional
 
 import numpy as np
@@ -20,6 +21,7 @@ import pandas as pd
 
 logger = logging.getLogger(__name__)
 
+from .optional_runtime import ensure_insider_libstdcpp, ensure_optional_vendor_on_path
 from .base import (
     ModelBase, ModelConfig, SklearnModelWrapper,
     GradientBoostingWrapper, NaiveForecaster,
@@ -408,6 +410,10 @@ class TabPFNRegressorWrapper(ModelBase):
     _MAX_ROWS = 20_000
 
     def __init__(self, **kwargs):
+        kwargs = dict(kwargs)
+        env_model_path = os.getenv("BLOCK3_TABPFN_MODEL_PATH")
+        if env_model_path and "model_path" not in kwargs:
+            kwargs["model_path"] = env_model_path
         config = ModelConfig(
             name="TabPFNRegressor",
             model_type="regression",
@@ -419,6 +425,8 @@ class TabPFNRegressorWrapper(ModelBase):
         self._feature_names: list[str] = []
 
     def fit(self, X: pd.DataFrame, y: pd.Series, **kwargs) -> "TabPFNRegressorWrapper":
+        ensure_optional_vendor_on_path()
+        ensure_insider_libstdcpp()
         try:
             from tabpfn import TabPFNRegressor
         except ImportError:
@@ -437,7 +445,18 @@ class TabPFNRegressorWrapper(ModelBase):
         Xf = X.fillna(0)
         self._feature_names = list(Xf.columns)
         self.model = TabPFNRegressor(**self._init_kwargs)
-        self.model.fit(Xf.values, y.values)
+        try:
+            self.model.fit(Xf.values, y.values)
+        except RuntimeError as e:
+            msg = str(e)
+            if "gated" in msg or "HuggingFace authentication error" in msg:
+                raise RuntimeError(
+                    "TabPFN weights are gated. Accept the terms at "
+                    "https://huggingface.co/Prior-Labs/tabpfn_2_5 and provide "
+                    "access via `hf auth login`, `HF_TOKEN`, or a local "
+                    "`BLOCK3_TABPFN_MODEL_PATH` checkpoint."
+                ) from e
+            raise
         self._fitted = True
         return self
 
@@ -452,6 +471,10 @@ class TabPFNClassifierWrapper(ModelBase):
     _MAX_ROWS = 20_000
 
     def __init__(self, **kwargs):
+        kwargs = dict(kwargs)
+        env_model_path = os.getenv("BLOCK3_TABPFN_MODEL_PATH")
+        if env_model_path and "model_path" not in kwargs:
+            kwargs["model_path"] = env_model_path
         config = ModelConfig(
             name="TabPFNClassifier",
             model_type="classification",
@@ -463,6 +486,8 @@ class TabPFNClassifierWrapper(ModelBase):
         self._feature_names: list[str] = []
 
     def fit(self, X: pd.DataFrame, y: pd.Series, **kwargs) -> "TabPFNClassifierWrapper":
+        ensure_optional_vendor_on_path()
+        ensure_insider_libstdcpp()
         try:
             from tabpfn import TabPFNClassifier
         except ImportError:
@@ -482,7 +507,18 @@ class TabPFNClassifierWrapper(ModelBase):
         yb = (y.values > 0.5).astype(int)
         self._feature_names = list(Xf.columns)
         self.model = TabPFNClassifier(**self._init_kwargs)
-        self.model.fit(Xf.values, yb)
+        try:
+            self.model.fit(Xf.values, yb)
+        except RuntimeError as e:
+            msg = str(e)
+            if "gated" in msg or "HuggingFace authentication error" in msg:
+                raise RuntimeError(
+                    "TabPFN weights are gated. Accept the terms at "
+                    "https://huggingface.co/Prior-Labs/tabpfn_2_5 and provide "
+                    "access via `hf auth login`, `HF_TOKEN`, or a local "
+                    "`BLOCK3_TABPFN_MODEL_PATH` checkpoint."
+                ) from e
+            raise
         self._fitted = True
         return self
 

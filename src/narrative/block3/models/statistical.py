@@ -14,6 +14,7 @@ import numpy as np
 import pandas as pd
 
 from .base import ModelBase, ModelConfig
+from .optional_runtime import ensure_optional_vendor_on_path
 
 _logger = logging.getLogger(__name__)
 
@@ -280,6 +281,7 @@ class ProphetWrapper(ModelBase):
         self._fallback_value = 0.0
 
     def fit(self, X: pd.DataFrame, y: pd.Series, **kwargs) -> "ProphetWrapper":
+        ensure_optional_vendor_on_path()
         try:
             from prophet import Prophet
         except ImportError:

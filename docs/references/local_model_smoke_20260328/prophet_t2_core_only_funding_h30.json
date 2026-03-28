@@ -1,0 +1,27 @@
+{
+  "model": "Prophet",
+  "model_kwargs": {
+    "max_entities_fit": 4,
+    "min_history": 20
+  },
+  "task": "task2_forecast",
+  "ablation": "core_only",
+  "target": "funding_raised_usd",
+  "horizon": 30,
+  "train_rows": 300,
+  "val_rows": 336,
+  "test_rows": 324,
+  "train_matrix_rows": 167,
+  "test_matrix_rows": 324,
+  "feature_count": 77,
+  "fit_seconds": 5.2401814460754395,
+  "predict_seconds": 0.2087242603302002,
+  "prediction_std": 183038.47686267327,
+  "constant_prediction": false,
+  "metrics": {
+    "mae": 5300.863530553524,
+    "rmse": 7245.306638650458,
+    "smape": 1.6354423814930983,
+    "mape": 1.6485538948924043
+  }
+}

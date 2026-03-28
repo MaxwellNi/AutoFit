@@ -6,6 +6,15 @@ benchmark results. They are small, freeze-backed audited slices used to decide
 whether a newly integrated model is healthy enough to justify more expensive
 benchmark work.
 
+Supporting implementation added in this round:
+
+- generic runner:
+  - `scripts/run_block3_local_model_smoke.py`
+- optional dependency bootstrap:
+  - `scripts/bootstrap_optional_model_deps.py`
+- runtime helper for local vendor path / `libstdc++` preload:
+  - `src/narrative/block3/models/optional_runtime.py`
+
 ## 1. SAMformer
 
 ### Command status
@@ -46,14 +55,38 @@ path, not a large submission.
 
 - local wrapper: **exists**
   - `src/narrative/block3/models/statistical.py`
-- blocker:
-  - insider env import fails with
-    `ModuleNotFoundError: No module named 'prophet'`
+- local vendor install path:
+  - `~/.cache/block3_optional_pydeps/py312`
+- bootstrap route:
+  - `scripts/bootstrap_optional_model_deps.py --group prophet`
+- local generic smoke: **passed**
+  - output artifact:
+    - `docs/references/local_model_smoke_20260328/prophet_t2_core_only_funding_h30.json`
+
+### Slice
+
+- model: `Prophet`
+- task: `task2_forecast`
+- ablation: `core_only`
+- target: `funding_raised_usd`
+- horizon: `30`
+- max entities: `4`
+- max rows: `300`
+
+### Result
+
+- `fit_seconds = 5.24`
+- `predict_seconds = 0.209`
+- `prediction_std = 183038.48`
+- `constant_prediction = false`
+- `MAE = 5300.86`
+- `RMSE = 7245.31`
 
 ### Interpretation
 
-Prophet is no longer blocked by wrapper absence. It is currently blocked by
-environment dependency availability.
+Prophet is no longer blocked by wrapper absence or dependency availability.
+The current practical path is a **repo/user-local vendor install**, not
+mutating the shared insider env.
 
 ## 3. TabPFN / TabPFN-TS
 
@@ -61,11 +94,18 @@ environment dependency availability.
 
 - local generic wrappers: **already exist**
   - `src/narrative/block3/models/traditional_ml.py`
-- blocker:
-  - insider env import fails with
-    `libstdc++.so.6: version 'GLIBCXX_3.4.31' not found`
+- `GLIBCXX_3.4.31` blocker: **resolved**
+  - preloading the insider env `libstdc++.so.6.0.34` makes `tabpfn 6.3.2`
+    importable
+- wrapper support added:
+  - `BLOCK3_TABPFN_MODEL_PATH` may now be used to point to a local checkpoint
+- current blocker:
+  - official model download is **gated**
+  - tiny local smoke now reaches model loading, then fails with
+    Hugging Face access-control instructions for `Prior-Labs/tabpfn_2_5`
 
 ### Interpretation
 
-TabPFN is currently blocked by runtime/toolchain compatibility, not by missing
-model glue code.
+TabPFN is no longer blocked by runtime/toolchain compatibility. It is currently
+blocked by **gated model-weight access** unless a local checkpoint path or HF
+token is provided.
