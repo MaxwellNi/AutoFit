@@ -1,6 +1,6 @@
 # Current Source of Truth
 
-> Last verified: 2026-03-28 17:10 CET
+> Last verified: 2026-03-28 17:55 CET
 > Verified by direct scans of `runs/benchmarks/block3_phase9_fair/`, live `squeue -u npin`, `sacct`, benchmark aggregation scripts.
 
 This file is the authoritative documentation entry point for the current Block 3 project state.
@@ -43,7 +43,7 @@ If any other document disagrees with this file, prefer this file and the evidenc
 | Text embedding artifacts | `AVAILABLE` | `runs/text_embeddings/embedding_metadata.json` |
 | Phase 12 text reruns | `48/48 COMPLETED` | core_text+full 91/91 models |
 | Phase 15 new models | 23 submitted, 15 valid, 8 excluded (Finding H), 78/160 | direct scan |
-| Live jobs | `40` (9R + 31PD) | squeue 2026-03-28 17:10: gpu 6R+0PD, l40s 3R+14PD, hopper 0R+17PD |
+| Live jobs | `40` (9R + 31PD) | squeue 2026-03-28 17:55: gpu 6R+0PD, l40s 3R+14PD, hopper 0R+17PD |
 | Clean full comparable frontier | `55` models @ shared `160/160` | post-filter `all_results.csv`, non-retired only |
 
 ## What the Current Benchmark Means
@@ -63,7 +63,7 @@ If any other document disagrees with this file, prefer this file and the evidenc
 
 ## Current Execution Reality
 
-1. Live queue snapshot verified on 2026-03-28 17:10 CET:
+1. Live queue snapshot verified on 2026-03-28 17:55 CET:
    - `9 RUNNING` = `6 gpu + 3 l40s + 0 hopper`
    - `31 PENDING` = `0 gpu + 14 l40s + 17 hopper`
    - **40 total**
@@ -115,8 +115,8 @@ If any other document disagrees with this file, prefer this file and the evidenc
    - `5294243` `v740_prop_clr` **failed before model execution** because `quick` preset does not support `h=30`
    - `5294254` `v740_prop_std` **completed successfully** as the corrected `Prophet` resubmission on `bigmem`
    - `5294255` `v740_tpfn26c` **completed successfully** as the first narrow `TabPFNClassifier` + official 2.6 checkpoint benchmark-clear probe
-   - `5294259` `v740_tpfn26r_fu` is now **queued** as the first narrow `TabPFNRegressor` funding clear
-   - `5294260` `v740_tpfn26r_inv` is now **queued** as the first narrow `TabPFNRegressor` investors-count clear
+   - `5294259` `v740_tpfn26r_fu` **completed successfully** as the first `TabPFNRegressor` funding narrow clear
+   - `5294260` `v740_tpfn26r_inv` **completed successfully**, but returned `fairness_pass = false` on the audited investors-count slice and therefore must be treated as a red-flag result rather than a promotable clear
    - all of these write to isolated output roots under `runs/benchmarks/block3_phase9_localclear_20260328/` and do **not** count as canonical benchmark results
 
 ## Current Priorities

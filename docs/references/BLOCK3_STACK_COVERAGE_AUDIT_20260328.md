@@ -88,7 +88,7 @@ The strongest honest statement today is:
 | `Timer-XL` | yes | 0 / 0 | registered only |
 | `SEMPO` | yes | 0 / 0 | registered but excluded on the current benchmark line |
 | `TS-RAG` | no | 0 / 0 | not integrated |
-| `TabPFN-time-series` | wrappers exist as `TabPFNClassifier/Regressor` | 0 / 0 | registered; latest-source 2.6 runtime now locally ready; narrow clear completed successfully |
+| `TabPFN-time-series` | wrappers exist as `TabPFNClassifier/Regressor` | 0 / 0 | registered; latest-source 2.6 runtime now locally ready; classifier and funding-regressor narrow clears completed successfully; investors-count regressor probe completed but failed fairness |
 
 ## 3. Layer 3: 2025-2026 Supervised Official Repos
 
@@ -139,8 +139,8 @@ but they are **not** current benchmark entrants by themselves.
 | --- | --- | --- |
 | `SAMformer` | wrapper exists; generic local smoke passes; **narrow benchmark-clear completed** (`MAE=0.3485`, fairness pass true) | decide whether to promote into a wider canonical benchmark lane |
 | `Prophet` | wrapper exists; user-local vendor path works; generic local smoke passes; corrected `bigmem` narrow clear completed successfully, but the audited funding slice quality is weak | keep as a cheap sanity baseline candidate, not a high-ceiling frontier entrant |
-| `TabPFN-TS` | wrappers exist; official `tabpfn_2_6` checkpoints cached locally; latest-source vendor runtime (`tabpfn 7.0.1`) installed; first narrow clear completed successfully | decide whether to promote it into a wider canonical benchmark lane, especially for binary/event-like tasks |
-| `LightGTS` | docs-only / source-map complete | next real benchmark entrant after the current first wave |
+| `TabPFN-TS` | wrappers exist; official `tabpfn_2_6` checkpoints cached locally; latest-source vendor runtime (`tabpfn 7.0.1`) installed; classifier and funding-regressor narrow clears completed; investors-count regressor probe surfaced a fairness red flag | keep exploring, but do not promote blindly; binary/event slices remain the most credible first expansion path |
+| `LightGTS` | official repo audited at HEAD; script-driven project with checkpoints and custom data pipeline; a first vendor-path helper now exists, but no Block 3 wrapper yet | next real benchmark entrant after the current first wave, via a custom vendor wrapper rather than a package lane |
 | `OLinear` | docs-only; blocked by artifact-generation path | finish preprocessing design before wrapper work |
 | `ElasTST` | docs-only | treat as a strong varied-horizon comparator after first-wave additions |
 | `UniTS` | docs-only | treat as a higher-cost second-wave addition tied to the V740 design |

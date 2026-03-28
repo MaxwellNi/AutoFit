@@ -1,17 +1,17 @@
 # Current Queue Progress
 
-> Snapshot time: 2026-03-28 17:25 CET
+> Snapshot time: 2026-03-28 17:55 CET
 > Source: live `squeue -u npin`, `squeue --start -u npin`, and `sacct -u npin -S 2026-03-26T00:00:00`
 
 ## Summary
 
 | Metric | Value |
 | --- | ---: |
-| Total jobs | 42 |
+| Total jobs | 40 |
 | Running | 9 |
-| Pending | 33 |
+| Pending | 31 |
 | gpu running | 6 |
-| gpu pending | 2 |
+| gpu pending | 0 |
 | bigmem running | 0 |
 | l40s running | 3 |
 | l40s pending | 14 |
@@ -36,18 +36,18 @@
 
 | jobid | job | partition | planned_start | reason | notes |
 | --- | --- | --- | --- | --- | --- |
-| 5294259 | v740_tpfn26r_fu | gpu | N/A | Priority | `TabPFNRegressor` narrow clear on `task2/core_edgar/funding_raised_usd/h=30` |
-| 5294260 | v740_tpfn26r_inv | gpu | N/A | Priority | `TabPFNRegressor` narrow clear on `task2/core_edgar/investors_count/h=14` |
 | 5294241 | l2_ac_t2_s2 | l40s | N/A | Priority | resumed overflow copy after 2-day TIMEOUT on `5269759` |
 | 5269748 | l2_ac_t1_ce | l40s | 2026-03-30 01:25:41 | Resources | l40s overflow backlog |
 | 5269758 | l2_ac_t2_fu | l40s | 2026-03-30 01:27:39 | Priority | l40s overflow backlog |
 | 5269765 | h2_ac_t1_ce | hopper | 2026-03-31 03:20:00 | Priority | opportunistic overflow backlog |
+| 5269771 | h2_ac_t2_ce | hopper | 2026-03-31 03:20:00 | Priority | opportunistic overflow backlog |
+| 5269780 | h2_ac_t3_e2 | hopper | 2026-03-31 03:20:00 | Priority | opportunistic overflow backlog |
 
 ## Pending Breakdown
 
 | partition | pending_jobs | notes |
 | --- | ---: | --- |
-| gpu | 2 | both are local-only `TabPFNRegressor` clears; canonical gpu critical path remains fully running |
+| gpu | 0 | canonical gpu critical path is fully running; no extra local-only gpu clears are pending right now |
 | l40s | 14 | accel_v2 overflow backlog plus the requeued `l2_ac_t2_s2` |
 | hopper | 17 | pure overflow backlog only |
 
@@ -60,6 +60,6 @@
    - `5294243` `v740_prop_clr` → failed before model execution because `quick` preset cannot run `h=30`
    - `5294254` `v740_prop_std` → corrected `Prophet` resubmission, completed successfully
    - `5294255` `v740_tpfn26c` → first `TabPFN 2.6` narrow clear, completed successfully
-   - `5294259` `v740_tpfn26r_fu` → queued as the first `TabPFNRegressor` funding clear
-   - `5294260` `v740_tpfn26r_inv` → queued as the first `TabPFNRegressor` investors-count clear
+   - `5294259` `v740_tpfn26r_fu` → completed as the first `TabPFNRegressor` funding clear (`fairness_pass=true`, quality weak)
+   - `5294260` `v740_tpfn26r_inv` → completed as the first `TabPFNRegressor` investors-count clear, but with `fairness_pass=false`
 4. These local-only jobs use separate output roots and do not count as canonical benchmark results.

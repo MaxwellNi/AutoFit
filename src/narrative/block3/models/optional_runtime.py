@@ -30,6 +30,34 @@ def get_tabpfn_vendor_dir() -> Path:
     return Path.home() / ".cache" / "block3_optional_pydeps" / f"{py_tag}_tabpfn_latest"
 
 
+def get_optional_repo_root() -> Path:
+    """Return the default user-local root for optional vendor repos."""
+    env_override = os.getenv("BLOCK3_OPTIONAL_REPO_ROOT")
+    if env_override:
+        return Path(env_override).expanduser().resolve()
+    return Path.home() / ".cache" / "block3_optional_repos"
+
+
+def get_lightgts_repo_dir() -> Path:
+    """Return the preferred LightGTS repo path.
+
+    Resolution order:
+    1. explicit `BLOCK3_LIGHTGTS_REPO`
+    2. user-local optional repo root
+    3. `/tmp/LightGTS` as a practical same-node audit fallback
+    """
+    env_override = os.getenv("BLOCK3_LIGHTGTS_REPO")
+    if env_override:
+        return Path(env_override).expanduser().resolve()
+    default_repo = get_optional_repo_root() / "LightGTS"
+    if default_repo.exists():
+        return default_repo.resolve()
+    tmp_repo = Path("/tmp/LightGTS")
+    if tmp_repo.exists():
+        return tmp_repo.resolve()
+    return default_repo.resolve()
+
+
 def ensure_optional_vendor_on_path() -> Path:
     """Add the optional vendor directory to sys.path when it exists."""
     vendor = get_optional_vendor_dir()
@@ -58,6 +86,25 @@ def ensure_tabpfn_vendor_on_path() -> Path:
             sys.path.remove(str(vendor))
         sys.path.insert(0, str(vendor))
     return vendor
+
+
+def ensure_lightgts_repo_on_path() -> Path:
+    """Expose an audited LightGTS repo on `sys.path` when available.
+
+    The official repo is script-driven rather than a pip package. For Block 3 we
+    therefore prefer a vendor-repo import pattern similar to a shallow vendored
+    source tree. This helper adds both the repo root and its `src/` subtree so
+    later wrappers can import either top-level scripts or model modules.
+    """
+    repo = get_lightgts_repo_dir()
+    if not repo.exists():
+        return repo
+    for path in (repo, repo / "src"):
+        s = str(path)
+        if s in sys.path:
+            sys.path.remove(s)
+        sys.path.insert(0, s)
+    return repo
 
 
 def _candidate_lib_dirs() -> list[Path]:
@@ -94,8 +141,11 @@ def ensure_insider_libstdcpp() -> Path | None:
 
 __all__ = [
     "ensure_insider_libstdcpp",
+    "ensure_lightgts_repo_on_path",
     "ensure_optional_vendor_on_path",
     "ensure_tabpfn_vendor_on_path",
+    "get_lightgts_repo_dir",
     "get_optional_vendor_dir",
+    "get_optional_repo_root",
     "get_tabpfn_vendor_dir",
 ]

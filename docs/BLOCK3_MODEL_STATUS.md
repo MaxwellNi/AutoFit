@@ -1,6 +1,6 @@
 # Block 3 Model Benchmark Status
 
-> Last updated: 2026-03-28 17:10 CET
+> Last updated: 2026-03-28 17:55 CET
 > Current authority: `docs/CURRENT_SOURCE_OF_TRUTH.md`
 > Evidence: direct scan of `runs/benchmarks/block3_phase9_fair/`, `all_results.csv`, live `squeue`, `sacct`, and benchmark aggregation scripts.
 
@@ -63,7 +63,7 @@ Detailed per-job progress/ETA snapshot: `docs/RUN_QUEUE_PROGRESS_CURRENT.md`
 | Slice | Value | Notes |
 | --- | ---: | --- |
 | gpu RUNNING | 6 | `af739_t1_e2`, `af739_t1_s2`, `af739_t2_e2`, `af739_t2_s2`, `af739_t3_e2`, `gpu_cos2_t2` |
-| gpu PENDING | 2 | `v740_tpfn26r_fu`, `v740_tpfn26r_inv` narrow `TabPFNRegressor` clears |
+| gpu PENDING | 0 | no local-only gpu clears are pending right now |
 | l40s RUNNING | 3 | `l2_ac_t2_e2`, `l2_ac_t3_co`, `l2_ac_t3_ct` |
 | l40s PENDING | 14 | overflow / resume-safe accel_v2 backlog |
 | hopper RUNNING | 0 | no current hopper jobs are running for `npin` |
@@ -78,8 +78,8 @@ Detailed per-job progress/ETA snapshot: `docs/RUN_QUEUE_PROGRESS_CURRENT.md`
   - `5294242` `v740_samf_clr` completed successfully
   - `5294254` `v740_prop_std` completed successfully on `bigmem`
   - `5294255` `v740_tpfn26c` completed successfully on `gpu`
-  - `5294259` `v740_tpfn26r_fu` is now queued to test `TabPFNRegressor` on `task2/core_edgar/funding_raised_usd/h=30`
-  - `5294260` `v740_tpfn26r_inv` is now queued to test `TabPFNRegressor` on `task2/core_edgar/investors_count/h=14`
+  - `5294259` `v740_tpfn26r_fu` has now completed and proves the funding regressor path runs cleanly through the narrow-clear harness
+  - `5294260` `v740_tpfn26r_inv` has now completed too, but the resulting audited slice fails the fairness gate and therefore is not promotable
 - `l40s` remains the best overflow partition when memory needs fit within the 15G/CPU rule and a resume-safe script exists.
 - `hopper` is not memory-constrained in the way older docs implied; the real limiter is priority/preemption. It should be treated as opportunistic overflow, not as the sole critical path.
 - `ModernTCN` remains the dominant throughput bottleneck for non-`e2` accel jobs.
@@ -104,8 +104,8 @@ Detailed per-job progress/ETA snapshot: `docs/RUN_QUEUE_PROGRESS_CURRENT.md`
    - `5294243` `v740_prop_clr` (`Prophet`) → failed due invalid `quick+h30` preset/horizon combination
    - `5294254` `v740_prop_std` (`Prophet`) → corrected CPU-only resubmission completed successfully
    - `5294255` `v740_tpfn26c` (`TabPFNClassifier`) → first latest-source 2.6 narrow clear completed successfully
-   - `5294259` `v740_tpfn26r_fu` (`TabPFNRegressor`) → queued funding narrow clear
-   - `5294260` `v740_tpfn26r_inv` (`TabPFNRegressor`) → queued investors-count narrow clear
+   - `5294259` `v740_tpfn26r_fu` (`TabPFNRegressor`) → completed funding narrow clear (`fairness_pass=true`, quality weak)
+   - `5294260` `v740_tpfn26r_inv` (`TabPFNRegressor`) → completed investors-count narrow clear (`fairness_pass=false`, red-flag result)
 7. **Rebuilt** `docs/benchmarks/phase9_current_snapshot.{json,md}` and `docs/BLOCK3_RESULTS.md` using the insider Python environment after the new landings.
 8. **Recovered the first corrected local V739 vs V740 compare** (`mb_t1_core_edgar_is_funded_h14`), which currently favors V739/`PatchTST` over V740-alpha on that audited binary EDGAR slice.
 

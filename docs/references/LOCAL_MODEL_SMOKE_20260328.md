@@ -203,18 +203,68 @@ These are resumable SLURM jobs under
 clear the models against the real benchmark harness without polluting the
 canonical leaderboard.
 
-## 5. Next Narrow-Clear Queue
+## 5. TabPFNRegressor 2.6 Follow-up Probes
 
-The next two highest-value follow-up probes are now queued so that `TabPFN 2.6`
-is not judged only from a single binary slice:
+The next two highest-value follow-up probes have now both **completed** so that
+`TabPFN 2.6` is no longer judged only from a single binary slice.
 
-- `5294259` `v740_tpfn26r_fu`
-  - `TabPFNRegressor`
-  - `task2_forecast / core_edgar / funding_raised_usd / h=30`
-- `5294260` `v740_tpfn26r_inv`
-  - `TabPFNRegressor`
-  - `task2_forecast / core_edgar / investors_count / h=14`
+### Funding narrow clear
 
-Both use the latest-source vendor runtime (`tabpfn 7.0.1`) plus the official
-`tabpfn_2_6` regressor checkpoint and write to isolated local-clear output
-roots outside the canonical leaderboard.
+- job: `5294259` `v740_tpfn26r_fu`
+- model: `TabPFNRegressor`
+- slice:
+  - `task2_forecast`
+  - `core_edgar`
+  - `funding_raised_usd`
+  - `h=30`
+- output root:
+  - `runs/benchmarks/block3_phase9_localclear_20260328/tabpfn2_6_regressor_funding/`
+
+#### Result
+
+- `MAE = 1389577.1089`
+- `RMSE = 1827933.2039`
+- `prediction_coverage_ratio = 1.0`
+- `fairness_pass = true`
+- `peak_rss_gb = 46.66`
+- `train_time_seconds = 1.68`
+- `inference_time_seconds = 0.66`
+
+#### Interpretation
+
+This funding probe proves that the latest-source `TabPFN 2.6` regressor path is
+not limited to the earlier binary clear. The harness path is clean and fully
+covered on a real audited funding slice, but the quality on this slice is weak.
+So the current conclusion is not “promote to canonical now”, but rather:
+`TabPFNRegressor` is **runnable and auditable**, yet still needs more evidence
+before wider benchmark expansion.
+
+### Investors-count narrow clear
+
+- job: `5294260` `v740_tpfn26r_inv`
+- model: `TabPFNRegressor`
+- slice:
+  - `task2_forecast`
+  - `core_edgar`
+  - `investors_count`
+  - `h=14`
+- output root:
+  - `runs/benchmarks/block3_phase9_localclear_20260328/tabpfn2_6_regressor_investors/`
+
+#### Result
+
+- `MAE = 0.0`
+- `RMSE = 0.0`
+- `prediction_coverage_ratio = 1.0`
+- `fairness_pass = false`
+- `peak_rss_gb = 48.30`
+- `train_time_seconds = 1.64`
+- `inference_time_seconds = 0.002`
+
+#### Interpretation
+
+This probe is a **red flag, not a success story**. The numerical score is
+perfect, but the run fails the fairness gate. It therefore cannot be promoted
+as a valid benchmark-clear result, and it should be treated as evidence that
+`TabPFNRegressor` still needs closer auditing on count-style targets before any
+canonical expansion is considered.
