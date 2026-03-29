@@ -1,0 +1,24 @@
+{
+  "model": "LightGTS",
+  "variant": "ctx60_patch15",
+  "task": "task2_forecast",
+  "ablation": "core_edgar",
+  "target": "funding_raised_usd",
+  "horizon": 30,
+  "train_rows": 300,
+  "val_rows": 336,
+  "test_rows": 324,
+  "train_matrix_rows": 131,
+  "test_matrix_rows": 324,
+  "feature_count": 105,
+  "fit_seconds": 4.599769830703735,
+  "predict_seconds": 0.01824808120727539,
+  "prediction_std": 10802.782384434098,
+  "constant_prediction": false,
+  "metrics": {
+    "mae": 445367.98931765,
+    "rmse": 639270.557696361,
+    "smape": 103.24929224631217,
+    "mape": 55.60828455610463
+  }
+}

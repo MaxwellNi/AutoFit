@@ -1,6 +1,6 @@
 # Phase 9 / V739 Current Snapshot
 
-> Generated: 2026-03-28T16:59:14.510932+00:00
+> Generated: 2026-03-29T12:39:14.908465+00:00
 > Canonical benchmark: `runs/benchmarks/block3_phase9_fair`
 
 ## Verified Current Facts
@@ -8,13 +8,13 @@
 | metric | value | evidence |
 | --- | --- | --- |
 | metrics_files | 137 | raw metrics scan |
-| raw_records | 16122 | raw metrics scan |
+| raw_records | 16137 | raw metrics scan |
 | raw_models | 137 | raw metrics scan |
 | raw_nonretired_models | 116 | raw metrics scan minus retired AutoFit legacy lines |
 | raw_retired_autofit_models | 21 | raw metrics scan |
 | raw_complete_models | 75 | raw metrics scan |
 | raw_partial_models | 62 | raw metrics scan |
-| filtered_records | 12272 | `all_results.csv` |
+| filtered_records | 12286 | `all_results.csv` |
 | filtered_models | 107 | `all_results.csv` (includes retired AutoFit legacy lines if they pass filters) |
 | filtered_nonretired_models | 86 | `all_results.csv` minus retired AutoFit legacy lines |
 | filtered_retired_autofit_models | 21 | `all_results.csv` |
@@ -30,10 +30,10 @@
 
 | metric | value |
 | --- | --- |
-| jobs_total | 40 |
-| running | 9 |
-| pending | 31 |
-| npin_pending | 31 |
+| jobs_total | 41 |
+| running | 7 |
+| pending | 34 |
+| npin_pending | 34 |
 | cfisch_pending | 0 |
 | v739_pending | 0 |
 | v739_running | 5 |
@@ -42,7 +42,7 @@
 
 | reason | count |
 | --- | --- |
-| (Priority) | 30 |
+| (Priority) | 33 |
 | (Resources) | 1 |
 
 ## Text Embedding Artifacts
@@ -151,21 +151,21 @@
 | LightTS | 93 | 113 |
 | Pyraformer | 93 | 113 |
 | Reformer | 93 | 113 |
-| CARD | 81 | 81 |
-| DUET | 81 | 81 |
-| FiLM | 81 | 81 |
-| FilterTS | 81 | 81 |
-| FreTS | 81 | 81 |
-| Fredformer | 81 | 81 |
-| ModernTCN | 81 | 81 |
-| NonstationaryTransformer | 81 | 81 |
-| PDF | 81 | 81 |
-| PIR | 81 | 81 |
-| SCINet | 81 | 81 |
-| SRSNet | 81 | 81 |
-| SegRNN | 81 | 81 |
-| TimeRecipe | 81 | 81 |
-| xPatch | 81 | 81 |
+| CARD | 82 | 82 |
+| DUET | 82 | 82 |
+| FiLM | 82 | 82 |
+| FilterTS | 82 | 82 |
+| FreTS | 82 | 82 |
+| Fredformer | 82 | 82 |
+| ModernTCN | 82 | 82 |
+| NonstationaryTransformer | 82 | 82 |
+| PDF | 82 | 82 |
+| PIR | 82 | 82 |
+| SCINet | 82 | 82 |
+| SRSNet | 82 | 82 |
+| SegRNN | 82 | 82 |
+| TimeRecipe | 82 | 82 |
+| xPatch | 82 | 82 |
 | CFPT | 69 | 69 |
 | DeformableTST | 69 | 69 |
 | MICN | 69 | 69 |

@@ -1,0 +1,23 @@
+{
+  "model": "LightGTS",
+  "task": "task2_forecast",
+  "ablation": "core_edgar",
+  "target": "funding_raised_usd",
+  "horizon": 30,
+  "train_rows": 300,
+  "val_rows": 336,
+  "test_rows": 324,
+  "train_matrix_rows": 131,
+  "test_matrix_rows": 324,
+  "feature_count": 105,
+  "fit_seconds": 0.03510618209838867,
+  "predict_seconds": 2.5033950805664062e-05,
+  "prediction_std": 0.0,
+  "constant_prediction": true,
+  "metrics": {
+    "mae": 439131.0,
+    "rmse": 632329.9629117696,
+    "smape": 99.90033959592203,
+    "mape": 54.74203603976437
+  }
+}

@@ -1,6 +1,6 @@
 # LightGTS Integration Audit
 
-> Last updated: 2026-03-28
+> Last updated: 2026-03-29
 > Scope: direct official-repo audit to decide the most realistic Block 3
 > integration path for `LightGTS`.
 
@@ -84,17 +84,33 @@ than to a “just install a package and call it” path.
 - code path quality: **high enough to proceed**
 - vendor-path helper: **now exists** in
   `src/narrative/block3/models/optional_runtime.py`
-- local wrapper: **not written yet**
+- local wrapper scaffold: **now exists** in
+  `src/narrative/block3/models/lightgts_model.py`
+- vendor import + minimal instantiation smoke: **passed** on 2026-03-29
+- first tiny freeze-backed real-data smoke: **completed** on 2026-03-29
+  - first pass (`input_size=96`) produced **no training windows** and therefore
+    fell back to a constant predictor
+  - second pass (`input_size=60`, `patch_len=15`, `stride=15`) became
+    **non-fallback and non-constant**
+  - audited slice:
+    `task2_forecast / core_edgar / funding_raised_usd / h=30`
+  - result:
+    - `fit_seconds = 4.60`
+    - `prediction_std = 10802.78`
+    - `constant_prediction = false`
+    - `MAE = 445367.99`
 - registry entry: **not added yet**
+- registry entry: **now added locally** under the `transformer_sota` lane on 2026-03-29
+- narrow benchmark-clear: **submitted** as `5298059` `v740_lgts_clr`
 - canonical benchmark landing: **none yet**
 
 ## 7. Recommended next engineering step
 
-The next concrete step should be:
+The next concrete step should now be:
 
-1. create a vendor-path helper for `LightGTS`,
-2. scaffold a `LightGTS` Block 3 wrapper,
-3. run a tiny local audited smoke before any narrow benchmark-clear attempt.
+1. let the first narrow benchmark-clear job (`5298059`) run to completion,
+2. inspect whether the harness path stays clean and fair on the audited slice,
+3. only then decide whether `LightGTS` deserves a wider local-clear matrix or a true canonical expansion attempt.
 
 ## 8. Bottom line
 
@@ -102,5 +118,8 @@ The next concrete step should be:
 
 The verified status is:
 
-> **official repo audited, credible for integration, but not package-ready; the
-> realistic Block 3 route is a custom vendor wrapper.**
+> **official repo audited, custom wrapper scaffolded, vendor import smoke
+> passed, and the first real-data tiny smoke is now non-fallback with a
+> shorter context; the model is still not benchmark-clear, so the realistic
+> Block 3 route remains a custom vendor wrapper with a widened local smoke gate
+> before any canonical expansion.**

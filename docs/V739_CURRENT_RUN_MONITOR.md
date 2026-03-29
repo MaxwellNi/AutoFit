@@ -1,6 +1,6 @@
 # V739 Current Run Monitor and Landing Checklist
 
-> Last verified: 2026-03-28 15:45 CET
+> Last verified: 2026-03-29 14:34 CEST
 > Scope: current AutoFit V739 execution reality on the canonical clean benchmark line only.
 
 ## Current Verified Reality
@@ -45,8 +45,8 @@
 | Job | State | Partition | Notes |
 | --- | --- | --- | --- |
 | `af739_t1_e2` | RUNNING | `gpu` | task1 `core_edgar_seed2` gap-fill, running as `5290110` |
-| `af739_t1_s2` | RUNNING | `gpu` | task1 `core_only_seed2` gap-fill, running as `5290111` at `189G` |
-| `af739_t2_s2` | RUNNING | `gpu` | task2 `core_only_seed2` gap-fill, running as `5290113` at `189G` |
+| `af739_t1_s2` | RUNNING | `gpu` | task1 `core_only_seed2` gap-fill, now running as `5298049` at `200G / 8 CPU` |
+| `af739_t2_s2` | RUNNING | `gpu` | task2 `core_only_seed2` gap-fill, now running as `5298048` at `200G / 8 CPU` |
 | `af739_t2_e2` | RUNNING | `gpu` | task2 `core_edgar_seed2` gap-fill, running as `5290112` |
 | `af739_t3_e2` | RUNNING | `gpu` | task3 `core_edgar_seed2` gap-fill, timeout-repaired as `5290366` |
 
@@ -62,9 +62,14 @@
    - `5290111 af739_t1_s2`
    - `5290112 af739_t2_e2`
    - `5290113 af739_t2_s2`
-3. The two seed2 jobs were escalated from `150G` to `189G` because the failed copies exceeded the original memory budget by ~7G.
-4. `af739_t3_e2` also hit `TIMEOUT` in its repaired copy (`5284506`) and has now been requeued as `5290366`.
-5. By the 2026-03-28 15:45 queue check, all five repaired `af739_*` jobs had actually started running again. The current risk is throughput, not missing submissions.
+3. The first seed2 repair from `150G` to `189G` was still insufficient:
+   - `5290111 af739_t1_s2` → `OUT_OF_MEMORY` with `MaxRSS=198181112K`
+   - `5290113 af739_t2_s2` → `OUT_OF_MEMORY` with `MaxRSS=198179092K`
+4. Both seed2 jobs were then resubmitted again at the current practical recovery setting:
+   - `5298049 af739_t1_s2` at `200G / 8 CPU`
+   - `5298048 af739_t2_s2` at `200G / 8 CPU`
+5. `af739_t3_e2` also hit `TIMEOUT` in its repaired copy (`5284506`) and has now been requeued as `5290366`.
+6. By the 2026-03-29 14:34 queue check, all five repaired `af739_*` jobs were still live. The current risk remains throughput, not missing submissions.
 
 ## Operational Interpretation
 

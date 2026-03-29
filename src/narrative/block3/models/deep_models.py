@@ -29,6 +29,7 @@ import pandas as pd
 
 from .base import ModelBase, ModelConfig
 from .samformer_model import create_samformer
+from .lightgts_model import create_lightgts
 
 _logger = logging.getLogger(__name__)
 
@@ -1910,6 +1911,8 @@ TRANSFORMER_MODELS = {
     "DeepNPTS": create_deepnpts,
     # 2026-03-23 benchmark expansion
     "SAMformer": create_samformer,
+    # 2026-03-29 local-clear expansion
+    "LightGTS": create_lightgts,
 }
 
 FOUNDATION_MODELS = {

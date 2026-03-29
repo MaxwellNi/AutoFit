@@ -180,7 +180,85 @@ cached 2.6 checkpoint clear a real narrow benchmark slice cleanly. The
 remaining question is no longer “can it run?”, but whether it deserves wider
 canonical benchmark expansion.
 
-## 4. Narrow benchmark-clear status
+## 4. LightGTS
+
+### Current factual status
+
+- local wrapper scaffold: **exists**
+  - `src/narrative/block3/models/lightgts_model.py`
+- official repo audit: **done**
+  - `docs/references/LIGHTGTS_INTEGRATION_AUDIT_20260328.md`
+- vendor import + minimal instantiation smoke: **passed**
+- first real-data tiny smoke: **completed twice**
+  - artifacts:
+    - `docs/references/local_model_smoke_20260328/lightgts_t2_core_edgar_funding_h30.json`
+    - `docs/references/local_model_smoke_20260328/lightgts_t2_core_edgar_funding_h30_ctx60.json`
+
+### Slice
+
+- model: `LightGTS`
+- task: `task2_forecast`
+- ablation: `core_edgar`
+- target: `funding_raised_usd`
+- horizon: `30`
+- max entities: `4`
+- max rows: `300`
+
+### Result
+
+#### First attempt: default-ish longer context
+
+- `input_size = 96`
+- `patch_len = 24`
+- `stride = 24`
+- outcome:
+  - `No training windows, using fallback-only mode`
+  - `constant_prediction = true`
+  - `MAE = 439131.00`
+
+#### Second attempt: smaller context matched to the tiny slice
+
+- `input_size = 60`
+- `patch_len = 15`
+- `stride = 15`
+- result:
+  - `fit_seconds = 4.60`
+  - `predict_seconds = 0.018`
+  - `prediction_std = 10802.78`
+  - `constant_prediction = false`
+  - `MAE = 445367.99`
+  - `RMSE = 639270.56`
+
+### Interpretation
+
+LightGTS has now crossed the most important first gate:
+
+- it is no longer just an audited vendor repo,
+- it is no longer just an import/instantiation smoke,
+- and it is no longer fallback-only by default.
+
+The main lesson from this first real-data pass is precise:
+
+> on tiny Block 3 audited slices, `LightGTS` needs a shorter context than the
+> repo-style default before it even has valid training windows.
+
+So the next correct step is **not** “register it into the canonical benchmark
+right now”. The correct next step is:
+
+1. keep the current wrapper out of the canonical leaderboard,
+2. register it only as a local-clear entrant,
+3. attempt a narrow benchmark-clear job.
+
+That next step is now in motion:
+
+- job: `5298059` `v740_lgts_clr`
+- current state: **PENDING**
+- scope:
+  - `task2_forecast / core_edgar / funding_raised_usd / h=30`
+- output root:
+  - `runs/benchmarks/block3_phase9_localclear_20260329/lightgts_funding_h30/`
+
+## 5. Narrow benchmark-clear status
 
 As of 2026-03-28, the first three local-only narrow benchmark-clear jobs have
 all completed through the real benchmark harness with isolated output roots:
@@ -203,7 +281,7 @@ These are resumable SLURM jobs under
 clear the models against the real benchmark harness without polluting the
 canonical leaderboard.
 
-## 5. TabPFNRegressor 2.6 Follow-up Probes
+## 6. TabPFNRegressor 2.6 Follow-up Probes
 
 The next two highest-value follow-up probes have now both **completed** so that
 `TabPFN 2.6` is no longer judged only from a single binary slice.
