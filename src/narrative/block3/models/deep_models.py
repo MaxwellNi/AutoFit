@@ -30,6 +30,7 @@ import pandas as pd
 from .base import ModelBase, ModelConfig
 from .samformer_model import create_samformer
 from .lightgts_model import create_lightgts
+from .olinear_model import create_olinear
 
 _logger = logging.getLogger(__name__)
 
@@ -1913,6 +1914,8 @@ TRANSFORMER_MODELS = {
     "SAMformer": create_samformer,
     # 2026-03-29 local-clear expansion
     "LightGTS": create_lightgts,
+    # 2026-03-30 local-clear expansion
+    "OLinear": create_olinear,
 }
 
 FOUNDATION_MODELS = {

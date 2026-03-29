@@ -58,6 +58,15 @@ def get_lightgts_repo_dir() -> Path:
     return default_repo.resolve()
 
 
+def get_olinear_repo_dir() -> Path:
+    """Return the preferred OLinear repo path."""
+    env_override = os.getenv("BLOCK3_OLINEAR_REPO")
+    if env_override:
+        return Path(env_override).expanduser().resolve()
+    default_repo = get_optional_repo_root() / "OLinear"
+    return default_repo.resolve()
+
+
 def ensure_optional_vendor_on_path() -> Path:
     """Add the optional vendor directory to sys.path when it exists."""
     vendor = get_optional_vendor_dir()
@@ -107,6 +116,18 @@ def ensure_lightgts_repo_on_path() -> Path:
     return repo
 
 
+def ensure_olinear_repo_on_path() -> Path:
+    """Expose an audited OLinear repo on `sys.path` when available."""
+    repo = get_olinear_repo_dir()
+    if not repo.exists():
+        return repo
+    s = str(repo)
+    if s in sys.path:
+        sys.path.remove(s)
+    sys.path.insert(0, s)
+    return repo
+
+
 def _candidate_lib_dirs() -> list[Path]:
     candidates: list[Path] = []
     exe = Path(sys.executable).resolve()
@@ -142,9 +163,11 @@ def ensure_insider_libstdcpp() -> Path | None:
 __all__ = [
     "ensure_insider_libstdcpp",
     "ensure_lightgts_repo_on_path",
+    "ensure_olinear_repo_on_path",
     "ensure_optional_vendor_on_path",
     "ensure_tabpfn_vendor_on_path",
     "get_lightgts_repo_dir",
+    "get_olinear_repo_dir",
     "get_optional_vendor_dir",
     "get_optional_repo_root",
     "get_tabpfn_vendor_dir",

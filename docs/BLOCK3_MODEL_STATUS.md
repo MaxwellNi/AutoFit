@@ -1,6 +1,6 @@
 # Block 3 Model Benchmark Status
 
-> Last updated: 2026-03-30 00:36 CEST
+> Last updated: 2026-03-30 01:14 CEST
 > Current authority: `docs/CURRENT_SOURCE_OF_TRUTH.md`
 > Evidence: direct scan of `runs/benchmarks/block3_phase9_fair/`, `all_results.csv`, live `squeue`, `sacct`, and benchmark aggregation scripts.
 
@@ -87,6 +87,13 @@ Detailed per-job progress/ETA snapshot: `docs/RUN_QUEUE_PROGRESS_CURRENT.md`
   - first narrow benchmark-clear attempt `5298059` completed without model execution because the compute node could not see `/tmp/LightGTS`
   - repaired rerun `5298289` completed successfully after switching to `~/.cache/block3_optional_repos/LightGTS`
   - current narrow-clear result: `MAE = 201930.5506`, `fairness_pass = true`
+- `OLinear` has now moved from docs-only into the same local-clear lane:
+  - official repo is audited and pinned locally
+  - Block 3 wrapper exists in `src/narrative/block3/models/olinear_model.py`
+  - first tiny funding smoke is non-fallback on `task2_forecast/core_edgar/funding_raised_usd/h=30`
+  - tiny investors-count smoke on `h=14` falls back to constant on that small slice
+  - first narrow benchmark-clear rerun `5298296` completed successfully
+  - current narrow-clear result: `MAE = 131288.8062`, `fairness_pass = true`
 - `hopper` is not memory-constrained in the way older docs implied; the real limiter is priority/preemption. It should be treated as opportunistic overflow, not as the sole critical path.
 - `ModernTCN` remains the dominant throughput bottleneck for non-`e2` accel jobs.
 
@@ -119,6 +126,7 @@ Detailed per-job progress/ETA snapshot: `docs/RUN_QUEUE_PROGRESS_CURRENT.md`
    - `5294260` `v740_tpfn26r_inv` (`TabPFNRegressor`) → completed investors-count narrow clear (`fairness_pass=false`, red-flag result)
    - `5298059` `v740_lgts_clr` (`LightGTS`) → completed without model execution because the compute node could not see `/tmp/LightGTS`
    - `5298289` `v740_lgts_clr` (`LightGTS`) → repaired rerun completed successfully after switching to `~/.cache/block3_optional_repos/LightGTS`
+   - `5298296` `v740_olnr_clr` (`OLinear`) → first audited funding narrow clear completed successfully (`fairness_pass=true`)
 8. **Rebuilt** `docs/benchmarks/phase9_current_snapshot.{json,md}` and `docs/BLOCK3_RESULTS.md` using the insider Python environment after the new landings.
 9. **Recovered the first corrected local V739 vs V740 compare** (`mb_t1_core_edgar_is_funded_h14`), which currently favors V739/`PatchTST` over V740-alpha on that audited binary EDGAR slice.
 10. **A second timeout wave hit the GPU e2/cos2 critical path on 2026-03-30 and was repaired immediately**:
@@ -131,6 +139,13 @@ Detailed per-job progress/ETA snapshot: `docs/RUN_QUEUE_PROGRESS_CURRENT.md`
      - `5298286 af739_t2_e2`
      - `5298287 af739_t3_e2`
      - `5298288 gpu_cos2_t2`
+11. **`OLinear` is no longer blocked by “missing artifact generation” as an abstract issue.**
+    The current state is:
+    - vendor repo audited locally,
+    - Block 3 wrapper implemented,
+    - tiny real-data smoke exists,
+    - first funding narrow clear exists,
+    - count-side evidence is still weak and should not yet be oversold.
 
 ## Resource Policy (Current)
 

@@ -1,6 +1,6 @@
 # Current Source of Truth
 
-> Last verified: 2026-03-30 00:36 CEST
+> Last verified: 2026-03-30 01:14 CEST
 > Verified by direct scans of `runs/benchmarks/block3_phase9_fair/`, live `squeue -u npin`, `sacct`, benchmark aggregation scripts.
 
 This file is the authoritative documentation entry point for the current Block 3 project state.
@@ -43,7 +43,7 @@ If any other document disagrees with this file, prefer this file and the evidenc
 | Text embedding artifacts | `AVAILABLE` | `runs/text_embeddings/embedding_metadata.json` |
 | Phase 12 text reruns | `48/48 COMPLETED` | core_text+full 91/91 models |
 | Phase 15 new models | 23 submitted, 15 valid, 8 excluded (Finding H), 78/160 | direct scan |
-| Live jobs | `40` (9R + 31PD) | direct `squeue -u npin,cfisch` 2026-03-30 00:36: gpu 6R+0PD, l40s 3R+14PD, hopper 0R+17PD |
+| Live jobs | `40` (9R + 31PD) | direct `squeue -u npin,cfisch` 2026-03-30 01:14: gpu 6R+0PD, l40s 3R+14PD, hopper 0R+17PD |
 | Clean full comparable frontier | `55` models @ shared `160/160` | post-filter `all_results.csv`, non-retired only |
 
 ## What the Current Benchmark Means
@@ -63,7 +63,7 @@ If any other document disagrees with this file, prefer this file and the evidenc
 
 ## Current Execution Reality
 
-1. Live queue snapshot verified on 2026-03-30 00:36 CEST:
+1. Live queue snapshot verified on 2026-03-30 01:14 CEST:
    - `9 RUNNING` = `6 gpu + 3 l40s + 0 hopper`
    - `31 PENDING` = `0 gpu + 14 l40s + 17 hopper`
    - **40 total**
@@ -165,6 +165,37 @@ If any other document disagrees with this file, prefer this file and the evidenc
      - `LightGTS` is now genuinely past the “import only” stage
      - it has a real narrow harness clear
      - it is still a local-clear side path and does **not** yet count as a canonical benchmark entrant
+11. `OLinear` has now crossed the same first serious local-only integration gates:
+   - the official repo is audited and pinned locally at:
+     - `~/.cache/block3_optional_repos/OLinear`
+     - HEAD `f168e01a3e0e316ad98330b5e77afed1f77b0af5`
+   - local integration is no longer blocked only on paper by artifact generation:
+     - a Block 3 vendor-path helper exists in `src/narrative/block3/models/optional_runtime.py`
+     - a real local wrapper exists in `src/narrative/block3/models/olinear_model.py`
+     - the model is now locally registered through `src/narrative/block3/models/deep_models.py`
+   - first tiny real-data funding smoke on:
+     - `task2_forecast / core_edgar / funding_raised_usd / h=30`
+     - is **non-fallback** and **non-constant**
+     - `fit_seconds = 15.35`
+     - `MAE = 265368.0`
+   - first tiny real-data investors-count smoke on:
+     - `task2_forecast / core_edgar / investors_count / h=14`
+     - falls back to a constant predictor on that tiny slice
+   - first narrow benchmark-clear rerun:
+     - `5298296` `v740_olnr_clr`
+     - completed successfully on the real harness
+     - output root:
+       `runs/benchmarks/block3_phase9_localclear_20260330/olinear_funding_h30/`
+     - metrics:
+       - `MAE = 131288.8062`
+       - `RMSE = 174092.4956`
+       - `prediction_coverage_ratio = 1.0`
+       - `fairness_pass = true`
+       - `peak_rss_gb = 47.49`
+   - interpretation:
+     - `OLinear` is now past the “docs-only / preprocessing-blocked” stage
+     - it has a real audited funding narrow clear
+     - it remains a local-clear side path and does **not** yet count as a canonical benchmark entrant
 
 ## Current Priorities
 

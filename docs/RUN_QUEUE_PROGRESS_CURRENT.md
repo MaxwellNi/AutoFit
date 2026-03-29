@@ -1,6 +1,6 @@
 # Current Queue Progress
 
-> Snapshot time: 2026-03-30 00:36 CEST
+> Snapshot time: 2026-03-30 01:14 CEST
 > Source: live `squeue -u npin,cfisch`, `squeue --start -u npin,cfisch`, and `sacct -u npin -S 2026-03-28T00:00:00`
 
 ## Summary
@@ -22,15 +22,15 @@
 
 | jobid | job | partition | elapsed | limit | progress | time_left | reason/node |
 | --- | --- | --- | --- | --- | ---: | --- | --- |
-| 5298048 | af739_t2_s2 | gpu | 10:21:21 | 2-00:00:00 | 21.6% | 1d13h38m | iris-186 |
-| 5298049 | af739_t1_s2 | gpu | 10:21:21 | 2-00:00:00 | 21.6% | 1d13h38m | iris-170 |
-| 5298285 | af739_t1_e2 | gpu | 0:01:12 | 2-00:00:00 | 0.0% | 1d23h58m | iris-185 |
-| 5298286 | af739_t2_e2 | gpu | 0:01:12 | 2-00:00:00 | 0.0% | 1d23h58m | iris-185 |
-| 5298287 | af739_t3_e2 | gpu | 0:01:12 | 2-00:00:00 | 0.0% | 1d23h58m | iris-186 |
-| 5298288 | gpu_cos2_t2 | gpu | 0:01:12 | 2-00:00:00 | 0.0% | 1d23h58m | iris-169 |
-| 5269761 | l2_ac_t3_co | l40s | 1-23:10:55 | 2-00:00:00 | 98.3% | 0h49m | iris-198 |
-| 5279084 | l2_ac_t1_ct | l40s | 6:21:39 | 2-00:00:00 | 13.3% | 1d17h38m | iris-199 |
-| 5269764 | l2_ac_t3_fu | l40s | 8:28:59 | 2-00:00:00 | 17.7% | 1d15h31m | iris-199 |
+| 5298048 | af739_t2_s2 | gpu | 10:58:30 | 2-00:00:00 | 22.9% | 1d13h01m | iris-186 |
+| 5298049 | af739_t1_s2 | gpu | 10:58:30 | 2-00:00:00 | 22.9% | 1d13h01m | iris-170 |
+| 5298285 | af739_t1_e2 | gpu | 0:38:21 | 2-00:00:00 | 1.3% | 1d23h21m | iris-185 |
+| 5298286 | af739_t2_e2 | gpu | 0:38:21 | 2-00:00:00 | 1.3% | 1d23h21m | iris-185 |
+| 5298287 | af739_t3_e2 | gpu | 0:38:21 | 2-00:00:00 | 1.3% | 1d23h21m | iris-186 |
+| 5298288 | gpu_cos2_t2 | gpu | 0:38:21 | 2-00:00:00 | 1.3% | 1d23h21m | iris-169 |
+| 5269761 | l2_ac_t3_co | l40s | 1-23:48:04 | 2-00:00:00 | 99.2% | 0h12m | iris-198 |
+| 5279084 | l2_ac_t1_ct | l40s | 6:58:48 | 2-00:00:00 | 14.5% | 1d17h01m | iris-199 |
+| 5269764 | l2_ac_t3_fu | l40s | 9:06:08 | 2-00:00:00 | 19.0% | 1d14h54m | iris-199 |
 
 ## Highest-Value Pending Jobs
 
@@ -72,3 +72,8 @@
 6. These local-only jobs use separate output roots and do not count as canonical benchmark results.
 7. `5298059` `v740_lgts_clr` is no longer pending. It completed without model execution because the compute node could not see `/tmp/LightGTS`.
 8. The repaired `LightGTS` rerun `5298289` completed successfully after switching the vendor repo to the persistent path `~/.cache/block3_optional_repos/LightGTS`.
+9. `5298296` `v740_olnr_clr` has also completed successfully as the first audited `OLinear` funding narrow clear:
+   - `task2_forecast / core_edgar / funding_raised_usd / h=30`
+   - `MAE = 131288.8062`
+   - `fairness_pass = true`
+   - this remains a local-only side path and does not count as a canonical benchmark landing

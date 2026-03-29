@@ -1,4 +1,4 @@
-# Local Model Smoke Notes (2026-03-28)
+# Local Model Smoke Notes (2026-03-30)
 
 This note records the first round of generic local smokes run through
 `scripts/run_block3_local_model_smoke.py`. These are **not** canonical
@@ -291,7 +291,99 @@ That still does **not** make it a canonical benchmark entrant yet. It does mean
 that the next honest question is no longer “can it run?” but “does it deserve a
 wider local-clear matrix or a true canonical expansion attempt?”.
 
-## 5. Narrow benchmark-clear status
+## 5. OLinear
+
+### Current factual status
+
+- local wrapper: **exists**
+  - `src/narrative/block3/models/olinear_model.py`
+- vendor/runtime helper:
+  - `src/narrative/block3/models/optional_runtime.py`
+- official repo audit: **done**
+  - persistent local repo:
+    `~/.cache/block3_optional_repos/OLinear`
+  - audited HEAD:
+    `f168e01a3e0e316ad98330b5e77afed1f77b0af5`
+- local generic smokes: **completed**
+  - artifacts:
+    - `docs/references/local_model_smoke_20260330/olinear_t2_core_edgar_funding_h30.json`
+    - `docs/references/local_model_smoke_20260330/olinear_t2_core_edgar_investors_h14.json`
+
+### Funding slice
+
+- model: `OLinear`
+- task: `task2_forecast`
+- ablation: `core_edgar`
+- target: `funding_raised_usd`
+- horizon: `30`
+- max entities: `4`
+- max rows: `300`
+
+#### Result
+
+- `fit_seconds = 15.35`
+- `predict_seconds = 0.0869`
+- `prediction_std = 300966.34`
+- `constant_prediction = false`
+- `MAE = 265368.00`
+- `RMSE = 528267.79`
+
+### Investors-count slice
+
+- model: `OLinear`
+- task: `task2_forecast`
+- ablation: `core_edgar`
+- target: `investors_count`
+- horizon: `14`
+- max entities: `4`
+- max rows: `300`
+
+#### Result
+
+- wrapper logs:
+  - `No training windows, using fallback-only mode`
+- `fit_seconds = 0.044`
+- `predict_seconds = 0.00003`
+- `prediction_std = 0.0`
+- `constant_prediction = true`
+- `MAE = 11.25`
+- `RMSE = 14.64`
+
+### Narrow benchmark-clear update
+
+- job: `5298296` `v740_olnr_clr`
+- status: **COMPLETED**
+- output root:
+  - `runs/benchmarks/block3_phase9_localclear_20260330/olinear_funding_h30/`
+
+Benchmark-harness metrics on the audited slice:
+
+- `MAE = 131288.8062`
+- `RMSE = 174092.4956`
+- `prediction_coverage_ratio = 1.0`
+- `fairness_pass = true`
+- `peak_rss_gb = 47.49`
+- `train_time_seconds = 3.01`
+- `inference_time_seconds = 0.0050`
+
+### Interpretation
+
+OLinear is no longer in the old “docs-only / artifact-blocked” state.
+It now has all of the following:
+
+- an audited official repo path,
+- a Block 3 wrapper,
+- a real non-fallback funding smoke,
+- and a first audited narrow benchmark-clear on the real harness.
+
+The honest remaining limitation is also clear:
+
+- the current count-side evidence is weak,
+- the tiny `investors_count` slice fell back to a constant predictor,
+- so OLinear should be treated as a **promising local-clear entrant**, not yet
+  as a broadly proven canonical comparator.
+
+## 6. Narrow benchmark-clear status
 
 As of 2026-03-30, four local-only narrow benchmark-clear lines have completed
 through the real benchmark harness with isolated output roots:
@@ -312,13 +404,17 @@ through the real benchmark harness with isolated output roots:
   - `LightGTS`
   - `task2_forecast / core_edgar / funding_raised_usd / h=30`
   - **completed successfully** after repairing the vendor repo path
+- `5298296` `v740_olnr_clr`
+  - `OLinear`
+  - `task2_forecast / core_edgar / funding_raised_usd / h=30`
+  - **completed successfully**
 
 These are resumable SLURM jobs under
 `runs/benchmarks/block3_phase9_localclear_20260328/`. They are intended to
 clear the models against the real benchmark harness without polluting the
 canonical leaderboard.
 
-## 6. TabPFNRegressor 2.6 Follow-up Probes
+## 7. TabPFNRegressor 2.6 Follow-up Probes
 
 The next two highest-value follow-up probes have now both **completed** so that
 `TabPFN 2.6` is no longer judged only from a single binary slice.
