@@ -31,6 +31,7 @@ from .base import ModelBase, ModelConfig
 from .samformer_model import create_samformer
 from .lightgts_model import create_lightgts
 from .olinear_model import create_olinear
+from .elastst_model import create_elastst
 
 _logger = logging.getLogger(__name__)
 
@@ -1916,6 +1917,8 @@ TRANSFORMER_MODELS = {
     "LightGTS": create_lightgts,
     # 2026-03-30 local-clear expansion
     "OLinear": create_olinear,
+    # 2026-03-30 varied-horizon local-clear expansion
+    "ElasTST": create_elastst,
 }
 
 FOUNDATION_MODELS = {

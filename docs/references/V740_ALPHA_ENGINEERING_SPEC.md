@@ -125,6 +125,34 @@
 > `text_source_density = 1.0`) but should not be over-read as proof that text
 > already improves long-horizon behavior. It mainly confirms that the bigger
 > `h=90` path now executes cleanly on a richer local slice.
+>
+> 2026-03-30 implementation update:
+> alpha now includes a first lightweight scaffold for two previously
+> design-only mechanisms:
+> 
+> 1. **selective-learning sample weighting**
+>    - windows are now assigned mild per-sample weights from target magnitude
+>      and history volatility,
+>    - the weighting is intentionally conservative (`0.6–1.3`) so the first
+>      implementation can be audited without destabilizing the prototype,
+>    - this currently affects the training loss only and is not yet claimed as
+>      a benchmark-ready curriculum policy.
+> 2. **DistDF-style multistep distribution alignment**
+>    - non-binary targets now receive an auxiliary per-window alignment on
+>      prediction-vs-target horizon mean and horizon dispersion,
+>    - this is a first approximation of the intended long-horizon objective,
+>      not the full paper-faithful DistDF implementation.
+>
+> The same day also moved `ElasTST` out of the docs-only bucket:
+> a local vendor-import wrapper now exists, the first funding smoke is
+> non-fallback, and a shorter-context investors smoke also runs end-to-end.
+> `ElasTST` is therefore now a real local-clear candidate rather than only a
+> literature reference.
+> A post-change V740 sanity check on
+> `task2_forecast / core_edgar / funding_raised_usd / h=30` also completed
+> cleanly (`docs/references/v740_alpha_selective_smoke_20260330/`), which is
+> enough to say the first selective-learning / DistDF scaffold does not break
+> the current alpha execution path.
 
 ## 1. Purpose
 

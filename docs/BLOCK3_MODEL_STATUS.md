@@ -64,7 +64,7 @@ Detailed per-job progress/ETA snapshot: `docs/RUN_QUEUE_PROGRESS_CURRENT.md`
 | --- | ---: | --- |
 | gpu RUNNING | 6 | `af739_t1_e2`, `af739_t1_s2`, `af739_t2_e2`, `af739_t2_s2`, `af739_t3_e2`, `gpu_cos2_t2` |
 | gpu PENDING | 0 | no current gpu backlog after the repaired e2/cos2 resubmissions started |
-| l40s RUNNING | 3 | `l2_ac_t3_co`, `l2_ac_t1_ct`, `l2_ac_t3_fu` |
+| l40s RUNNING | 3 | `l2_ac_t3_ce`, `l2_ac_t1_ct`, `l2_ac_t3_fu` |
 | l40s PENDING | 14 | overflow / resume-safe accel_v2 backlog |
 | hopper RUNNING | 0 | no current hopper jobs are running for `npin` |
 | hopper PENDING | 17 | priority-limited overflow backlog |
@@ -94,6 +94,13 @@ Detailed per-job progress/ETA snapshot: `docs/RUN_QUEUE_PROGRESS_CURRENT.md`
   - tiny investors-count smoke on `h=14` falls back to constant on that small slice
   - first narrow benchmark-clear rerun `5298296` completed successfully
   - current narrow-clear result: `MAE = 131288.8062`, `fairness_pass = true`
+- `ElasTST` has now joined the same local-clear lane:
+  - official ProbTS repo is audited locally
+  - Block 3 wrapper exists in `src/narrative/block3/models/elastst_model.py`
+  - first tiny funding smoke is non-fallback on `task2_forecast/core_edgar/funding_raised_usd/h=30`
+  - default-context tiny investors slice had no windows, but a shorter-context rerun is also non-fallback
+  - first narrow benchmark-clear `5298399` completed successfully
+  - current narrow-clear result: `MAE = 201925.6990`, `fairness_pass = true`
 - `hopper` is not memory-constrained in the way older docs implied; the real limiter is priority/preemption. It should be treated as opportunistic overflow, not as the sole critical path.
 - `ModernTCN` remains the dominant throughput bottleneck for non-`e2` accel jobs.
 

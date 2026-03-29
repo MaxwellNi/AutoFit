@@ -1,0 +1,34 @@
+{
+  "model": "ElasTST",
+  "model_kwargs": {
+    "input_size": 60,
+    "l_patch_size": "8_16",
+    "hidden_size": 64,
+    "d_inner": 128,
+    "n_heads": 4,
+    "batch_size": 16,
+    "max_epochs": 3,
+    "patience": 1,
+    "max_covariates": 8
+  },
+  "task": "task2_forecast",
+  "ablation": "core_edgar",
+  "target": "investors_count",
+  "horizon": 14,
+  "train_rows": 300,
+  "val_rows": 332,
+  "test_rows": 324,
+  "train_matrix_rows": 300,
+  "test_matrix_rows": 324,
+  "feature_count": 105,
+  "fit_seconds": 0.0364527702331543,
+  "predict_seconds": 2.5272369384765625e-05,
+  "prediction_std": 0.0,
+  "constant_prediction": true,
+  "metrics": {
+    "mae": 11.25,
+    "rmse": 14.637281168304447,
+    "smape": 22.73077326753419,
+    "mape": 19.720535309024807
+  }
+}

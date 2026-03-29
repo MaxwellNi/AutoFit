@@ -701,6 +701,8 @@ class V740AlphaPrototypeWrapper(ModelBase):
         enable_teacher_distill: bool = True,
         enable_event_head: bool = True,
         enable_task_modulation: bool = True,
+        enable_selective_learning: bool = True,
+        enable_distdf_loss: bool = True,
         seed: int = 42,
         **kwargs,
     ):
@@ -725,6 +727,8 @@ class V740AlphaPrototypeWrapper(ModelBase):
         self.enable_teacher_distill = enable_teacher_distill
         self.enable_event_head = enable_event_head
         self.enable_task_modulation = enable_task_modulation
+        self.enable_selective_learning = enable_selective_learning
+        self.enable_distdf_loss = enable_distdf_loss
         self.seed = seed
         self._network = None
         self._device = None
@@ -754,6 +758,45 @@ class V740AlphaPrototypeWrapper(ModelBase):
         self._ablation_name = "core_only"
         self._horizon = 1
         self._dual_clock_cfg = DualClockConfig(max_events=max_event_tokens)
+
+    def _weighted_reduce(self, torch, values, sample_weight=None):
+        if values.ndim > 1:
+            dims = tuple(range(1, values.ndim))
+            values = values.mean(dim=dims)
+        if sample_weight is None:
+            return values.mean()
+        weight = sample_weight.to(device=values.device, dtype=values.dtype).view(-1)
+        weight = weight / weight.mean().clamp_min(1e-6)
+        return (values * weight).mean()
+
+    def _build_window_sample_weights(self, train_x: np.ndarray, train_y: np.ndarray) -> np.ndarray:
+        n = len(train_x)
+        weights = np.ones((n,), dtype=np.float32)
+        if n == 0 or not self.enable_selective_learning:
+            return weights
+
+        target_mag = np.mean(np.abs(train_y), axis=1)
+        hist_vol = np.std(train_x[:, 0, :], axis=1)
+
+        def _normalize(arr: np.ndarray) -> np.ndarray:
+            arr = np.asarray(arr, dtype=np.float32)
+            if not np.isfinite(arr).any():
+                return np.zeros_like(arr)
+            lo = float(np.nanpercentile(arr, 5))
+            hi = float(np.nanpercentile(arr, 95))
+            if hi <= lo + 1e-8:
+                return np.zeros_like(arr)
+            return np.clip((arr - lo) / (hi - lo), 0.0, 1.0)
+
+        mag_norm = _normalize(target_mag)
+        vol_norm = _normalize(hist_vol)
+
+        weights = 1.0 + 0.10 * mag_norm - 0.20 * vol_norm
+        if self._has_edgar_path():
+            weights += 0.05 * float(self._edgar_source_density)
+        if self._has_text_path():
+            weights += 0.03 * float(self._text_source_density)
+        return np.clip(weights.astype(np.float32), 0.6, 1.3)
 
     def _token_tensor(self, torch, batch_size: int):
         task_idx = torch.full((batch_size,), self._TASK_MAP.get(self._task_name, 0), dtype=torch.long, device=self._device)
@@ -818,7 +861,7 @@ class V740AlphaPrototypeWrapper(ModelBase):
         self._teacher_logistic_mix = float(logistic_mix)
         self._teacher_tree_mix = float(tree_mix)
 
-    def _loss(self, torch, outputs, target, teacher_probs=None):
+    def _loss(self, torch, outputs, target, teacher_probs=None, sample_weight=None):
         if self._binary_target:
             logits = outputs["binary"]
             probs = torch.sigmoid(logits)
@@ -835,8 +878,8 @@ class V740AlphaPrototypeWrapper(ModelBase):
             )
             pt = probs * target + (1.0 - probs) * (1.0 - target)
             focal = ((1.0 - pt).clamp_min(1e-4) ** 1.5) * bce_raw
-            bce = focal.mean()
-            brier = torch.mean((probs - target) ** 2)
+            bce = self._weighted_reduce(torch, focal, sample_weight=sample_weight)
+            brier = self._weighted_reduce(torch, (probs - target) ** 2, sample_weight=sample_weight)
             rate_ref = torch.tensor(
                 self._binary_train_rate,
                 dtype=target.dtype,
@@ -859,20 +902,30 @@ class V740AlphaPrototypeWrapper(ModelBase):
             if self.enable_event_head:
                 event_target = (target.max(dim=1).values > 0.5).to(target.dtype)
                 event_logits = outputs["event"]
-                event_bce = torch.nn.functional.binary_cross_entropy_with_logits(
+                event_bce_raw = torch.nn.functional.binary_cross_entropy_with_logits(
                     event_logits,
                     event_target,
                     pos_weight=pos_weight,
+                    reduction="none",
                 )
+                event_bce = self._weighted_reduce(torch, event_bce_raw, sample_weight=sample_weight)
             teacher_align = torch.zeros((), dtype=target.dtype, device=target.device)
             if teacher_probs is not None and self.enable_teacher_distill:
                 teacher_probs = teacher_probs.to(device=target.device, dtype=target.dtype).view(-1)
                 teacher_probs = teacher_probs.clamp(1e-4, 1.0 - 1e-4)
                 avg_probs = probs.mean(dim=1)
-                teacher_align = torch.nn.functional.mse_loss(avg_probs, teacher_probs)
+                teacher_align = self._weighted_reduce(
+                    torch,
+                    (avg_probs - teacher_probs) ** 2,
+                    sample_weight=sample_weight,
+                )
                 if self.enable_event_head:
                     event_probs = torch.sigmoid(outputs["event"])
-                    teacher_align = teacher_align + 0.5 * torch.nn.functional.mse_loss(event_probs, teacher_probs)
+                    teacher_align = teacher_align + 0.5 * self._weighted_reduce(
+                        torch,
+                        (event_probs - teacher_probs) ** 2,
+                        sample_weight=sample_weight,
+                    )
             return (
                 bce
                 + 0.15 * brier
@@ -884,18 +937,63 @@ class V740AlphaPrototypeWrapper(ModelBase):
             )
         if self._target_name == "investors_count":
             pred = torch.relu(outputs["count"])
-            base = torch.nn.functional.smooth_l1_loss(pred, target)
-            neg_penalty = torch.relu(-outputs["count"]).mean()
-            return base + 0.05 * neg_penalty
+            base = self._weighted_reduce(
+                torch,
+                torch.nn.functional.smooth_l1_loss(pred, target, reduction="none"),
+                sample_weight=sample_weight,
+            )
+            neg_penalty = self._weighted_reduce(torch, torch.relu(-outputs["count"]), sample_weight=sample_weight)
+            distdf = torch.zeros((), dtype=target.dtype, device=target.device)
+            if self.enable_distdf_loss:
+                pred_mean = pred.mean(dim=1)
+                tgt_mean = target.mean(dim=1)
+                pred_std = pred.std(dim=1, unbiased=False)
+                tgt_std = target.std(dim=1, unbiased=False)
+                distdf = self._weighted_reduce(
+                    torch,
+                    torch.nn.functional.smooth_l1_loss(pred_mean, tgt_mean, reduction="none")
+                    + 0.5 * torch.nn.functional.smooth_l1_loss(
+                        torch.log1p(pred_std),
+                        torch.log1p(tgt_std),
+                        reduction="none",
+                    ),
+                    sample_weight=sample_weight,
+                )
+            return base + 0.05 * neg_penalty + 0.05 * distdf
         pred = outputs["continuous"]
-        base = torch.nn.functional.smooth_l1_loss(pred, target)
+        base = self._weighted_reduce(
+            torch,
+            torch.nn.functional.smooth_l1_loss(pred, target, reduction="none"),
+            sample_weight=sample_weight,
+        )
         pred_pos = torch.relu(pred)
         target_pos = torch.relu(target)
-        align = torch.nn.functional.smooth_l1_loss(
-            torch.log1p(pred_pos),
-            torch.log1p(target_pos),
+        align = self._weighted_reduce(
+            torch,
+            torch.nn.functional.smooth_l1_loss(
+                torch.log1p(pred_pos),
+                torch.log1p(target_pos),
+                reduction="none",
+            ),
+            sample_weight=sample_weight,
         )
-        return base + 0.1 * align
+        distdf = torch.zeros((), dtype=target.dtype, device=target.device)
+        if self.enable_distdf_loss:
+            pred_mean = pred.mean(dim=1)
+            tgt_mean = target.mean(dim=1)
+            pred_std = pred.std(dim=1, unbiased=False).clamp_min(1e-6)
+            tgt_std = target.std(dim=1, unbiased=False).clamp_min(1e-6)
+            distdf = self._weighted_reduce(
+                torch,
+                torch.nn.functional.smooth_l1_loss(pred_mean, tgt_mean, reduction="none")
+                + 0.5 * torch.nn.functional.smooth_l1_loss(
+                    torch.log1p(pred_std),
+                    torch.log1p(tgt_std),
+                    reduction="none",
+                ),
+                sample_weight=sample_weight,
+            )
+        return base + 0.1 * align + 0.05 * distdf
 
     def fit(self, X: pd.DataFrame, y: pd.Series, **kwargs) -> "V740AlphaPrototypeWrapper":
         torch, nn, V740AlphaNet = _torch_imports()
@@ -977,8 +1075,14 @@ class V740AlphaPrototypeWrapper(ModelBase):
             self._binary_transition_rate = float(transition_targets.mean()) if len(transition_targets) else 0.5
             self._configure_binary_regime()
 
-        train_x = torch.tensor(np.stack(entity_windows.train_x), dtype=torch.float32)
-        train_y = torch.tensor(np.stack(entity_windows.train_y), dtype=torch.float32)
+        train_x_np = np.stack(entity_windows.train_x).astype(np.float32, copy=False)
+        train_y_np = np.stack(entity_windows.train_y).astype(np.float32, copy=False)
+        train_x = torch.tensor(train_x_np, dtype=torch.float32)
+        train_y = torch.tensor(train_y_np, dtype=torch.float32)
+        train_sample_weight = torch.tensor(
+            self._build_window_sample_weights(train_x_np, train_y_np),
+            dtype=torch.float32,
+        )
         train_edgar_recent = self._memory_batch(
             torch,
             entity_windows.train_edgar_recent,
@@ -1093,6 +1197,7 @@ class V740AlphaPrototypeWrapper(ModelBase):
             train_text_recent,
             train_text_bucket,
             train_teacher,
+            train_sample_weight,
         )
         sampler = None
         shuffle = True
@@ -1123,7 +1228,7 @@ class V740AlphaPrototypeWrapper(ModelBase):
         for epoch in range(self.max_epochs):
             self._network.train()
             losses = []
-            for xb, yb, er, eb, tr, tb, tp in loader:
+            for xb, yb, er, eb, tr, tb, tp, sw in loader:
                 xb = xb.to(self._device)
                 yb = yb.to(self._device)
                 er = er.to(self._device)
@@ -1131,6 +1236,7 @@ class V740AlphaPrototypeWrapper(ModelBase):
                 tr = tr.to(self._device)
                 tb = tb.to(self._device)
                 tp = tp.to(self._device)
+                sw = sw.to(self._device)
                 task_idx, target_idx, horizon_value, ablation_idx = self._token_tensor(torch, len(xb))
                 outputs = self._network(
                     xb,
@@ -1143,7 +1249,13 @@ class V740AlphaPrototypeWrapper(ModelBase):
                     text_recent=tr,
                     text_bucket=tb,
                 )
-                loss = self._loss(torch, outputs, yb, teacher_probs=tp if self._binary_target else None)
+                loss = self._loss(
+                    torch,
+                    outputs,
+                    yb,
+                    teacher_probs=tp if self._binary_target else None,
+                    sample_weight=sw,
+                )
                 optimizer.zero_grad()
                 loss.backward()
                 torch.nn.utils.clip_grad_norm_(self._network.parameters(), 1.0)

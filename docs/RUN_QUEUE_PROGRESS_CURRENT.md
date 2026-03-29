@@ -1,6 +1,6 @@
 # Current Queue Progress
 
-> Snapshot time: 2026-03-30 01:14 CEST
+> Snapshot time: 2026-03-30 01:39 CEST
 > Source: live `squeue -u npin,cfisch`, `squeue --start -u npin,cfisch`, and `sacct -u npin -S 2026-03-28T00:00:00`
 
 ## Summary
@@ -22,15 +22,15 @@
 
 | jobid | job | partition | elapsed | limit | progress | time_left | reason/node |
 | --- | --- | --- | --- | --- | ---: | --- | --- |
-| 5298048 | af739_t2_s2 | gpu | 10:58:30 | 2-00:00:00 | 22.9% | 1d13h01m | iris-186 |
-| 5298049 | af739_t1_s2 | gpu | 10:58:30 | 2-00:00:00 | 22.9% | 1d13h01m | iris-170 |
-| 5298285 | af739_t1_e2 | gpu | 0:38:21 | 2-00:00:00 | 1.3% | 1d23h21m | iris-185 |
-| 5298286 | af739_t2_e2 | gpu | 0:38:21 | 2-00:00:00 | 1.3% | 1d23h21m | iris-185 |
-| 5298287 | af739_t3_e2 | gpu | 0:38:21 | 2-00:00:00 | 1.3% | 1d23h21m | iris-186 |
-| 5298288 | gpu_cos2_t2 | gpu | 0:38:21 | 2-00:00:00 | 1.3% | 1d23h21m | iris-169 |
-| 5269761 | l2_ac_t3_co | l40s | 1-23:48:04 | 2-00:00:00 | 99.2% | 0h12m | iris-198 |
-| 5279084 | l2_ac_t1_ct | l40s | 6:58:48 | 2-00:00:00 | 14.5% | 1d17h01m | iris-199 |
-| 5269764 | l2_ac_t3_fu | l40s | 9:06:08 | 2-00:00:00 | 19.0% | 1d14h54m | iris-199 |
+| 5298048 | af739_t2_s2 | gpu | 11:23:41 | 2-00:00:00 | 23.7% | 1d12h36m | iris-186 |
+| 5298049 | af739_t1_s2 | gpu | 11:23:41 | 2-00:00:00 | 23.7% | 1d12h36m | iris-170 |
+| 5298285 | af739_t1_e2 | gpu | 1:03:32 | 2-00:00:00 | 2.2% | 1d22h56m | iris-185 |
+| 5298286 | af739_t2_e2 | gpu | 1:03:32 | 2-00:00:00 | 2.2% | 1d22h56m | iris-185 |
+| 5298287 | af739_t3_e2 | gpu | 1:03:32 | 2-00:00:00 | 2.2% | 1d22h56m | iris-186 |
+| 5298288 | gpu_cos2_t2 | gpu | 1:03:32 | 2-00:00:00 | 2.2% | 1d22h56m | iris-169 |
+| 5269760 | l2_ac_t3_ce | l40s | 0:13:01 | 2-00:00:00 | 0.5% | 1d23h47m | iris-198 |
+| 5279084 | l2_ac_t1_ct | l40s | 7:23:59 | 2-00:00:00 | 15.4% | 1d16h36m | iris-199 |
+| 5269764 | l2_ac_t3_fu | l40s | 9:31:19 | 2-00:00:00 | 19.8% | 1d14h29m | iris-199 |
 
 ## Highest-Value Pending Jobs
 
@@ -58,7 +58,7 @@
 2. `af739_t1_s2` and `af739_t2_s2` failed once more at `189G` (`MaxRSS≈198.18G`) and were resubmitted as `5298049` / `5298048` at `200G / 8 CPU`.
 3. `l2_ac_t2_s2` is the confirmed latest `l40s` timeout casualty on 2026-03-28; log evidence shows it progressed deep into `investors_count` before the 2-day wall, so it was resubmitted as `5294241`.
 4. The `l40s` lane is no longer down to a single live job. At this snapshot:
-   - `l2_ac_t3_co`
+   - `l2_ac_t3_ce`
    - `l2_ac_t1_ct`
    - `l2_ac_t3_fu`
    are all RUNNING, so the current queue is `9R+31PD`.
@@ -77,3 +77,11 @@
    - `MAE = 131288.8062`
    - `fairness_pass = true`
    - this remains a local-only side path and does not count as a canonical benchmark landing
+10. `5298399` `v740_elas_clr` has now completed successfully as the first `ElasTST` narrow benchmark-clear probe:
+   - `task2_forecast / core_edgar / funding_raised_usd / h=30`
+   - `MAE = 201925.6990`
+   - `RMSE = 205733.8504`
+   - `prediction_coverage_ratio = 1.0`
+   - `fairness_pass = true`
+   - `peak_rss_gb = 47.06`
+   - this remains a local-only clear path and does not count as a canonical benchmark result

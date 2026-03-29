@@ -479,3 +479,105 @@ perfect, but the run fails the fairness gate. It therefore cannot be promoted
 as a valid benchmark-clear result, and it should be treated as evidence that
 `TabPFNRegressor` still needs closer auditing on count-style targets before any
 canonical expansion is considered.
+
+## 8. ElasTST
+
+### Current factual status
+
+- official ProbTS repo audited locally:
+  - `~/.cache/block3_optional_repos/ProbTS`
+- dedicated local wrapper now exists:
+  - `src/narrative/block3/models/elastst_model.py`
+- integration audit:
+  - `docs/references/ELASTST_INTEGRATION_AUDIT_20260330.md`
+
+### Funding slice: first non-fallback smoke
+
+- output artifact:
+  - `docs/references/local_model_smoke_20260330/elastst_t2_core_edgar_funding_h30.json`
+
+Slice:
+
+- model: `ElasTST`
+- task: `task2_forecast`
+- ablation: `core_edgar`
+- target: `funding_raised_usd`
+- horizon: `30`
+- max entities: `4`
+- max rows: `300`
+- wrapper config:
+  - `input_size=60`
+  - `l_patch_size=8_16`
+  - `hidden_size=64`
+  - `d_inner=128`
+  - `n_heads=4`
+
+Result:
+
+- `fit_seconds = 2.02`
+- `predict_seconds = 0.020`
+- `prediction_std = 10801.88`
+- `constant_prediction = false`
+- `MAE = 445367.47`
+- `RMSE = 639269.97`
+
+### Investors slice: default context too long on the tiny slice
+
+- output artifact:
+  - `docs/references/local_model_smoke_20260330/elastst_t2_core_edgar_investors_h14.json`
+
+Result:
+
+- `No training windows`
+- fallback-only
+- `constant_prediction = true`
+- `MAE = 11.25`
+
+### Investors slice: shorter context restores a real path
+
+- output artifact:
+  - `docs/references/local_model_smoke_20260330/elastst_t2_core_edgar_investors_h14_ctx30.json`
+
+Adjusted config:
+
+- `input_size=30`
+- `l_patch_size=6_10`
+
+Result:
+
+- `fit_seconds = 2.30`
+- `predict_seconds = 0.048`
+- `prediction_std = 1.90e-4`
+- `constant_prediction = false`
+- `MAE = 47.52`
+- `RMSE = 48.95`
+
+### Interpretation
+
+ElasTST is now beyond the “paper only” stage:
+
+- the local wrapper is real,
+- funding and shorter-context investors slices both execute end-to-end,
+- and the remaining question is no longer “can it run?” but
+  “which context / patch settings make it worth paying for narrow clear?”
+
+So the honest next step is:
+
+1. keep it in local-clear status,
+2. start with a funding narrow clear first,
+3. widen only if the first clear is healthy.
+
+That first narrow clear has now already completed successfully:
+
+- job: `5298399` `v740_elas_clr`
+- output root:
+  - `runs/benchmarks/block3_phase9_localclear_20260330/elastst_funding_h30/`
+- audited harness result:
+  - `MAE = 201925.6990`
+  - `RMSE = 205733.8504`
+  - `prediction_coverage_ratio = 1.0`
+  - `fairness_pass = true`
+  - `peak_rss_gb = 47.06`
+
+So `ElasTST` has now crossed the same first serious local-clear gate that
+`LightGTS` and `OLinear` already crossed earlier.

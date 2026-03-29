@@ -1,6 +1,6 @@
 # Current Source of Truth
 
-> Last verified: 2026-03-30 01:14 CEST
+> Last verified: 2026-03-30 01:39 CEST
 > Verified by direct scans of `runs/benchmarks/block3_phase9_fair/`, live `squeue -u npin`, `sacct`, benchmark aggregation scripts.
 
 This file is the authoritative documentation entry point for the current Block 3 project state.
@@ -43,7 +43,7 @@ If any other document disagrees with this file, prefer this file and the evidenc
 | Text embedding artifacts | `AVAILABLE` | `runs/text_embeddings/embedding_metadata.json` |
 | Phase 12 text reruns | `48/48 COMPLETED` | core_text+full 91/91 models |
 | Phase 15 new models | 23 submitted, 15 valid, 8 excluded (Finding H), 78/160 | direct scan |
-| Live jobs | `40` (9R + 31PD) | direct `squeue -u npin,cfisch` 2026-03-30 01:14: gpu 6R+0PD, l40s 3R+14PD, hopper 0R+17PD |
+| Live jobs | `40` (9R + 31PD) | direct `squeue -u npin` 2026-03-30 01:39: gpu 6R+0PD, l40s 3R+14PD, hopper 0R+17PD |
 | Clean full comparable frontier | `55` models @ shared `160/160` | post-filter `all_results.csv`, non-retired only |
 
 ## What the Current Benchmark Means
@@ -63,7 +63,7 @@ If any other document disagrees with this file, prefer this file and the evidenc
 
 ## Current Execution Reality
 
-1. Live queue snapshot verified on 2026-03-30 01:14 CEST:
+1. Live queue snapshot verified on 2026-03-30 01:39 CEST:
    - `9 RUNNING` = `6 gpu + 3 l40s + 0 hopper`
    - `31 PENDING` = `0 gpu + 14 l40s + 17 hopper`
    - **40 total**
@@ -75,7 +75,7 @@ If any other document disagrees with this file, prefer this file and the evidenc
      - `af739_t3_e2` (`5298287`)
      - `gpu_cos2_t2` (`5298288`)
    - Current l40s runners:
-     - `l2_ac_t3_co`
+     - `l2_ac_t3_ce`
      - `l2_ac_t1_ct`
      - `l2_ac_t3_fu`
    - Current hopper runners: none; hopper remains pure overflow backlog right now
@@ -110,7 +110,7 @@ If any other document disagrees with this file, prefer this file and the evidenc
    - the gpu critical path is still actively running: `gpu_cos2_t2` plus the five af739 gap-fill jobs are all on live GPU nodes
    - active accel_v2 runtime is now concentrated on `l40s`; hopper remains queued but not live
    - live `l40s` runners at this moment are:
-     - `l2_ac_t3_co`
+     - `l2_ac_t3_ce`
      - `l2_ac_t1_ct`
      - `l2_ac_t3_fu`
    - `l2_ac_t2_s2` timed out at the 2-day wall on 2026-03-28 after advancing into the `investors_count` section and was resubmitted as `5294241`
@@ -178,6 +178,31 @@ If any other document disagrees with this file, prefer this file and the evidenc
      - is **non-fallback** and **non-constant**
      - `fit_seconds = 15.35`
      - `MAE = 265368.0`
+12. `ElasTST` is no longer docs-only:
+   - the official ProbTS repo is audited locally at:
+     - `~/.cache/block3_optional_repos/ProbTS`
+   - a local vendor-import wrapper now exists at:
+     - `src/narrative/block3/models/elastst_model.py`
+   - the first funding smoke on:
+     - `task2_forecast / core_edgar / funding_raised_usd / h=30`
+     - is **non-fallback** and **non-constant**
+     - `fit_seconds = 2.02`
+     - `MAE = 445367.47`
+   - the first shorter-context investors smoke on:
+     - `task2_forecast / core_edgar / investors_count / h=14`
+     - `input_size = 30`, `l_patch_size = 6_10`
+     - is also **non-fallback**
+     - `fit_seconds = 2.30`
+     - `MAE = 47.52`
+   - the first narrow benchmark-clear job has already completed successfully:
+     - `5298399 v740_elas_clr`
+     - `task2_forecast / core_edgar / funding_raised_usd / h=30`
+     - `MAE = 201925.6990`
+     - `RMSE = 205733.8504`
+     - `fairness_pass = true`
+     - `prediction_coverage_ratio = 1.0`
+     - `peak_rss_gb = 47.06`
+   - this remains a local-only side path and does **not** count as a canonical benchmark result
    - first tiny real-data investors-count smoke on:
      - `task2_forecast / core_edgar / investors_count / h=14`
      - falls back to a constant predictor on that tiny slice
