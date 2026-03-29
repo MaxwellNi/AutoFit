@@ -101,16 +101,28 @@ than to a “just install a package and call it” path.
     - `MAE = 445367.99`
 - registry entry: **not added yet**
 - registry entry: **now added locally** under the `transformer_sota` lane on 2026-03-29
-- narrow benchmark-clear: **submitted** as `5298059` `v740_lgts_clr`
+- narrow benchmark-clear:
+  - first attempt `5298059` completed without model execution because the
+    compute node could not see `/tmp/LightGTS`
+  - repaired rerun `5298289` completed successfully after switching to the
+    persistent user-local path `~/.cache/block3_optional_repos/LightGTS`
+  - result on the audited slice:
+    - `MAE = 201930.5506`
+    - `RMSE = 205737.7476`
+    - `prediction_coverage_ratio = 1.0`
+    - `fairness_pass = true`
+    - `peak_rss_gb = 47.40`
 - canonical benchmark landing: **none yet**
 
 ## 7. Recommended next engineering step
 
 The next concrete step should now be:
 
-1. let the first narrow benchmark-clear job (`5298059`) run to completion,
-2. inspect whether the harness path stays clean and fair on the audited slice,
-3. only then decide whether `LightGTS` deserves a wider local-clear matrix or a true canonical expansion attempt.
+1. treat the repo-path issue as solved and keep using the persistent vendor path
+   instead of `/tmp/LightGTS`,
+2. inspect whether this first successful narrow clear is strong enough to justify
+   a wider local-clear matrix,
+3. only then decide whether `LightGTS` deserves a true canonical expansion attempt.
 
 ## 8. Bottom line
 
@@ -119,7 +131,7 @@ The next concrete step should now be:
 The verified status is:
 
 > **official repo audited, custom wrapper scaffolded, vendor import smoke
-> passed, and the first real-data tiny smoke is now non-fallback with a
-> shorter context; the model is still not benchmark-clear, so the realistic
-> Block 3 route remains a custom vendor wrapper with a widened local smoke gate
-> before any canonical expansion.**
+> passed, first real-data tiny smoke is non-fallback with a shorter context,
+> and the repaired first narrow benchmark-clear now succeeds on a real audited
+> slice; the realistic Block 3 route remains a custom vendor wrapper with a
+> widened local-clear gate before any canonical expansion.**

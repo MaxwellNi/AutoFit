@@ -1,6 +1,6 @@
 # Block 3 Stack Coverage Audit
 
-> Last updated: 2026-03-28
+> Last updated: 2026-03-30
 > Scope: factual audit of what is and is not currently integrated for the
 > Block 3 benchmark and V740 research line.
 > Evidence sources:
@@ -140,7 +140,7 @@ but they are **not** current benchmark entrants by themselves.
 | `SAMformer` | wrapper exists; generic local smoke passes; **narrow benchmark-clear completed** (`MAE=0.3485`, fairness pass true) | decide whether to promote into a wider canonical benchmark lane |
 | `Prophet` | wrapper exists; user-local vendor path works; generic local smoke passes; corrected `bigmem` narrow clear completed successfully, but the audited funding slice quality is weak | keep as a cheap sanity baseline candidate, not a high-ceiling frontier entrant |
 | `TabPFN-TS` | wrappers exist; official `tabpfn_2_6` checkpoints cached locally; latest-source vendor runtime (`tabpfn 7.0.1`) installed; classifier and funding-regressor narrow clears completed; investors-count regressor probe surfaced a fairness red flag | keep exploring, but do not promote blindly; binary/event slices remain the most credible first expansion path |
-| `LightGTS` | official repo audited at HEAD; script-driven project with checkpoints and custom data pipeline; vendor-path helper plus a first Block 3 wrapper scaffold now exist; vendor import + minimal instantiation smoke pass; first tiny freeze-backed funding smoke is now non-fallback after reducing context to `input_size=60`; local registry entry now exists and the first narrow benchmark-clear job is queued as `5298059` | next real benchmark entrant after the current first wave, via a custom vendor wrapper rather than a package lane |
+| `LightGTS` | official repo audited at HEAD; script-driven project with checkpoints and custom data pipeline; vendor-path helper plus a first Block 3 wrapper scaffold now exist; vendor import + minimal instantiation smoke pass; first tiny freeze-backed funding smoke is non-fallback after reducing context to `input_size=60`; the first narrow benchmark-clear attempt failed only because the compute node could not see `/tmp/LightGTS`; the repaired rerun `5298289` completed successfully with `MAE=201930.5506`, `fairness_pass=true` | strongest current second-wave efficient entrant; next honest step is a wider local-clear matrix or a carefully chosen canonical expansion attempt |
 | `OLinear` | docs-only; blocked by artifact-generation path | finish preprocessing design before wrapper work |
 | `ElasTST` | docs-only | treat as a strong varied-horizon comparator after first-wave additions |
 | `UniTS` | docs-only | treat as a higher-cost second-wave addition tied to the V740 design |

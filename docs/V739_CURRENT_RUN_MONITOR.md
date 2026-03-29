@@ -1,6 +1,6 @@
 # V739 Current Run Monitor and Landing Checklist
 
-> Last verified: 2026-03-29 14:34 CEST
+> Last verified: 2026-03-30 00:36 CEST
 > Scope: current AutoFit V739 execution reality on the canonical clean benchmark line only.
 
 ## Current Verified Reality
@@ -11,9 +11,13 @@
    - 0 NaN/Inf
    - 0 fallback
    - 100% fairness pass
-4. **Current live V739 queue state is 5 jobs total, all now RUNNING**:
-   - `af739_t1_e2`, `af739_t1_s2`, `af739_t2_s2`, `af739_t2_e2`, `af739_t3_e2`
-5. `af739_t3_e2` did hit the 2-day wall in its previous copy (`5284506`), but the repaired resubmission (`5290366`) is now live again.
+4. **Current live V739 queue state is still 5 jobs total, all RUNNING again**:
+   - `af739_t1_e2` → `5298285`
+   - `af739_t1_s2` → `5298049`
+   - `af739_t2_s2` → `5298048`
+   - `af739_t2_e2` → `5298286`
+   - `af739_t3_e2` → `5298287`
+5. The seed2 jobs are the current memory-heavy copies, while the three `e2` jobs are the latest timeout-repaired copies from the second timeout wave on 2026-03-30.
 
 ## Coverage Audit
 
@@ -44,11 +48,11 @@
 
 | Job | State | Partition | Notes |
 | --- | --- | --- | --- |
-| `af739_t1_e2` | RUNNING | `gpu` | task1 `core_edgar_seed2` gap-fill, running as `5290110` |
+| `af739_t1_e2` | RUNNING | `gpu` | task1 `core_edgar_seed2` gap-fill, timeout-repaired again as `5298285` |
 | `af739_t1_s2` | RUNNING | `gpu` | task1 `core_only_seed2` gap-fill, now running as `5298049` at `200G / 8 CPU` |
 | `af739_t2_s2` | RUNNING | `gpu` | task2 `core_only_seed2` gap-fill, now running as `5298048` at `200G / 8 CPU` |
-| `af739_t2_e2` | RUNNING | `gpu` | task2 `core_edgar_seed2` gap-fill, running as `5290112` |
-| `af739_t3_e2` | RUNNING | `gpu` | task3 `core_edgar_seed2` gap-fill, timeout-repaired as `5290366` |
+| `af739_t2_e2` | RUNNING | `gpu` | task2 `core_edgar_seed2` gap-fill, timeout-repaired again as `5298286` |
+| `af739_t3_e2` | RUNNING | `gpu` | task3 `core_edgar_seed2` gap-fill, timeout-repaired again as `5298287` |
 
 ## What Changed on 2026-03-27 / 2026-03-28
 
@@ -68,8 +72,15 @@
 4. Both seed2 jobs were then resubmitted again at the current practical recovery setting:
    - `5298049 af739_t1_s2` at `200G / 8 CPU`
    - `5298048 af739_t2_s2` at `200G / 8 CPU`
-5. `af739_t3_e2` also hit `TIMEOUT` in its repaired copy (`5284506`) and has now been requeued as `5290366`.
-6. By the 2026-03-29 14:34 queue check, all five repaired `af739_*` jobs were still live. The current risk remains throughput, not missing submissions.
+5. The three `e2` jobs and the sibling `gpu_cos2_t2` hit the 2-day wall again on 2026-03-30:
+   - `5290110 af739_t1_e2` → `TIMEOUT`
+   - `5290112 af739_t2_e2` → `TIMEOUT`
+   - `5290366 af739_t3_e2` → `TIMEOUT`
+6. All three `e2` jobs were resubmitted immediately:
+   - `5298285 af739_t1_e2`
+   - `5298286 af739_t2_e2`
+   - `5298287 af739_t3_e2`
+7. By the 2026-03-30 00:36 queue check, all five repaired `af739_*` jobs were live again. The current risk remains throughput, not missing submissions.
 
 ## Operational Interpretation
 

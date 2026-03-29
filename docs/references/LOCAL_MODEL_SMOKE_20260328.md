@@ -249,19 +249,52 @@ right now”. The correct next step is:
 2. register it only as a local-clear entrant,
 3. attempt a narrow benchmark-clear job.
 
-That next step is now in motion:
+That next step has now completed in two stages:
+
+### First narrow benchmark-clear attempt
 
 - job: `5298059` `v740_lgts_clr`
-- current state: **PENDING**
+- outcome: **not a valid clear**
+- real blocker:
+  - the compute node could not see the vendor repo because the job exported
+    `BLOCK3_LIGHTGTS_REPO=/tmp/LightGTS`
+  - the harness exited with:
+    `LightGTS official repo not found`
+
+### Repaired narrow benchmark-clear
+
+- repaired job: `5298289` `v740_lgts_clr`
+- repair:
+  - moved the official repo to the persistent user-local path
+    `~/.cache/block3_optional_repos/LightGTS`
 - scope:
   - `task2_forecast / core_edgar / funding_raised_usd / h=30`
 - output root:
   - `runs/benchmarks/block3_phase9_localclear_20260329/lightgts_funding_h30/`
+- result:
+  - `MAE = 201930.5506`
+  - `RMSE = 205737.7476`
+  - `prediction_coverage_ratio = 1.0`
+  - `fairness_pass = true`
+  - `peak_rss_gb = 47.40`
+
+### Interpretation update
+
+LightGTS is now past all of these gates:
+
+- vendor repo audit
+- import/instantiation smoke
+- non-fallback tiny real-data smoke
+- first real narrow benchmark-clear
+
+That still does **not** make it a canonical benchmark entrant yet. It does mean
+that the next honest question is no longer “can it run?” but “does it deserve a
+wider local-clear matrix or a true canonical expansion attempt?”.
 
 ## 5. Narrow benchmark-clear status
 
-As of 2026-03-28, the first three local-only narrow benchmark-clear jobs have
-all completed through the real benchmark harness with isolated output roots:
+As of 2026-03-30, four local-only narrow benchmark-clear lines have completed
+through the real benchmark harness with isolated output roots:
 
 - `5294242` `v740_samf_clr`
   - `SAMformer`
@@ -275,6 +308,10 @@ all completed through the real benchmark harness with isolated output roots:
   - `TabPFNClassifier`
   - `task1_outcome / core_edgar / is_funded / h=14`
   - **completed successfully**
+- `5298289` `v740_lgts_clr`
+  - `LightGTS`
+  - `task2_forecast / core_edgar / funding_raised_usd / h=30`
+  - **completed successfully** after repairing the vendor repo path
 
 These are resumable SLURM jobs under
 `runs/benchmarks/block3_phase9_localclear_20260328/`. They are intended to
