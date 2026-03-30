@@ -1,6 +1,6 @@
 # Current Source of Truth
 
-> Last verified: 2026-03-30 10:45 CEST
+> Last verified: 2026-03-30 11:17 CEST
 > Verified by direct scans of `runs/benchmarks/block3_phase9_fair/`, live `squeue -u npin`, `sacct`, benchmark aggregation scripts.
 
 This file is the authoritative documentation entry point for the current Block 3 project state.
@@ -43,7 +43,7 @@ If any other document disagrees with this file, prefer this file and the evidenc
 | Text embedding artifacts | `AVAILABLE` | `runs/text_embeddings/embedding_metadata.json` |
 | Phase 12 text reruns | `48/48 COMPLETED` | core_text+full 91/91 models |
 | Phase 15 new models | 23 submitted, 15 valid, 8 excluded (Finding H), 78/160 | direct scan |
-| Live jobs | `40` (9R + 31PD) | direct `squeue -u npin` 2026-03-30 10:45: gpu 6R+0PD, l40s 3R+14PD, hopper 0R+17PD |
+| Live jobs | `40` (9R + 31PD) | direct `squeue -u npin` 2026-03-30 11:17: gpu 6R+0PD, l40s 3R+14PD, hopper 0R+17PD |
 | Clean full comparable frontier | `55` models @ shared `160/160` | post-filter `all_results.csv`, non-retired only |
 
 ## What the Current Benchmark Means
@@ -63,7 +63,7 @@ If any other document disagrees with this file, prefer this file and the evidenc
 
 ## Current Execution Reality
 
-1. Live queue snapshot verified on 2026-03-30 10:45 CEST:
+1. Live queue snapshot verified on 2026-03-30 11:17 CEST:
    - `9 RUNNING` = `6 gpu + 3 l40s + 0 hopper`
    - `31 PENDING` = `0 gpu + 14 l40s + 17 hopper`
    - **40 total**
@@ -236,9 +236,22 @@ If any other document disagrees with this file, prefer this file and the evidenc
      - `RMSE = 174105.8744`
      - `prediction_coverage_ratio = 1.0`
      - `fairness_pass = true`
-     - `peak_rss_gb = 47.73`
+   - `peak_rss_gb = 47.73`
    - this remains a local-only side path and does **not** count as a canonical benchmark landing
-14. The first `CASA + TimeEmb`-inspired V740 alpha implementation pass is now audited on real freeze-backed slices:
+14. `OLinear` count-side is now settled enough for an honest decision:
+   - a richer local smoke on:
+     - `task2_forecast / core_edgar / investors_count / h=14`
+     - `input_size = 30`, `temp_patch_len = 6`, `temp_stride = 6`
+     - became **non-fallback** and **non-constant**
+     - `MAE = 0.0206`
+   - but the matching audited harness narrow clear:
+     - `5298523 v740_olnr_inv`
+     - finishes with `fairness_pass = false`
+     - and the log explicitly reports a constant `137.0` prediction on the audited slice
+   - the correct operational conclusion is therefore:
+     - keep `OLinear` as a promising **funding-side** entrant
+     - do **not** promote its count-side lane yet
+15. The first `CASA + TimeEmb`-inspired V740 alpha implementation pass is now audited on real freeze-backed slices:
    - code surface:
      - `src/narrative/block3/models/v740_alpha.py`
    - new lightweight mechanisms:
@@ -255,10 +268,15 @@ If any other document disagrees with this file, prefer this file and the evidenc
        - `MAE = 176137.8275`
        - `constant_prediction = false`
    - relative to the immediately prior audited alpha objective line, these new smokes show real directional improvement on the same funding and binary audited slices while staying non-degenerate
-15. The same `CASA + TimeEmb` alpha line now also has first fuller-source audited evidence:
+16. The same `CASA + TimeEmb` alpha line now also has fuller-source audited evidence:
    - `task1_outcome / full / is_funded / h=14`
      - `MAE = 0.2758`
      - `RMSE = 0.4962`
+     - `text_source_density = 1.0`
+     - `constant_prediction = false`
+   - `task1_outcome / full / is_funded / h=60`
+     - `MAE = 0.3296`
+     - `RMSE = 0.5366`
      - `text_source_density = 1.0`
      - `constant_prediction = false`
    - `task2_forecast / full / funding_raised_usd / h=60`
@@ -269,9 +287,11 @@ If any other document disagrees with this file, prefer this file and the evidenc
    - current honest interpretation:
      - the first fuller-source binary slice is slightly stronger than the
        matching `core_edgar` audit,
-     - while the first fuller-source funding `h=60` slice is effectively tied
-       with `core_edgar`, so text is source-covered there but not yet proven as
-       the main gain source.
+     - the fuller-source binary line stays non-degenerate even at `h=60`, but
+        is clearly harder than the matching `h=14` slice,
+     - while the fuller-source funding `h=60` slice is effectively tied with
+        `core_edgar`, so text is source-covered there but not yet proven as the
+        main gain source.
 
 ## Current Priorities
 

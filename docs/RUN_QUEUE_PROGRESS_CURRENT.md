@@ -1,6 +1,6 @@
 # Current Queue Progress
 
-> Snapshot time: 2026-03-30 10:45 CEST
+> Snapshot time: 2026-03-30 11:17 CEST
 > Source: live `squeue -u npin,cfisch`, `squeue --start -u npin,cfisch`, and `sacct -u npin -S 2026-03-28T00:00:00`
 
 ## Summary
@@ -22,15 +22,15 @@
 
 | jobid | job | partition | elapsed | limit | progress | time_left | reason/node |
 | --- | --- | --- | --- | --- | ---: | --- | --- |
-| 5298285 | af739_t1_e2 | gpu | 10:08:07 | 2-00:00:00 | 21.1% | 1d13h52m | iris-185 |
-| 5298286 | af739_t2_e2 | gpu | 10:08:07 | 2-00:00:00 | 21.1% | 1d13h52m | iris-185 |
-| 5298287 | af739_t3_e2 | gpu | 10:08:07 | 2-00:00:00 | 21.1% | 1d13h52m | iris-186 |
-| 5298288 | gpu_cos2_t2 | gpu | 10:08:07 | 2-00:00:00 | 21.1% | 1d13h52m | iris-169 |
-| 5298048 | af739_t2_s2 | gpu | 20:28:16 | 2-00:00:00 | 42.6% | 1d3h32m | iris-186 |
-| 5298049 | af739_t1_s2 | gpu | 20:28:16 | 2-00:00:00 | 42.6% | 1d3h32m | iris-170 |
-| 5269760 | l2_ac_t3_ce | l40s | 9:17:36 | 2-00:00:00 | 19.4% | 1d14h42m | iris-198 |
-| 5279084 | l2_ac_t1_ct | l40s | 16:28:34 | 2-00:00:00 | 34.3% | 1d7h31m | iris-199 |
-| 5269764 | l2_ac_t3_fu | l40s | 18:35:54 | 2-00:00:00 | 38.7% | 1d5h24m | iris-199 |
+| 5298285 | af739_t1_e2 | gpu | 10:42:06 | 2-00:00:00 | 22.3% | 1d13h17m | iris-185 |
+| 5298286 | af739_t2_e2 | gpu | 10:42:06 | 2-00:00:00 | 22.3% | 1d13h17m | iris-185 |
+| 5298287 | af739_t3_e2 | gpu | 10:42:06 | 2-00:00:00 | 22.3% | 1d13h17m | iris-186 |
+| 5298288 | gpu_cos2_t2 | gpu | 10:42:06 | 2-00:00:00 | 22.3% | 1d13h17m | iris-169 |
+| 5298048 | af739_t2_s2 | gpu | 21:02:15 | 2-00:00:00 | 43.8% | 1d2h57m | iris-186 |
+| 5298049 | af739_t1_s2 | gpu | 21:02:15 | 2-00:00:00 | 43.8% | 1d2h57m | iris-170 |
+| 5269760 | l2_ac_t3_ce | l40s | 9:51:35 | 2-00:00:00 | 20.5% | 1d14h08m | iris-198 |
+| 5279084 | l2_ac_t1_ct | l40s | 17:02:33 | 2-00:00:00 | 35.5% | 1d6h57m | iris-199 |
+| 5269764 | l2_ac_t3_fu | l40s | 19:09:53 | 2-00:00:00 | 39.9% | 1d4h50m | iris-199 |
 
 ## Highest-Value Pending Jobs
 
@@ -40,6 +40,7 @@
 | 5269749 | l2_ac_t1_co | l40s | 2026-03-31 16:07:37 | Priority | next l40s backlog item with a concrete start time |
 | 5269752 | l2_ac_t1_fu | l40s | 2026-04-02 14:30:00 | Priority | later l40s restart already scheduled |
 | 5294241 | l2_ac_t2_s2 | l40s | 2026-04-04 14:30:00 | Priority | resumed overflow copy after 2-day TIMEOUT on `5269759` |
+| 5269757 | l2_ac_t2_e2 | l40s | 2026-04-04 16:10:00 | Priority | next scheduled l40s e2 overflow slot |
 | 5298506 | l2_ac_t3_co | l40s | N/A | Priority | newly resubmitted after verified 2-day TIMEOUT on `5269761`; resumable continuation, not a structural failure |
 | 5269765 | h2_ac_t1_ce | hopper | 2026-03-31 03:20:00 | Priority | opportunistic overflow backlog |
 | 5269771 | h2_ac_t2_ce | hopper | 2026-03-31 03:20:00 | Priority | opportunistic overflow backlog |
@@ -66,7 +67,7 @@
    - `l2_ac_t3_ce`
    - `l2_ac_t1_ct`
    - `l2_ac_t3_fu`
-   are all RUNNING, so the current queue is `9R+30PD`.
+   are all RUNNING, so the current queue is `9R+31PD`.
 6. Local-only V740 model-clear status has advanced:
    - `5294242` `v740_samf_clr` → completed successfully
    - `5294243` `v740_prop_clr` → failed before model execution because `quick` preset cannot run `h=30`
@@ -112,11 +113,27 @@
      - `MAE = 0.2758`
      - `text_source_density = 1.0`
      - still non-constant
+   - `task1_outcome / full / is_funded / h=60`:
+     - `MAE = 0.3296`
+     - `text_source_density = 1.0`
+     - still non-constant
    - `task2_forecast / full / funding_raised_usd / h=60`:
      - `MAE = 176137.0694`
      - `text_source_density = 1.0`
      - still non-constant
    - current honest interpretation:
      - the first `full` binary slice improves slightly over `core_edgar`
+     - the `full` binary line also stays non-degenerate at `h=60`, but is
+       clearly harder than the matching `h=14` slice
      - the `full` funding `h=60` slice is effectively tied with `core_edgar`,
        so text is source-covered there but not yet proven to be the main driver
+17. `5298523` `v740_olnr_inv` has now completed as the first count-side `OLinear` narrow clear:
+   - `task2_forecast / core_edgar / investors_count / h=14`
+   - `input_size = 30`, `temp_patch_len = 6`, `temp_stride = 6`
+   - `MAE ≈ 4.58e-05`
+   - `prediction_coverage_ratio = 1.0`
+   - `fairness_pass = false`
+   - log evidence shows a constant `137.0` prediction on the audited slice
+   - current honest interpretation:
+     - `OLinear` funding-side evidence remains promising,
+     - but the count-side lane is not promotable right now

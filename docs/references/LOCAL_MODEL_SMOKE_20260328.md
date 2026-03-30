@@ -383,6 +383,62 @@ The honest remaining limitation is also clear:
 - so OLinear should be treated as a **promising local-clear entrant**, not yet
   as a broadly proven canonical comparator.
 
+### Count-side follow-up (2026-03-30)
+
+A richer local-only follow-up was then run on:
+
+- model: `OLinear`
+- task: `task2_forecast`
+- ablation: `core_edgar`
+- target: `investors_count`
+- horizon: `14`
+- model kwargs:
+  - `input_size = 30`
+  - `temp_patch_len = 6`
+  - `temp_stride = 6`
+- max entities: `12`
+- max rows: `800`
+
+Artifact:
+
+- `docs/references/local_model_smoke_20260330/olinear_t2_core_edgar_investors_h14_ctx30.json`
+
+Result:
+
+- `fit_seconds = 37.48`
+- `predict_seconds = 0.223`
+- `prediction_std = 34.09`
+- `constant_prediction = false`
+- `MAE = 0.0206`
+- `RMSE = 0.1398`
+
+This looked promising enough to justify a real harness check, so the matching
+narrow benchmark-clear was submitted and completed:
+
+- job: `5298523` `v740_olnr_inv`
+- output root:
+  - `runs/benchmarks/block3_phase9_localclear_20260330/olinear_investors_h14_ctx30/`
+
+Harness result:
+
+- `MAE ≈ 4.58e-05`
+- `prediction_coverage_ratio = 1.0`
+- `fairness_pass = false`
+- `peak_rss_gb = 45.01`
+
+Important log evidence:
+
+- the harness run reports:
+  - `CONSTANT-PREDICTION detected for OLinear ... all 71 predictions = 137.0000`
+
+Interpretation:
+
+- the richer smoke shows the count-side route is not blocked only by missing
+  windows anymore,
+- but the real audited harness still rejects the lane on fairness grounds,
+- so `OLinear` remains a promising funding-side entrant, not a count-side
+  promotable comparator.
+
 ## 6. Narrow benchmark-clear status
 
 As of 2026-03-30, four local-only narrow benchmark-clear lines have completed

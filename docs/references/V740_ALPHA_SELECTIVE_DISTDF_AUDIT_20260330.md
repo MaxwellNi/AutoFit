@@ -346,10 +346,44 @@ Interpretation:
     slice,
   - but text is **not yet** clearly the main gain driver there
 
+### 5.6 Fuller-source longer-horizon binary rerun (`full`, `h=60`)
+
+Artifact:
+
+- `docs/references/v740_alpha_selective_smoke_20260330/t1_full_is_funded_h60_v3.json`
+
+Result:
+
+- `constant_prediction = false`
+- `prediction_std = 0.2045`
+- `binary_temperature = 1.0`
+- `edgar_source_density = 0.9093`
+- `text_source_density = 1.0`
+- `MAE = 0.3296`
+- `RMSE = 0.5366`
+- `wall_time_seconds = 42.71`
+
+Relative to the matching fuller-source binary `h=14` audit:
+
+- fuller-source `h=14` artifact:
+  - `docs/references/v740_alpha_selective_smoke_20260330/t1_full_is_funded_h14_v3.json`
+- fuller-source `h=14` `MAE`:
+  - `0.2758`
+
+Interpretation:
+
+- this harder longer-h binary slice is still **non-degenerate** and fully
+  source-covered,
+- but it is clearly harder than the matching `h=14` slice,
+- so the current honest claim is:
+  - the `CASA + TimeEmb` pass now stays stable on a harder long-h fuller-source
+    binary slice too,
+  - but this is not yet evidence of a decisive long-h binary breakthrough
+
 ## 6. Current honest takeaway
 
 The current `Selective + DistDF + CASA + TimeEmb` alpha line is now supported
-by eight real local facts:
+by nine real local facts:
 
 1. second-pass objective-only funding smoke improves slightly,
 2. second-pass hard binary EDGAR smoke stays non-degenerate,
@@ -359,12 +393,15 @@ by eight real local facts:
 6. third-pass `h=60` funding smoke also improves materially,
 7. third-pass fuller-source binary smoke improves slightly over `core_edgar`,
 8. third-pass fuller-source `h=60` funding smoke stays stable and tied with the
-   matching `core_edgar` slice.
+   matching `core_edgar` slice,
+9. third-pass fuller-source `h=60` binary smoke stays stable and non-degenerate,
+   but remains clearly harder than the matching `h=14` fuller-source slice.
 
 So the current honest label is:
 
 - **objective scaffold and first mechanism add-ons are both stronger than before**
 - **fuller-source slices now also stay stable under the same mechanism pass**
+- **the same mechanism pass now also survives a harder long-h fuller-source binary slice**
 - **still pre-benchmark**
 - **worth continuing**
 - **not yet a decisive performance breakthrough**
