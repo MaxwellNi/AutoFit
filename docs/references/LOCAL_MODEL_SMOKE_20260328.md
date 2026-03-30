@@ -78,7 +78,12 @@ yet, but it now has a credible path to the next integration step.
   - `RMSE = 528267.79`
 - interpretation:
   - this was strong enough to justify a second narrow-clear promotion probe,
-    now queued as `5299018 v740_samf_fu_clr`
+    initially queued as `5299018 v740_samf_fu_clr`
+  - `5299018` failed immediately because the submission still used
+    `--preset quick`, which cannot run `task2 / h=30`
+  - repaired rerun:
+    - `5299636 v740_samf_fu_clr`
+    - current state: `PENDING`
 
 ## 2. Prophet
 
@@ -306,6 +311,24 @@ LightGTS is now past all of these gates:
 That still does **not** make it a canonical benchmark entrant yet. It does mean
 that the next honest question is no longer “can it run?” but “does it deserve a
 wider local-clear matrix or a true canonical expansion attempt?”.
+
+### Fuller-source follow-up smoke
+
+- output artifact:
+  - `docs/references/local_model_smoke_20260330/lightgts_t2_full_funding_h30_ctx60.json`
+- slice:
+  - `task2_forecast / full / funding_raised_usd / h=30`
+- result:
+  - `fit_seconds = 8.05`
+  - `prediction_std = 10802.80`
+  - `constant_prediction = false`
+  - `MAE = 445368.0`
+  - `RMSE = 639270.57`
+- interpretation:
+  - richer source coverage does not break the wrapper
+  - this was strong enough to justify a fuller-source promotion probe:
+    - `5299637 v740_lgts_fu_clr`
+    - current state: `PENDING`
 
 ## 5. OLinear
 

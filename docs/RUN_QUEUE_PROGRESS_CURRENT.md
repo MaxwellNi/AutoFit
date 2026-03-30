@@ -1,59 +1,59 @@
 # Current Queue Progress
 
-> Snapshot time: 2026-03-30 14:08 CEST
+> Snapshot time: 2026-03-30 17:15 CEST
 > Source: live `squeue -u npin,cfisch`, `squeue --start -u npin,cfisch`, and `sacct -u npin -S 2026-03-28T00:00:00`
 
 ## Summary
 
 | Metric | Value |
 | --- | ---: |
-| Total jobs | 41 |
-| Running | 10 |
-| Pending | 31 |
+| Total jobs | 42 |
+| Running | 13 |
+| Pending | 29 |
 | gpu running | 6 |
-| gpu pending | 1 |
+| gpu pending | 2 |
 | bigmem running | 0 |
 | l40s running | 4 |
 | l40s pending | 13 |
-| hopper running | 0 |
-| hopper pending | 17 |
+| hopper running | 3 |
+| hopper pending | 14 |
 
 ## Running Jobs
 
 | jobid | job | partition | elapsed | limit | progress | time_left | reason/node |
 | --- | --- | --- | --- | --- | ---: | --- | --- |
-| 5298285 | af739_t1_e2 | gpu | 14:12:08 | 2-00:00:00 | 29.4% | 1d9h48m | iris-185 |
-| 5298286 | af739_t2_e2 | gpu | 14:12:08 | 2-00:00:00 | 29.4% | 1d9h48m | iris-185 |
-| 5298287 | af739_t3_e2 | gpu | 14:12:08 | 2-00:00:00 | 29.4% | 1d9h48m | iris-186 |
-| 5298288 | gpu_cos2_t2 | gpu | 14:12:08 | 2-00:00:00 | 29.4% | 1d9h48m | iris-169 |
-| 5298048 | af739_t2_s2 | gpu | 1-00:32:17 | 2-00:00:00 | 50.7% | 23h28m | iris-186 |
-| 5298049 | af739_t1_s2 | gpu | 1-00:32:17 | 2-00:00:00 | 50.7% | 23h28m | iris-170 |
-| 5279085 | l2_ac_t1_e2 | l40s | 2:40:09 | 2-00:00:00 | 5.6% | 1d21h20m | iris-198 |
-| 5269760 | l2_ac_t3_ce | l40s | 13:21:37 | 2-00:00:00 | 27.8% | 1d10h38m | iris-198 |
-| 5279084 | l2_ac_t1_ct | l40s | 20:32:35 | 2-00:00:00 | 42.8% | 1d3h27m | iris-199 |
-| 5269764 | l2_ac_t3_fu | l40s | 22:39:55 | 2-00:00:00 | 47.2% | 1d1h20m | iris-199 |
+| 5298285 | af739_t1_e2 | gpu | 16:50:07 | 2-00:00:00 | 35.1% | 1d7h10m | iris-185 |
+| 5298286 | af739_t2_e2 | gpu | 16:50:07 | 2-00:00:00 | 35.1% | 1d7h10m | iris-185 |
+| 5298287 | af739_t3_e2 | gpu | 16:50:07 | 2-00:00:00 | 35.1% | 1d7h10m | iris-186 |
+| 5298288 | gpu_cos2_t2 | gpu | 16:50:07 | 2-00:00:00 | 35.1% | 1d7h10m | iris-169 |
+| 5298048 | af739_t2_s2 | gpu | 1-03:10:16 | 2-00:00:00 | 56.6% | 20h50m | iris-186 |
+| 5298049 | af739_t1_s2 | gpu | 1-03:10:16 | 2-00:00:00 | 56.6% | 20h50m | iris-170 |
+| 5269768 | h2_ac_t1_e2 | hopper | 2:05:51 | 2-00:00:00 | 4.4% | 1d21h54m | iris-197 |
+| 5269769 | h2_ac_t1_fu | hopper | 2:05:51 | 2-00:00:00 | 4.4% | 1d21h54m | iris-197 |
+| 5269770 | h2_ac_t1_s2 | hopper | 2:02:51 | 2-00:00:00 | 4.2% | 1d21h57m | iris-197 |
+| 5279085 | l2_ac_t1_e2 | l40s | 5:18:08 | 2-00:00:00 | 11.0% | 1d18h42m | iris-198 |
+| 5269760 | l2_ac_t3_ce | l40s | 15:59:36 | 2-00:00:00 | 33.3% | 1d8h00m | iris-198 |
+| 5279084 | l2_ac_t1_ct | l40s | 23:10:34 | 2-00:00:00 | 48.3% | 1d0h49m | iris-199 |
+| 5269764 | l2_ac_t3_fu | l40s | 1-01:17:54 | 2-00:00:00 | 52.7% | 22h42m | iris-199 |
 
 ## Highest-Value Pending Jobs
 
 | jobid | job | partition | planned_start | reason | notes |
 | --- | --- | --- | --- | --- | --- |
-| 5299018 | v740_samf_fu_clr | gpu | N/A | Priority | second `SAMformer` narrow-clear probe queued after a non-fallback funding-side tiny smoke |
+| 5299636 | v740_samf_fu_clr | gpu | 2026-03-31 11:52:21 | Priority | repaired second `SAMformer` funding narrow-clear; first attempt `5299018` failed only because `quick` preset cannot run `task2 / h=30` |
+| 5299637 | v740_lgts_fu_clr | gpu | N/A | Priority | fuller-source `LightGTS` funding narrow-clear queued after a non-fallback `full` tiny smoke |
 | 5269749 | l2_ac_t1_co | l40s | 2026-03-31 16:07:37 | Priority | next l40s backlog item with a concrete start time |
 | 5269752 | l2_ac_t1_fu | l40s | 2026-04-01 12:07:23 | Priority | later l40s restart already scheduled |
-| 5294241 | l2_ac_t2_s2 | l40s | 2026-04-03 12:10:00 | Priority | resumed overflow copy after 2-day TIMEOUT on `5269759` |
-| 5269757 | l2_ac_t2_e2 | l40s | 2026-04-04 16:10:00 | Priority | next scheduled l40s e2 overflow slot |
 | 5298506 | l2_ac_t3_co | l40s | N/A | Priority | newly resubmitted after verified 2-day TIMEOUT on `5269761`; resumable continuation, not a structural failure |
-| 5269765 | h2_ac_t1_ce | hopper | 2026-03-31 03:20:00 | Priority | opportunistic overflow backlog |
-| 5269771 | h2_ac_t2_ce | hopper | 2026-03-31 03:20:00 | Priority | opportunistic overflow backlog |
-| 5269780 | h2_ac_t3_e2 | hopper | 2026-03-31 03:20:00 | Priority | opportunistic overflow backlog |
+| 5269765 | h2_ac_t1_ce | hopper | 2026-04-01 15:19:40 | Priority | opportunistic overflow backlog |
 
 ## Pending Breakdown
 
 | partition | pending_jobs | notes |
 | --- | ---: | --- |
-| gpu | 1 | canonical gpu critical path is fully live again; the only gpu pending item is the local-only `SAMformer` funding clear |
+| gpu | 2 | canonical gpu critical path is fully live; current gpu backlog is local-only comparator promotion work (`SAMformer`, `LightGTS`) |
 | l40s | 13 | accel_v2 overflow backlog; current live state has four active `l40s` runners including `l2_ac_t1_e2` |
-| hopper | 17 | pure overflow backlog only |
+| hopper | 14 | opportunistic overflow backlog; three hopper runners are now active again |
 
 ## Canonical Benchmark Recovery Notes
 
@@ -125,11 +125,21 @@
    - result:
      - `MAE = 265368.0`
      - `constant_prediction = false`
-   - this was strong enough to justify a second narrow-clear job:
-     - `5299018 v740_samf_fu_clr`
-   - it is currently pending on `gpu`; this is now the most important open
-     comparator-promotion decision beyond the already settled `UniTS`
-     count-side failure
+   - the first promotion probe `5299018 v740_samf_fu_clr` failed immediately
+     because the submission still used `--preset quick`, which cannot run
+     `task2 / h=30`
+   - the repaired resubmission is now:
+     - `5299636 v740_samf_fu_clr`
+     - current planned start: `2026-03-31 11:52:21`
+18. `LightGTS` has now also crossed the “single audited slice only” boundary:
+   - a fuller-source tiny funding smoke has landed on
+     `task2_forecast / full / funding_raised_usd / h=30`
+   - result:
+     - `MAE = 445368.0`
+     - `constant_prediction = false`
+   - this was strong enough to justify a fuller-source promotion probe:
+     - `5299637 v740_lgts_fu_clr`
+   - it is currently pending on `gpu`
    - `task2_forecast / full / funding_raised_usd / h=60`:
      - `MAE = 176137.0694`
      - `text_source_density = 1.0`

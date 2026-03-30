@@ -1,0 +1,39 @@
+{
+  "model": "LightGTS",
+  "model_kwargs": {
+    "input_size": 60,
+    "patch_len": 15,
+    "stride": 15,
+    "max_covariates": 8,
+    "d_model": 64,
+    "d_ff": 128,
+    "e_layers": 2,
+    "d_layers": 2,
+    "n_heads": 4,
+    "batch_size": 64,
+    "max_epochs": 5,
+    "patience": 2,
+    "max_entities": 1000,
+    "max_windows": 12000
+  },
+  "task": "task2_forecast",
+  "ablation": "full",
+  "target": "funding_raised_usd",
+  "horizon": 30,
+  "train_rows": 300,
+  "val_rows": 336,
+  "test_rows": 324,
+  "train_matrix_rows": 131,
+  "test_matrix_rows": 324,
+  "feature_count": 169,
+  "fit_seconds": 8.047455310821533,
+  "predict_seconds": 0.013520002365112305,
+  "prediction_std": 10802.800886807088,
+  "constant_prediction": false,
+  "metrics": {
+    "mae": 445368.0,
+    "rmse": 639270.5697277171,
+    "smape": 103.24929818095072,
+    "mape": 55.608286039764366
+  }
+}
