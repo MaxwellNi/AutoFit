@@ -153,6 +153,26 @@
 > cleanly (`docs/references/v740_alpha_selective_smoke_20260330/`), which is
 > enough to say the first selective-learning / DistDF scaffold does not break
 > the current alpha execution path.
+>
+> A later same-day refinement tightened that scaffold without changing the
+> architecture surface:
+>
+> - selective-learning weights now use per-window source activity from the
+>   EDGAR/text memories rather than only global source-density scalars,
+> - the non-binary DistDF-style auxiliary now also aligns horizon endpoint and
+>   step-difference shape, not just horizon mean/dispersion.
+>
+> On the same audited funding slice
+> (`task2_forecast / core_edgar / funding_raised_usd / h=30`), the second-pass
+> sanity smoke remains clean and slightly improves from `MAE = 441572.68` to
+> `MAE = 441156.71`. This is still far from benchmark-ready, but it confirms
+> that the stronger objective scaffold remains stable.
+>
+> `ElasTST` also now has a second narrow benchmark-clear result on the
+> `investors_count` slice (`5298437`). That run completes cleanly at the system
+> level but returns `fairness_pass = false`, which is an important reminder
+> that varied-horizon models still need count-side tuning before they are ready
+> for broader benchmark promotion.
 
 ## 1. Purpose
 

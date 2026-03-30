@@ -1,6 +1,6 @@
 # Block 3 Model Benchmark Status
 
-> Last updated: 2026-03-30 01:14 CEST
+> Last updated: 2026-03-30 08:57 CEST
 > Current authority: `docs/CURRENT_SOURCE_OF_TRUTH.md`
 > Evidence: direct scan of `runs/benchmarks/block3_phase9_fair/`, `all_results.csv`, live `squeue`, `sacct`, and benchmark aggregation scripts.
 
@@ -18,7 +18,7 @@
 | post-filter distinct models | 107 | includes 21 retired AutoFit legacy lines |
 | post-filter non-retired models | 86 | `all_results.csv` minus retired AutoFit legacy lines |
 | conditions per full model | 160 | t1(72) + t2(48) + t3(40) |
-| live jobs | **40** | 9R + 31PD (gpu 6R+0PD, l40s 3R+14PD, hopper 0R+17PD) |
+| live jobs | **39** | 9R + 30PD (gpu 6R+0PD, l40s 3R+13PD, hopper 0R+17PD) |
 | clean full comparable frontier | **55** | post-filter non-retired models at shared 160/160 |
 | text embeddings | available | 5,774,931 rows, 64 PCA dims |
 
@@ -65,11 +65,11 @@ Detailed per-job progress/ETA snapshot: `docs/RUN_QUEUE_PROGRESS_CURRENT.md`
 | gpu RUNNING | 6 | `af739_t1_e2`, `af739_t1_s2`, `af739_t2_e2`, `af739_t2_s2`, `af739_t3_e2`, `gpu_cos2_t2` |
 | gpu PENDING | 0 | no current gpu backlog after the repaired e2/cos2 resubmissions started |
 | l40s RUNNING | 3 | `l2_ac_t3_ce`, `l2_ac_t1_ct`, `l2_ac_t3_fu` |
-| l40s PENDING | 14 | overflow / resume-safe accel_v2 backlog |
+| l40s PENDING | 13 | overflow / resume-safe accel_v2 backlog |
 | hopper RUNNING | 0 | no current hopper jobs are running for `npin` |
 | hopper PENDING | 17 | priority-limited overflow backlog |
 | bigmem RUNNING | 0 | no current bigmem benchmark-side work |
-| **total** | **40** | **9 RUNNING + 31 PENDING** |
+| **total** | **39** | **9 RUNNING + 30 PENDING** |
 
 ### Current Throughput Interpretation
 
@@ -101,6 +101,10 @@ Detailed per-job progress/ETA snapshot: `docs/RUN_QUEUE_PROGRESS_CURRENT.md`
   - default-context tiny investors slice had no windows, but a shorter-context rerun is also non-fallback
   - first narrow benchmark-clear `5298399` completed successfully
   - current narrow-clear result: `MAE = 201925.6990`, `fairness_pass = true`
+  - second narrow benchmark-clear `5298437` now proves the shorter-context count slice executes through the real harness, but it returns `fairness_pass = false`
+  - current honest state is therefore:
+    - funding side = clean local-clear
+    - investors/count side = executable but not yet promotable
 - `hopper` is not memory-constrained in the way older docs implied; the real limiter is priority/preemption. It should be treated as opportunistic overflow, not as the sole critical path.
 - `ModernTCN` remains the dominant throughput bottleneck for non-`e2` accel jobs.
 

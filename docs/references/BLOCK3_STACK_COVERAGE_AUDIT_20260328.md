@@ -1,6 +1,6 @@
 # Block 3 Stack Coverage Audit
 
-> Last updated: 2026-03-30 02:45 CEST
+> Last updated: 2026-03-30 08:57 CEST
 > Scope: factual audit of what is and is not currently integrated for the
 > Block 3 benchmark and V740 research line.
 > Evidence sources:
@@ -20,7 +20,7 @@ This document is intentionally strict about status labels:
 
 ## 0. Strict Verdict
 
-As of **2026-03-28**, the answer to
+As of **2026-03-30**, the answer to
 
 > "Are these stacks and repo families already fully registered, integrated,
 > tuned, and adapted to Block 3?"
@@ -142,7 +142,7 @@ but they are **not** current benchmark entrants by themselves.
 | `TabPFN-TS` | wrappers exist; official `tabpfn_2_6` checkpoints cached locally; latest-source vendor runtime (`tabpfn 7.0.1`) installed; classifier and funding-regressor narrow clears completed; investors-count regressor probe surfaced a fairness red flag | keep exploring, but do not promote blindly; binary/event slices remain the most credible first expansion path |
 | `LightGTS` | official repo audited at HEAD; script-driven project with checkpoints and custom data pipeline; vendor-path helper plus a first Block 3 wrapper scaffold now exist; vendor import + minimal instantiation smoke pass; first tiny freeze-backed funding smoke is non-fallback after reducing context to `input_size=60`; the first narrow benchmark-clear attempt failed only because the compute node could not see `/tmp/LightGTS`; the repaired rerun `5298289` completed successfully with `MAE=201930.5506`, `fairness_pass=true` | strongest current second-wave efficient entrant; next honest step is a wider local-clear matrix or a carefully chosen canonical expansion attempt |
 | `OLinear` | official repo audited and pinned locally; Block 3 vendor-path helper exists; local wrapper exists in `src/narrative/block3/models/olinear_model.py`; first tiny funding smoke is non-fallback on `task2_forecast/core_edgar/funding_raised_usd/h=30`; tiny investors-count smoke on `h=14` falls back to constant on that small slice; first audited funding narrow clear `5298296` completed successfully with `MAE=131288.8062`, `fairness_pass=true` | move from docs-only into the same local-clear comparator lane as `LightGTS`; widen the local-clear matrix before any canonical promotion |
-| `ElasTST` | local wrapper now exists; funding smoke is non-fallback; shorter-context investors smoke is also non-fallback; first funding narrow clear now completed successfully | promote from local-clear into a wider local-clear matrix before any canonical attempt |
+| `ElasTST` | local wrapper now exists; funding smoke is non-fallback; shorter-context investors smoke is also non-fallback; first funding narrow clear completed successfully, but the second investors-count narrow clear now returns `fairness_pass=false` | keep in local-clear lane; fix count-side fairness before any canonical attempt |
 | `UniTS` | docs-only | treat as a higher-cost second-wave addition tied to the V740 design |
 
 ## 6. What This Audit Means

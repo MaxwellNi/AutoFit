@@ -1,20 +1,20 @@
 # Current Queue Progress
 
-> Snapshot time: 2026-03-30 01:39 CEST
+> Snapshot time: 2026-03-30 08:57 CEST
 > Source: live `squeue -u npin,cfisch`, `squeue --start -u npin,cfisch`, and `sacct -u npin -S 2026-03-28T00:00:00`
 
 ## Summary
 
 | Metric | Value |
 | --- | ---: |
-| Total jobs | 40 |
+| Total jobs | 39 |
 | Running | 9 |
-| Pending | 31 |
+| Pending | 30 |
 | gpu running | 6 |
 | gpu pending | 0 |
 | bigmem running | 0 |
 | l40s running | 3 |
-| l40s pending | 14 |
+| l40s pending | 13 |
 | hopper running | 0 |
 | hopper pending | 17 |
 
@@ -22,24 +22,24 @@
 
 | jobid | job | partition | elapsed | limit | progress | time_left | reason/node |
 | --- | --- | --- | --- | --- | ---: | --- | --- |
-| 5298048 | af739_t2_s2 | gpu | 11:23:41 | 2-00:00:00 | 23.7% | 1d12h36m | iris-186 |
-| 5298049 | af739_t1_s2 | gpu | 11:23:41 | 2-00:00:00 | 23.7% | 1d12h36m | iris-170 |
-| 5298285 | af739_t1_e2 | gpu | 1:03:32 | 2-00:00:00 | 2.2% | 1d22h56m | iris-185 |
-| 5298286 | af739_t2_e2 | gpu | 1:03:32 | 2-00:00:00 | 2.2% | 1d22h56m | iris-185 |
-| 5298287 | af739_t3_e2 | gpu | 1:03:32 | 2-00:00:00 | 2.2% | 1d22h56m | iris-186 |
-| 5298288 | gpu_cos2_t2 | gpu | 1:03:32 | 2-00:00:00 | 2.2% | 1d22h56m | iris-169 |
-| 5269760 | l2_ac_t3_ce | l40s | 0:13:01 | 2-00:00:00 | 0.5% | 1d23h47m | iris-198 |
-| 5279084 | l2_ac_t1_ct | l40s | 7:23:59 | 2-00:00:00 | 15.4% | 1d16h36m | iris-199 |
-| 5269764 | l2_ac_t3_fu | l40s | 9:31:19 | 2-00:00:00 | 19.8% | 1d14h29m | iris-199 |
+| 5298285 | af739_t1_e2 | gpu | 8:22:04 | 2-00:00:00 | 17.4% | 1d15h37m | iris-185 |
+| 5298286 | af739_t2_e2 | gpu | 8:22:04 | 2-00:00:00 | 17.4% | 1d15h37m | iris-185 |
+| 5298287 | af739_t3_e2 | gpu | 8:22:04 | 2-00:00:00 | 17.4% | 1d15h37m | iris-186 |
+| 5298288 | gpu_cos2_t2 | gpu | 8:22:04 | 2-00:00:00 | 17.4% | 1d15h37m | iris-169 |
+| 5298048 | af739_t2_s2 | gpu | 18:42:13 | 2-00:00:00 | 39.0% | 1d5h17m | iris-186 |
+| 5298049 | af739_t1_s2 | gpu | 18:42:13 | 2-00:00:00 | 39.0% | 1d5h17m | iris-170 |
+| 5269760 | l2_ac_t3_ce | l40s | 7:31:33 | 2-00:00:00 | 15.7% | 1d16h28m | iris-198 |
+| 5279084 | l2_ac_t1_ct | l40s | 14:42:31 | 2-00:00:00 | 30.6% | 1d9h17m | iris-199 |
+| 5269764 | l2_ac_t3_fu | l40s | 16:49:51 | 2-00:00:00 | 35.1% | 1d7h10m | iris-199 |
 
 ## Highest-Value Pending Jobs
 
 | jobid | job | partition | planned_start | reason | notes |
 | --- | --- | --- | --- | --- | --- |
-| 5269748 | l2_ac_t1_ce | l40s | 2026-03-30 01:25:41 | Priority | first scheduled l40s restart slot |
-| 5269758 | l2_ac_t2_fu | l40s | 2026-03-30 14:24:32 | Priority | next l40s backlog item with a concrete start time |
-| 5294241 | l2_ac_t2_s2 | l40s | 2026-04-04 14:20:00 | Priority | resumed overflow copy after 2-day TIMEOUT on `5269759` |
-| 5269763 | l2_ac_t3_e2 | l40s | 2026-04-03 01:30:00 | Priority | later l40s restart already scheduled |
+| 5279085 | l2_ac_t1_e2 | l40s | 2026-03-31 14:20:21 | Resources | first l40s slot with a concrete restart time |
+| 5269749 | l2_ac_t1_co | l40s | 2026-03-31 16:07:37 | Priority | next l40s backlog item with a concrete start time |
+| 5269752 | l2_ac_t1_fu | l40s | 2026-04-02 14:30:00 | Priority | later l40s restart already scheduled |
+| 5294241 | l2_ac_t2_s2 | l40s | 2026-04-04 14:30:00 | Priority | resumed overflow copy after 2-day TIMEOUT on `5269759` |
 | 5269765 | h2_ac_t1_ce | hopper | 2026-03-31 03:20:00 | Priority | opportunistic overflow backlog |
 | 5269771 | h2_ac_t2_ce | hopper | 2026-03-31 03:20:00 | Priority | opportunistic overflow backlog |
 | 5269780 | h2_ac_t3_e2 | hopper | 2026-03-31 03:20:00 | Priority | opportunistic overflow backlog |
@@ -49,7 +49,7 @@
 | partition | pending_jobs | notes |
 | --- | ---: | --- |
 | gpu | 0 | canonical gpu critical path is fully live again; no gpu backlog remains at this snapshot |
-| l40s | 14 | accel_v2 overflow backlog; current live state has three active `l40s` runners |
+| l40s | 13 | accel_v2 overflow backlog; current live state has three active `l40s` runners |
 | hopper | 17 | pure overflow backlog only |
 
 ## Canonical Benchmark Recovery Notes
@@ -61,7 +61,7 @@
    - `l2_ac_t3_ce`
    - `l2_ac_t1_ct`
    - `l2_ac_t3_fu`
-   are all RUNNING, so the current queue is `9R+31PD`.
+   are all RUNNING, so the current queue is `9R+30PD`.
 5. Local-only V740 model-clear status has advanced:
    - `5294242` `v740_samf_clr` → completed successfully
    - `5294243` `v740_prop_clr` → failed before model execution because `quick` preset cannot run `h=30`
@@ -85,3 +85,10 @@
    - `fairness_pass = true`
    - `peak_rss_gb = 47.06`
    - this remains a local-only clear path and does not count as a canonical benchmark result
+11. `5298437` `v740_elas_inv_clr` has now completed as the second `ElasTST` narrow probe:
+   - `task2_forecast / core_edgar / investors_count / h=14`
+   - `input_size=30`, `l_patch_size=6_10`
+   - `MAE = 125.1687`
+   - `prediction_coverage_ratio = 1.0`
+   - `fairness_pass = false`
+   - this is a useful negative result and keeps `ElasTST` in the local-clear lane rather than promoting it

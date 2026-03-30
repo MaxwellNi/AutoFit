@@ -769,7 +769,15 @@ class V740AlphaPrototypeWrapper(ModelBase):
         weight = weight / weight.mean().clamp_min(1e-6)
         return (values * weight).mean()
 
-    def _build_window_sample_weights(self, train_x: np.ndarray, train_y: np.ndarray) -> np.ndarray:
+    def _build_window_sample_weights(
+        self,
+        train_x: np.ndarray,
+        train_y: np.ndarray,
+        train_edgar_recent: Optional[np.ndarray] = None,
+        train_edgar_bucket: Optional[np.ndarray] = None,
+        train_text_recent: Optional[np.ndarray] = None,
+        train_text_bucket: Optional[np.ndarray] = None,
+    ) -> np.ndarray:
         n = len(train_x)
         weights = np.ones((n,), dtype=np.float32)
         if n == 0 or not self.enable_selective_learning:
@@ -792,10 +800,52 @@ class V740AlphaPrototypeWrapper(ModelBase):
         vol_norm = _normalize(hist_vol)
 
         weights = 1.0 + 0.10 * mag_norm - 0.20 * vol_norm
+        horizon_factor = float(
+            np.clip(np.log1p(max(1, self._horizon)) / np.log1p(365.0), 0.0, 1.0)
+        )
+
+        def _recent_activity(recent: Optional[np.ndarray]) -> np.ndarray:
+            if recent is None or len(recent) == 0:
+                return np.zeros((n,), dtype=np.float32)
+            present = (recent[:, :, 2] > 0.0).astype(np.float32)
+            active = present.any(axis=1).astype(np.float32)
+            active_count = present.sum(axis=1).astype(np.float32)
+            if float(active_count.max()) > 0.0:
+                active_count = active_count / float(active_count.max())
+            return 0.6 * active + 0.4 * active_count
+
+        def _bucket_activity(bucket: Optional[np.ndarray]) -> np.ndarray:
+            if bucket is None or len(bucket) == 0:
+                return np.zeros((n,), dtype=np.float32)
+            counts = bucket[:, :, 0].sum(axis=1).astype(np.float32)
+            if float(counts.max()) > 0.0:
+                counts = counts / float(counts.max())
+            return counts
+
+        edgar_activity = 0.7 * _recent_activity(train_edgar_recent) + 0.3 * _bucket_activity(train_edgar_bucket)
+        text_activity = 0.7 * _recent_activity(train_text_recent) + 0.3 * _bucket_activity(train_text_bucket)
+
+        if self._binary_target:
+            event_mask = (train_y.max(axis=1) > 0.5).astype(np.float32)
+            state_now = (train_x[:, 0, -1] > 0.5).astype(np.float32)
+            transition_mask = ((event_mask > 0.5) & (state_now < 0.5)).astype(np.float32)
+            weights += 0.12 * event_mask + 0.10 * transition_mask
+            weights += 0.05 * edgar_activity
+            weights += 0.03 * text_activity
+        else:
+            target_delta = (
+                np.mean(np.abs(np.diff(train_y, axis=1)), axis=1)
+                if train_y.shape[1] > 1
+                else np.zeros((n,), dtype=np.float32)
+            )
+            delta_norm = _normalize(target_delta)
+            weights += 0.08 * delta_norm
+            weights += (0.04 + 0.08 * horizon_factor) * edgar_activity
+            weights += (0.02 + 0.05 * horizon_factor) * text_activity
         if self._has_edgar_path():
-            weights += 0.05 * float(self._edgar_source_density)
+            weights += 0.04 * float(self._edgar_source_density)
         if self._has_text_path():
-            weights += 0.03 * float(self._text_source_density)
+            weights += 0.02 * float(self._text_source_density)
         return np.clip(weights.astype(np.float32), 0.6, 1.3)
 
     def _token_tensor(self, torch, batch_size: int):
@@ -949,6 +999,10 @@ class V740AlphaPrototypeWrapper(ModelBase):
                 tgt_mean = target.mean(dim=1)
                 pred_std = pred.std(dim=1, unbiased=False)
                 tgt_std = target.std(dim=1, unbiased=False)
+                pred_last = pred[:, -1]
+                tgt_last = target[:, -1]
+                pred_step = pred[:, 1:] - pred[:, :-1] if pred.shape[1] > 1 else pred[:, :1] * 0.0
+                tgt_step = target[:, 1:] - target[:, :-1] if target.shape[1] > 1 else target[:, :1] * 0.0
                 distdf = self._weighted_reduce(
                     torch,
                     torch.nn.functional.smooth_l1_loss(pred_mean, tgt_mean, reduction="none")
@@ -957,6 +1011,14 @@ class V740AlphaPrototypeWrapper(ModelBase):
                         torch.log1p(tgt_std),
                         reduction="none",
                     ),
+                    sample_weight=sample_weight,
+                ) + 0.5 * self._weighted_reduce(
+                    torch,
+                    torch.nn.functional.smooth_l1_loss(pred_last, tgt_last, reduction="none"),
+                    sample_weight=sample_weight,
+                ) + 0.25 * self._weighted_reduce(
+                    torch,
+                    torch.nn.functional.smooth_l1_loss(pred_step, tgt_step, reduction="none"),
                     sample_weight=sample_weight,
                 )
             return base + 0.05 * neg_penalty + 0.05 * distdf
@@ -983,6 +1045,10 @@ class V740AlphaPrototypeWrapper(ModelBase):
             tgt_mean = target.mean(dim=1)
             pred_std = pred.std(dim=1, unbiased=False).clamp_min(1e-6)
             tgt_std = target.std(dim=1, unbiased=False).clamp_min(1e-6)
+            pred_last = pred[:, -1]
+            tgt_last = target[:, -1]
+            pred_step = pred[:, 1:] - pred[:, :-1] if pred.shape[1] > 1 else pred[:, :1] * 0.0
+            tgt_step = target[:, 1:] - target[:, :-1] if target.shape[1] > 1 else target[:, :1] * 0.0
             distdf = self._weighted_reduce(
                 torch,
                 torch.nn.functional.smooth_l1_loss(pred_mean, tgt_mean, reduction="none")
@@ -991,6 +1057,14 @@ class V740AlphaPrototypeWrapper(ModelBase):
                     torch.log1p(tgt_std),
                     reduction="none",
                 ),
+                sample_weight=sample_weight,
+            ) + 0.5 * self._weighted_reduce(
+                torch,
+                torch.nn.functional.smooth_l1_loss(pred_last, tgt_last, reduction="none"),
+                sample_weight=sample_weight,
+            ) + 0.25 * self._weighted_reduce(
+                torch,
+                torch.nn.functional.smooth_l1_loss(pred_step, tgt_step, reduction="none"),
                 sample_weight=sample_weight,
             )
         return base + 0.1 * align + 0.05 * distdf
@@ -1077,10 +1151,37 @@ class V740AlphaPrototypeWrapper(ModelBase):
 
         train_x_np = np.stack(entity_windows.train_x).astype(np.float32, copy=False)
         train_y_np = np.stack(entity_windows.train_y).astype(np.float32, copy=False)
+        train_edgar_recent_np = (
+            np.stack(entity_windows.train_edgar_recent).astype(np.float32, copy=False)
+            if entity_windows.train_edgar_recent
+            else None
+        )
+        train_edgar_bucket_np = (
+            np.stack(entity_windows.train_edgar_bucket).astype(np.float32, copy=False)
+            if entity_windows.train_edgar_bucket
+            else None
+        )
+        train_text_recent_np = (
+            np.stack(entity_windows.train_text_recent).astype(np.float32, copy=False)
+            if entity_windows.train_text_recent
+            else None
+        )
+        train_text_bucket_np = (
+            np.stack(entity_windows.train_text_bucket).astype(np.float32, copy=False)
+            if entity_windows.train_text_bucket
+            else None
+        )
         train_x = torch.tensor(train_x_np, dtype=torch.float32)
         train_y = torch.tensor(train_y_np, dtype=torch.float32)
         train_sample_weight = torch.tensor(
-            self._build_window_sample_weights(train_x_np, train_y_np),
+            self._build_window_sample_weights(
+                train_x_np,
+                train_y_np,
+                train_edgar_recent=train_edgar_recent_np,
+                train_edgar_bucket=train_edgar_bucket_np,
+                train_text_recent=train_text_recent_np,
+                train_text_bucket=train_text_bucket_np,
+            ),
             dtype=torch.float32,
         )
         train_edgar_recent = self._memory_batch(

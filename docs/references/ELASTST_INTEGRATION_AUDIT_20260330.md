@@ -193,13 +193,51 @@ Result:
 
 This means `ElasTST` is now past the “tiny smoke only” stage.
 
+### 5.2 Second narrow benchmark-clear: investors-count remains a red flag
+
+Job:
+
+- `5298437` `v740_elas_inv_clr`
+
+Output root:
+
+- `runs/benchmarks/block3_phase9_localclear_20260330/elastst_investors_h14_ctx30/`
+
+Configuration:
+
+- `task2_forecast`
+- `core_edgar`
+- `investors_count`
+- `h=14`
+- `input_size=30`
+- `l_patch_size=6_10`
+
+Result:
+
+- `MAE = 125.1687`
+- `RMSE = 125.1687`
+- `prediction_coverage_ratio = 1.0`
+- `fairness_pass = false`
+- `peak_rss_gb = 46.24`
+- `train_time_seconds = 3.36`
+- `inference_time_seconds = 0.014`
+
+This is a useful negative result. It means the shorter-context path is enough
+to make `ElasTST` executable on the count slice, but **not** enough to make it
+promotable. At the moment, the correct label is:
+
+- funding narrow clear: **clean**
+- investors narrow clear: **runs, but fails fairness**
+
 ## 6. Practical next step
 
 The most defensible next step is:
 
 1. keep `ElasTST` in the local-clear lane
-2. widen the local-clear matrix beyond the first funding slice
-3. only then decide whether it deserves:
+2. treat the count-side fairness failure as a tuning problem, not as proof of
+   general readiness
+3. widen the local-clear matrix beyond the first funding slice
+4. only then decide whether it deserves:
    - a broader local-clear matrix, or
    - a more formal comparator expansion
 

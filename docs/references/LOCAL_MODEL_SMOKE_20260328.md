@@ -581,3 +581,53 @@ That first narrow clear has now already completed successfully:
 
 So `ElasTST` has now crossed the same first serious local-clear gate that
 `LightGTS` and `OLinear` already crossed earlier.
+
+That said, the second narrow clear is now also real and is **not** clean:
+
+- job: `5298437` `v740_elas_inv_clr`
+- output root:
+  - `runs/benchmarks/block3_phase9_localclear_20260330/elastst_investors_h14_ctx30/`
+- audited harness result:
+  - `MAE = 125.1687`
+  - `RMSE = 125.1687`
+  - `prediction_coverage_ratio = 1.0`
+  - `fairness_pass = false`
+  - `peak_rss_gb = 46.24`
+
+So the current honest summary for `ElasTST` is:
+
+- funding side: clean narrow clear exists
+- count side: executable, but not yet promotable
+
+## 9. V740-alpha selective / DistDF scaffold v2
+
+The latest V740-only sanity pass stayed deliberately lightweight and auditable.
+
+- output artifact:
+  - `docs/references/v740_alpha_selective_smoke_20260330/t2_core_edgar_funding_h30_v2.json`
+- slice:
+  - `task2_forecast`
+  - `core_edgar`
+  - `funding_raised_usd`
+  - `h=30`
+
+Second-pass implementation changes:
+
+- selective-learning weights now use window-level source activity from the
+  EDGAR/text recent + bucket memories instead of only global source density
+- the non-binary DistDF-style auxiliary now also aligns:
+  - horizon endpoint
+  - step-difference shape
+
+Result:
+
+- `constant_prediction = false`
+- `prediction_std = 3508.63`
+- `edgar_source_density = 1.0`
+- `MAE = 441156.71`
+- `RMSE = 634565.63`
+
+Compared with the earlier first-pass scaffold (`MAE = 441572.68`), this is a
+small but real improvement. The stronger claim is still the engineering one:
+the second scaffold runs cleanly and does not destabilize the current V740
+prototype.

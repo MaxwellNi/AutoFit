@@ -1,6 +1,6 @@
 # Current Source of Truth
 
-> Last verified: 2026-03-30 01:39 CEST
+> Last verified: 2026-03-30 08:57 CEST
 > Verified by direct scans of `runs/benchmarks/block3_phase9_fair/`, live `squeue -u npin`, `sacct`, benchmark aggregation scripts.
 
 This file is the authoritative documentation entry point for the current Block 3 project state.
@@ -43,7 +43,7 @@ If any other document disagrees with this file, prefer this file and the evidenc
 | Text embedding artifacts | `AVAILABLE` | `runs/text_embeddings/embedding_metadata.json` |
 | Phase 12 text reruns | `48/48 COMPLETED` | core_text+full 91/91 models |
 | Phase 15 new models | 23 submitted, 15 valid, 8 excluded (Finding H), 78/160 | direct scan |
-| Live jobs | `40` (9R + 31PD) | direct `squeue -u npin` 2026-03-30 01:39: gpu 6R+0PD, l40s 3R+14PD, hopper 0R+17PD |
+| Live jobs | `39` (9R + 30PD) | direct `squeue -u npin` 2026-03-30 08:57: gpu 6R+0PD, l40s 3R+13PD, hopper 0R+17PD |
 | Clean full comparable frontier | `55` models @ shared `160/160` | post-filter `all_results.csv`, non-retired only |
 
 ## What the Current Benchmark Means
@@ -63,10 +63,10 @@ If any other document disagrees with this file, prefer this file and the evidenc
 
 ## Current Execution Reality
 
-1. Live queue snapshot verified on 2026-03-30 01:39 CEST:
+1. Live queue snapshot verified on 2026-03-30 08:57 CEST:
    - `9 RUNNING` = `6 gpu + 3 l40s + 0 hopper`
-   - `31 PENDING` = `0 gpu + 14 l40s + 17 hopper`
-   - **40 total**
+   - `30 PENDING` = `0 gpu + 13 l40s + 17 hopper`
+   - **39 total**
    - Current gpu runners:
      - `af739_t1_s2` (`5298049`)
      - `af739_t2_s2` (`5298048`)
@@ -202,6 +202,15 @@ If any other document disagrees with this file, prefer this file and the evidenc
      - `fairness_pass = true`
      - `prediction_coverage_ratio = 1.0`
      - `peak_rss_gb = 47.06`
+   - the second narrow benchmark-clear job has also completed:
+     - `5298437 v740_elas_inv_clr`
+     - `task2_forecast / core_edgar / investors_count / h=14`
+     - `input_size = 30`, `l_patch_size = 6_10`
+     - `MAE = 125.1687`
+     - `RMSE = 125.1687`
+     - `fairness_pass = false`
+     - `prediction_coverage_ratio = 1.0`
+     - `peak_rss_gb = 46.24`
    - this remains a local-only side path and does **not** count as a canonical benchmark result
    - first tiny real-data investors-count smoke on:
      - `task2_forecast / core_edgar / investors_count / h=14`
