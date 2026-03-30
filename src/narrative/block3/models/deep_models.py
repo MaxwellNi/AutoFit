@@ -32,6 +32,7 @@ from .samformer_model import create_samformer
 from .lightgts_model import create_lightgts
 from .olinear_model import create_olinear
 from .elastst_model import create_elastst
+from .units_model import create_units
 
 _logger = logging.getLogger(__name__)
 
@@ -1919,6 +1920,8 @@ TRANSFORMER_MODELS = {
     "OLinear": create_olinear,
     # 2026-03-30 varied-horizon local-clear expansion
     "ElasTST": create_elastst,
+    # 2026-03-30 unified forecasting local-clear expansion
+    "UniTS": create_units,
 }
 
 FOUNDATION_MODELS = {

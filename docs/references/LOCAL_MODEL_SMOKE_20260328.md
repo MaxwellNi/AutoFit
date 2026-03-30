@@ -599,7 +599,65 @@ So the current honest summary for `ElasTST` is:
 - funding side: clean narrow clear exists
 - count side: executable, but not yet promotable
 
-## 9. V740-alpha selective / DistDF scaffold v2
+## 9. UniTS
+
+### Current factual status
+
+- local wrapper scaffold: **exists**
+  - `src/narrative/block3/models/units_model.py`
+- official repo audit: **done**
+  - local repo:
+    `~/.cache/block3_optional_repos/UniTS`
+  - audited HEAD:
+    `0e0281482864017cac8832b2651906ff5375a34e`
+- vendor import smoke: **passed**
+- first real-data tiny smoke: **passed**
+  - artifact:
+    `docs/references/local_model_smoke_20260330/units_t2_core_edgar_funding_h30.json`
+
+### Slice
+
+- model: `UniTS`
+- task: `task2_forecast`
+- ablation: `core_edgar`
+- target: `funding_raised_usd`
+- horizon: `30`
+- max entities: `4`
+- max rows: `300`
+
+### Result
+
+- `fit_seconds = 14.95`
+- `predict_seconds = 0.174`
+- `prediction_std = 300966.34`
+- `constant_prediction = false`
+- `MAE = 265368.00`
+- `RMSE = 528267.79`
+
+### Interpretation
+
+This is enough to move `UniTS` out of the docs-only bucket.
+It is now:
+
+- vendor-audited,
+- importable inside the Block 3 environment,
+- locally wrapped for forecasting,
+- and capable of a first non-fallback real-data smoke on a freeze-backed
+  funding slice.
+
+It is now also past the first narrow-clear gate:
+
+- job: `5298457` `v740_units_clr`
+- output root:
+  - `runs/benchmarks/block3_phase9_localclear_20260330/units_funding_h30/`
+- audited harness result:
+  - `MAE = 131725.2212`
+  - `RMSE = 174105.8744`
+  - `prediction_coverage_ratio = 1.0`
+  - `fairness_pass = true`
+  - `peak_rss_gb = 47.73`
+
+## 10. V740-alpha selective / DistDF scaffold v2
 
 The latest V740-only sanity pass stayed deliberately lightweight and auditable.
 

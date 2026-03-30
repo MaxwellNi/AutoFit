@@ -173,6 +173,18 @@
 > level but returns `fairness_pass = false`, which is an important reminder
 > that varied-horizon models still need count-side tuning before they are ready
 > for broader benchmark promotion.
+>
+> A dedicated summary of the second-pass objective audit now exists at:
+> `docs/references/V740_ALPHA_SELECTIVE_DISTDF_AUDIT_20260330.md`.
+> The short version is:
+>
+> - same-slice funding smoke improves slightly (`441572.68 -> 441156.71`),
+> - a hard binary EDGAR smoke remains non-degenerate (`MAE = 0.3089`),
+> - and a source-covered `h=60` funding smoke also remains non-degenerate
+>   (`MAE = 232810.09`).
+>
+> This is still not benchmark-ready evidence, but it is enough to justify
+> continuing with the strengthened objective scaffold rather than reverting it.
 
 ## 1. Purpose
 
