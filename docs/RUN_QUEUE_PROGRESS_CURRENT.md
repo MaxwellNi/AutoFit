@@ -1,17 +1,17 @@
 # Current Queue Progress
 
-> Snapshot time: 2026-03-30 11:17 CEST
+> Snapshot time: 2026-03-30 11:47 CEST
 > Source: live `squeue -u npin,cfisch`, `squeue --start -u npin,cfisch`, and `sacct -u npin -S 2026-03-28T00:00:00`
 
 ## Summary
 
 | Metric | Value |
 | --- | ---: |
-| Total jobs | 40 |
+| Total jobs | 41 |
 | Running | 9 |
-| Pending | 31 |
+| Pending | 32 |
 | gpu running | 6 |
-| gpu pending | 0 |
+| gpu pending | 1 |
 | bigmem running | 0 |
 | l40s running | 3 |
 | l40s pending | 14 |
@@ -22,15 +22,15 @@
 
 | jobid | job | partition | elapsed | limit | progress | time_left | reason/node |
 | --- | --- | --- | --- | --- | ---: | --- | --- |
-| 5298285 | af739_t1_e2 | gpu | 10:42:06 | 2-00:00:00 | 22.3% | 1d13h17m | iris-185 |
-| 5298286 | af739_t2_e2 | gpu | 10:42:06 | 2-00:00:00 | 22.3% | 1d13h17m | iris-185 |
-| 5298287 | af739_t3_e2 | gpu | 10:42:06 | 2-00:00:00 | 22.3% | 1d13h17m | iris-186 |
-| 5298288 | gpu_cos2_t2 | gpu | 10:42:06 | 2-00:00:00 | 22.3% | 1d13h17m | iris-169 |
-| 5298048 | af739_t2_s2 | gpu | 21:02:15 | 2-00:00:00 | 43.8% | 1d2h57m | iris-186 |
-| 5298049 | af739_t1_s2 | gpu | 21:02:15 | 2-00:00:00 | 43.8% | 1d2h57m | iris-170 |
-| 5269760 | l2_ac_t3_ce | l40s | 9:51:35 | 2-00:00:00 | 20.5% | 1d14h08m | iris-198 |
-| 5279084 | l2_ac_t1_ct | l40s | 17:02:33 | 2-00:00:00 | 35.5% | 1d6h57m | iris-199 |
-| 5269764 | l2_ac_t3_fu | l40s | 19:09:53 | 2-00:00:00 | 39.9% | 1d4h50m | iris-199 |
+| 5298285 | af739_t1_e2 | gpu | 11:12:15 | 2-00:00:00 | 23.4% | 1d12h47m | iris-185 |
+| 5298286 | af739_t2_e2 | gpu | 11:12:15 | 2-00:00:00 | 23.4% | 1d12h47m | iris-185 |
+| 5298287 | af739_t3_e2 | gpu | 11:12:15 | 2-00:00:00 | 23.4% | 1d12h47m | iris-186 |
+| 5298288 | gpu_cos2_t2 | gpu | 11:12:15 | 2-00:00:00 | 23.4% | 1d12h47m | iris-169 |
+| 5298048 | af739_t2_s2 | gpu | 21:32:24 | 2-00:00:00 | 44.9% | 1d2h28m | iris-186 |
+| 5298049 | af739_t1_s2 | gpu | 21:32:24 | 2-00:00:00 | 44.9% | 1d2h28m | iris-170 |
+| 5269760 | l2_ac_t3_ce | l40s | 10:21:44 | 2-00:00:00 | 21.7% | 1d13h38m | iris-198 |
+| 5279084 | l2_ac_t1_ct | l40s | 17:32:42 | 2-00:00:00 | 36.5% | 1d6h27m | iris-199 |
+| 5269764 | l2_ac_t3_fu | l40s | 19:40:02 | 2-00:00:00 | 41.0% | 1d4h20m | iris-199 |
 
 ## Highest-Value Pending Jobs
 
@@ -42,6 +42,7 @@
 | 5294241 | l2_ac_t2_s2 | l40s | 2026-04-04 14:30:00 | Priority | resumed overflow copy after 2-day TIMEOUT on `5269759` |
 | 5269757 | l2_ac_t2_e2 | l40s | 2026-04-04 16:10:00 | Priority | next scheduled l40s e2 overflow slot |
 | 5298506 | l2_ac_t3_co | l40s | N/A | Priority | newly resubmitted after verified 2-day TIMEOUT on `5269761`; resumable continuation, not a structural failure |
+| 5298559 | v740_units_inv_clr | gpu | 2026-03-30 17:29:28 | Priority | second `UniTS` local-clear probe queued from a promising count-side richer smoke |
 | 5269765 | h2_ac_t1_ce | hopper | 2026-03-31 03:20:00 | Priority | opportunistic overflow backlog |
 | 5269771 | h2_ac_t2_ce | hopper | 2026-03-31 03:20:00 | Priority | opportunistic overflow backlog |
 | 5269780 | h2_ac_t3_e2 | hopper | 2026-03-31 03:20:00 | Priority | opportunistic overflow backlog |
@@ -50,7 +51,7 @@
 
 | partition | pending_jobs | notes |
 | --- | ---: | --- |
-| gpu | 0 | canonical gpu critical path is fully live again; no gpu backlog remains at this snapshot |
+| gpu | 1 | canonical gpu critical path is fully live again; the only gpu pending item is the local-only `UniTS` count-side narrow clear |
 | l40s | 14 | accel_v2 overflow backlog; current live state has three active `l40s` runners plus newly requeued `l2_ac_t3_co` |
 | hopper | 17 | pure overflow backlog only |
 
@@ -67,7 +68,7 @@
    - `l2_ac_t3_ce`
    - `l2_ac_t1_ct`
    - `l2_ac_t3_fu`
-   are all RUNNING, so the current queue is `9R+31PD`.
+   are all RUNNING, so the current queue is `9R+32PD`.
 6. Local-only V740 model-clear status has advanced:
    - `5294242` `v740_samf_clr` → completed successfully
    - `5294243` `v740_prop_clr` → failed before model execution because `quick` preset cannot run `h=30`
@@ -137,3 +138,16 @@
    - current honest interpretation:
      - `OLinear` funding-side evidence remains promising,
      - but the count-side lane is not promotable right now
+18. A richer `UniTS` count-side follow-up now exists:
+   - local smoke:
+     - `task2_forecast / core_edgar / investors_count / h=14`
+     - `input_size = 30`, `patch_len = 5`, `stride = 5`
+     - `MAE = 0.0214`
+     - `constant_prediction = false`
+   - this was strong enough to justify a second real harness clear
+   - `5298559 v740_units_inv_clr` is now queued as the next highest-value local-only comparator probe
+19. Additional partition-specific duplicates are **not** justified right now for `5298559`:
+   - `gpu` already has a concrete same-day start time: `2026-03-30 17:29:28`
+   - a `hopper` test-only duplicate would start much later (`2026-05-06 03:18:22`)
+   - the current `l40s` submission path for this local-only pattern is rejected under the present account/QoS context
+   - so duplicating it today would increase queue pressure without accelerating the result

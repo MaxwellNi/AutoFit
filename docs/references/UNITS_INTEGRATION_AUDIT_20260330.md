@@ -175,3 +175,39 @@ As of this pass, the correct label for `UniTS` is:
 
 That is exactly the kind of state we wanted before spending broader benchmark
 budget on it.
+
+## 7. Count-side follow-up now queued
+
+A richer count-side local smoke has now also been run on:
+
+- `task2_forecast / core_edgar / investors_count / h=14`
+- `input_size = 30`
+- `patch_len = 5`
+- `stride = 5`
+- `12 entities / 800 train rows`
+
+Artifact:
+
+- `docs/references/local_model_smoke_20260330/units_t2_core_edgar_investors_h14_ctx30.json`
+
+Result:
+
+- `MAE = 0.0214`
+- `RMSE = 0.1401`
+- `prediction_std = 34.09`
+- `constant_prediction = false`
+
+This is only a screening result, not a promotion result. The direct lesson
+from the OLinear count-side audit is now clear:
+
+> a stronger richer smoke is enough to justify a harness clear, but not enough
+> to claim the lane is clean.
+
+So the next real step is now queued:
+
+- `5298559` `v740_units_inv_clr`
+- scope:
+  - `task2_forecast / core_edgar / investors_count / h=14`
+  - `input_size = 30`
+  - `patch_len = 5`
+  - `stride = 5`

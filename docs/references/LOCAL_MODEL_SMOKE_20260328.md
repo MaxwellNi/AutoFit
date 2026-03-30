@@ -711,7 +711,53 @@ It is now also past the first narrow-clear gate:
   - `RMSE = 174105.8744`
   - `prediction_coverage_ratio = 1.0`
   - `fairness_pass = true`
-  - `peak_rss_gb = 47.73`
+- `peak_rss_gb = 47.73`
+
+### Count-side follow-up (2026-03-30)
+
+A richer local-only follow-up was then run on:
+
+- model: `UniTS`
+- task: `task2_forecast`
+- ablation: `core_edgar`
+- target: `investors_count`
+- horizon: `14`
+- model kwargs:
+  - `input_size = 30`
+  - `patch_len = 5`
+  - `stride = 5`
+  - `d_model = 64`
+  - `prompt_num = 4`
+  - `e_layers = 2`
+  - `n_heads = 4`
+- max entities: `12`
+- max rows: `800`
+
+Artifact:
+
+- `docs/references/local_model_smoke_20260330/units_t2_core_edgar_investors_h14_ctx30.json`
+
+Result:
+
+- `fit_seconds = 77.62`
+- `predict_seconds = 0.963`
+- `prediction_std = 34.09`
+- `constant_prediction = false`
+- `MAE = 0.0214`
+- `RMSE = 0.1401`
+
+Interpretation:
+
+- this is much stronger than the first funding-only smoke in terms of “should
+  we spend another real clear on this model?”
+- but, after the `OLinear` count-side lesson, this still only counts as a
+  **screening signal**
+- the correct next step is a real harness-side narrow clear, not promotion
+  based on this local result alone
+
+That next step has now been queued as:
+
+- `5298559` `v740_units_inv_clr`
 
 ## 10. V740-alpha selective / DistDF scaffold v2
 

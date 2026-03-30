@@ -1,6 +1,6 @@
 # Current Source of Truth
 
-> Last verified: 2026-03-30 11:17 CEST
+> Last verified: 2026-03-30 11:47 CEST
 > Verified by direct scans of `runs/benchmarks/block3_phase9_fair/`, live `squeue -u npin`, `sacct`, benchmark aggregation scripts.
 
 This file is the authoritative documentation entry point for the current Block 3 project state.
@@ -43,7 +43,7 @@ If any other document disagrees with this file, prefer this file and the evidenc
 | Text embedding artifacts | `AVAILABLE` | `runs/text_embeddings/embedding_metadata.json` |
 | Phase 12 text reruns | `48/48 COMPLETED` | core_text+full 91/91 models |
 | Phase 15 new models | 23 submitted, 15 valid, 8 excluded (Finding H), 78/160 | direct scan |
-| Live jobs | `40` (9R + 31PD) | direct `squeue -u npin` 2026-03-30 11:17: gpu 6R+0PD, l40s 3R+14PD, hopper 0R+17PD |
+| Live jobs | `41` (9R + 32PD) | direct `squeue -u npin` 2026-03-30 11:47: gpu 6R+1PD, l40s 3R+14PD, hopper 0R+17PD |
 | Clean full comparable frontier | `55` models @ shared `160/160` | post-filter `all_results.csv`, non-retired only |
 
 ## What the Current Benchmark Means
@@ -63,10 +63,10 @@ If any other document disagrees with this file, prefer this file and the evidenc
 
 ## Current Execution Reality
 
-1. Live queue snapshot verified on 2026-03-30 11:17 CEST:
+1. Live queue snapshot verified on 2026-03-30 11:47 CEST:
    - `9 RUNNING` = `6 gpu + 3 l40s + 0 hopper`
-   - `31 PENDING` = `0 gpu + 14 l40s + 17 hopper`
-   - **40 total**
+   - `32 PENDING` = `1 gpu + 14 l40s + 17 hopper`
+   - **41 total**
    - Current gpu runners:
      - `af739_t1_s2` (`5298049`)
      - `af739_t2_s2` (`5298048`)
@@ -292,6 +292,19 @@ If any other document disagrees with this file, prefer this file and the evidenc
      - while the fuller-source funding `h=60` slice is effectively tied with
         `core_edgar`, so text is source-covered there but not yet proven as the
         main gain source.
+17. `UniTS` has now produced its first stronger count-side local signal:
+   - richer local smoke on:
+     - `task2_forecast / core_edgar / investors_count / h=14`
+     - `input_size = 30`, `patch_len = 5`, `stride = 5`
+     - `12 entities / 800 train rows`
+   - result:
+     - `MAE = 0.0214`
+     - `constant_prediction = false`
+   - this is not enough to promote the lane by itself,
+   - but it is strong enough to justify a real harness check,
+   - so a second narrow clear is now queued:
+     - `5298559 v740_units_inv_clr`
+     - current estimated start: `2026-03-30 17:29:28`
 
 ## Current Priorities
 

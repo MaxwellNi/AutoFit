@@ -229,6 +229,37 @@ promotable. At the moment, the correct label is:
 - funding narrow clear: **clean**
 - investors narrow clear: **runs, but fails fairness**
 
+### 5.3 More conservative count-side smoke did not justify a rerun
+
+A second richer local-only count-side smoke was then tried with a shorter and
+more conservative context:
+
+- `task2_forecast / core_edgar / investors_count / h=14`
+- `input_size = 21`
+- `l_patch_size = 3_6`
+
+Artifact:
+
+- `docs/references/local_model_smoke_20260330/elastst_t2_core_edgar_investors_h14_ctx21.json`
+
+Result:
+
+- `MAE = 51.1572`
+- `RMSE = 61.1242`
+- `prediction_std = 0.1172`
+- `constant_prediction = false`
+
+Interpretation:
+
+- this confirms the count-side lane remains executable under a wider range of
+  shorter contexts,
+- but it does **not** provide a strong enough improvement signal over the
+  earlier `input_size=30 / l_patch_size=6_10` path to justify another harness
+  rerun immediately,
+- so the current honest action is:
+  - keep `ElasTST` in the local-clear lane,
+  - do not spend another narrow-clear slot on its count-side today
+
 ## 6. Practical next step
 
 The most defensible next step is:

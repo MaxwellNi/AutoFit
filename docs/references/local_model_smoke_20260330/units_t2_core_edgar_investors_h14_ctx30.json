@@ -1,0 +1,37 @@
+{
+  "model": "UniTS",
+  "model_kwargs": {
+    "input_size": 30,
+    "patch_len": 5,
+    "stride": 5,
+    "d_model": 64,
+    "prompt_num": 4,
+    "e_layers": 2,
+    "n_heads": 4,
+    "max_epochs": 3,
+    "batch_size": 16,
+    "max_covariates": 8,
+    "max_entities": 1000,
+    "max_windows": 12000
+  },
+  "task": "task2_forecast",
+  "ablation": "core_edgar",
+  "target": "investors_count",
+  "horizon": 14,
+  "train_rows": 800,
+  "val_rows": 999,
+  "test_rows": 972,
+  "train_matrix_rows": 800,
+  "test_matrix_rows": 972,
+  "feature_count": 105,
+  "fit_seconds": 77.61838889122009,
+  "predict_seconds": 0.9634730815887451,
+  "prediction_std": 34.093821816781194,
+  "constant_prediction": false,
+  "metrics": {
+    "mae": 0.021414112774923506,
+    "rmse": 0.1400799582959016,
+    "smape": 0.03240762450728203,
+    "mape": 0.03247009701889361
+  }
+}

@@ -1,5 +1,5 @@
 {
-  "generated_at_utc": "2026-03-30T08:27:13.318534+00:00",
+  "generated_at_utc": "2026-03-30T09:46:29.919523+00:00",
   "benchmark_dir": "runs/benchmarks/block3_phase9_fair",
   "filtered_csv": "runs/benchmarks/block3_phase9_fair/all_results.csv",
   "text_dir": "runs/text_embeddings",
@@ -1252,29 +1252,31 @@
     ]
   },
   "slurm": {
-    "jobs_total": 39,
+    "jobs_total": 41,
     "state_counts": {
-      "PENDING": 30,
+      "PENDING": 32,
       "RUNNING": 9
     },
     "user_state_counts": {
-      "npin|PENDING": 30,
+      "npin|PENDING": 32,
       "npin|RUNNING": 9
     },
     "partition_state_counts": {
+      "gpu|PENDING": 1,
       "gpu|RUNNING": 6,
       "hopper|PENDING": 17,
-      "l40s|PENDING": 13,
+      "l40s|PENDING": 14,
       "l40s|RUNNING": 3
     },
     "qos_state_counts": {
       "besteffort|PENDING": 17,
-      "iris-snt|PENDING": 13,
+      "iris-snt|PENDING": 14,
       "iris-snt|RUNNING": 3,
+      "normal|PENDING": 1,
       "normal|RUNNING": 6
     },
     "pending_reasons": {
-      "(Priority)": 29,
+      "(Priority)": 31,
       "(Resources)": 1
     },
     "v739_jobs": 5,
@@ -1283,6 +1285,14 @@
     },
     "text_jobs": 0,
     "jobs": [
+      {
+        "job_name": "v740_units_inv_clr",
+        "user": "npin",
+        "state": "PENDING",
+        "partition": "gpu",
+        "qos": "normal",
+        "reason": "(Priority)"
+      },
       {
         "job_name": "af739_t1_e2",
         "user": "npin",
@@ -1565,6 +1575,14 @@
       },
       {
         "job_name": "l2_ac_t2_ct",
+        "user": "npin",
+        "state": "PENDING",
+        "partition": "l40s",
+        "qos": "iris-snt",
+        "reason": "(Priority)"
+      },
+      {
+        "job_name": "l2_ac_t3_co",
         "user": "npin",
         "state": "PENDING",
         "partition": "l40s",
