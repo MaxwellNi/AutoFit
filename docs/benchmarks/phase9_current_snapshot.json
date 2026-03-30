@@ -1,5 +1,5 @@
 {
-  "generated_at_utc": "2026-03-30T19:36:05.807854+00:00",
+  "generated_at_utc": "2026-03-30T20:50:10.807576+00:00",
   "benchmark_dir": "runs/benchmarks/block3_phase9_fair",
   "filtered_csv": "runs/benchmarks/block3_phase9_fair/all_results.csv",
   "text_dir": "runs/text_embeddings",
@@ -1252,17 +1252,17 @@
     ]
   },
   "slurm": {
-    "jobs_total": 40,
+    "jobs_total": 42,
     "state_counts": {
-      "PENDING": 28,
+      "PENDING": 30,
       "RUNNING": 12
     },
     "user_state_counts": {
-      "npin|PENDING": 28,
+      "npin|PENDING": 30,
       "npin|RUNNING": 12
     },
     "partition_state_counts": {
-      "gpu|PENDING": 1,
+      "gpu|PENDING": 3,
       "gpu|RUNNING": 5,
       "hopper|PENDING": 14,
       "hopper|RUNNING": 3,
@@ -1274,11 +1274,11 @@
       "besteffort|RUNNING": 3,
       "iris-snt|PENDING": 13,
       "iris-snt|RUNNING": 4,
-      "normal|PENDING": 1,
+      "normal|PENDING": 3,
       "normal|RUNNING": 5
     },
     "pending_reasons": {
-      "(Priority)": 27,
+      "(Priority)": 29,
       "(Resources)": 1
     },
     "v739_jobs": 5,
@@ -1289,12 +1289,36 @@
     "text_jobs": 0,
     "jobs": [
       {
-        "job_name": "af739_t1_s2",
+        "job_name": "af739_t2_s2",
         "user": "npin",
         "state": "PENDING",
         "partition": "gpu",
         "qos": "normal",
         "reason": "(Priority)"
+      },
+      {
+        "job_name": "v740_samf_lane",
+        "user": "npin",
+        "state": "PENDING",
+        "partition": "gpu",
+        "qos": "normal",
+        "reason": "(Priority)"
+      },
+      {
+        "job_name": "v740_lgts_lane",
+        "user": "npin",
+        "state": "PENDING",
+        "partition": "gpu",
+        "qos": "normal",
+        "reason": "(Priority)"
+      },
+      {
+        "job_name": "af739_t1_s2",
+        "user": "npin",
+        "state": "RUNNING",
+        "partition": "gpu",
+        "qos": "normal",
+        "reason": "iris-179"
       },
       {
         "job_name": "af739_t1_e2",
@@ -1327,14 +1351,6 @@
         "partition": "gpu",
         "qos": "normal",
         "reason": "iris-169"
-      },
-      {
-        "job_name": "af739_t2_s2",
-        "user": "npin",
-        "state": "RUNNING",
-        "partition": "gpu",
-        "qos": "normal",
-        "reason": "iris-186"
       },
       {
         "job_name": "h2_ac_t2_ce",

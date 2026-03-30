@@ -1,6 +1,6 @@
 # Current Source of Truth
 
-> Last verified: 2026-03-30 21:36 CEST
+> Last verified: 2026-03-30 22:50 CEST
 > Verified by direct scans of `runs/benchmarks/block3_phase9_fair/`, live `squeue -u npin`, `sacct`, benchmark aggregation scripts.
 
 This file is the authoritative documentation entry point for the current Block 3 project state.
@@ -43,7 +43,7 @@ If any other document disagrees with this file, prefer this file and the evidenc
 | Text embedding artifacts | `AVAILABLE` | `runs/text_embeddings/embedding_metadata.json` |
 | Phase 12 text reruns | `48/48 COMPLETED` | core_text+full 91/91 models |
 | Phase 15 new models | 23 submitted, 15 valid, 8 excluded (Finding H), 78/160 | direct scan |
-| Live jobs | `40` (12R + 28PD) | direct `squeue -u npin` 2026-03-30 21:36: gpu 5R+1PD, l40s 4R+13PD, hopper 3R+14PD |
+| Live jobs | `42` (12R + 30PD) | direct `squeue -u npin` 2026-03-30 22:50: gpu 5R+3PD, l40s 4R+13PD, hopper 3R+14PD |
 | Clean full comparable frontier | `55` models @ shared `160/160` | post-filter `all_results.csv`, non-retired only |
 
 ## What the Current Benchmark Means
@@ -63,18 +63,20 @@ If any other document disagrees with this file, prefer this file and the evidenc
 
 ## Current Execution Reality
 
-1. Live queue snapshot verified on 2026-03-30 21:36 CEST:
+1. Live queue snapshot verified on 2026-03-30 22:50 CEST:
    - `12 RUNNING` = `5 gpu + 4 l40s + 3 hopper`
-   - `28 PENDING` = `1 gpu + 13 l40s + 14 hopper`
-   - **40 total**
+   - `30 PENDING` = `3 gpu + 13 l40s + 14 hopper`
+   - **42 total**
    - Current gpu runners:
-     - `af739_t2_s2` (`5298048`)
+     - `af739_t1_s2` (`5299888`)
      - `af739_t1_e2` (`5298285`)
      - `af739_t2_e2` (`5298286`)
      - `af739_t3_e2` (`5298287`)
      - `gpu_cos2_t2` (`5298288`)
    - Current gpu pending:
-     - `af739_t1_s2` (`5299888`)
+     - `af739_t2_s2` (`5300059`)
+     - `v740_samf_lane` (`5300057`)
+     - `v740_lgts_lane` (`5300058`)
    - Current l40s runners:
      - `l2_ac_t1_e2`
      - `l2_ac_t3_ce`
@@ -90,12 +92,12 @@ If any other document disagrees with this file, prefer this file and the evidenc
    - **132/160 conditions landed** (+1 from 131, s2/e2 gap-filling)
    - 5 af739 jobs live: `4 RUNNING + 1 PENDING`
    - RUNNING:
+     - `t1_s2` as `5299888`
      - `t1_e2` as `5298285`
      - `t2_e2` as `5298286`
-     - `t2_s2` as `5298048`
      - `t3_e2` as `5298287`
    - PENDING:
-     - `t1_s2` as `5299888`
+     - `t2_s2` as `5300059`
    - Missing structure: `t1_e2=9`, `t1_s2=8`, `t2_e2=4`, `t2_s2=4`, `t3_e2=3` (28 total)
    - V739 is empirically valid: 0 NaN/Inf, 0 fallback, 100% fairness pass
    - The seed2 jobs required three repair rounds:
@@ -103,8 +105,9 @@ If any other document disagrees with this file, prefer this file and the evidenc
      - `189G` OOM (`MaxRSS ≈ 198.18G`)
      - `200G / 8 CPU` still OOMed for `t1_s2` on `5298049`
    - the current state is:
-     - `5298048 af739_t2_s2` still RUNNING at `200G / 8 CPU`
-     - `5299888 af739_t1_s2` resubmitted at `224G / 9 CPU`
+     - `5299888 af739_t1_s2` is now RUNNING at `224G / 9 CPU`
+     - `5298048 af739_t2_s2` also OOMed at `200G / 8 CPU` with `MaxRSS = 209713460K`
+     - `t2_s2` has therefore been resubmitted again as `5300059` at `224G / 9 CPU`
    - `t1_e2`, `t2_e2`, `t3_e2`, and `gpu_cos2_t2` all hit the 2-day wall again in their repaired copies on 2026-03-29 and were explicitly resubmitted as:
      - `5298285 af739_t1_e2`
      - `5298286 af739_t2_e2`
@@ -117,8 +120,8 @@ If any other document disagrees with this file, prefer this file and the evidenc
    - Removed from accel_v2 scripts → ~30% faster per job
 4. accel_v2 progress (current live reality):
    - the gpu critical path is still actively running, but it is now split as:
-     - live gpu runners: `gpu_cos2_t2`, `af739_t2_s2`, `af739_t1_e2`, `af739_t2_e2`, `af739_t3_e2`
-     - repaired gpu pending: `af739_t1_s2` as `5299888`
+     - live gpu runners: `af739_t1_s2`, `gpu_cos2_t2`, `af739_t1_e2`, `af739_t2_e2`, `af739_t3_e2`
+     - repaired gpu pending: `af739_t2_s2` as `5300059`
    - active accel_v2 runtime is now shared across `l40s` and `hopper`; hopper is no longer “queued only”
    - live `l40s` runners at this moment are:
      - `l2_ac_t1_e2`
@@ -159,6 +162,9 @@ If any other document disagrees with this file, prefer this file and the evidenc
      - `RMSE = 174074.8917`
      - `prediction_coverage_ratio = 1.0`
      - `fairness_pass = true`
+   - the next step is now queued as a wider local lane-expansion job:
+     - `5300057` `v740_samf_lane`
+     - scope: `task2_forecast / core_edgar / funding_raised_usd / h={30,60}`
    - `5294243` `v740_prop_clr` **failed before model execution** because `quick` preset does not support `h=30`
    - `5294254` `v740_prop_std` **completed successfully** as the corrected `Prophet` resubmission on `bigmem`
    - `5294255` `v740_tpfn26c` **completed successfully** as the first narrow `TabPFNClassifier` + official 2.6 checkpoint benchmark-clear probe
@@ -175,6 +181,9 @@ If any other document disagrees with this file, prefer this file and the evidenc
      - `RMSE = 205737.7476`
      - `prediction_coverage_ratio = 1.0`
      - `fairness_pass = true`
+   - the next step is now queued as a wider local lane-expansion job:
+     - `5300058` `v740_lgts_lane`
+     - scope: `task2_forecast / full / funding_raised_usd / h={30,60}`
    - the more conservative `ElasTST` count-side repair probe has now also completed:
      - `5299641` `v740_elas_i21_clr`
      - `task2_forecast / core_edgar / investors_count / h=14`
