@@ -1,6 +1,6 @@
 # Block 3 Model Benchmark Status
 
-> Last updated: 2026-03-30 08:57 CEST
+> Last updated: 2026-03-30 10:32 CEST
 > Current authority: `docs/CURRENT_SOURCE_OF_TRUTH.md`
 > Evidence: direct scan of `runs/benchmarks/block3_phase9_fair/`, `all_results.csv`, live `squeue`, `sacct`, and benchmark aggregation scripts.
 
@@ -18,7 +18,7 @@
 | post-filter distinct models | 107 | includes 21 retired AutoFit legacy lines |
 | post-filter non-retired models | 86 | `all_results.csv` minus retired AutoFit legacy lines |
 | conditions per full model | 160 | t1(72) + t2(48) + t3(40) |
-| live jobs | **39** | 9R + 30PD (gpu 6R+0PD, l40s 3R+13PD, hopper 0R+17PD) |
+| live jobs | **40** | 9R + 31PD (gpu 6R+0PD, l40s 3R+14PD, hopper 0R+17PD) |
 | clean full comparable frontier | **55** | post-filter non-retired models at shared 160/160 |
 | text embeddings | available | 5,774,931 rows, 64 PCA dims |
 
@@ -65,11 +65,11 @@ Detailed per-job progress/ETA snapshot: `docs/RUN_QUEUE_PROGRESS_CURRENT.md`
 | gpu RUNNING | 6 | `af739_t1_e2`, `af739_t1_s2`, `af739_t2_e2`, `af739_t2_s2`, `af739_t3_e2`, `gpu_cos2_t2` |
 | gpu PENDING | 0 | no current gpu backlog after the repaired e2/cos2 resubmissions started |
 | l40s RUNNING | 3 | `l2_ac_t3_ce`, `l2_ac_t1_ct`, `l2_ac_t3_fu` |
-| l40s PENDING | 13 | overflow / resume-safe accel_v2 backlog |
+| l40s PENDING | 14 | overflow / resume-safe accel_v2 backlog |
 | hopper RUNNING | 0 | no current hopper jobs are running for `npin` |
 | hopper PENDING | 17 | priority-limited overflow backlog |
 | bigmem RUNNING | 0 | no current bigmem benchmark-side work |
-| **total** | **39** | **9 RUNNING + 30 PENDING** |
+| **total** | **40** | **9 RUNNING + 31 PENDING** |
 
 ### Current Throughput Interpretation
 
@@ -82,6 +82,10 @@ Detailed per-job progress/ETA snapshot: `docs/RUN_QUEUE_PROGRESS_CURRENT.md`
   - `5294260` `v740_tpfn26r_inv` has now completed too, but the resulting audited slice fails the fairness gate and therefore is not promotable
 - `l40s` remains the best overflow partition when memory needs fit within the 15G/CPU rule and a resume-safe script exists.
 - the repaired `gpu` e2/cos2 copies are now live again, so the current queue has swung back toward the GPU critical path.
+- `l2_ac_t3_co` is now back in queue:
+  - `5269761 l2_ac_t3_co` timed out at the 2-day wall on `l40s`
+  - log evidence shows it was cleanly continuing the resumable `investors_count` section
+  - it has now been resubmitted as `5298506`
 - `LightGTS` has now been promoted from wrapper-only status to a completed local-clear entrant:
   - tiny real-data smoke is non-fallback on `task2_forecast/core_edgar/funding_raised_usd/h=30`
   - first narrow benchmark-clear attempt `5298059` completed without model execution because the compute node could not see `/tmp/LightGTS`
@@ -105,6 +109,19 @@ Detailed per-job progress/ETA snapshot: `docs/RUN_QUEUE_PROGRESS_CURRENT.md`
   - current honest state is therefore:
     - funding side = clean local-clear
     - investors/count side = executable but not yet promotable
+- `UniTS` has now joined the same local-clear lane:
+  - official repo audited locally
+  - Block 3 forecasting-only wrapper exists in `src/narrative/block3/models/units_model.py`
+  - first tiny funding smoke is non-fallback
+  - first narrow benchmark-clear `5298457` completed successfully
+  - current narrow-clear result: `MAE = 131725.2212`, `fairness_pass = true`
+- `V740-alpha` now includes a first audited `CASA + TimeEmb`-inspired mechanism pass:
+  - lightweight local-context block + static/dynamic/source fusion gate live in `src/narrative/block3/models/v740_alpha.py`
+  - audited local smokes now show:
+    - funding `h=30`: `MAE = 182493.8486`
+    - binary `h=14`: `MAE = 0.2853`
+    - funding `h=60`: `MAE = 176137.8275`
+  - these remain local-only engineering results, not canonical benchmark lines
 - `hopper` is not memory-constrained in the way older docs implied; the real limiter is priority/preemption. It should be treated as opportunistic overflow, not as the sole critical path.
 - `ModernTCN` remains the dominant throughput bottleneck for non-`e2` accel jobs.
 
@@ -157,6 +174,8 @@ Detailed per-job progress/ETA snapshot: `docs/RUN_QUEUE_PROGRESS_CURRENT.md`
     - tiny real-data smoke exists,
     - first funding narrow clear exists,
     - count-side evidence is still weak and should not yet be oversold.
+12. **`l2_ac_t3_co` was the only newly verified canonical task that should run but was absent from the queue.**
+    It has now been resubmitted as `5298506` on the same justified `l40s / 120G / 8 CPU / 1 GPU / 2d` resume-safe envelope.
 
 ## Resource Policy (Current)
 
@@ -171,4 +190,4 @@ Detailed per-job progress/ETA snapshot: `docs/RUN_QUEUE_PROGRESS_CURRENT.md`
 1. Let the six running gpu jobs (`af739_t1_e2`, `af739_t1_s2`, `af739_t2_e2`, `af739_t2_s2`, `af739_t3_e2`, `gpu_cos2_t2`) keep draining in place.
 2. Continue letting accel_v2 drain on `gpu + l40s + hopper`; do not touch the canonical benchmark harness beyond necessary resubmissions.
 3. Rebuild `docs/benchmarks/phase9_current_snapshot.*` and `docs/BLOCK3_RESULTS.md` again after the next meaningful landing increment.
-4. Use the newly completed local-only model-clear results (`SAMformer`, `Prophet`, `TabPFN 2.6`) to decide which comparator deserves the next canonical expansion step.
+4. Continue using the completed local-only model-clear results (`SAMformer`, `Prophet`, `TabPFN 2.6`, `LightGTS`, `OLinear`, `ElasTST`, `UniTS`) to decide which comparator deserves the next canonical expansion step.

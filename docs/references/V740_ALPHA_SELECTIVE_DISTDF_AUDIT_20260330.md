@@ -175,17 +175,130 @@ It should still **not** be over-read as final long-horizon evidence, because:
 - and the current question is still stability and directionality, not final
   benchmark superiority.
 
-## 5. Current honest takeaway
+## 5. Third-pass mechanism add-on: lightweight CASA + TimeEmb
 
-The second-pass objective refinement is now supported by three real local facts:
+A later same-day engineering pass then added two **strictly lightweight**
+mechanism stubs that had previously remained in the design docs only:
 
-1. same-slice funding smoke improves slightly,
-2. hard binary EDGAR smoke stays non-degenerate,
-3. longer-horizon funding smoke also stays non-degenerate.
+1. `CASALocalContextBlock`
+   - a cheap condition-aware local-context gate over the dynamic sequence
+   - intentionally **not** a paper-faithful CASA reimplementation
+   - goal: give alpha a local-context refinement path without turning the trunk
+     into a heavy attention model
+
+2. `StaticDynamicTimeFusion`
+   - a TimeEmb-inspired static/dynamic/source fusion gate
+   - combines:
+     - dynamic summary (`pooled`, `memory_feat`, `value_feat`)
+     - source/static summary (`static_feat`, `edgar_feat`, `text_feat`)
+     - condition token (`task/target/horizon/ablation`)
+   - goal: let alpha modulate source/static information more explicitly rather
+     than only concatenating it downstream
+
+These two additions keep the one-model, one-inference-path constraint intact.
+
+### 5.1 Funding rerun on the same audited `h=30` slice
+
+Artifact:
+
+- `docs/references/v740_alpha_selective_smoke_20260330/t2_core_edgar_funding_h30_v3.json`
+
+Result:
+
+- `constant_prediction = false`
+- `prediction_std = 14231.45`
+- `edgar_source_density = 1.0`
+- `MAE = 182493.85`
+- `RMSE = 364527.28`
+- `wall_time_seconds = 63.12`
+
+Relative to the second-pass result:
+
+- previous artifact:
+  - `docs/references/v740_alpha_selective_smoke_20260330/t2_core_edgar_funding_h30_v2.json`
+- previous `MAE`:
+  - `441156.71`
+
+Interpretation:
+
+- this is a **material improvement**, not just a no-regression check
+- on this audited funding slice, the new local-context + fusion logic appears
+  to matter more than the earlier objective-only refinements
+
+### 5.2 Binary rerun on the hard EDGAR audited slice
+
+Artifact:
+
+- `docs/references/v740_alpha_selective_smoke_20260330/t1_core_edgar_is_funded_h14_v3.json`
+
+Result:
+
+- `constant_prediction = false`
+- `prediction_std = 0.1060`
+- `binary_train_rate = 0.9177`
+- `binary_event_rate = 0.9348`
+- `binary_transition_rate = 0.0217`
+- `binary_temperature = 3.0`
+- `task_mod_enabled = false`
+- `binary_teacher_weight = 0.1395`
+- `binary_event_weight = 0.1790`
+- `teacher_logistic_mix = 0.2846`
+- `teacher_tree_mix = 0.7154`
+- `edgar_source_density = 0.9093`
+- `MAE = 0.2853`
+- `RMSE = 0.5011`
+- `wall_time_seconds = 70.66`
+
+Relative to the second-pass result:
+
+- previous `MAE = 0.3089`
+
+Interpretation:
+
+- binary behavior remains non-degenerate
+- and the new mechanism pass also gives a **real incremental gain** on this
+  hard audited slice
+
+### 5.3 Long-horizon rerun (`h=60`)
+
+Artifact:
+
+- `docs/references/v740_alpha_selective_smoke_20260330/t2_core_edgar_funding_h60_v3.json`
+
+Result:
+
+- `constant_prediction = false`
+- `prediction_std = 12997.48`
+- `edgar_source_density = 1.0`
+- `MAE = 176137.83`
+- `RMSE = 367851.11`
+- `wall_time_seconds = 39.09`
+
+Relative to the second-pass result:
+
+- previous `MAE = 232810.09`
+
+Interpretation:
+
+- the first `CASA + TimeEmb` pass is not only helping short-horizon funding
+  and binary slices
+- it also improves the currently audited source-covered `h=60` funding slice
+
+## 6. Current honest takeaway
+
+The current `Selective + DistDF + CASA + TimeEmb` alpha line is now supported
+by six real local facts:
+
+1. second-pass objective-only funding smoke improves slightly,
+2. second-pass hard binary EDGAR smoke stays non-degenerate,
+3. second-pass longer-horizon funding smoke stays non-degenerate,
+4. third-pass `h=30` funding smoke improves materially,
+5. third-pass binary EDGAR smoke improves incrementally,
+6. third-pass `h=60` funding smoke also improves materially.
 
 So the current honest label is:
 
-- **objective scaffold stronger than before**
+- **objective scaffold and first mechanism add-ons are both stronger than before**
 - **still pre-benchmark**
 - **worth continuing**
 - **not yet a decisive performance breakthrough**

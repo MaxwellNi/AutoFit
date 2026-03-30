@@ -415,6 +415,41 @@ def _torch_imports():
             up = nn.functional.interpolate(mixed, size=x.shape[-1], mode="linear", align_corners=False)
             return x + up * gate
 
+    class CASALocalContextBlock(nn.Module):
+        """Lightweight CASA-inspired local context attention.
+
+        This is intentionally not a paper-faithful CASA reimplementation.
+        The goal is to add a cheap local-context gating path that conditions
+        local sequence mixing on the current task/horizon regime.
+        """
+
+        def __init__(self, hidden_dim: int, cond_dim: int, kernel_size: int = 7):
+            super().__init__()
+            self.query = nn.Conv1d(hidden_dim, hidden_dim, kernel_size=1)
+            self.value = nn.Conv1d(hidden_dim, hidden_dim, kernel_size=1)
+            self.local = nn.Conv1d(
+                hidden_dim,
+                hidden_dim,
+                kernel_size=kernel_size,
+                padding=kernel_size // 2,
+                groups=max(1, hidden_dim // 8),
+            )
+            self.cond_gate = nn.Sequential(
+                nn.Linear(cond_dim, hidden_dim),
+                nn.GELU(),
+                nn.Linear(hidden_dim, hidden_dim),
+                nn.Sigmoid(),
+            )
+            self.out = nn.Conv1d(hidden_dim, hidden_dim, kernel_size=1)
+
+        def forward(self, x: torch.Tensor, cond: torch.Tensor) -> torch.Tensor:
+            q = self.query(x)
+            local = self.local(x)
+            gate = self.cond_gate(cond).unsqueeze(-1)
+            score = torch.sigmoid((q * local) / math.sqrt(max(1, x.shape[1])))
+            mixed = self.value(x) * score * gate
+            return x + self.out(mixed)
+
     class CompactTemporalMemory(nn.Module):
         def __init__(self, hidden_dim: int):
             super().__init__()
@@ -468,6 +503,49 @@ def _torch_imports():
 
         def forward(self, static_vec: torch.Tensor) -> torch.Tensor:
             return self.net(static_vec)
+
+    class StaticDynamicTimeFusion(nn.Module):
+        """TimeEmb-inspired static/dynamic/source fusion gate."""
+
+        def __init__(self, hidden_dim: int, cond_dim: int):
+            super().__init__()
+            self.dynamic_proj = nn.Sequential(
+                nn.Linear(hidden_dim * 3, hidden_dim),
+                nn.GELU(),
+                nn.Linear(hidden_dim, hidden_dim),
+            )
+            self.source_proj = nn.Sequential(
+                nn.Linear(hidden_dim * 3, hidden_dim),
+                nn.GELU(),
+                nn.Linear(hidden_dim, hidden_dim),
+            )
+            self.cond_gate = nn.Sequential(
+                nn.Linear(cond_dim, hidden_dim),
+                nn.GELU(),
+                nn.Linear(hidden_dim, hidden_dim),
+                nn.Sigmoid(),
+            )
+            self.residual = nn.Sequential(
+                nn.Linear(hidden_dim * 2, hidden_dim),
+                nn.GELU(),
+                nn.Linear(hidden_dim, hidden_dim),
+            )
+
+        def forward(
+            self,
+            pooled: torch.Tensor,
+            memory_feat: torch.Tensor,
+            value_feat: torch.Tensor,
+            static_feat: torch.Tensor,
+            edgar_feat: torch.Tensor,
+            text_feat: torch.Tensor,
+            cond: torch.Tensor,
+        ) -> torch.Tensor:
+            dynamic_feat = self.dynamic_proj(torch.cat([pooled, memory_feat, value_feat], dim=-1))
+            source_feat = self.source_proj(torch.cat([static_feat, edgar_feat, text_feat], dim=-1))
+            gate = self.cond_gate(cond)
+            fused = dynamic_feat + gate * source_feat
+            return fused + 0.1 * self.residual(torch.cat([dynamic_feat, source_feat], dim=-1))
 
     class EventMemoryEncoder(nn.Module):
         def __init__(self, hidden_dim: int):
@@ -567,6 +645,7 @@ def _torch_imports():
             self.decomp = MovingAverageDecomposition(kernel_size=5)
             self.multi_res = MultiResolutionBlock(hidden_dim, hidden_dim)
             self.patch_mixer = PatchContextMixer(hidden_dim, patch_size=8)
+            self.casa_local = CASALocalContextBlock(hidden_dim, cond_dim, kernel_size=7)
             self.memory_branch = CompactTemporalMemory(hidden_dim)
             self.value_branch = ValueBucketEncoder(num_bins=32, hidden_dim=hidden_dim)
             self.cond_encoder = ConditionEncoder(emb_dim=cond_dim, seq_len=seq_len)
@@ -575,9 +654,10 @@ def _torch_imports():
             self.fusion = InvariantVariantFusion(hidden_dim, cond_dim)
             self.task_mod = TaskSpecificModulator(hidden_dim)
             self.static_proj = StaticSummaryProjector(max(1, in_channels - 1), hidden_dim)
+            self.time_fusion = StaticDynamicTimeFusion(hidden_dim, cond_dim)
             self.backbone_norm = nn.LayerNorm(hidden_dim)
             self.combine = nn.Sequential(
-                nn.Linear(hidden_dim * 6 + cond_dim, hidden_dim * 2),
+                nn.Linear(hidden_dim * 7 + cond_dim, hidden_dim * 2),
                 nn.GELU(),
                 nn.Linear(hidden_dim * 2, hidden_dim),
             )
@@ -631,19 +711,29 @@ def _torch_imports():
                 static_summary = x.new_zeros((x.shape[0], 1))
             x = self.input_proj(x)
             trend, seasonal = self.decomp(x)
+            cond = self.cond_encoder(task_idx, target_idx, horizon_value, ablation_idx)
             fused = self.multi_res(trend + seasonal)
             fused = self.patch_mixer(fused)
+            fused = self.casa_local(fused, cond)
             memory_feat = self.memory_branch(fused)
             value_feat = self.value_branch(target_hist)
-            cond = self.cond_encoder(task_idx, target_idx, horizon_value, ablation_idx)
             fused = self.fusion(fused, cond)
             pooled = fused.mean(dim=-1)
             static_feat = self.static_proj(static_summary)
             edgar_feat = self.edgar_memory(edgar_recent, edgar_bucket, x.shape[0], x.device)
             text_feat = self.text_memory(text_recent, text_bucket, x.shape[0], x.device)
+            time_fused = self.time_fusion(
+                pooled,
+                memory_feat,
+                value_feat,
+                static_feat,
+                edgar_feat,
+                text_feat,
+                cond,
+            )
             pooled = self.backbone_norm(pooled)
             pooled = self.combine(torch.cat([
-                pooled, memory_feat, value_feat, static_feat, edgar_feat, text_feat, cond,
+                pooled, memory_feat, value_feat, static_feat, edgar_feat, text_feat, time_fused, cond,
             ], dim=-1))
             if self.task_mod_enabled:
                 pooled = self.task_mod(pooled, task_idx)

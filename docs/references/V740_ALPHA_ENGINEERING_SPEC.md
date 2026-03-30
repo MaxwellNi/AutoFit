@@ -185,6 +185,34 @@
 >
 > This is still not benchmark-ready evidence, but it is enough to justify
 > continuing with the strengthened objective scaffold rather than reverting it.
+>
+> A third same-day mechanism pass has now also landed in code:
+>
+> - a lightweight `CASALocalContextBlock` now sits after the patch/context
+>   mixer as a cheap condition-aware local-context refinement path,
+> - a `StaticDynamicTimeFusion` gate now performs a first explicit
+>   TimeEmb-inspired static/dynamic/source fusion before the final pooled
+>   combine step.
+>
+> This remains intentionally lightweight and is not a faithful reimplementation
+> of either paper family. It is an engineering-first synthesis intended to
+> answer whether these mechanism directions help on Block 3 without breaking
+> the one-model cost profile.
+>
+> The first audited results from this third pass are now recorded in
+> `docs/references/V740_ALPHA_SELECTIVE_DISTDF_AUDIT_20260330.md` and show:
+>
+> - `task2_forecast / core_edgar / funding_raised_usd / h=30`
+>   improves to `MAE = 182493.85`,
+> - `task1_outcome / core_edgar / is_funded / h=14`
+>   improves to `MAE = 0.2853`,
+> - `task2_forecast / core_edgar / funding_raised_usd / h=60`
+>   improves to `MAE = 176137.83`,
+>
+> all while remaining non-constant and source-covered on the audited EDGAR
+> slices. This is still local-only evidence, but it is the strongest direct
+> sign so far that V740 benefits from moving beyond objective-only refinement
+> and into disciplined mechanism synthesis.
 
 ## 1. Purpose
 

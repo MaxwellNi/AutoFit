@@ -1,6 +1,6 @@
 # Current Source of Truth
 
-> Last verified: 2026-03-30 08:57 CEST
+> Last verified: 2026-03-30 10:32 CEST
 > Verified by direct scans of `runs/benchmarks/block3_phase9_fair/`, live `squeue -u npin`, `sacct`, benchmark aggregation scripts.
 
 This file is the authoritative documentation entry point for the current Block 3 project state.
@@ -43,7 +43,7 @@ If any other document disagrees with this file, prefer this file and the evidenc
 | Text embedding artifacts | `AVAILABLE` | `runs/text_embeddings/embedding_metadata.json` |
 | Phase 12 text reruns | `48/48 COMPLETED` | core_text+full 91/91 models |
 | Phase 15 new models | 23 submitted, 15 valid, 8 excluded (Finding H), 78/160 | direct scan |
-| Live jobs | `39` (9R + 30PD) | direct `squeue -u npin` 2026-03-30 08:57: gpu 6R+0PD, l40s 3R+13PD, hopper 0R+17PD |
+| Live jobs | `40` (9R + 31PD) | direct `squeue -u npin` 2026-03-30 10:32: gpu 6R+0PD, l40s 3R+14PD, hopper 0R+17PD |
 | Clean full comparable frontier | `55` models @ shared `160/160` | post-filter `all_results.csv`, non-retired only |
 
 ## What the Current Benchmark Means
@@ -63,10 +63,10 @@ If any other document disagrees with this file, prefer this file and the evidenc
 
 ## Current Execution Reality
 
-1. Live queue snapshot verified on 2026-03-30 08:57 CEST:
+1. Live queue snapshot verified on 2026-03-30 10:32 CEST:
    - `9 RUNNING` = `6 gpu + 3 l40s + 0 hopper`
-   - `30 PENDING` = `0 gpu + 13 l40s + 17 hopper`
-   - **39 total**
+   - `31 PENDING` = `0 gpu + 14 l40s + 17 hopper`
+   - **40 total**
    - Current gpu runners:
      - `af739_t1_s2` (`5298049`)
      - `af739_t2_s2` (`5298048`)
@@ -114,6 +114,7 @@ If any other document disagrees with this file, prefer this file and the evidenc
      - `l2_ac_t1_ct`
      - `l2_ac_t3_fu`
    - `l2_ac_t2_s2` timed out at the 2-day wall on 2026-03-28 after advancing into the `investors_count` section and was resubmitted as `5294241`
+   - `l2_ac_t3_co` also timed out at the 2-day wall on 2026-03-30 while cleanly continuing the resumable `investors_count` section and has now been resubmitted as `5298506`
    - the earlier short-lived `l40s` burst has not fully vanished; three `l40s` overflow jobs are still live while the rest are back in the pending backlog
    - **ModernTCN remains the universal bottleneck** for non-`e2` accel paths and is still the main reason resumable copies keep timing out before the backlog clears
    - `_requeue_handler()` remains present in the script surface; current progress still depends on partition availability more than on correctness bugs
@@ -218,6 +219,42 @@ If any other document disagrees with this file, prefer this file and the evidenc
    - first narrow benchmark-clear rerun:
      - `5298296` `v740_olnr_clr`
      - completed successfully on the real harness
+13. `UniTS` is also no longer docs-only:
+   - the official repo is audited locally at:
+     - `~/.cache/block3_optional_repos/UniTS`
+     - HEAD `0e0281482864017cac8832b2651906ff5375a34e`
+   - a forecasting-only Block 3 wrapper now exists at:
+     - `src/narrative/block3/models/units_model.py`
+   - first tiny funding smoke on:
+     - `task2_forecast / core_edgar / funding_raised_usd / h=30`
+     - is **non-fallback**
+     - `fit_seconds = 14.95`
+     - `MAE = 265368.0`
+   - first narrow benchmark-clear:
+     - `5298457 v740_units_clr`
+     - `MAE = 131725.2212`
+     - `RMSE = 174105.8744`
+     - `prediction_coverage_ratio = 1.0`
+     - `fairness_pass = true`
+     - `peak_rss_gb = 47.73`
+   - this remains a local-only side path and does **not** count as a canonical benchmark landing
+14. The first `CASA + TimeEmb`-inspired V740 alpha implementation pass is now audited on real freeze-backed slices:
+   - code surface:
+     - `src/narrative/block3/models/v740_alpha.py`
+   - new lightweight mechanisms:
+     - `CASALocalContextBlock` for cheap condition-aware local context mixing
+     - `StaticDynamicTimeFusion` for TimeEmb-style static/dynamic/source fusion
+   - three audited local smokes now exist:
+     - `task2_forecast / core_edgar / funding_raised_usd / h=30`
+       - `MAE = 182493.8486`
+       - `constant_prediction = false`
+     - `task1_outcome / core_edgar / is_funded / h=14`
+       - `MAE = 0.2853`
+       - `constant_prediction = false`
+     - `task2_forecast / core_edgar / funding_raised_usd / h=60`
+       - `MAE = 176137.8275`
+       - `constant_prediction = false`
+   - relative to the immediately prior audited alpha objective line, these new smokes show real directional improvement on the same funding and binary audited slices while staying non-degenerate
      - output root:
        `runs/benchmarks/block3_phase9_localclear_20260330/olinear_funding_h30/`
      - metrics:
