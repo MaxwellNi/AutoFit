@@ -223,6 +223,18 @@ the factual answer today is:
 - **No, not fully.**
 - We have a **strong current benchmark core**.
 - We have **partial integration** for a meaningful subset.
-- We have **local-clear evidence** for `SAMformer`, `Prophet`, and `TabPFN 2.6`.
+- We now have **local-clear evidence** for:
+  - `SAMformer`
+  - `Prophet`
+  - `TabPFN 2.6`
+  - `LightGTS`
+  - `OLinear`
+  - `ElasTST`
+  - `UniTS`
+- We also now have first code-and-audit evidence for the V740 methodology line:
+  - `DistDF`
+  - `Selective Learning`
+  - first lightweight `CASA`
+  - first lightweight `TimeEmb`
 - But we do **not** yet have full integration + audited tuning + canonical
   benchmark landing for the full four-layer list the user provided.

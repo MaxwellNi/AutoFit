@@ -284,21 +284,87 @@ Interpretation:
   and binary slices
 - it also improves the currently audited source-covered `h=60` funding slice
 
+### 5.4 Fuller-source binary rerun (`full`, `h=14`)
+
+Artifact:
+
+- `docs/references/v740_alpha_selective_smoke_20260330/t1_full_is_funded_h14_v3.json`
+
+Result:
+
+- `constant_prediction = false`
+- `prediction_std = 0.0848`
+- `binary_temperature = 3.0`
+- `edgar_source_density = 0.9093`
+- `text_source_density = 1.0`
+- `MAE = 0.2758`
+- `RMSE = 0.4962`
+- `wall_time_seconds = 66.18`
+
+Relative to the matching core-edgar v3 binary audit:
+
+- core-edgar artifact:
+  - `docs/references/v740_alpha_selective_smoke_20260330/t1_core_edgar_is_funded_h14_v3.json`
+- core-edgar `MAE`:
+  - `0.2853`
+
+Interpretation:
+
+- the first fuller-source binary slice is also **directionally better** than
+  the matching `core_edgar` slice
+- this is useful because it shows the current static/dynamic/source fusion
+  logic can absorb the extra text channel without collapsing binary behavior
+
+### 5.5 Fuller-source long-horizon funding rerun (`full`, `h=60`)
+
+Artifact:
+
+- `docs/references/v740_alpha_selective_smoke_20260330/t2_full_funding_h60_v3.json`
+
+Result:
+
+- `constant_prediction = false`
+- `prediction_std = 12997.13`
+- `edgar_source_density = 1.0`
+- `text_source_density = 1.0`
+- `MAE = 176137.0694`
+- `RMSE = 367849.7154`
+- `wall_time_seconds = 38.75`
+
+Relative to the matching `core_edgar` v3 long-horizon audit:
+
+- core-edgar artifact:
+  - `docs/references/v740_alpha_selective_smoke_20260330/t2_core_edgar_funding_h60_v3.json`
+- core-edgar `MAE`:
+  - `176137.8275`
+
+Interpretation:
+
+- this is effectively a **tie** with the matching `core_edgar` slice
+- so the current honest statement is:
+  - the `full` route is now source-covered and stable on this audited long-h
+    slice,
+  - but text is **not yet** clearly the main gain driver there
+
 ## 6. Current honest takeaway
 
 The current `Selective + DistDF + CASA + TimeEmb` alpha line is now supported
-by six real local facts:
+by eight real local facts:
 
 1. second-pass objective-only funding smoke improves slightly,
 2. second-pass hard binary EDGAR smoke stays non-degenerate,
 3. second-pass longer-horizon funding smoke stays non-degenerate,
 4. third-pass `h=30` funding smoke improves materially,
 5. third-pass binary EDGAR smoke improves incrementally,
-6. third-pass `h=60` funding smoke also improves materially.
+6. third-pass `h=60` funding smoke also improves materially,
+7. third-pass fuller-source binary smoke improves slightly over `core_edgar`,
+8. third-pass fuller-source `h=60` funding smoke stays stable and tied with the
+   matching `core_edgar` slice.
 
 So the current honest label is:
 
 - **objective scaffold and first mechanism add-ons are both stronger than before**
+- **fuller-source slices now also stay stable under the same mechanism pass**
 - **still pre-benchmark**
 - **worth continuing**
 - **not yet a decisive performance breakthrough**

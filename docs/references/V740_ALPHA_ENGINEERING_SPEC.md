@@ -208,11 +208,21 @@
 >   improves to `MAE = 0.2853`,
 > - `task2_forecast / core_edgar / funding_raised_usd / h=60`
 >   improves to `MAE = 176137.83`,
+> - `task1_outcome / full / is_funded / h=14`
+>   improves further to `MAE = 0.2758`,
+> - and `task2_forecast / full / funding_raised_usd / h=60`
+>   stays effectively tied with the matching `core_edgar` slice
+>   (`MAE = 176137.07` vs `176137.83`),
 >
 > all while remaining non-constant and source-covered on the audited EDGAR
 > slices. This is still local-only evidence, but it is the strongest direct
 > sign so far that V740 benefits from moving beyond objective-only refinement
-> and into disciplined mechanism synthesis.
+> and into disciplined mechanism synthesis. The current honest reading is:
+>
+> - fuller-source binary behavior is slightly stronger than `core_edgar`,
+> - fuller-source long-h funding is now stable and source-covered,
+> - but text is not yet proven to be the primary gain source on the current
+>   audited funding slice.
 
 ## 1. Purpose
 

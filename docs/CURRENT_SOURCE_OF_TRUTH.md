@@ -1,6 +1,6 @@
 # Current Source of Truth
 
-> Last verified: 2026-03-30 10:32 CEST
+> Last verified: 2026-03-30 10:45 CEST
 > Verified by direct scans of `runs/benchmarks/block3_phase9_fair/`, live `squeue -u npin`, `sacct`, benchmark aggregation scripts.
 
 This file is the authoritative documentation entry point for the current Block 3 project state.
@@ -43,7 +43,7 @@ If any other document disagrees with this file, prefer this file and the evidenc
 | Text embedding artifacts | `AVAILABLE` | `runs/text_embeddings/embedding_metadata.json` |
 | Phase 12 text reruns | `48/48 COMPLETED` | core_text+full 91/91 models |
 | Phase 15 new models | 23 submitted, 15 valid, 8 excluded (Finding H), 78/160 | direct scan |
-| Live jobs | `40` (9R + 31PD) | direct `squeue -u npin` 2026-03-30 10:32: gpu 6R+0PD, l40s 3R+14PD, hopper 0R+17PD |
+| Live jobs | `40` (9R + 31PD) | direct `squeue -u npin` 2026-03-30 10:45: gpu 6R+0PD, l40s 3R+14PD, hopper 0R+17PD |
 | Clean full comparable frontier | `55` models @ shared `160/160` | post-filter `all_results.csv`, non-retired only |
 
 ## What the Current Benchmark Means
@@ -63,7 +63,7 @@ If any other document disagrees with this file, prefer this file and the evidenc
 
 ## Current Execution Reality
 
-1. Live queue snapshot verified on 2026-03-30 10:32 CEST:
+1. Live queue snapshot verified on 2026-03-30 10:45 CEST:
    - `9 RUNNING` = `6 gpu + 3 l40s + 0 hopper`
    - `31 PENDING` = `0 gpu + 14 l40s + 17 hopper`
    - **40 total**
@@ -255,18 +255,23 @@ If any other document disagrees with this file, prefer this file and the evidenc
        - `MAE = 176137.8275`
        - `constant_prediction = false`
    - relative to the immediately prior audited alpha objective line, these new smokes show real directional improvement on the same funding and binary audited slices while staying non-degenerate
-     - output root:
-       `runs/benchmarks/block3_phase9_localclear_20260330/olinear_funding_h30/`
-     - metrics:
-       - `MAE = 131288.8062`
-       - `RMSE = 174092.4956`
-       - `prediction_coverage_ratio = 1.0`
-       - `fairness_pass = true`
-       - `peak_rss_gb = 47.49`
-   - interpretation:
-     - `OLinear` is now past the “docs-only / preprocessing-blocked” stage
-     - it has a real audited funding narrow clear
-     - it remains a local-clear side path and does **not** yet count as a canonical benchmark entrant
+15. The same `CASA + TimeEmb` alpha line now also has first fuller-source audited evidence:
+   - `task1_outcome / full / is_funded / h=14`
+     - `MAE = 0.2758`
+     - `RMSE = 0.4962`
+     - `text_source_density = 1.0`
+     - `constant_prediction = false`
+   - `task2_forecast / full / funding_raised_usd / h=60`
+     - `MAE = 176137.0694`
+     - `RMSE = 367849.7154`
+     - `text_source_density = 1.0`
+     - `constant_prediction = false`
+   - current honest interpretation:
+     - the first fuller-source binary slice is slightly stronger than the
+       matching `core_edgar` audit,
+     - while the first fuller-source funding `h=60` slice is effectively tied
+       with `core_edgar`, so text is source-covered there but not yet proven as
+       the main gain source.
 
 ## Current Priorities
 

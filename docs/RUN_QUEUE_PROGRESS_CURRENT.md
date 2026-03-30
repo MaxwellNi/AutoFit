@@ -1,6 +1,6 @@
 # Current Queue Progress
 
-> Snapshot time: 2026-03-30 10:32 CEST
+> Snapshot time: 2026-03-30 10:45 CEST
 > Source: live `squeue -u npin,cfisch`, `squeue --start -u npin,cfisch`, and `sacct -u npin -S 2026-03-28T00:00:00`
 
 ## Summary
@@ -22,15 +22,15 @@
 
 | jobid | job | partition | elapsed | limit | progress | time_left | reason/node |
 | --- | --- | --- | --- | --- | ---: | --- | --- |
-| 5298285 | af739_t1_e2 | gpu | 9:54:07 | 2-00:00:00 | 20.6% | 1d14h5m | iris-185 |
-| 5298286 | af739_t2_e2 | gpu | 9:54:07 | 2-00:00:00 | 20.6% | 1d14h5m | iris-185 |
-| 5298287 | af739_t3_e2 | gpu | 9:54:07 | 2-00:00:00 | 20.6% | 1d14h5m | iris-186 |
-| 5298288 | gpu_cos2_t2 | gpu | 9:54:07 | 2-00:00:00 | 20.6% | 1d14h5m | iris-169 |
-| 5298048 | af739_t2_s2 | gpu | 20:14:16 | 2-00:00:00 | 42.2% | 1d3h45m | iris-186 |
-| 5298049 | af739_t1_s2 | gpu | 20:14:16 | 2-00:00:00 | 42.2% | 1d3h45m | iris-170 |
-| 5269760 | l2_ac_t3_ce | l40s | 9:03:36 | 2-00:00:00 | 18.9% | 1d14h56m | iris-198 |
-| 5279084 | l2_ac_t1_ct | l40s | 16:14:34 | 2-00:00:00 | 33.8% | 1d7h45m | iris-199 |
-| 5269764 | l2_ac_t3_fu | l40s | 18:21:54 | 2-00:00:00 | 38.3% | 1d5h38m | iris-199 |
+| 5298285 | af739_t1_e2 | gpu | 10:08:07 | 2-00:00:00 | 21.1% | 1d13h52m | iris-185 |
+| 5298286 | af739_t2_e2 | gpu | 10:08:07 | 2-00:00:00 | 21.1% | 1d13h52m | iris-185 |
+| 5298287 | af739_t3_e2 | gpu | 10:08:07 | 2-00:00:00 | 21.1% | 1d13h52m | iris-186 |
+| 5298288 | gpu_cos2_t2 | gpu | 10:08:07 | 2-00:00:00 | 21.1% | 1d13h52m | iris-169 |
+| 5298048 | af739_t2_s2 | gpu | 20:28:16 | 2-00:00:00 | 42.6% | 1d3h32m | iris-186 |
+| 5298049 | af739_t1_s2 | gpu | 20:28:16 | 2-00:00:00 | 42.6% | 1d3h32m | iris-170 |
+| 5269760 | l2_ac_t3_ce | l40s | 9:17:36 | 2-00:00:00 | 19.4% | 1d14h42m | iris-198 |
+| 5279084 | l2_ac_t1_ct | l40s | 16:28:34 | 2-00:00:00 | 34.3% | 1d7h31m | iris-199 |
+| 5269764 | l2_ac_t3_fu | l40s | 18:35:54 | 2-00:00:00 | 38.7% | 1d5h24m | iris-199 |
 
 ## Highest-Value Pending Jobs
 
@@ -106,3 +106,17 @@
    - binary `h=14` audited smoke: `MAE = 0.2853`
    - funding `h=60` audited smoke: `MAE = 176137.8275`
    - these remain local-only engineering audits and do not count as canonical benchmark results
+15. The current 2026-03-30 10:45 recheck found **no additional missing canonical jobs** beyond the already repaired `5298506 l2_ac_t3_co`.
+16. The same `CASA + TimeEmb` audit line now also has fuller-source `full` evidence:
+   - `task1_outcome / full / is_funded / h=14`:
+     - `MAE = 0.2758`
+     - `text_source_density = 1.0`
+     - still non-constant
+   - `task2_forecast / full / funding_raised_usd / h=60`:
+     - `MAE = 176137.0694`
+     - `text_source_density = 1.0`
+     - still non-constant
+   - current honest interpretation:
+     - the first `full` binary slice improves slightly over `core_edgar`
+     - the `full` funding `h=60` slice is effectively tied with `core_edgar`,
+       so text is source-covered there but not yet proven to be the main driver
