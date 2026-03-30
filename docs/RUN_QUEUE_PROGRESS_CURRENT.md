@@ -1,17 +1,17 @@
 # Current Queue Progress
 
-> Snapshot time: 2026-03-30 13:59 CEST
+> Snapshot time: 2026-03-30 14:08 CEST
 > Source: live `squeue -u npin,cfisch`, `squeue --start -u npin,cfisch`, and `sacct -u npin -S 2026-03-28T00:00:00`
 
 ## Summary
 
 | Metric | Value |
 | --- | ---: |
-| Total jobs | 40 |
+| Total jobs | 41 |
 | Running | 10 |
-| Pending | 30 |
+| Pending | 31 |
 | gpu running | 6 |
-| gpu pending | 0 |
+| gpu pending | 1 |
 | bigmem running | 0 |
 | l40s running | 4 |
 | l40s pending | 13 |
@@ -22,21 +22,22 @@
 
 | jobid | job | partition | elapsed | limit | progress | time_left | reason/node |
 | --- | --- | --- | --- | --- | ---: | --- | --- |
-| 5298285 | af739_t1_e2 | gpu | 13:23:36 | 2-00:00:00 | 27.9% | 1d10h36m | iris-185 |
-| 5298286 | af739_t2_e2 | gpu | 13:23:36 | 2-00:00:00 | 27.9% | 1d10h36m | iris-185 |
-| 5298287 | af739_t3_e2 | gpu | 13:23:36 | 2-00:00:00 | 27.9% | 1d10h36m | iris-186 |
-| 5298288 | gpu_cos2_t2 | gpu | 13:23:36 | 2-00:00:00 | 27.9% | 1d10h36m | iris-169 |
-| 5298048 | af739_t2_s2 | gpu | 23:43:45 | 2-00:00:00 | 49.5% | 1d0h16m | iris-186 |
-| 5298049 | af739_t1_s2 | gpu | 23:43:45 | 2-00:00:00 | 49.5% | 1d0h16m | iris-170 |
-| 5279085 | l2_ac_t1_e2 | l40s | 1:51:37 | 2-00:00:00 | 3.9% | 1d22h08m | iris-198 |
-| 5269760 | l2_ac_t3_ce | l40s | 12:33:05 | 2-00:00:00 | 26.1% | 1d11h26m | iris-198 |
-| 5279084 | l2_ac_t1_ct | l40s | 19:44:03 | 2-00:00:00 | 41.1% | 1d4h15m | iris-199 |
-| 5269764 | l2_ac_t3_fu | l40s | 21:51:23 | 2-00:00:00 | 45.5% | 1d2h08m | iris-199 |
+| 5298285 | af739_t1_e2 | gpu | 14:12:08 | 2-00:00:00 | 29.4% | 1d9h48m | iris-185 |
+| 5298286 | af739_t2_e2 | gpu | 14:12:08 | 2-00:00:00 | 29.4% | 1d9h48m | iris-185 |
+| 5298287 | af739_t3_e2 | gpu | 14:12:08 | 2-00:00:00 | 29.4% | 1d9h48m | iris-186 |
+| 5298288 | gpu_cos2_t2 | gpu | 14:12:08 | 2-00:00:00 | 29.4% | 1d9h48m | iris-169 |
+| 5298048 | af739_t2_s2 | gpu | 1-00:32:17 | 2-00:00:00 | 50.7% | 23h28m | iris-186 |
+| 5298049 | af739_t1_s2 | gpu | 1-00:32:17 | 2-00:00:00 | 50.7% | 23h28m | iris-170 |
+| 5279085 | l2_ac_t1_e2 | l40s | 2:40:09 | 2-00:00:00 | 5.6% | 1d21h20m | iris-198 |
+| 5269760 | l2_ac_t3_ce | l40s | 13:21:37 | 2-00:00:00 | 27.8% | 1d10h38m | iris-198 |
+| 5279084 | l2_ac_t1_ct | l40s | 20:32:35 | 2-00:00:00 | 42.8% | 1d3h27m | iris-199 |
+| 5269764 | l2_ac_t3_fu | l40s | 22:39:55 | 2-00:00:00 | 47.2% | 1d1h20m | iris-199 |
 
 ## Highest-Value Pending Jobs
 
 | jobid | job | partition | planned_start | reason | notes |
 | --- | --- | --- | --- | --- | --- |
+| 5299018 | v740_samf_fu_clr | gpu | N/A | Priority | second `SAMformer` narrow-clear probe queued after a non-fallback funding-side tiny smoke |
 | 5269749 | l2_ac_t1_co | l40s | 2026-03-31 16:07:37 | Priority | next l40s backlog item with a concrete start time |
 | 5269752 | l2_ac_t1_fu | l40s | 2026-04-01 12:07:23 | Priority | later l40s restart already scheduled |
 | 5294241 | l2_ac_t2_s2 | l40s | 2026-04-03 12:10:00 | Priority | resumed overflow copy after 2-day TIMEOUT on `5269759` |
@@ -50,7 +51,7 @@
 
 | partition | pending_jobs | notes |
 | --- | ---: | --- |
-| gpu | 0 | canonical gpu critical path is fully live again; no gpu backlog remains at this snapshot |
+| gpu | 1 | canonical gpu critical path is fully live again; the only gpu pending item is the local-only `SAMformer` funding clear |
 | l40s | 13 | accel_v2 overflow backlog; current live state has four active `l40s` runners including `l2_ac_t1_e2` |
 | hopper | 17 | pure overflow backlog only |
 
@@ -118,6 +119,17 @@
      - `MAE = 0.3296`
      - `text_source_density = 1.0`
      - still non-constant
+17. `SAMformer` is no longer a single-slice local-clear entrant:
+   - a second tiny audited funding smoke has now landed on
+     `task2_forecast / core_edgar / funding_raised_usd / h=30`
+   - result:
+     - `MAE = 265368.0`
+     - `constant_prediction = false`
+   - this was strong enough to justify a second narrow-clear job:
+     - `5299018 v740_samf_fu_clr`
+   - it is currently pending on `gpu`; this is now the most important open
+     comparator-promotion decision beyond the already settled `UniTS`
+     count-side failure
    - `task2_forecast / full / funding_raised_usd / h=60`:
      - `MAE = 176137.0694`
      - `text_source_density = 1.0`

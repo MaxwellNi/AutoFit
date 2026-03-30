@@ -16,7 +16,7 @@ The threshold here is strict:
 | Wave | Item | Current status | Best evidence today | Honest next step |
 | --- | --- | --- | --- | --- |
 | First | `TabPFNRegressor 2.6` | **narrow-clear evaluated; not promotable yet** | funding clear runs with `fairness_pass=true` but weak quality; investors clear returns `fairness_pass=false` | do not widen yet unless a new targeted count-safe setting emerges |
-| First | `SAMformer` | **narrow-clear done** | `MAE=0.3485`, `fairness_pass=true` on `task1_outcome/core_edgar/is_funded/h14` | decide whether to widen into a small local-clear matrix |
+| First | `SAMformer` | **binary narrow-clear done; funding promotion probe queued** | first audited clear: `MAE=0.3485`, `fairness_pass=true` on `task1_outcome/core_edgar/is_funded/h14`; second funding-side tiny smoke is non-fallback with `MAE=265368.0` on `task2_forecast/core_edgar/funding_raised_usd/h30`; follow-up clear `5299018` is now queued | use `5299018` to decide whether `SAMformer` deserves promotion beyond a single binary slice |
 | First | `Prophet` | **narrow-clear done; sanity baseline only** | corrected CPU-only narrow clear succeeds, but quality is weak | keep only as a reviewer-friendly sanity baseline |
 | Second | `LightGTS` | **narrow-clear done** | repaired narrow clear `MAE=201930.5506`, `fairness_pass=true` | widen local-clear matrix before any canonical promotion |
 | Second | `OLinear` | **funding narrow-clear done; count-side narrow-clear evaluated and failed fairness** | funding clear `MAE=131288.8062`, `fairness_pass=true`; count-side clear `5298523` ends with `fairness_pass=false` and constant `137.0` predictions on the audited harness slice | keep as a funding-side comparator only until count-side behavior is fixed |
@@ -55,7 +55,7 @@ The threshold here is strict:
 - `OLinear` count-side recovery beyond the current failed narrow clear
 - `ElasTST` count-side fairness
 - `UniTS` count-side recovery beyond the current failed narrow clear
-- whether `SAMformer` deserves wider benchmark promotion
+- whether `SAMformer` deserves wider benchmark promotion beyond the newly queued funding probe `5299018`
 - whether text becomes a real gain source under the new `CASA + TimeEmb` pass
 - canonical benchmark landing for any of the new local-clear entrants
 

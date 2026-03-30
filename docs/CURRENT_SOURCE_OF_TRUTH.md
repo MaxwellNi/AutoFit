@@ -1,6 +1,6 @@
 # Current Source of Truth
 
-> Last verified: 2026-03-30 13:59 CEST
+> Last verified: 2026-03-30 14:12 CEST
 > Verified by direct scans of `runs/benchmarks/block3_phase9_fair/`, live `squeue -u npin`, `sacct`, benchmark aggregation scripts.
 
 This file is the authoritative documentation entry point for the current Block 3 project state.
@@ -43,7 +43,7 @@ If any other document disagrees with this file, prefer this file and the evidenc
 | Text embedding artifacts | `AVAILABLE` | `runs/text_embeddings/embedding_metadata.json` |
 | Phase 12 text reruns | `48/48 COMPLETED` | core_text+full 91/91 models |
 | Phase 15 new models | 23 submitted, 15 valid, 8 excluded (Finding H), 78/160 | direct scan |
-| Live jobs | `40` (10R + 30PD) | direct `squeue -u npin` 2026-03-30 13:59: gpu 6R+0PD, l40s 4R+13PD, hopper 0R+17PD |
+| Live jobs | `41` (10R + 31PD) | direct `squeue -u npin` 2026-03-30 14:12: gpu 6R+1PD, l40s 4R+13PD, hopper 0R+17PD |
 | Clean full comparable frontier | `55` models @ shared `160/160` | post-filter `all_results.csv`, non-retired only |
 
 ## What the Current Benchmark Means
@@ -63,10 +63,10 @@ If any other document disagrees with this file, prefer this file and the evidenc
 
 ## Current Execution Reality
 
-1. Live queue snapshot verified on 2026-03-30 13:59 CEST:
+1. Live queue snapshot verified on 2026-03-30 14:12 CEST:
    - `10 RUNNING` = `6 gpu + 4 l40s + 0 hopper`
-   - `30 PENDING` = `0 gpu + 13 l40s + 17 hopper`
-   - **40 total**
+   - `31 PENDING` = `1 gpu + 13 l40s + 17 hopper`
+   - **41 total**
    - Current gpu runners:
      - `af739_t1_s2` (`5298049`)
      - `af739_t2_s2` (`5298048`)
@@ -136,12 +136,19 @@ If any other document disagrees with this file, prefer this file and the evidenc
    - interpretation: `V740-alpha` is still much cheaper, but it is **not yet** strong enough to replace V739 on this audited binary EDGAR slice
 9. Local-only model-clear queue state:
    - `5294242` `v740_samf_clr` **completed successfully** for a narrow `SAMformer` benchmark-clear probe
+   - a second `SAMformer` funding-side tiny smoke is now also non-fallback:
+     - `task2_forecast / core_edgar / funding_raised_usd / h=30`
+     - `MAE = 265368.0`
+     - `constant_prediction = false`
+   - that evidence was strong enough to justify a second narrow-clear probe:
+     - `5299018` `v740_samf_fu_clr`
+     - current state: `PENDING`
    - `5294243` `v740_prop_clr` **failed before model execution** because `quick` preset does not support `h=30`
    - `5294254` `v740_prop_std` **completed successfully** as the corrected `Prophet` resubmission on `bigmem`
    - `5294255` `v740_tpfn26c` **completed successfully** as the first narrow `TabPFNClassifier` + official 2.6 checkpoint benchmark-clear probe
    - `5294259` `v740_tpfn26r_fu` **completed successfully** as the first `TabPFNRegressor` funding narrow clear
    - `5294260` `v740_tpfn26r_inv` **completed successfully**, but returned `fairness_pass = false` on the audited investors-count slice and therefore must be treated as a red-flag result rather than a promotable clear
-   - all of these write to isolated output roots under `runs/benchmarks/block3_phase9_localclear_20260328/` and do **not** count as canonical benchmark results
+   - all of these write to isolated output roots under `runs/benchmarks/block3_phase9_localclear_20260328/` or `runs/benchmarks/block3_phase9_localclear_20260330/` and do **not** count as canonical benchmark results
 10. `LightGTS` local integration has now crossed both the first real-data gate and the first narrow benchmark-clear gate:
    - the vendor repo audit and import smoke had already passed
    - the first tiny real-data funding smoke at `input_size=96` produced **no training windows** and therefore fell back to a constant predictor

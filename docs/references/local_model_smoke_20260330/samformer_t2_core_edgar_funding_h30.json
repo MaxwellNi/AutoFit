@@ -1,0 +1,24 @@
+{
+  "model": "SAMformer",
+  "model_kwargs": {},
+  "task": "task2_forecast",
+  "ablation": "core_edgar",
+  "target": "funding_raised_usd",
+  "horizon": 30,
+  "train_rows": 300,
+  "val_rows": 336,
+  "test_rows": 324,
+  "train_matrix_rows": 131,
+  "test_matrix_rows": 324,
+  "feature_count": 105,
+  "fit_seconds": 12.972366571426392,
+  "predict_seconds": 0.007884502410888672,
+  "prediction_std": 300966.3444755908,
+  "constant_prediction": false,
+  "metrics": {
+    "mae": 265368.0,
+    "rmse": 528267.7931882654,
+    "smape": 53.24929818095142,
+    "mape": 30.608286039764703
+  }
+}

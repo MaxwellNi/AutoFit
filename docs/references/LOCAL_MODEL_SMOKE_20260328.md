@@ -64,6 +64,22 @@ smoke only” stage. It has a first **real benchmark-harness narrow clear** on a
 freeze-backed audited slice. It is still **not** a canonical benchmark entrant
 yet, but it now has a credible path to the next integration step.
 
+### Funding-side follow-up smoke
+
+- output artifact:
+  - `docs/references/local_model_smoke_20260330/samformer_t2_core_edgar_funding_h30.json`
+- slice:
+  - `task2_forecast / core_edgar / funding_raised_usd / h=30`
+- result:
+  - `fit_seconds = 12.97`
+  - `prediction_std = 300966.34`
+  - `constant_prediction = false`
+  - `MAE = 265368.0`
+  - `RMSE = 528267.79`
+- interpretation:
+  - this was strong enough to justify a second narrow-clear promotion probe,
+    now queued as `5299018 v740_samf_fu_clr`
+
 ## 2. Prophet
 
 ### Current factual status
