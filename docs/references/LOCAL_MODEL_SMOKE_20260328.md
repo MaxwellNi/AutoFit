@@ -693,6 +693,10 @@ So the current honest summary for `ElasTST` is:
 
 - funding side: clean narrow clear exists
 - count side: executable, but not yet promotable
+- a bounded count-side repair probe is now also queued:
+  - `5299641` `v740_elas_i21_clr`
+  - `task2_forecast / core_edgar / investors_count / h=14`
+  - `input_size = 21`, `l_patch_size = 3_6`
 
 ## 9. UniTS
 

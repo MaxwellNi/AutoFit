@@ -229,7 +229,7 @@ promotable. At the moment, the correct label is:
 - funding narrow clear: **clean**
 - investors narrow clear: **runs, but fails fairness**
 
-### 5.3 More conservative count-side smoke did not justify a rerun
+### 5.3 More conservative count-side smoke justified one bounded repair probe
 
 A second richer local-only count-side smoke was then tried with a shorter and
 more conservative context:
@@ -253,26 +253,33 @@ Interpretation:
 
 - this confirms the count-side lane remains executable under a wider range of
   shorter contexts,
-- but it does **not** provide a strong enough improvement signal over the
-  earlier `input_size=30 / l_patch_size=6_10` path to justify another harness
-  rerun immediately,
-- so the current honest action is:
-  - keep `ElasTST` in the local-clear lane,
-  - do not spend another narrow-clear slot on its count-side today
+- the local score alone still does **not** prove the count lane is fixed,
+- but after the queue recheck showed no additional missing canonical repair
+  jobs, and with the other high-value promotion probes already isolated on
+  their own GPU local-clear slots, it became reasonable to spend **one**
+  bounded count-side repair probe on this more conservative setting.
+
+That repair probe is now queued as:
+
+- `5299641` `v740_elas_i21_clr`
+- scope:
+  - `task2_forecast / core_edgar / investors_count / h=14`
+  - `input_size = 21`
+  - `l_patch_size = 3_6`
+- current state:
+  - `PENDING`
 
 ## 6. Practical next step
 
-The most defensible next step is:
+The most defensible next step is now narrower and more concrete:
 
-1. keep `ElasTST` in the local-clear lane
-2. treat the count-side fairness failure as a tuning problem, not as proof of
-   general readiness
-3. widen the local-clear matrix beyond the first funding slice
-4. only then decide whether it deserves:
-   - a broader local-clear matrix, or
-   - a more formal comparator expansion
+1. let `5299641 v740_elas_i21_clr` finish,
+2. use that result to make a real count-side stop/go decision,
+3. only if it passes fairness should `ElasTST` spend another expansion slot.
 
 The key engineering lesson from the first pass is now explicit:
 
 > `ElasTST` is not blocked by missing source code anymore. The main tuning
-> issue is now **context / patch-size compatibility on Block 3 audited slices**.
+> issue is now **context / patch-size compatibility on Block 3 audited slices**,
+> and the current decision point is no longer “can it run?” but “can the
+> count-side lane recover enough to justify wider spend?”.

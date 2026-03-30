@@ -1,6 +1,6 @@
 # Block 3 Model Benchmark Status
 
-> Last updated: 2026-03-30 10:32 CEST
+> Last updated: 2026-03-30 17:48 CEST
 > Current authority: `docs/CURRENT_SOURCE_OF_TRUTH.md`
 > Evidence: direct scan of `runs/benchmarks/block3_phase9_fair/`, `all_results.csv`, live `squeue`, `sacct`, and benchmark aggregation scripts.
 
@@ -18,7 +18,7 @@
 | post-filter distinct models | 107 | includes 21 retired AutoFit legacy lines |
 | post-filter non-retired models | 86 | `all_results.csv` minus retired AutoFit legacy lines |
 | conditions per full model | 160 | t1(72) + t2(48) + t3(40) |
-| live jobs | **40** | 9R + 31PD (gpu 6R+0PD, l40s 3R+14PD, hopper 0R+17PD) |
+| live jobs | **43** | 13R + 30PD (gpu 6R+3PD, l40s 4R+13PD, hopper 3R+14PD) |
 | clean full comparable frontier | **55** | post-filter non-retired models at shared 160/160 |
 | text embeddings | available | 5,774,931 rows, 64 PCA dims |
 
@@ -63,13 +63,13 @@ Detailed per-job progress/ETA snapshot: `docs/RUN_QUEUE_PROGRESS_CURRENT.md`
 | Slice | Value | Notes |
 | --- | ---: | --- |
 | gpu RUNNING | 6 | `af739_t1_e2`, `af739_t1_s2`, `af739_t2_e2`, `af739_t2_s2`, `af739_t3_e2`, `gpu_cos2_t2` |
-| gpu PENDING | 0 | no current gpu backlog after the repaired e2/cos2 resubmissions started |
-| l40s RUNNING | 3 | `l2_ac_t3_ce`, `l2_ac_t1_ct`, `l2_ac_t3_fu` |
+| gpu PENDING | 3 | `v740_samf_fu_clr`, `v740_lgts_fu_clr`, `v740_elas_i21_clr` |
+| l40s RUNNING | 4 | `l2_ac_t1_e2`, `l2_ac_t3_ce`, `l2_ac_t1_ct`, `l2_ac_t3_fu` |
 | l40s PENDING | 14 | overflow / resume-safe accel_v2 backlog |
-| hopper RUNNING | 0 | no current hopper jobs are running for `npin` |
-| hopper PENDING | 17 | priority-limited overflow backlog |
+| hopper RUNNING | 3 | `h2_ac_t1_e2`, `h2_ac_t1_fu`, `h2_ac_t1_s2` |
+| hopper PENDING | 14 | priority-limited overflow backlog |
 | bigmem RUNNING | 0 | no current bigmem benchmark-side work |
-| **total** | **40** | **9 RUNNING + 31 PENDING** |
+| **total** | **43** | **13 RUNNING + 30 PENDING** |
 
 ### Current Throughput Interpretation
 
@@ -81,7 +81,7 @@ Detailed per-job progress/ETA snapshot: `docs/RUN_QUEUE_PROGRESS_CURRENT.md`
   - `5294259` `v740_tpfn26r_fu` has now completed and proves the funding regressor path runs cleanly through the narrow-clear harness
   - `5294260` `v740_tpfn26r_inv` has now completed too, but the resulting audited slice fails the fairness gate and therefore is not promotable
 - `l40s` remains the best overflow partition when memory needs fit within the 15G/CPU rule and a resume-safe script exists.
-- the repaired `gpu` e2/cos2 copies are now live again, so the current queue has swung back toward the GPU critical path.
+- the repaired `gpu` e2/cos2 copies are now live again, while `hopper` has also reactivated three `t1` overflow jobs, so the queue has swung back toward active multi-partition draining rather than pure backlog.
 - `l2_ac_t3_co` is now back in queue:
   - `5269761 l2_ac_t3_co` timed out at the 2-day wall on `l40s`
   - log evidence shows it was cleanly continuing the resumable `investors_count` section
@@ -106,6 +106,10 @@ Detailed per-job progress/ETA snapshot: `docs/RUN_QUEUE_PROGRESS_CURRENT.md`
   - first narrow benchmark-clear `5298399` completed successfully
   - current narrow-clear result: `MAE = 201925.6990`, `fairness_pass = true`
   - second narrow benchmark-clear `5298437` now proves the shorter-context count slice executes through the real harness, but it returns `fairness_pass = false`
+  - a more conservative count-side repair probe is now also queued:
+    - `5299641 v740_elas_i21_clr`
+    - `task2_forecast / core_edgar / investors_count / h=14`
+    - `input_size = 21`, `l_patch_size = 3_6`
   - current honest state is therefore:
     - funding side = clean local-clear
     - investors/count side = executable but not yet promotable

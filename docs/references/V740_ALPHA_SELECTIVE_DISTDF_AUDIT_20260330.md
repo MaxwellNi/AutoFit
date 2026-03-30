@@ -378,12 +378,43 @@ Interpretation:
 - so the current honest claim is:
   - the `CASA + TimeEmb` pass now stays stable on a harder long-h fuller-source
     binary slice too,
-  - but this is not yet evidence of a decisive long-h binary breakthrough
+- but this is not yet evidence of a decisive long-h binary breakthrough
+
+### 5.7 Fuller-source short-horizon funding rerun (`full`, `h=30`)
+
+Artifact:
+
+- `docs/references/v740_alpha_selective_smoke_20260330/t2_full_funding_h30_v3.json`
+
+Result:
+
+- `constant_prediction = false`
+- `prediction_std = 14233.66`
+- `edgar_source_density = 1.0`
+- `text_source_density = 1.0`
+- `MAE = 182491.8726`
+- `RMSE = 364524.0365`
+- `wall_time_seconds = 35.2`
+
+Relative to the matching `core_edgar` v3 short-horizon funding audit:
+
+- core-edgar artifact:
+  - `docs/references/v740_alpha_selective_smoke_20260330/t2_core_edgar_funding_h30_v3.json`
+- core-edgar `MAE`:
+  - `182493.8486`
+
+Interpretation:
+
+- this fuller-source funding slice is also **stable and source-covered**
+- it is only a **tie / slight edge** over the matching `core_edgar` slice
+- so the current honest statement remains:
+  - text survives the new mechanism pass cleanly on this audited funding line,
+  - but text is **not yet** proven to be the main gain driver there
 
 ## 6. Current honest takeaway
 
 The current `Selective + DistDF + CASA + TimeEmb` alpha line is now supported
-by nine real local facts:
+by ten real local facts:
 
 1. second-pass objective-only funding smoke improves slightly,
 2. second-pass hard binary EDGAR smoke stays non-degenerate,
@@ -396,12 +427,16 @@ by nine real local facts:
    matching `core_edgar` slice,
 9. third-pass fuller-source `h=60` binary smoke stays stable and non-degenerate,
    but remains clearly harder than the matching `h=14` fuller-source slice.
+10. third-pass fuller-source `h=30` funding smoke also stays stable and
+    effectively tied with the matching `core_edgar` slice.
 
 So the current honest label is:
 
 - **objective scaffold and first mechanism add-ons are both stronger than before**
 - **fuller-source slices now also stay stable under the same mechanism pass**
 - **the same mechanism pass now also survives a harder long-h fuller-source binary slice**
+- **text is now repeatedly source-covered on fuller-source funding and binary slices**
+- **but text is still not proven to be the dominant gain source on audited funding slices**
 - **still pre-benchmark**
 - **worth continuing**
 - **not yet a decisive performance breakthrough**

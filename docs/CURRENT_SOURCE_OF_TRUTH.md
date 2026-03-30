@@ -1,6 +1,6 @@
 # Current Source of Truth
 
-> Last verified: 2026-03-30 17:15 CEST
+> Last verified: 2026-03-30 17:48 CEST
 > Verified by direct scans of `runs/benchmarks/block3_phase9_fair/`, live `squeue -u npin`, `sacct`, benchmark aggregation scripts.
 
 This file is the authoritative documentation entry point for the current Block 3 project state.
@@ -43,7 +43,7 @@ If any other document disagrees with this file, prefer this file and the evidenc
 | Text embedding artifacts | `AVAILABLE` | `runs/text_embeddings/embedding_metadata.json` |
 | Phase 12 text reruns | `48/48 COMPLETED` | core_text+full 91/91 models |
 | Phase 15 new models | 23 submitted, 15 valid, 8 excluded (Finding H), 78/160 | direct scan |
-| Live jobs | `42` (13R + 29PD) | direct `squeue -u npin` 2026-03-30 17:15: gpu 6R+2PD, l40s 4R+13PD, hopper 3R+14PD |
+| Live jobs | `43` (13R + 30PD) | direct `squeue -u npin` 2026-03-30 17:48: gpu 6R+3PD, l40s 4R+13PD, hopper 3R+14PD |
 | Clean full comparable frontier | `55` models @ shared `160/160` | post-filter `all_results.csv`, non-retired only |
 
 ## What the Current Benchmark Means
@@ -63,10 +63,10 @@ If any other document disagrees with this file, prefer this file and the evidenc
 
 ## Current Execution Reality
 
-1. Live queue snapshot verified on 2026-03-30 17:15 CEST:
+1. Live queue snapshot verified on 2026-03-30 17:48 CEST:
    - `13 RUNNING` = `6 gpu + 4 l40s + 3 hopper`
-   - `29 PENDING` = `2 gpu + 13 l40s + 14 hopper`
-   - **42 total**
+   - `30 PENDING` = `3 gpu + 13 l40s + 14 hopper`
+   - **43 total**
    - Current gpu runners:
      - `af739_t1_s2` (`5298049`)
      - `af739_t2_s2` (`5298048`)
@@ -79,7 +79,10 @@ If any other document disagrees with this file, prefer this file and the evidenc
      - `l2_ac_t3_ce`
      - `l2_ac_t1_ct`
      - `l2_ac_t3_fu`
-   - Current hopper runners: none; hopper remains pure overflow backlog right now
+   - Current hopper runners:
+     - `h2_ac_t1_e2`
+     - `h2_ac_t1_fu`
+     - `h2_ac_t1_s2`
    - **ModernTCN bottleneck** remains the dominant throughput limiter for non-e2 accel jobs
    - Partition constraints (`sinfo` verified): `gpu=756G`, `l40s=515G`, `hopper=2063754MB (~2.06TB)`; the earlier `hopper=201G` claim was a unit-reading error
 2. V739 status:
@@ -156,6 +159,12 @@ If any other document disagrees with this file, prefer this file and the evidenc
      - `constant_prediction = false`
    - this was strong enough to justify a fuller-source `LightGTS` promotion probe:
      - `5299637` `v740_lgts_fu_clr`
+     - current state: `PENDING`
+   - a more conservative `ElasTST` count-side repair probe is now also queued:
+     - `5299641` `v740_elas_i21_clr`
+     - scope:
+       - `task2_forecast / core_edgar / investors_count / h=14`
+       - `input_size = 21`, `l_patch_size = 3_6`
      - current state: `PENDING`
    - all of these write to isolated output roots under `runs/benchmarks/block3_phase9_localclear_20260328/`, `runs/benchmarks/block3_phase9_localclear_20260329/`, or `runs/benchmarks/block3_phase9_localclear_20260330/` and do **not** count as canonical benchmark results
 10. `LightGTS` local integration has now crossed both the first real-data gate and the first narrow benchmark-clear gate:
@@ -301,14 +310,20 @@ If any other document disagrees with this file, prefer this file and the evidenc
      - `RMSE = 367849.7154`
      - `text_source_density = 1.0`
      - `constant_prediction = false`
+   - `task2_forecast / full / funding_raised_usd / h=30`
+     - `MAE = 182491.8726`
+     - `RMSE = 364524.0365`
+     - `text_source_density = 1.0`
+     - `constant_prediction = false`
    - current honest interpretation:
      - the first fuller-source binary slice is slightly stronger than the
        matching `core_edgar` audit,
      - the fuller-source binary line stays non-degenerate even at `h=60`, but
         is clearly harder than the matching `h=14` slice,
      - while the fuller-source funding `h=60` slice is effectively tied with
-        `core_edgar`, so text is source-covered there but not yet proven as the
-        main gain source.
+        `core_edgar`, and the newer fuller-source funding `h=30` slice is only
+        a tie / slight edge over the matching `core_edgar` audit, so text is
+        source-covered there but not yet proven as the main gain source.
 17. `UniTS` count-side now has a real harness-side decision:
    - richer local smoke on:
      - `task2_forecast / core_edgar / investors_count / h=14`
