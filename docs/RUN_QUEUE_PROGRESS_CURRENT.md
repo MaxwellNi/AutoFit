@@ -1,20 +1,20 @@
 # Current Queue Progress
 
-> Snapshot time: 2026-03-30 11:47 CEST
+> Snapshot time: 2026-03-30 13:59 CEST
 > Source: live `squeue -u npin,cfisch`, `squeue --start -u npin,cfisch`, and `sacct -u npin -S 2026-03-28T00:00:00`
 
 ## Summary
 
 | Metric | Value |
 | --- | ---: |
-| Total jobs | 41 |
-| Running | 9 |
-| Pending | 32 |
+| Total jobs | 40 |
+| Running | 10 |
+| Pending | 30 |
 | gpu running | 6 |
-| gpu pending | 1 |
+| gpu pending | 0 |
 | bigmem running | 0 |
-| l40s running | 3 |
-| l40s pending | 14 |
+| l40s running | 4 |
+| l40s pending | 13 |
 | hopper running | 0 |
 | hopper pending | 17 |
 
@@ -22,27 +22,26 @@
 
 | jobid | job | partition | elapsed | limit | progress | time_left | reason/node |
 | --- | --- | --- | --- | --- | ---: | --- | --- |
-| 5298285 | af739_t1_e2 | gpu | 11:12:15 | 2-00:00:00 | 23.4% | 1d12h47m | iris-185 |
-| 5298286 | af739_t2_e2 | gpu | 11:12:15 | 2-00:00:00 | 23.4% | 1d12h47m | iris-185 |
-| 5298287 | af739_t3_e2 | gpu | 11:12:15 | 2-00:00:00 | 23.4% | 1d12h47m | iris-186 |
-| 5298288 | gpu_cos2_t2 | gpu | 11:12:15 | 2-00:00:00 | 23.4% | 1d12h47m | iris-169 |
-| 5298048 | af739_t2_s2 | gpu | 21:32:24 | 2-00:00:00 | 44.9% | 1d2h28m | iris-186 |
-| 5298049 | af739_t1_s2 | gpu | 21:32:24 | 2-00:00:00 | 44.9% | 1d2h28m | iris-170 |
-| 5269760 | l2_ac_t3_ce | l40s | 10:21:44 | 2-00:00:00 | 21.7% | 1d13h38m | iris-198 |
-| 5279084 | l2_ac_t1_ct | l40s | 17:32:42 | 2-00:00:00 | 36.5% | 1d6h27m | iris-199 |
-| 5269764 | l2_ac_t3_fu | l40s | 19:40:02 | 2-00:00:00 | 41.0% | 1d4h20m | iris-199 |
+| 5298285 | af739_t1_e2 | gpu | 13:23:36 | 2-00:00:00 | 27.9% | 1d10h36m | iris-185 |
+| 5298286 | af739_t2_e2 | gpu | 13:23:36 | 2-00:00:00 | 27.9% | 1d10h36m | iris-185 |
+| 5298287 | af739_t3_e2 | gpu | 13:23:36 | 2-00:00:00 | 27.9% | 1d10h36m | iris-186 |
+| 5298288 | gpu_cos2_t2 | gpu | 13:23:36 | 2-00:00:00 | 27.9% | 1d10h36m | iris-169 |
+| 5298048 | af739_t2_s2 | gpu | 23:43:45 | 2-00:00:00 | 49.5% | 1d0h16m | iris-186 |
+| 5298049 | af739_t1_s2 | gpu | 23:43:45 | 2-00:00:00 | 49.5% | 1d0h16m | iris-170 |
+| 5279085 | l2_ac_t1_e2 | l40s | 1:51:37 | 2-00:00:00 | 3.9% | 1d22h08m | iris-198 |
+| 5269760 | l2_ac_t3_ce | l40s | 12:33:05 | 2-00:00:00 | 26.1% | 1d11h26m | iris-198 |
+| 5279084 | l2_ac_t1_ct | l40s | 19:44:03 | 2-00:00:00 | 41.1% | 1d4h15m | iris-199 |
+| 5269764 | l2_ac_t3_fu | l40s | 21:51:23 | 2-00:00:00 | 45.5% | 1d2h08m | iris-199 |
 
 ## Highest-Value Pending Jobs
 
 | jobid | job | partition | planned_start | reason | notes |
 | --- | --- | --- | --- | --- | --- |
-| 5279085 | l2_ac_t1_e2 | l40s | 2026-03-31 14:20:21 | Resources | first l40s slot with a concrete restart time |
 | 5269749 | l2_ac_t1_co | l40s | 2026-03-31 16:07:37 | Priority | next l40s backlog item with a concrete start time |
-| 5269752 | l2_ac_t1_fu | l40s | 2026-04-02 14:30:00 | Priority | later l40s restart already scheduled |
-| 5294241 | l2_ac_t2_s2 | l40s | 2026-04-04 14:30:00 | Priority | resumed overflow copy after 2-day TIMEOUT on `5269759` |
+| 5269752 | l2_ac_t1_fu | l40s | 2026-04-01 12:07:23 | Priority | later l40s restart already scheduled |
+| 5294241 | l2_ac_t2_s2 | l40s | 2026-04-03 12:10:00 | Priority | resumed overflow copy after 2-day TIMEOUT on `5269759` |
 | 5269757 | l2_ac_t2_e2 | l40s | 2026-04-04 16:10:00 | Priority | next scheduled l40s e2 overflow slot |
 | 5298506 | l2_ac_t3_co | l40s | N/A | Priority | newly resubmitted after verified 2-day TIMEOUT on `5269761`; resumable continuation, not a structural failure |
-| 5298559 | v740_units_inv_clr | gpu | 2026-03-30 17:29:28 | Priority | second `UniTS` local-clear probe queued from a promising count-side richer smoke |
 | 5269765 | h2_ac_t1_ce | hopper | 2026-03-31 03:20:00 | Priority | opportunistic overflow backlog |
 | 5269771 | h2_ac_t2_ce | hopper | 2026-03-31 03:20:00 | Priority | opportunistic overflow backlog |
 | 5269780 | h2_ac_t3_e2 | hopper | 2026-03-31 03:20:00 | Priority | opportunistic overflow backlog |
@@ -51,8 +50,8 @@
 
 | partition | pending_jobs | notes |
 | --- | ---: | --- |
-| gpu | 1 | canonical gpu critical path is fully live again; the only gpu pending item is the local-only `UniTS` count-side narrow clear |
-| l40s | 14 | accel_v2 overflow backlog; current live state has three active `l40s` runners plus newly requeued `l2_ac_t3_co` |
+| gpu | 0 | canonical gpu critical path is fully live again; no gpu backlog remains at this snapshot |
+| l40s | 13 | accel_v2 overflow backlog; current live state has four active `l40s` runners including `l2_ac_t1_e2` |
 | hopper | 17 | pure overflow backlog only |
 
 ## Canonical Benchmark Recovery Notes
@@ -64,11 +63,12 @@
    - `5269761 l2_ac_t3_co` hit the 2-day wall on 2026-03-30
    - the log shows it was cleanly continuing `investors_count` work when SLURM cancelled it for time limit
    - it has now been resubmitted as `5298506`
-5. The `l40s` lane is no longer down to a single live job. At this snapshot:
+5. The `l40s` lane is now running four jobs. At this snapshot:
+   - `l2_ac_t1_e2`
    - `l2_ac_t3_ce`
    - `l2_ac_t1_ct`
    - `l2_ac_t3_fu`
-   are all RUNNING, so the current queue is `9R+32PD`.
+   are all RUNNING, so the current queue is `10R+30PD`.
 6. Local-only V740 model-clear status has advanced:
    - `5294242` `v740_samf_clr` → completed successfully
    - `5294243` `v740_prop_clr` → failed before model execution because `quick` preset cannot run `h=30`
@@ -138,16 +138,21 @@
    - current honest interpretation:
      - `OLinear` funding-side evidence remains promising,
      - but the count-side lane is not promotable right now
-18. A richer `UniTS` count-side follow-up now exists:
-   - local smoke:
+18. `5298559 v740_units_inv_clr` has now completed, and the result is decisive:
+   - scope:
      - `task2_forecast / core_edgar / investors_count / h=14`
      - `input_size = 30`, `patch_len = 5`, `stride = 5`
-     - `MAE = 0.0214`
-     - `constant_prediction = false`
-   - this was strong enough to justify a second real harness clear
-   - `5298559 v740_units_inv_clr` is now queued as the next highest-value local-only comparator probe
-19. Additional partition-specific duplicates are **not** justified right now for `5298559`:
-   - `gpu` already has a concrete same-day start time: `2026-03-30 17:29:28`
+   - audited result:
+     - `MAE = 6.1035e-05`
+     - `prediction_coverage_ratio = 1.0`
+     - `fairness_pass = false`
+   - log evidence shows a constant `136.9999` prediction on the audited slice
+   - current honest interpretation:
+     - the richer local smoke was only a screening signal,
+     - `UniTS` remains promotable on the funding lane only,
+     - its current count-side lane is not promotable
+19. Additional partition-specific duplicates were correctly **not** launched for `5298559`:
+   - `gpu` already had a concrete same-day start time and then completed quickly
    - a `hopper` test-only duplicate would start much later (`2026-05-06 03:18:22`)
    - the current `l40s` submission path for this local-only pattern is rejected under the present account/QoS context
-   - so duplicating it today would increase queue pressure without accelerating the result
+   - so not duplicating it avoided extra queue pressure without losing time

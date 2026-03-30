@@ -176,7 +176,7 @@ As of this pass, the correct label for `UniTS` is:
 That is exactly the kind of state we wanted before spending broader benchmark
 budget on it.
 
-## 7. Count-side follow-up now queued
+## 7. Count-side follow-up now completed
 
 A richer count-side local smoke has now also been run on:
 
@@ -197,13 +197,13 @@ Result:
 - `prediction_std = 34.09`
 - `constant_prediction = false`
 
-This is only a screening result, not a promotion result. The direct lesson
-from the OLinear count-side audit is now clear:
+This was only a screening result, not a promotion result. The direct lesson
+from the OLinear count-side audit was then tested on the real harness:
 
 > a stronger richer smoke is enough to justify a harness clear, but not enough
 > to claim the lane is clean.
 
-So the next real step is now queued:
+That next real step has now completed:
 
 - `5298559` `v740_units_inv_clr`
 - scope:
@@ -211,3 +211,26 @@ So the next real step is now queued:
   - `input_size = 30`
   - `patch_len = 5`
   - `stride = 5`
+
+Audited result:
+
+- `MAE = 6.1035e-05`
+- `RMSE = 6.1035e-05`
+- `prediction_coverage_ratio = 1.0`
+- `fairness_pass = false`
+- `peak_rss_gb = 48.22`
+- `train_time_seconds = 20.70`
+- `inference_time_seconds = 0.098`
+
+Direct log evidence:
+
+- the harness flags a **constant-prediction** event
+- all `71` predictions collapse to approximately `136.9999`
+
+Current honest interpretation:
+
+- `UniTS` remains a real and credible funding-side local-clear entrant,
+- but its current count-side lane is **not promotable**
+- so the next reasonable step is **not** to widen its count-side matrix, but to
+  keep it in the same decision bucket as `OLinear` / `ElasTST` on count-style
+  targets until a materially different setting exists

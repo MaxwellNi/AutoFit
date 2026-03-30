@@ -755,9 +755,21 @@ Interpretation:
 - the correct next step is a real harness-side narrow clear, not promotion
   based on this local result alone
 
-That next step has now been queued as:
+That next step has now landed as a real harness-side decision:
 
 - `5298559` `v740_units_inv_clr`
+- audited result:
+  - `MAE = 6.1035e-05`
+  - `prediction_coverage_ratio = 1.0`
+  - `fairness_pass = false`
+- direct log evidence:
+  - constant `136.9999` prediction on the audited slice
+
+So the current honest interpretation is:
+
+- the richer local smoke was useful as a **screening** signal,
+- but `UniTS` is still only promotable on the funding lane,
+- not on the current count-side lane
 
 ## 10. V740-alpha selective / DistDF scaffold v2
 

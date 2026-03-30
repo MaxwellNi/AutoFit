@@ -21,7 +21,7 @@ The threshold here is strict:
 | Second | `LightGTS` | **narrow-clear done** | repaired narrow clear `MAE=201930.5506`, `fairness_pass=true` | widen local-clear matrix before any canonical promotion |
 | Second | `OLinear` | **funding narrow-clear done; count-side narrow-clear evaluated and failed fairness** | funding clear `MAE=131288.8062`, `fairness_pass=true`; count-side clear `5298523` ends with `fairness_pass=false` and constant `137.0` predictions on the audited harness slice | keep as a funding-side comparator only until count-side behavior is fixed |
 | Third | `ElasTST` | **partially done** | funding clear succeeds; investors clear runs but `fairness_pass=false` | keep in local-clear lane and fix count-side fairness first |
-| Third | `UniTS` | **funding narrow-clear done; second count-side clear queued** | funding clear `MAE=131725.2212`, `fairness_pass=true`; richer count-side smoke now justifies `5298559 v740_units_inv_clr` | use `5298559` to decide whether UniTS deserves a broader local-clear matrix |
+| Third | `UniTS` | **funding narrow-clear done; count-side narrow-clear evaluated and failed fairness** | funding clear `MAE=131725.2212`, `fairness_pass=true`; count-side clear `5298559` ends with `fairness_pass=false` and constant `136.9999` predictions on the audited harness slice | keep `UniTS` as a funding-side comparator only until a materially different count-safe setting exists |
 
 ## 2. V740 methodology lane status
 
@@ -54,7 +54,7 @@ The threshold here is strict:
 
 - `OLinear` count-side recovery beyond the current failed narrow clear
 - `ElasTST` count-side fairness
-- `UniTS` beyond its first funding clear
+- `UniTS` count-side recovery beyond the current failed narrow clear
 - whether `SAMformer` deserves wider benchmark promotion
 - whether text becomes a real gain source under the new `CASA + TimeEmb` pass
 - canonical benchmark landing for any of the new local-clear entrants
@@ -112,7 +112,7 @@ are still concrete rather than vague:
 
 - `SAMformer` promotion decision,
 - `ElasTST` count-side fairness,
-- `UniTS` beyond its first funding clear,
+- `UniTS` count-side recovery,
 - proving whether text becomes a real gain source under `CASA + TimeEmb`,
 - and getting at least one new entrant past local-clear into a more serious
   benchmark lane.
