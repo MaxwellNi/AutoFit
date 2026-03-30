@@ -259,23 +259,27 @@ Interpretation:
   their own GPU local-clear slots, it became reasonable to spend **one**
   bounded count-side repair probe on this more conservative setting.
 
-That repair probe is now queued as:
+That repair probe has now completed as:
 
 - `5299641` `v740_elas_i21_clr`
 - scope:
   - `task2_forecast / core_edgar / investors_count / h=14`
   - `input_size = 21`
   - `l_patch_size = 3_6`
-- current state:
-  - `PENDING`
+- audited result:
+  - `MAE = 124.4985`
+  - `RMSE = 124.4985`
+  - `prediction_coverage_ratio = 1.0`
+  - `fairness_pass = false`
+  - `peak_rss_gb = 47.02`
 
 ## 6. Practical next step
 
 The most defensible next step is now narrower and more concrete:
 
-1. let `5299641 v740_elas_i21_clr` finish,
-2. use that result to make a real count-side stop/go decision,
-3. only if it passes fairness should `ElasTST` spend another expansion slot.
+1. treat the funding lane as clean enough to keep,
+2. treat the count lane as still negative after two audited clears plus the more conservative repair probe,
+3. only revisit count-side `ElasTST` if a materially different context / patch regime is available.
 
 The key engineering lesson from the first pass is now explicit:
 

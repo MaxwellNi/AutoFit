@@ -83,7 +83,11 @@ yet, but it now has a credible path to the next integration step.
     `--preset quick`, which cannot run `task2 / h=30`
   - repaired rerun:
     - `5299636 v740_samf_fu_clr`
-    - current state: `PENDING`
+    - audited result:
+      - `MAE = 130514.7325`
+      - `RMSE = 174074.8917`
+      - `prediction_coverage_ratio = 1.0`
+      - `fairness_pass = true`
 
 ## 2. Prophet
 
@@ -328,7 +332,11 @@ wider local-clear matrix or a true canonical expansion attempt?”.
   - richer source coverage does not break the wrapper
   - this was strong enough to justify a fuller-source promotion probe:
     - `5299637 v740_lgts_fu_clr`
-    - current state: `PENDING`
+    - audited result:
+      - `MAE = 201930.5506`
+      - `RMSE = 205737.7476`
+      - `prediction_coverage_ratio = 1.0`
+      - `fairness_pass = true`
 
 ## 5. OLinear
 
@@ -693,10 +701,12 @@ So the current honest summary for `ElasTST` is:
 
 - funding side: clean narrow clear exists
 - count side: executable, but not yet promotable
-- a bounded count-side repair probe is now also queued:
+- the bounded count-side repair probe has now also completed:
   - `5299641` `v740_elas_i21_clr`
   - `task2_forecast / core_edgar / investors_count / h=14`
   - `input_size = 21`, `l_patch_size = 3_6`
+  - `MAE = 124.4985`
+  - `fairness_pass = false`
 
 ## 9. UniTS
 

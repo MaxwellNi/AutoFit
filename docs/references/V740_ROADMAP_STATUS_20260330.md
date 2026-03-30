@@ -16,11 +16,11 @@ The threshold here is strict:
 | Wave | Item | Current status | Best evidence today | Honest next step |
 | --- | --- | --- | --- | --- |
 | First | `TabPFNRegressor 2.6` | **narrow-clear evaluated; not promotable yet** | funding clear runs with `fairness_pass=true` but weak quality; investors clear returns `fairness_pass=false` | do not widen yet unless a new targeted count-safe setting emerges |
-| First | `SAMformer` | **binary narrow-clear done; funding promotion probe repaired and requeued** | first audited clear: `MAE=0.3485`, `fairness_pass=true` on `task1_outcome/core_edgar/is_funded/h14`; second funding-side tiny smoke is non-fallback with `MAE=265368.0` on `task2_forecast/core_edgar/funding_raised_usd/h30`; first funding probe `5299018` failed only because `quick` preset cannot run `task2 / h=30`; repaired follow-up clear `5299636` is now queued | use `5299636` to decide whether `SAMformer` deserves promotion beyond a single binary slice |
+| First | `SAMformer` | **binary narrow-clear done; funding promotion probe completed cleanly** | first audited clear: `MAE=0.3485`, `fairness_pass=true` on `task1_outcome/core_edgar/is_funded/h14`; second funding-side tiny smoke is non-fallback with `MAE=265368.0` on `task2_forecast/core_edgar/funding_raised_usd/h30`; first funding probe `5299018` failed only because `quick` preset cannot run `task2 / h=30`; repaired follow-up clear `5299636` now lands with `MAE=130514.7325`, `fairness_pass=true` | decide whether this is enough to promote `SAMformer` beyond a single binary slice |
 | First | `Prophet` | **narrow-clear done; sanity baseline only** | corrected CPU-only narrow clear succeeds, but quality is weak | keep only as a reviewer-friendly sanity baseline |
-| Second | `LightGTS` | **narrow-clear done; fuller-source promotion probe queued** | repaired narrow clear `MAE=201930.5506`, `fairness_pass=true`; fuller-source tiny funding smoke is also non-fallback with `MAE=445368.0`, which justified a second probe `5299637` on `full / funding / h=30` | use `5299637` to decide whether `LightGTS` can move beyond a single audited funding slice |
+| Second | `LightGTS` | **narrow-clear done; fuller-source promotion probe completed cleanly** | repaired core-edgar narrow clear `MAE=201930.5506`, `fairness_pass=true`; fuller-source tiny funding smoke is also non-fallback with `MAE=445368.0`; matching promotion probe `5299637` on `full / funding / h=30` also lands cleanly with `MAE=201930.5506`, `fairness_pass=true` | decide whether `LightGTS` now deserves a wider benchmark lane rather than another local-clear-only hop |
 | Second | `OLinear` | **funding narrow-clear done; count-side narrow-clear evaluated and failed fairness** | funding clear `MAE=131288.8062`, `fairness_pass=true`; count-side clear `5298523` ends with `fairness_pass=false` and constant `137.0` predictions on the audited harness slice | keep as a funding-side comparator only until count-side behavior is fixed |
-| Third | `ElasTST` | **partially done; count-side repair probe queued** | funding clear succeeds; first investors clear runs but `fairness_pass=false`; a more conservative repair probe `5299641` is now queued from `input_size=21 / l_patch_size=3_6` | use `5299641` to decide whether count-side can recover or should remain funding-only |
+| Third | `ElasTST` | **partially done; count-side repair probe completed and stayed negative** | funding clear succeeds; first investors clear runs but `fairness_pass=false`; the more conservative repair probe `5299641` from `input_size=21 / l_patch_size=3_6` also ends with `fairness_pass=false` | keep `ElasTST` funding-only unless a materially different count-safe design appears |
 | Third | `UniTS` | **funding narrow-clear done; count-side narrow-clear evaluated and failed fairness** | funding clear `MAE=131725.2212`, `fairness_pass=true`; count-side clear `5298559` ends with `fairness_pass=false` and constant `136.9999` predictions on the audited harness slice | keep `UniTS` as a funding-side comparator only until a materially different count-safe setting exists |
 
 ## 2. V740 methodology lane status
@@ -53,10 +53,10 @@ The threshold here is strict:
 ### Not done to the extreme yet
 
 - `OLinear` count-side recovery beyond the current failed narrow clear
-- `ElasTST` count-side fairness
+- `ElasTST` count-side fairness recovery beyond the now-second failed repair probe
 - `UniTS` count-side recovery beyond the current failed narrow clear
-- whether `SAMformer` deserves wider benchmark promotion beyond the repaired funding probe `5299636`
-- whether `LightGTS` stays stable on fuller-source funding slices beyond the first `core_edgar` clear
+- whether `SAMformer` deserves wider benchmark promotion now that `5299636` has landed cleanly
+- whether `LightGTS` deserves wider benchmark promotion now that `5299637` has landed cleanly
 - whether text becomes a real gain source under the new `CASA + TimeEmb` pass
 - canonical benchmark landing for any of the new local-clear entrants
 
@@ -112,7 +112,8 @@ As of 2026-03-30, we are not at that finish line yet. The remaining named gaps
 are still concrete rather than vague:
 
 - `SAMformer` promotion decision,
-- `ElasTST` count-side repair result from `5299641`,
+- `LightGTS` promotion decision,
+- `ElasTST` count-side recovery beyond `5299641`,
 - `UniTS` count-side recovery,
 - proving whether text becomes a real gain source under `CASA + TimeEmb`,
 - and getting at least one new entrant past local-clear into a more serious

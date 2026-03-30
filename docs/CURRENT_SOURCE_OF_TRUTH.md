@@ -1,6 +1,6 @@
 # Current Source of Truth
 
-> Last verified: 2026-03-30 17:48 CEST
+> Last verified: 2026-03-30 21:36 CEST
 > Verified by direct scans of `runs/benchmarks/block3_phase9_fair/`, live `squeue -u npin`, `sacct`, benchmark aggregation scripts.
 
 This file is the authoritative documentation entry point for the current Block 3 project state.
@@ -43,7 +43,7 @@ If any other document disagrees with this file, prefer this file and the evidenc
 | Text embedding artifacts | `AVAILABLE` | `runs/text_embeddings/embedding_metadata.json` |
 | Phase 12 text reruns | `48/48 COMPLETED` | core_text+full 91/91 models |
 | Phase 15 new models | 23 submitted, 15 valid, 8 excluded (Finding H), 78/160 | direct scan |
-| Live jobs | `43` (13R + 30PD) | direct `squeue -u npin` 2026-03-30 17:48: gpu 6R+3PD, l40s 4R+13PD, hopper 3R+14PD |
+| Live jobs | `40` (12R + 28PD) | direct `squeue -u npin` 2026-03-30 21:36: gpu 5R+1PD, l40s 4R+13PD, hopper 3R+14PD |
 | Clean full comparable frontier | `55` models @ shared `160/160` | post-filter `all_results.csv`, non-retired only |
 
 ## What the Current Benchmark Means
@@ -63,17 +63,18 @@ If any other document disagrees with this file, prefer this file and the evidenc
 
 ## Current Execution Reality
 
-1. Live queue snapshot verified on 2026-03-30 17:48 CEST:
-   - `13 RUNNING` = `6 gpu + 4 l40s + 3 hopper`
-   - `30 PENDING` = `3 gpu + 13 l40s + 14 hopper`
-   - **43 total**
+1. Live queue snapshot verified on 2026-03-30 21:36 CEST:
+   - `12 RUNNING` = `5 gpu + 4 l40s + 3 hopper`
+   - `28 PENDING` = `1 gpu + 13 l40s + 14 hopper`
+   - **40 total**
    - Current gpu runners:
-     - `af739_t1_s2` (`5298049`)
      - `af739_t2_s2` (`5298048`)
      - `af739_t1_e2` (`5298285`)
      - `af739_t2_e2` (`5298286`)
      - `af739_t3_e2` (`5298287`)
      - `gpu_cos2_t2` (`5298288`)
+   - Current gpu pending:
+     - `af739_t1_s2` (`5299888`)
    - Current l40s runners:
      - `l2_ac_t1_e2`
      - `l2_ac_t3_ce`
@@ -87,19 +88,23 @@ If any other document disagrees with this file, prefer this file and the evidenc
    - Partition constraints (`sinfo` verified): `gpu=756G`, `l40s=515G`, `hopper=2063754MB (~2.06TB)`; the earlier `hopper=201G` claim was a unit-reading error
 2. V739 status:
    - **132/160 conditions landed** (+1 from 131, s2/e2 gap-filling)
-   - 5 af739 jobs live: `5 RUNNING + 0 PENDING`
+   - 5 af739 jobs live: `4 RUNNING + 1 PENDING`
    - RUNNING:
      - `t1_e2` as `5298285`
-     - `t1_s2` as `5298049`
      - `t2_e2` as `5298286`
      - `t2_s2` as `5298048`
      - `t3_e2` as `5298287`
+   - PENDING:
+     - `t1_s2` as `5299888`
    - Missing structure: `t1_e2=9`, `t1_s2=8`, `t2_e2=4`, `t2_s2=4`, `t3_e2=3` (28 total)
    - V739 is empirically valid: 0 NaN/Inf, 0 fallback, 100% fairness pass
-   - The two seed2 jobs (`t1_s2`, `t2_s2`) OOMed once at `150G` and then again at `189G` (`MaxRSS ≈ 198.18G` on the second repaired copies)
-   - they are now running as:
-     - `5298049 af739_t1_s2` at `200G / 8 CPU`
-     - `5298048 af739_t2_s2` at `200G / 8 CPU`
+   - The seed2 jobs required three repair rounds:
+     - `150G` OOM
+     - `189G` OOM (`MaxRSS ≈ 198.18G`)
+     - `200G / 8 CPU` still OOMed for `t1_s2` on `5298049`
+   - the current state is:
+     - `5298048 af739_t2_s2` still RUNNING at `200G / 8 CPU`
+     - `5299888 af739_t1_s2` resubmitted at `224G / 9 CPU`
    - `t1_e2`, `t2_e2`, `t3_e2`, and `gpu_cos2_t2` all hit the 2-day wall again in their repaired copies on 2026-03-29 and were explicitly resubmitted as:
      - `5298285 af739_t1_e2`
      - `5298286 af739_t2_e2`
@@ -111,21 +116,24 @@ If any other document disagrees with this file, prefer this file and the evidenc
    - Added to AUDIT_EXCLUDED_MODELS in aggregate_block3_results.py
    - Removed from accel_v2 scripts → ~30% faster per job
 4. accel_v2 progress (current live reality):
-   - the gpu critical path is still actively running: `gpu_cos2_t2` plus the five af739 gap-fill jobs are all on live GPU nodes
-   - active accel_v2 runtime is now concentrated on `l40s`; hopper remains queued but not live
+   - the gpu critical path is still actively running, but it is now split as:
+     - live gpu runners: `gpu_cos2_t2`, `af739_t2_s2`, `af739_t1_e2`, `af739_t2_e2`, `af739_t3_e2`
+     - repaired gpu pending: `af739_t1_s2` as `5299888`
+   - active accel_v2 runtime is now shared across `l40s` and `hopper`; hopper is no longer “queued only”
    - live `l40s` runners at this moment are:
+     - `l2_ac_t1_e2`
      - `l2_ac_t3_ce`
      - `l2_ac_t1_ct`
      - `l2_ac_t3_fu`
    - `l2_ac_t2_s2` timed out at the 2-day wall on 2026-03-28 after advancing into the `investors_count` section and was resubmitted as `5294241`
    - `l2_ac_t3_co` also timed out at the 2-day wall on 2026-03-30 while cleanly continuing the resumable `investors_count` section and has now been resubmitted as `5298506`
-   - the earlier short-lived `l40s` burst has not fully vanished; three `l40s` overflow jobs are still live while the rest are back in the pending backlog
+   - the earlier short-lived `l40s` burst has not fully vanished; four `l40s` overflow jobs are still live while the rest are back in the pending backlog
    - **ModernTCN remains the universal bottleneck** for non-`e2` accel paths and is still the main reason resumable copies keep timing out before the backlog clears
    - `_requeue_handler()` remains present in the script surface; current progress still depends on partition availability more than on correctness bugs
 5. Critical gaps:
    - s2 (core_only_seed2): `gpu_cos2_t2` remains the canonical task2 seed2 gap-fill and has now been **resubmitted again** as `5298288` after the latest 2-day timeout on `5290365`
    - e2 (core_edgar_seed2): 2778 records (+54 from 2724), accel_v2 e2 scripts producing the bulk of recent growth
-   - V739: 28 missing s2+e2 conditions, and **all 5 required gap-fill jobs are now live** (`5 RUNNING + 0 PENDING`)
+   - V739: 28 missing s2+e2 conditions, and **all 5 required gap-fill jobs are covered by the queue** (`4 RUNNING + 1 PENDING`)
 6. Text embeddings:
    - `runs/text_embeddings/text_embeddings.parquet` — 5,774,931 rows, 64 PCA dims
    - Phase 12 all 48/48 complete. core_text+full coverage: 91/91 models
@@ -137,7 +145,7 @@ If any other document disagrees with this file, prefer this file and the evidenc
      - `V739`: `MAE = 0.1623`, selected model `PatchTST`, fit time `301.3s`
      - `V740-alpha`: `MAE = 0.2016`, fit time `38.9s`
    - interpretation: `V740-alpha` is still much cheaper, but it is **not yet** strong enough to replace V739 on this audited binary EDGAR slice
-9. Local-only model-clear queue state:
+9. Local-only model-clear promotion state:
    - `5294242` `v740_samf_clr` **completed successfully** for a narrow `SAMformer` benchmark-clear probe
    - a second `SAMformer` funding-side tiny smoke is now also non-fallback:
      - `task2_forecast / core_edgar / funding_raised_usd / h=30`
@@ -145,9 +153,12 @@ If any other document disagrees with this file, prefer this file and the evidenc
      - `constant_prediction = false`
    - the first funding-side promotion probe `5299018` failed immediately due to
      a submission-surface bug (`quick` preset cannot run `task2 / h=30`)
-   - the repaired resubmission is now:
+   - the repaired funding promotion probe has now **completed successfully**:
      - `5299636` `v740_samf_fu_clr`
-     - current state: `PENDING`
+     - `MAE = 130514.7325`
+     - `RMSE = 174074.8917`
+     - `prediction_coverage_ratio = 1.0`
+     - `fairness_pass = true`
    - `5294243` `v740_prop_clr` **failed before model execution** because `quick` preset does not support `h=30`
    - `5294254` `v740_prop_std` **completed successfully** as the corrected `Prophet` resubmission on `bigmem`
    - `5294255` `v740_tpfn26c` **completed successfully** as the first narrow `TabPFNClassifier` + official 2.6 checkpoint benchmark-clear probe
@@ -157,15 +168,20 @@ If any other document disagrees with this file, prefer this file and the evidenc
      - `task2_forecast / full / funding_raised_usd / h=30`
      - `MAE = 445368.0`
      - `constant_prediction = false`
-   - this was strong enough to justify a fuller-source `LightGTS` promotion probe:
+   - the fuller-source `LightGTS` promotion probe has now **completed successfully**:
      - `5299637` `v740_lgts_fu_clr`
-     - current state: `PENDING`
-   - a more conservative `ElasTST` count-side repair probe is now also queued:
+     - `task2_forecast / full / funding_raised_usd / h=30`
+     - `MAE = 201930.5506`
+     - `RMSE = 205737.7476`
+     - `prediction_coverage_ratio = 1.0`
+     - `fairness_pass = true`
+   - the more conservative `ElasTST` count-side repair probe has now also completed:
      - `5299641` `v740_elas_i21_clr`
-     - scope:
-       - `task2_forecast / core_edgar / investors_count / h=14`
-       - `input_size = 21`, `l_patch_size = 3_6`
-     - current state: `PENDING`
+     - `task2_forecast / core_edgar / investors_count / h=14`
+     - `input_size = 21`, `l_patch_size = 3_6`
+     - `MAE = 124.4985`
+     - `prediction_coverage_ratio = 1.0`
+     - `fairness_pass = false`
    - all of these write to isolated output roots under `runs/benchmarks/block3_phase9_localclear_20260328/`, `runs/benchmarks/block3_phase9_localclear_20260329/`, or `runs/benchmarks/block3_phase9_localclear_20260330/` and do **not** count as canonical benchmark results
 10. `LightGTS` local integration has now crossed both the first real-data gate and the first narrow benchmark-clear gate:
    - the vendor repo audit and import smoke had already passed
@@ -233,11 +249,20 @@ If any other document disagrees with this file, prefer this file and the evidenc
      - `5298437 v740_elas_inv_clr`
      - `task2_forecast / core_edgar / investors_count / h=14`
      - `input_size = 30`, `l_patch_size = 6_10`
-     - `MAE = 125.1687`
-     - `RMSE = 125.1687`
-     - `fairness_pass = false`
-     - `prediction_coverage_ratio = 1.0`
-     - `peak_rss_gb = 46.24`
+   - `MAE = 125.1687`
+   - `RMSE = 125.1687`
+   - `fairness_pass = false`
+   - `prediction_coverage_ratio = 1.0`
+   - `peak_rss_gb = 46.24`
+  - the more conservative count-side repair probe has now also completed:
+    - `5299641 v740_elas_i21_clr`
+    - `task2_forecast / core_edgar / investors_count / h=14`
+    - `input_size = 21`, `l_patch_size = 3_6`
+    - `MAE = 124.4985`
+    - `RMSE = 124.4985`
+    - `fairness_pass = false`
+    - `prediction_coverage_ratio = 1.0`
+    - `peak_rss_gb = 47.02`
    - this remains a local-only side path and does **not** count as a canonical benchmark result
    - first tiny real-data investors-count smoke on:
      - `task2_forecast / core_edgar / investors_count / h=14`
@@ -348,7 +373,7 @@ If any other document disagrees with this file, prefer this file and the evidenc
 4. ~~Phase 12 text reruns to land.~~ ✅ DONE. core_text+full 91/91 models.
 5. ~~Phase 15 new TSLib models.~~ ✅ Submitted. 15 valid, 8 excluded (Finding H).
 6. ~~Cancel old v1 l40s/hopper jobs.~~ ✅ DONE. 8 old v1 jobs cancelled, freed L40S for v2.
-7. Complete V739 s2/e2 gap-fill (currently `5 RUNNING + 0 PENDING`, all 5 live).
+7. Complete V739 s2/e2 gap-fill (currently `4 RUNNING + 1 PENDING`; `af739_t1_s2` is requeued as `5299888` after another OOM).
 8. Complete e2 gap for ETSformer/LightTS/Pyraformer/Reformer (0/28 e2 each — covered by accel_v2).
 9. Complete P15 model gap-fill to 160/160 via accel_v2 (54 total jobs, auto-requeue).
 10. g2_ac_v2 auto-requeue: e2/ct complete first run; co/s2/ce/fu need 2-3 requeues, with `gpu_cos2_t2` now corrected to the trimmed 23-model list.
