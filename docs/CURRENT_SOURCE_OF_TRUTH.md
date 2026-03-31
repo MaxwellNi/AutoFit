@@ -1,6 +1,6 @@
 # Current Source of Truth
 
-> Last verified: 2026-03-30 22:50 CEST
+> Last verified: 2026-03-31 03:03 CEST
 > Verified by direct scans of `runs/benchmarks/block3_phase9_fair/`, live `squeue -u npin`, `sacct`, benchmark aggregation scripts.
 
 This file is the authoritative documentation entry point for the current Block 3 project state.
@@ -43,7 +43,7 @@ If any other document disagrees with this file, prefer this file and the evidenc
 | Text embedding artifacts | `AVAILABLE` | `runs/text_embeddings/embedding_metadata.json` |
 | Phase 12 text reruns | `48/48 COMPLETED` | core_text+full 91/91 models |
 | Phase 15 new models | 23 submitted, 15 valid, 8 excluded (Finding H), 78/160 | direct scan |
-| Live jobs | `42` (12R + 30PD) | direct `squeue -u npin` 2026-03-30 22:50: gpu 5R+3PD, l40s 4R+13PD, hopper 3R+14PD |
+| Live jobs | `42` (13R + 29PD) | direct `squeue -u npin` 2026-03-31 03:03: gpu 6R+2PD, l40s 4R+13PD, hopper 3R+14PD |
 | Clean full comparable frontier | `55` models @ shared `160/160` | post-filter `all_results.csv`, non-retired only |
 
 ## What the Current Benchmark Means
@@ -63,20 +63,21 @@ If any other document disagrees with this file, prefer this file and the evidenc
 
 ## Current Execution Reality
 
-1. Live queue snapshot verified on 2026-03-30 22:50 CEST:
-   - `12 RUNNING` = `5 gpu + 4 l40s + 3 hopper`
-   - `30 PENDING` = `3 gpu + 13 l40s + 14 hopper`
+1. Live queue snapshot verified on 2026-03-31 03:03 CEST:
+   - `13 RUNNING` = `6 gpu + 4 l40s + 3 hopper`
+   - `29 PENDING` = `2 gpu + 13 l40s + 14 hopper`
    - **42 total**
    - Current gpu runners:
+     - `af739_t2_s2` (`5300059`)
      - `af739_t1_s2` (`5299888`)
      - `af739_t1_e2` (`5298285`)
      - `af739_t2_e2` (`5298286`)
      - `af739_t3_e2` (`5298287`)
      - `gpu_cos2_t2` (`5298288`)
    - Current gpu pending:
-     - `af739_t2_s2` (`5300059`)
-     - `v740_samf_lane` (`5300057`)
-     - `v740_lgts_lane` (`5300058`)
+     - `v740_samf_bin4h` (`5300644`)
+     - `v740_lgts_f4h` (`5300645`)
+     - one older local-only promotion lane slot has now drained (`5300635` completed)
    - Current l40s runners:
      - `l2_ac_t1_e2`
      - `l2_ac_t3_ce`
@@ -90,14 +91,13 @@ If any other document disagrees with this file, prefer this file and the evidenc
    - Partition constraints (`sinfo` verified): `gpu=756G`, `l40s=515G`, `hopper=2063754MB (~2.06TB)`; the earlier `hopper=201G` claim was a unit-reading error
 2. V739 status:
    - **132/160 conditions landed** (+1 from 131, s2/e2 gap-filling)
-   - 5 af739 jobs live: `4 RUNNING + 1 PENDING`
+   - 5 af739 jobs live: `5 RUNNING + 0 PENDING`
    - RUNNING:
+     - `t2_s2` as `5300059`
      - `t1_s2` as `5299888`
      - `t1_e2` as `5298285`
      - `t2_e2` as `5298286`
      - `t3_e2` as `5298287`
-   - PENDING:
-     - `t2_s2` as `5300059`
    - Missing structure: `t1_e2=9`, `t1_s2=8`, `t2_e2=4`, `t2_s2=4`, `t3_e2=3` (28 total)
    - V739 is empirically valid: 0 NaN/Inf, 0 fallback, 100% fairness pass
    - The seed2 jobs required three repair rounds:
@@ -107,7 +107,7 @@ If any other document disagrees with this file, prefer this file and the evidenc
    - the current state is:
      - `5299888 af739_t1_s2` is now RUNNING at `224G / 9 CPU`
      - `5298048 af739_t2_s2` also OOMed at `200G / 8 CPU` with `MaxRSS = 209713460K`
-     - `t2_s2` has therefore been resubmitted again as `5300059` at `224G / 9 CPU`
+     - `5300059 af739_t2_s2` is now also RUNNING at `224G / 9 CPU`
    - `t1_e2`, `t2_e2`, `t3_e2`, and `gpu_cos2_t2` all hit the 2-day wall again in their repaired copies on 2026-03-29 and were explicitly resubmitted as:
      - `5298285 af739_t1_e2`
      - `5298286 af739_t2_e2`
@@ -121,7 +121,7 @@ If any other document disagrees with this file, prefer this file and the evidenc
 4. accel_v2 progress (current live reality):
    - the gpu critical path is still actively running, but it is now split as:
      - live gpu runners: `af739_t1_s2`, `gpu_cos2_t2`, `af739_t1_e2`, `af739_t2_e2`, `af739_t3_e2`
-     - repaired gpu pending: `af739_t2_s2` as `5300059`
+     - repaired gpu runner: `af739_t2_s2` as `5300059`
    - active accel_v2 runtime is now shared across `l40s` and `hopper`; hopper is no longer “queued only”
    - live `l40s` runners at this moment are:
      - `l2_ac_t1_e2`
@@ -136,7 +136,7 @@ If any other document disagrees with this file, prefer this file and the evidenc
 5. Critical gaps:
    - s2 (core_only_seed2): `gpu_cos2_t2` remains the canonical task2 seed2 gap-fill and has now been **resubmitted again** as `5298288` after the latest 2-day timeout on `5290365`
    - e2 (core_edgar_seed2): 2778 records (+54 from 2724), accel_v2 e2 scripts producing the bulk of recent growth
-   - V739: 28 missing s2+e2 conditions, and **all 5 required gap-fill jobs are covered by the queue** (`4 RUNNING + 1 PENDING`)
+   - V739: 28 missing s2+e2 conditions, and **all 5 required gap-fill jobs are covered by the queue** (`5 RUNNING + 0 PENDING`)
 6. Text embeddings:
    - `runs/text_embeddings/text_embeddings.parquet` — 5,774,931 rows, 64 PCA dims
    - Phase 12 all 48/48 complete. core_text+full coverage: 91/91 models
@@ -162,9 +162,16 @@ If any other document disagrees with this file, prefer this file and the evidenc
      - `RMSE = 174074.8917`
      - `prediction_coverage_ratio = 1.0`
      - `fairness_pass = true`
-   - the next step is now queued as a wider local lane-expansion job:
+   - the wider local lane-expansion follow-up has now also completed cleanly:
      - `5300057` `v740_samf_lane`
-     - scope: `task2_forecast / core_edgar / funding_raised_usd / h={30,60}`
+     - output root:
+       - `runs/benchmarks/block3_phase9_localclear_20260330/samformer_funding_h30_h60_lane/`
+     - landed audited result on the current harness surface:
+       - `task2_forecast / core_edgar / funding_raised_usd / h=30`
+       - `MAE = 130514.7325`
+       - `fairness_pass = true`
+     - current honest read:
+       - this is now a **promotion-positive** funding-side line for `SAMformer`
    - `5294243` `v740_prop_clr` **failed before model execution** because `quick` preset does not support `h=30`
    - `5294254` `v740_prop_std` **completed successfully** as the corrected `Prophet` resubmission on `bigmem`
    - `5294255` `v740_tpfn26c` **completed successfully** as the first narrow `TabPFNClassifier` + official 2.6 checkpoint benchmark-clear probe
@@ -181,9 +188,16 @@ If any other document disagrees with this file, prefer this file and the evidenc
      - `RMSE = 205737.7476`
      - `prediction_coverage_ratio = 1.0`
      - `fairness_pass = true`
-   - the next step is now queued as a wider local lane-expansion job:
+   - the wider fuller-source lane-expansion follow-up has now also completed cleanly:
      - `5300058` `v740_lgts_lane`
-     - scope: `task2_forecast / full / funding_raised_usd / h={30,60}`
+     - output root:
+       - `runs/benchmarks/block3_phase9_localclear_20260330/lightgts_full_funding_h30_h60_lane/`
+     - landed audited result on the current harness surface:
+       - `task2_forecast / full / funding_raised_usd / h=30`
+       - `MAE = 201930.5506`
+       - `fairness_pass = true`
+     - current honest read:
+       - this is now a **promotion-positive** fuller-source funding line for `LightGTS`
    - the more conservative `ElasTST` count-side repair probe has now also completed:
      - `5299641` `v740_elas_i21_clr`
      - `task2_forecast / core_edgar / investors_count / h=14`
@@ -191,7 +205,29 @@ If any other document disagrees with this file, prefer this file and the evidenc
      - `MAE = 124.4985`
      - `prediction_coverage_ratio = 1.0`
      - `fairness_pass = false`
-   - all of these write to isolated output roots under `runs/benchmarks/block3_phase9_localclear_20260328/`, `runs/benchmarks/block3_phase9_localclear_20260329/`, or `runs/benchmarks/block3_phase9_localclear_20260330/` and do **not** count as canonical benchmark results
+   - the paired V740 text-gain audit has now completed cleanly:
+     - `5300635` `v740_txtgain_bin`
+     - scope:
+       - `task1_outcome / {core_edgar, full} / is_funded / h={14,60}`
+     - current audited evidence:
+       - `core_edgar / h=14`: `MAE = 0.3281`
+       - `full / h=14`: `MAE = 0.3264`
+       - `core_edgar / h=60`: `MAE = 0.3741`
+       - `full / h=60`: `MAE = 0.3056`
+     - current honest interpretation:
+       - on these audited fuller-source binary slices, text is no longer only
+         "stable source coverage"; it is now a **real positive signal**
+       - the text-gain question is now materially tighter for the binary lane,
+         though not yet fully answered for funding/count slices
+   - two more serious promotion-lane probes have now been queued:
+     - `5300644` `v740_samf_bin4h`
+       - `task1_outcome / core_edgar / is_funded / h={1,7,14,30}`
+     - `5300645` `v740_lgts_f4h`
+       - `task2_forecast / full / funding_raised_usd / h={1,7,14,30}`
+     - purpose:
+       - move `SAMformer` and `LightGTS` beyond single-condition promotion-positive
+         probes into the first more serious multi-horizon lane expansion
+   - all of these write to isolated output roots under `runs/benchmarks/block3_phase9_localclear_20260328/`, `runs/benchmarks/block3_phase9_localclear_20260329/`, `runs/benchmarks/block3_phase9_localclear_20260330/`, or `docs/references/v740_alpha_selective_smoke_20260331/` and do **not** count as canonical benchmark results
 10. `LightGTS` local integration has now crossed both the first real-data gate and the first narrow benchmark-clear gate:
    - the vendor repo audit and import smoke had already passed
    - the first tiny real-data funding smoke at `input_size=96` produced **no training windows** and therefore fell back to a constant predictor
@@ -382,7 +418,7 @@ If any other document disagrees with this file, prefer this file and the evidenc
 4. ~~Phase 12 text reruns to land.~~ ✅ DONE. core_text+full 91/91 models.
 5. ~~Phase 15 new TSLib models.~~ ✅ Submitted. 15 valid, 8 excluded (Finding H).
 6. ~~Cancel old v1 l40s/hopper jobs.~~ ✅ DONE. 8 old v1 jobs cancelled, freed L40S for v2.
-7. Complete V739 s2/e2 gap-fill (currently `4 RUNNING + 1 PENDING`; `af739_t1_s2` is requeued as `5299888` after another OOM).
+7. Complete V739 s2/e2 gap-fill (currently `5 RUNNING + 0 PENDING`; `af739_t1_s2` and `af739_t2_s2` are now both on the repaired `224G / 9 CPU` copies).
 8. Complete e2 gap for ETSformer/LightTS/Pyraformer/Reformer (0/28 e2 each — covered by accel_v2).
 9. Complete P15 model gap-fill to 160/160 via accel_v2 (54 total jobs, auto-requeue).
 10. g2_ac_v2 auto-requeue: e2/ct complete first run; co/s2/ce/fu need 2-3 requeues, with `gpu_cos2_t2` now corrected to the trimmed 23-model list.

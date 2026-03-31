@@ -1,6 +1,6 @@
 # V739 Current Run Monitor and Landing Checklist
 
-> Last verified: 2026-03-30 22:50 CEST
+> Last verified: 2026-03-31 03:03 CEST
 > Scope: current AutoFit V739 execution reality on the canonical clean benchmark line only.
 
 ## Current Verified Reality
@@ -11,7 +11,7 @@
    - 0 NaN/Inf
    - 0 fallback
    - 100% fairness pass
-4. **Current live V739 queue state is still 5 jobs total, now `4 RUNNING + 1 PENDING`**:
+4. **Current live V739 queue state is still 5 jobs total, now `5 RUNNING + 0 PENDING`**:
    - `af739_t1_e2` → `5298285`
    - `af739_t1_s2` → `5299888`
    - `af739_t2_s2` → `5300059`
@@ -50,7 +50,7 @@
 | --- | --- | --- | --- |
 | `af739_t1_e2` | RUNNING | `gpu` | task1 `core_edgar_seed2` gap-fill, timeout-repaired again as `5298285` |
 | `af739_t1_s2` | RUNNING | `gpu` | task1 `core_only_seed2` gap-fill, now running as `5299888` at `224G / 9 CPU` |
-| `af739_t2_s2` | PENDING | `gpu` | task2 `core_only_seed2` gap-fill; `5298048` also OOMed at `200G / 8 CPU`, now resubmitted as `5300059` at `224G / 9 CPU` |
+| `af739_t2_s2` | RUNNING | `gpu` | task2 `core_only_seed2` gap-fill; `5298048` also OOMed at `200G / 8 CPU`, now repaired and running as `5300059` at `224G / 9 CPU` |
 | `af739_t2_e2` | RUNNING | `gpu` | task2 `core_edgar_seed2` gap-fill, timeout-repaired again as `5298286` |
 | `af739_t3_e2` | RUNNING | `gpu` | task3 `core_edgar_seed2` gap-fill, timeout-repaired again as `5298287` |
 
@@ -86,7 +86,7 @@
    - `5298285 af739_t1_e2`
    - `5298286 af739_t2_e2`
    - `5298287 af739_t3_e2`
-9. By the 2026-03-30 22:50 queue check, all five repaired `af739_*` jobs were still covered by the queue, and the split remains `4 RUNNING + 1 PENDING`. The current risk remains throughput plus two stubborn seed2 memory lines, not missing submissions.
+9. By the 2026-03-31 01:48 queue check, all five repaired `af739_*` jobs were not just covered by the queue; they were all actively live, and the split had improved to `5 RUNNING + 0 PENDING`. The current risk remains throughput plus two stubborn seed2 memory lines, not missing submissions.
 
 ## Operational Interpretation
 

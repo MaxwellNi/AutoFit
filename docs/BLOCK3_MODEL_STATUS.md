@@ -1,6 +1,6 @@
 # Block 3 Model Benchmark Status
 
-> Last updated: 2026-03-30 22:50 CEST
+> Last updated: 2026-03-31 03:03 CEST
 > Current authority: `docs/CURRENT_SOURCE_OF_TRUTH.md`
 > Evidence: direct scan of `runs/benchmarks/block3_phase9_fair/`, `all_results.csv`, live `squeue`, `sacct`, and benchmark aggregation scripts.
 
@@ -18,7 +18,7 @@
 | post-filter distinct models | 107 | includes 21 retired AutoFit legacy lines |
 | post-filter non-retired models | 86 | `all_results.csv` minus retired AutoFit legacy lines |
 | conditions per full model | 160 | t1(72) + t2(48) + t3(40) |
-| live jobs | **42** | 12R + 30PD (gpu 5R+3PD, l40s 4R+13PD, hopper 3R+14PD) |
+| live jobs | **42** | 13R + 29PD (gpu 6R+2PD, l40s 4R+13PD, hopper 3R+14PD) |
 | clean full comparable frontier | **55** | post-filter non-retired models at shared 160/160 |
 | text embeddings | available | 5,774,931 rows, 64 PCA dims |
 
@@ -30,7 +30,7 @@
 | landed conditions | `132/160` | co=28, ce=28, ct=28, fu=28, s2/e2 gap-filling |
 | missing total | `28` | direct `all_results.csv` diff against expected 160 cells |
 | missing breakdown | `t1_e2=9`, `t1_s2=8`, `t2_e2=4`, `t2_s2=4`, `t3_e2=3` | direct query |
-| live V739 jobs | `5` | 4 RUNNING + 1 PENDING |
+| live V739 jobs | `5` | 5 RUNNING + 0 PENDING |
 | quality | 0 NaN/Inf, 0 fallback, 100% fairness pass | direct scan |
 | mean rank (last computed stable slice) | **#13** | current valid AutoFit baseline only |
 | V734-V738 | retired | oracle test-set leakage |
@@ -41,7 +41,7 @@
 | --- | --- | --- |
 | `af739_t1_e2` | RUNNING | task1 `core_edgar_seed2` gap-fill, timeout-repaired again as `5298285` |
 | `af739_t1_s2` | RUNNING | task1 `core_only_seed2` gap-fill, now running as `5299888` at `224G / 9 CPU` |
-| `af739_t2_s2` | PENDING | task2 `core_only_seed2` gap-fill; `5298048` also OOMed at `200G / 8 CPU`, now resubmitted as `5300059` at `224G / 9 CPU` |
+| `af739_t2_s2` | RUNNING | task2 `core_only_seed2` gap-fill; `5298048` also OOMed at `200G / 8 CPU`, now repaired and running as `5300059` at `224G / 9 CPU` |
 | `af739_t2_e2` | RUNNING | task2 `core_edgar_seed2` gap-fill, timeout-repaired again as `5298286` |
 | `af739_t3_e2` | RUNNING | task3 `core_edgar_seed2` gap-fill, timeout-repaired again as `5298287` |
 
@@ -62,18 +62,18 @@ Detailed per-job progress/ETA snapshot: `docs/RUN_QUEUE_PROGRESS_CURRENT.md`
 
 | Slice | Value | Notes |
 | --- | ---: | --- |
-| gpu RUNNING | 5 | `af739_t1_s2`, `af739_t1_e2`, `af739_t2_e2`, `af739_t3_e2`, `gpu_cos2_t2` |
-| gpu PENDING | 3 | `af739_t2_s2` repaired as `5300059` plus `v740_samf_lane` and `v740_lgts_lane` local promotion jobs |
+| gpu RUNNING | 6 | `af739_t2_s2`, `af739_t1_s2`, `af739_t1_e2`, `af739_t2_e2`, `af739_t3_e2`, `gpu_cos2_t2` |
+| gpu PENDING | 2 | `v740_samf_bin4h`, `v740_lgts_f4h` |
 | l40s RUNNING | 4 | `l2_ac_t1_e2`, `l2_ac_t3_ce`, `l2_ac_t1_ct`, `l2_ac_t3_fu` |
 | l40s PENDING | 13 | overflow / resume-safe accel_v2 backlog |
 | hopper RUNNING | 3 | `h2_ac_t1_e2`, `h2_ac_t1_fu`, `h2_ac_t1_s2` |
 | hopper PENDING | 14 | priority-limited overflow backlog |
 | bigmem RUNNING | 0 | no current bigmem benchmark-side work |
-| **total** | **42** | **12 RUNNING + 30 PENDING** |
+| **total** | **40** | **13 RUNNING + 27 PENDING** |
 
 ### Current Throughput Interpretation
 
-- `gpu` is again the live critical path: `af739_t1_s2`, three V739 `e2` jobs, and `gpu_cos2_t2` are currently running; `af739_t2_s2` has now been repaired again into the queue as `5300059`.
+- `gpu` is again the live critical path: both heavy V739 seed2 jobs (`af739_t1_s2`, `af739_t2_s2`), three V739 `e2` jobs, and `gpu_cos2_t2` are currently running together.
 - local-only model-clear surface has advanced:
   - `5294242` `v740_samf_clr` completed successfully
   - `5294254` `v740_prop_std` completed successfully on `bigmem`
@@ -188,17 +188,38 @@ Detailed per-job progress/ETA snapshot: `docs/RUN_QUEUE_PROGRESS_CURRENT.md`
    - repaired again as:
      - `5300059 af739_t2_s2`
      - `gpu / 224G / 9 CPU / 2d`
+   - this repaired copy is now **RUNNING**
 13. **`SAMformer` and `LightGTS` are no longer waiting at the single-probe stage.**
-   - `5300057 v740_samf_lane` queues a wider `funding_raised_usd @ {30,60}` lane for `SAMformer`
-   - `5300058 v740_lgts_lane` queues the matching `full / funding_raised_usd @ {30,60}` lane for `LightGTS`
-12. **`OLinear` is no longer blocked by “missing artifact generation” as an abstract issue.**
+   - `5300057 v740_samf_lane` has now completed cleanly and gives a promotion-positive funding-side result for `SAMformer`
+   - `5300058 v740_lgts_lane` has now completed cleanly and gives a promotion-positive fuller-source funding-side result for `LightGTS`
+14. **The dedicated V740 text-gain audit lane has now completed cleanly.**
+   - `5300635 v740_txtgain_bin`
+   - scope:
+     - `task1_outcome / {core_edgar, full} / is_funded / h={14,60}`
+   - result:
+     - `full` beats `core_edgar` on both audited binary horizons
+     - `h=14`: `0.3264 < 0.3281`
+     - `h=60`: `0.3056 < 0.3741`
+   - current honest interpretation:
+     - on these audited fuller-source binary slices, text is now a **real positive signal**
+     - the remaining open text-gain question is narrower and now mainly concerns
+       funding/count behavior rather than binary viability
+15. **Two more serious promotion-lane probes are now queued.**
+   - `5300644 v740_samf_bin4h`
+     - `task1_outcome / core_edgar / is_funded / h={1,7,14,30}`
+   - `5300645 v740_lgts_f4h`
+     - `task2_forecast / full / funding_raised_usd / h={1,7,14,30}`
+   - purpose:
+     - move both entrants beyond single-condition promotion-positive evidence
+       into a first multi-horizon lane expansion
+16. **`OLinear` is no longer blocked by “missing artifact generation” as an abstract issue.**
     The current state is:
     - vendor repo audited locally,
     - Block 3 wrapper implemented,
     - tiny real-data smoke exists,
     - first funding narrow clear exists,
     - count-side evidence is still weak and should not yet be oversold.
-13. **`l2_ac_t3_co` was the only newly verified canonical task that should run but was absent from the queue.**
+17. **`l2_ac_t3_co` was the only newly verified canonical task that should run but was absent from the queue.**
     It has now been resubmitted as `5298506` on the same justified `l40s / 120G / 8 CPU / 1 GPU / 2d` resume-safe envelope.
 
 ## Resource Policy (Current)
@@ -211,7 +232,8 @@ Detailed per-job progress/ETA snapshot: `docs/RUN_QUEUE_PROGRESS_CURRENT.md`
 
 ## Immediate Next Actions
 
-1. Let the five running gpu jobs (`af739_t1_s2`, `af739_t1_e2`, `af739_t2_e2`, `af739_t3_e2`, `gpu_cos2_t2`) keep draining in place, and watch `5300059 af739_t2_s2` until it actually starts.
+1. Let the six running gpu jobs (`af739_t2_s2`, `af739_t1_s2`, `af739_t1_e2`, `af739_t2_e2`, `af739_t3_e2`, `gpu_cos2_t2`) keep draining in place.
 2. Continue letting accel_v2 drain on `gpu + l40s + hopper`; do not touch the canonical benchmark harness beyond necessary resubmissions.
 3. Rebuild `docs/benchmarks/phase9_current_snapshot.*` and `docs/BLOCK3_RESULTS.md` again after the next meaningful landing increment.
-4. Continue using the completed local-only model-clear results (`SAMformer`, `Prophet`, `TabPFN 2.6`, `LightGTS`, `OLinear`, `ElasTST`, `UniTS`) plus the new queued lane jobs (`5300057`, `5300058`) to decide which comparator deserves the next canonical expansion step.
+4. Continue using the completed local-only model-clear results (`SAMformer`, `Prophet`, `TabPFN 2.6`, `LightGTS`, `OLinear`, `ElasTST`, `UniTS`) plus the now-completed wider lane jobs (`5300057`, `5300058`) to decide which comparator deserves the next canonical expansion step.
+5. Read out `5300644 v740_samf_bin4h` and `5300645 v740_lgts_f4h` next to decide whether either entrant is ready to move beyond the current local-clear lane.

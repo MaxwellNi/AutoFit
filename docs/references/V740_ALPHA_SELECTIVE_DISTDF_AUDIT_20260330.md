@@ -175,6 +175,56 @@ It should still **not** be over-read as final long-horizon evidence, because:
 - and the current question is still stability and directionality, not final
   benchmark superiority.
 
+## 6. Paired binary text-gain audit (`2026-03-31`)
+
+Artifact set:
+
+- `docs/references/v740_alpha_selective_smoke_20260331/t1_core_edgar_is_funded_h14_v4.json`
+- `docs/references/v740_alpha_selective_smoke_20260331/t1_full_is_funded_h14_v4.json`
+- `docs/references/v740_alpha_selective_smoke_20260331/t1_core_edgar_is_funded_h60_v4.json`
+- `docs/references/v740_alpha_selective_smoke_20260331/t1_full_is_funded_h60_v4.json`
+
+Scope:
+
+- task: `task1_outcome`
+- target: `is_funded`
+- paired ablations: `core_edgar` vs `full`
+- paired horizons: `14` and `60`
+- same local-only audited job: `5300635 v740_txtgain_bin`
+
+Observed results:
+
+- `core_edgar / h=14`
+  - `MAE = 0.3281`
+  - `RMSE = 0.5372`
+  - `edgar_source_density = 0.8538`
+  - `text_source_density = 0.0`
+- `full / h=14`
+  - `MAE = 0.3264`
+  - `RMSE = 0.5363`
+  - `edgar_source_density = 0.8538`
+  - `text_source_density = 1.0`
+- `core_edgar / h=60`
+  - `MAE = 0.3741`
+  - `RMSE = 0.5709`
+  - `edgar_source_density = 0.8538`
+  - `text_source_density = 0.0`
+- `full / h=60`
+  - `MAE = 0.3056`
+  - `RMSE = 0.5110`
+  - `edgar_source_density = 0.8538`
+  - `text_source_density = 1.0`
+
+Interpretation:
+
+- on these audited fuller-source binary slices, the `CASA + TimeEmb` pass has
+  now moved text beyond merely "stable source coverage"
+- the evidence is strongest at the harder `h=60` binary slice, where `full`
+  materially outperforms `core_edgar`
+- this still does **not** prove that text is already the main driver on the
+  funding/count lanes, but it does meaningfully close the binary-side version
+  of that question
+
 ## 5. Third-pass mechanism add-on: lightweight CASA + TimeEmb
 
 A later same-day engineering pass then added two **strictly lightweight**

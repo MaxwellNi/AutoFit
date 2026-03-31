@@ -1,6 +1,6 @@
 # Block 3 Benchmark Results
 
-**Generated**: 2026-03-30 22:46:26
+**Generated**: 2026-03-31 02:02:52
 **Benchmark Dir**: `block3_phase9_fair`
 **Total Records (post-filter)**: 12300
 
@@ -726,4 +726,4 @@ Shows which task/category/ablation combinations have results.
 | task3_risk_adjust | tslib_sota | full | 21 |
 
 ---
-_Last updated: 2026-03-30 22:46:26_
+_Last updated: 2026-03-31 02:02:53_

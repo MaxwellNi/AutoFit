@@ -1,6 +1,6 @@
 # Current Queue Progress
 
-> Snapshot time: 2026-03-30 22:50 CEST
+> Snapshot time: 2026-03-31 03:03 CEST
 > Source: live `squeue -u npin,cfisch`, `squeue --start -u npin,cfisch`, and `sacct -u npin -S 2026-03-28T00:00:00`
 
 ## Summary
@@ -8,10 +8,10 @@
 | Metric | Value |
 | --- | ---: |
 | Total jobs | 42 |
-| Running | 12 |
-| Pending | 30 |
-| gpu running | 5 |
-| gpu pending | 3 |
+| Running | 13 |
+| Pending | 29 |
+| gpu running | 6 |
+| gpu pending | 2 |
 | bigmem running | 0 |
 | l40s running | 4 |
 | l40s pending | 13 |
@@ -22,26 +22,26 @@
 
 | jobid | job | partition | elapsed | limit | progress | time_left | reason/node |
 | --- | --- | --- | --- | --- | ---: | --- | --- |
-| 5299888 | af739_t1_s2 | gpu | 1:01:01 | 2-00:00:00 | 2.1% | 1d22h59m | iris-179 |
-| 5298285 | af739_t1_e2 | gpu | 22:15:31 | 2-00:00:00 | 46.4% | 1d1h44m | iris-185 |
-| 5298286 | af739_t2_e2 | gpu | 22:15:31 | 2-00:00:00 | 46.4% | 1d1h44m | iris-185 |
-| 5298287 | af739_t3_e2 | gpu | 22:15:31 | 2-00:00:00 | 46.4% | 1d1h44m | iris-186 |
-| 5298288 | gpu_cos2_t2 | gpu | 22:15:31 | 2-00:00:00 | 46.4% | 1d1h44m | iris-169 |
-| 5269768 | h2_ac_t1_e2 | hopper | 7:31:15 | 2-00:00:00 | 15.7% | 1d16h29m | iris-197 |
-| 5269769 | h2_ac_t1_fu | hopper | 7:31:15 | 2-00:00:00 | 15.7% | 1d16h29m | iris-197 |
-| 5269770 | h2_ac_t1_s2 | hopper | 7:28:15 | 2-00:00:00 | 15.6% | 1d16h32m | iris-197 |
-| 5279085 | l2_ac_t1_e2 | l40s | 10:43:32 | 2-00:00:00 | 22.4% | 1d13h16m | iris-198 |
-| 5269760 | l2_ac_t3_ce | l40s | 21:25:00 | 2-00:00:00 | 44.6% | 1d2h35m | iris-198 |
-| 5279084 | l2_ac_t1_ct | l40s | 1-04:35:58 | 2-00:00:00 | 59.6% | 19h24m | iris-199 |
-| 5269764 | l2_ac_t3_fu | l40s | 1-06:43:18 | 2-00:00:00 | 64.0% | 17h17m | iris-199 |
+| 5300059 | af739_t2_s2 | gpu | 2:51:45 | 2-00:00:00 | 5.9% | 1d21h08m | iris-186 |
+| 5299888 | af739_t1_s2 | gpu | 4:12:46 | 2-00:00:00 | 8.8% | 1d19h47m | iris-179 |
+| 5298285 | af739_t1_e2 | gpu | 1-01:27:16 | 2-00:00:00 | 53.0% | 22h32m | iris-185 |
+| 5298286 | af739_t2_e2 | gpu | 1-01:27:16 | 2-00:00:00 | 53.0% | 22h32m | iris-185 |
+| 5298287 | af739_t3_e2 | gpu | 1-01:27:16 | 2-00:00:00 | 53.0% | 22h32m | iris-186 |
+| 5298288 | gpu_cos2_t2 | gpu | 1-01:27:16 | 2-00:00:00 | 53.0% | 22h32m | iris-169 |
+| 5269768 | h2_ac_t1_e2 | hopper | 10:43:00 | 2-00:00:00 | 22.4% | 1d13h16m | iris-197 |
+| 5269769 | h2_ac_t1_fu | hopper | 10:43:00 | 2-00:00:00 | 22.4% | 1d13h16m | iris-197 |
+| 5269770 | h2_ac_t1_s2 | hopper | 10:40:00 | 2-00:00:00 | 22.2% | 1d13h19m | iris-197 |
+| 5279085 | l2_ac_t1_e2 | l40s | 13:55:17 | 2-00:00:00 | 29.1% | 1d10h04m | iris-198 |
+| 5269760 | l2_ac_t3_ce | l40s | 1-00:36:45 | 2-00:00:00 | 51.2% | 23h23m | iris-198 |
+| 5279084 | l2_ac_t1_ct | l40s | 1-07:47:43 | 2-00:00:00 | 66.2% | 16h12m | iris-199 |
+| 5269764 | l2_ac_t3_fu | l40s | 1-09:55:03 | 2-00:00:00 | 70.6% | 14h04m | iris-199 |
 
 ## Highest-Value Pending Jobs
 
 | jobid | job | partition | planned_start | reason | notes |
 | --- | --- | --- | --- | --- | --- |
-| 5300059 | af739_t2_s2 | gpu | N/A | Priority | sibling seed2 line also OOMed at `200G / 8 CPU` (`MaxRSS=209713460K`); now repaired to `224G / 9 CPU` |
-| 5300057 | v740_samf_lane | gpu | N/A | Priority | wider `SAMformer` funding lane at `h={30,60}` to decide promotion beyond single-slice local-clear |
-| 5300058 | v740_lgts_lane | gpu | N/A | Priority | wider `LightGTS` fuller-source funding lane at `h={30,60}` to decide promotion beyond single-slice local-clear |
+| 5300644 | v740_samf_bin4h | gpu | N/A | Priority | first more-serious multi-horizon `SAMformer` lane on `task1_outcome/core_edgar/is_funded/h={1,7,14,30}` |
+| 5300645 | v740_lgts_f4h | gpu | N/A | Priority | first more-serious multi-horizon `LightGTS` lane on `task2_forecast/full/funding_raised_usd/h={1,7,14,30}` |
 | 5269749 | l2_ac_t1_co | l40s | 2026-03-31 16:07:37 | Priority | next l40s backlog item with a concrete start time |
 | 5269752 | l2_ac_t1_fu | l40s | 2026-04-01 12:07:23 | Priority | later l40s restart already scheduled |
 | 5294241 | l2_ac_t2_s2 | l40s | 2026-04-03 12:10:00 | Priority | repaired `l40s` timeout continuation on the `investors_count` section |
@@ -52,15 +52,15 @@
 
 | partition | pending_jobs | notes |
 | --- | ---: | --- |
-| gpu | 3 | one repaired canonical seed2 job (`5300059`) plus two new comparator lane-expansion jobs (`5300057`, `5300058`) |
+| gpu | 2 | two new local-only promotion-lane jobs (`5300644`, `5300645`) |
 | l40s | 13 | accel_v2 overflow backlog; current live state has four active `l40s` runners including `l2_ac_t1_e2` |
 | hopper | 14 | opportunistic overflow backlog; three hopper runners are now active again |
 
 ## Canonical Benchmark Recovery Notes
 
-1. The gpu critical path is now split as five live runners plus three pending GPU jobs:
-   - RUNNING: `af739_t1_s2`, `af739_t1_e2`, `af739_t2_e2`, `af739_t3_e2`, `gpu_cos2_t2`
-   - PENDING: `af739_t2_s2`, `v740_samf_lane`, `v740_lgts_lane`
+1. The gpu critical path now has all six canonical recovery jobs actively running:
+   - RUNNING: `af739_t2_s2`, `af739_t1_s2`, `af739_t1_e2`, `af739_t2_e2`, `af739_t3_e2`, `gpu_cos2_t2`
+   - separate local-only pending promotion lanes: `v740_samf_bin4h`, `v740_lgts_f4h`
 2. `af739_t1_s2` and `af739_t2_s2` failed once more at `189G` (`MaxRSS≈198.18G`) and were resubmitted as `5298049` / `5298048` at `200G / 8 CPU`.
 3. `5298049 af739_t1_s2` then OOMed again after `1-04:38:15` at `200G / 8 CPU`, so it has now been resubmitted as:
    - `5299888 af739_t1_s2`
@@ -82,7 +82,7 @@
    - `l2_ac_t1_ct`
    - `l2_ac_t3_fu`
    are all RUNNING, while `hopper` has also resumed three `t1` overflow jobs,
-   so the current queue is `12R+30PD`.
+   so the current queue is `13R+29PD`.
 8. Local-only V740 model-clear status has advanced:
    - `5294242` `v740_samf_clr` → completed successfully
    - `5294243` `v740_prop_clr` → failed before model execution because `quick` preset cannot run `h=30`
@@ -216,3 +216,32 @@
    - a `hopper` test-only duplicate would start much later (`2026-05-06 03:18:22`)
    - the current `l40s` submission path for this local-only pattern is rejected under the present account/QoS context
    - so not duplicating it avoided extra queue pressure without losing time
+23. The wider local promotion lanes for `SAMformer` and `LightGTS` are now already read out:
+   - `5300057 v740_samf_lane` → completed cleanly, current harness surface landed:
+     - `task2_forecast / core_edgar / funding_raised_usd / h=30`
+     - `MAE = 130514.7325`
+     - `fairness_pass = true`
+   - `5300058 v740_lgts_lane` → completed cleanly, current harness surface landed:
+     - `task2_forecast / full / funding_raised_usd / h=30`
+     - `MAE = 201930.5506`
+     - `fairness_pass = true`
+   - current honest label:
+     - both are now promotion-positive funding-side lines
+24. The paired V740 text-gain audit has now completed cleanly:
+   - `5300635 v740_txtgain_bin`
+   - scope:
+     - `task1_outcome / {core_edgar, full} / is_funded / h={14,60}`
+   - audited result:
+     - `full / h=14`: `MAE = 0.3264`
+     - `core_edgar / h=14`: `MAE = 0.3281`
+     - `full / h=60`: `MAE = 0.3056`
+     - `core_edgar / h=60`: `MAE = 0.3741`
+   - current honest interpretation:
+     - on these audited fuller-source binary slices, text is now a **real gain**
+       rather than only stable source coverage
+25. Two more-serious local-only promotion lanes are now queued:
+   - `5300644 v740_samf_bin4h`
+   - `5300645 v740_lgts_f4h`
+   - current purpose:
+     - move `SAMformer` and `LightGTS` beyond single-condition promotion-positive
+       probes into the first multi-horizon lane expansion

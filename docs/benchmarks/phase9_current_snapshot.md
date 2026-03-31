@@ -1,6 +1,6 @@
 # Phase 9 / V739 Current Snapshot
 
-> Generated: 2026-03-30T20:50:10.807576+00:00
+> Generated: 2026-03-31T00:02:55.466812+00:00
 > Canonical benchmark: `runs/benchmarks/block3_phase9_fair`
 
 ## Verified Current Facts
@@ -31,18 +31,18 @@
 | metric | value |
 | --- | --- |
 | jobs_total | 42 |
-| running | 12 |
-| pending | 30 |
-| npin_pending | 30 |
+| running | 13 |
+| pending | 29 |
+| npin_pending | 29 |
 | cfisch_pending | 0 |
-| v739_pending | 1 |
-| v739_running | 4 |
+| v739_pending | 0 |
+| v739_running | 5 |
 
 ### Pending Reasons
 
 | reason | count |
 | --- | --- |
-| (Priority) | 29 |
+| (Priority) | 28 |
 | (Resources) | 1 |
 
 ## Text Embedding Artifacts

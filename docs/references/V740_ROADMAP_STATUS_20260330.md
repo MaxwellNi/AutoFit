@@ -16,11 +16,11 @@ The threshold here is strict:
 | Wave | Item | Current status | Best evidence today | Honest next step |
 | --- | --- | --- | --- | --- |
 | First | `TabPFNRegressor 2.6` | **narrow-clear evaluated; not promotable yet** | funding clear runs with `fairness_pass=true` but weak quality; investors clear returns `fairness_pass=false` | do not widen yet unless a new targeted count-safe setting emerges |
-| First | `SAMformer` | **binary narrow-clear done; funding promotion probe completed cleanly; wider lane queued** | first audited clear: `MAE=0.3485`, `fairness_pass=true` on `task1_outcome/core_edgar/is_funded/h14`; second funding-side tiny smoke is non-fallback with `MAE=265368.0` on `task2_forecast/core_edgar/funding_raised_usd/h30`; first funding probe `5299018` failed only because `quick` preset cannot run `task2 / h=30`; repaired follow-up clear `5299636` now lands with `MAE=130514.7325`, `fairness_pass=true`; wider lane `5300057` is now queued on `funding_raised_usd @ {30,60}` | read out `5300057`, then make a final promote / keep-local decision |
+| First | `SAMformer` | **binary narrow-clear done; funding probes promotion-positive; first serious multi-horizon lane now queued** | first audited clear: `MAE=0.3485`, `fairness_pass=true` on `task1_outcome/core_edgar/is_funded/h14`; second funding-side tiny smoke is non-fallback with `MAE=265368.0` on `task2_forecast/core_edgar/funding_raised_usd/h30`; first funding probe `5299018` failed only because `quick` preset cannot run `task2 / h=30`; repaired follow-up clear `5299636` lands with `MAE=130514.7325`, `fairness_pass=true`; wider lane `5300057` also completed cleanly on the current harness surface with the same funding-side result; the first more-serious multi-horizon follow-up is now queued as `5300644` on `task1_outcome/core_edgar/is_funded/h={1,7,14,30}` | read out `5300644` and decide whether `SAMformer` is ready to move beyond local-clear |
 | First | `Prophet` | **narrow-clear done; sanity baseline only** | corrected CPU-only narrow clear succeeds, but quality is weak | keep only as a reviewer-friendly sanity baseline |
-| Second | `LightGTS` | **narrow-clear done; fuller-source promotion probe completed cleanly; wider lane queued** | repaired core-edgar narrow clear `MAE=201930.5506`, `fairness_pass=true`; fuller-source tiny funding smoke is also non-fallback with `MAE=445368.0`; matching promotion probe `5299637` on `full / funding / h=30` also lands cleanly with `MAE=201930.5506`, `fairness_pass=true`; wider lane `5300058` is now queued on `full / funding_raised_usd @ {30,60}` | read out `5300058`, then make a final promote / keep-local decision |
+| Second | `LightGTS` | **narrow-clear done; fuller-source funding probes promotion-positive; first serious multi-horizon lane now queued** | repaired core-edgar narrow clear `MAE=201930.5506`, `fairness_pass=true`; fuller-source tiny funding smoke is also non-fallback with `MAE=445368.0`; matching promotion probe `5299637` on `full / funding / h=30` lands cleanly with `MAE=201930.5506`, `fairness_pass=true`; wider lane `5300058` also completed cleanly on the current harness surface with the same fuller-source funding result; the first more-serious multi-horizon follow-up is now queued as `5300645` on `task2_forecast/full/funding_raised_usd/h={1,7,14,30}` | read out `5300645` and decide whether `LightGTS` is ready to move beyond local-clear |
 | Second | `OLinear` | **funding narrow-clear done; count-side narrow-clear evaluated and failed fairness** | funding clear `MAE=131288.8062`, `fairness_pass=true`; count-side clear `5298523` ends with `fairness_pass=false` and constant `137.0` predictions on the audited harness slice | keep as a funding-side comparator only until count-side behavior is fixed |
-| Third | `ElasTST` | **partially done; count-side repair probe completed and stayed negative** | funding clear succeeds; first investors clear runs but `fairness_pass=false`; the more conservative repair probe `5299641` from `input_size=21 / l_patch_size=3_6` also ends with `fairness_pass=false` | current default is stop on count-side and keep `ElasTST` funding-only unless a materially different count-safe design appears |
+| Third | `ElasTST` | **funding-side clear; count-side now effectively stop** | funding clear succeeds; first investors clear runs but `fairness_pass=false`; the more conservative repair probe `5299641` from `input_size=21 / l_patch_size=3_6` also ends with `fairness_pass=false` | keep `ElasTST` funding-only unless a materially different count-safe design appears |
 | Third | `UniTS` | **funding narrow-clear done; count-side narrow-clear evaluated and failed fairness** | funding clear `MAE=131725.2212`, `fairness_pass=true`; count-side clear `5298559` ends with `fairness_pass=false` and constant `136.9999` predictions on the audited harness slice | keep `UniTS` as a funding-side comparator only until a materially different count-safe setting exists |
 
 ## 2. V740 methodology lane status
@@ -30,7 +30,7 @@ The threshold here is strict:
 | `DistDF` | **first and second engineering passes landed** | source-aware multistep alignment stays non-degenerate on funding and binary audits | continue tightening target-specific multistep behavior |
 | `Selective Learning` | **first and second engineering passes landed** | weighted objective remains stable; later passes improved audited slices rather than breaking them | continue auditing on harder binary and fuller-source slices |
 | `CASA` | **first lightweight code pass landed** | `CASALocalContextBlock` now materially improves audited `core_edgar` funding `h=30` and remains stable on fuller-source binary audits through `h=60` | keep testing on fuller-source and harder long-h slices |
-| `TimeEmb` | **first lightweight code pass landed** | `StaticDynamicTimeFusion` now supports stable fuller-source audits with `text_source_density=1.0`, including non-degenerate `full / is_funded / h=60` and `full / funding_raised_usd / h=30` slices; funding remains a tie / slight edge rather than a decisive text win | continue testing where text may become real gain rather than neutral source coverage |
+| `TimeEmb` | **first lightweight code pass landed** | `StaticDynamicTimeFusion` now supports stable fuller-source audits with `text_source_density=1.0`; the paired binary text-gain audit `5300635` has now completed and shows `full` beating `core_edgar` on both audited `is_funded` slices (`h=14` and `h=60`); funding remains a tie / slight edge rather than a decisive text win | treat binary fuller-source text gain as established enough for now, and keep the remaining open text question focused on funding/count behavior |
 
 ## 3. What is actually done vs not done
 
@@ -53,11 +53,10 @@ The threshold here is strict:
 ### Not done to the extreme yet
 
 - `OLinear` count-side recovery beyond the current failed narrow clear
-- `ElasTST` count-side fairness recovery beyond the now-second failed repair probe
 - `UniTS` count-side recovery beyond the current failed narrow clear
-- reading out the wider `SAMformer` lane `5300057`
-- reading out the wider `LightGTS` lane `5300058`
-- whether text becomes a real gain source under the new `CASA + TimeEmb` pass
+- reading out the first more-serious `SAMformer` multi-horizon lane (`5300644`)
+- reading out the first more-serious `LightGTS` multi-horizon lane (`5300645`)
+- whether the newly established binary text gain also generalizes beyond the current fuller-source audited `is_funded` slices
 - canonical benchmark landing for any of the new local-clear entrants
 
 ## 4. Current honest summary
@@ -111,10 +110,9 @@ time:
 As of 2026-03-30, we are not at that finish line yet. The remaining named gaps
 are still concrete rather than vague:
 
-- `SAMformer` wider-lane result `5300057`,
-- `LightGTS` wider-lane result `5300058`,
-- whether `ElasTST` count-side should be treated as an effective stop after `5299641`,
+- deciding whether `SAMformer` is ready to move beyond local-clear after `5300644`,
+- deciding whether `LightGTS` is ready to move beyond local-clear after `5300645`,
+- deciding whether the now-positive binary text-gain result also extends beyond the current audited `is_funded` fuller-source slices,
 - `UniTS` count-side recovery,
-- proving whether text becomes a real gain source under `CASA + TimeEmb`,
 - and getting at least one new entrant past local-clear into a more serious
   benchmark lane.
