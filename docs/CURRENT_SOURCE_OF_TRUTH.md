@@ -1,7 +1,7 @@
 # Current Source of Truth
 
-> Last verified: 2026-03-31 03:03 CEST
-> Verified by direct scans of `runs/benchmarks/block3_phase9_fair/`, live `squeue -u npin`, `sacct`, benchmark aggregation scripts.
+> Last verified: 2026-03-31 11:30 CEST
+> Verified by direct scans of `runs/benchmarks/block3_phase9_fair/`, live `squeue -u npin`, `sacct`, benchmark aggregation scripts, Python record counting.
 
 This file is the authoritative documentation entry point for the current Block 3 project state.
 If any other document disagrees with this file, prefer this file and the evidence paths cited below.
@@ -25,13 +25,13 @@ If any other document disagrees with this file, prefer this file and the evidenc
 | Fact | Current value | Evidence |
 | --- | --- | --- |
 | Canonical benchmark directory | `runs/benchmarks/block3_phase9_fair/` | direct scan |
-| Raw metric records | `16152` | direct scan 2026-03-30 |
+| Raw metric records | `16182` | direct Python scan 2026-03-31 (+30 from 16152) |
 | Raw models materialized | `137` | direct scan (116 real + 21 retired AutoFit@1) |
 | Audit-excluded models | `24` | AUDIT_EXCLUDED_MODELS (17 old + 7 Finding H) |
 | Active (leaderboard) models | `92` | 116 raw - 24 excluded |
-| Raw complete models (`@160`) | `75` | direct unique-condition scan |
-| Active complete models (`@160`) | `62` | 75 raw complete - 13 excluded complete models |
-| Incomplete active models | `30` | 92 - 62 |
+| Raw complete models (`@160`) | `77` | direct unique-condition scan (+2 from 75) |
+| Active complete models (`@160`) | `64` | 77 raw complete - 13 excluded complete models |
+| Incomplete active models | `28` | 92 - 64 |
 | Per-ablation | co=2849, s2=2139, ce=2780, e2=2778, ct=2764, fu=2767 | direct scan 2026-03-26 |
 | Conditions per model | `160` | t1(72) + t2(48) + t3(40) |
 | Current AutoFit baseline | `AutoFitV739` only | Root `AGENTS.md` |
@@ -43,7 +43,7 @@ If any other document disagrees with this file, prefer this file and the evidenc
 | Text embedding artifacts | `AVAILABLE` | `runs/text_embeddings/embedding_metadata.json` |
 | Phase 12 text reruns | `48/48 COMPLETED` | core_text+full 91/91 models |
 | Phase 15 new models | 23 submitted, 15 valid, 8 excluded (Finding H), 78/160 | direct scan |
-| Live jobs | `42` (13R + 29PD) | direct `squeue -u npin` 2026-03-31 03:03: gpu 6R+2PD, l40s 4R+13PD, hopper 3R+14PD |
+| Live jobs | `38` (9R + 29PD) | direct `squeue -u npin` 2026-03-31 11:30: gpu 1R+5PD, l40s 5R+10PD, hopper 3R+14PD |
 | Clean full comparable frontier | `55` models @ shared `160/160` | post-filter `all_results.csv`, non-retired only |
 
 ## What the Current Benchmark Means
@@ -63,84 +63,78 @@ If any other document disagrees with this file, prefer this file and the evidenc
 
 ## Current Execution Reality
 
-1. Live queue snapshot verified on 2026-03-31 03:03 CEST:
-   - `13 RUNNING` = `6 gpu + 4 l40s + 3 hopper`
-   - `29 PENDING` = `2 gpu + 13 l40s + 14 hopper`
-   - **42 total**
+1. Live queue snapshot verified on 2026-03-31 11:30 CEST:
+   - `9 RUNNING` = `1 gpu + 5 l40s + 3 hopper`
+   - `29 PENDING` = `5 gpu + 10 l40s + 14 hopper`  (note: 15 hopper PENDING)
+   - **38 total**
    - Current gpu runners:
-     - `af739_t2_s2` (`5300059`)
-     - `af739_t1_s2` (`5299888`)
-     - `af739_t1_e2` (`5298285`)
-     - `af739_t2_e2` (`5298286`)
-     - `af739_t3_e2` (`5298287`)
-     - `gpu_cos2_t2` (`5298288`)
-   - Current gpu pending:
-     - `v740_samf_bin4h` (`5300644`)
-     - `v740_lgts_f4h` (`5300645`)
-     - one older local-only promotion lane slot has now drained (`5300635` completed)
+     - `af739_t2_s2` (`5300059`, running 1d3h, 224G)
+   - Current gpu pending (after resubmission 2026-03-31 11:30):
+     - `af739_t1_e2` (`5302271`, resubmitted after TIMEOUT)
+     - `af739_t2_e2` (`5302272`, resubmitted after TIMEOUT)
+     - `af739_t3_e2` (`5302273`, resubmitted after TIMEOUT)
+     - `af739_t1_s2` (`5302274`, resubmitted at 280G after OOM at 224G)
+     - `gpu_cos2_t2` (`5302275`, resubmitted after TIMEOUT)
+   - V740 GPU jobs COMPLETED since last snapshot:
+     - `v740_txtgain_bin` (`5300635`) — COMPLETED, text-gain binary audit
+     - `v740_samf_bin4h` (`5300644`) — COMPLETED, SAMformer multi-horizon lane
+     - `v740_lgts_f4h` (`5300645`) — COMPLETED, LightGTS multi-horizon lane
+   - GPU jobs that FAILED since last snapshot:
+     - `af739_t1_e2` (`5298285`) — TIMEOUT at 2d (saved 4 incremental records)
+     - `af739_t2_e2` (`5298286`) — TIMEOUT at 2d (saved 4 incremental records)
+     - `af739_t3_e2` (`5298287`) — TIMEOUT at 2d (saved 4 incremental records)
+     - `af739_t1_s2` (`5299888`) — OOM at 224G (MaxRSS 234G)
+     - `gpu_cos2_t2` (`5298288`) — TIMEOUT at 2d (0 incremental saves)
    - Current l40s runners:
-     - `l2_ac_t1_e2`
-     - `l2_ac_t3_ce`
-     - `l2_ac_t1_ct`
-     - `l2_ac_t3_fu`
+     - `l2_ac_t1_co` (14h elapsed)
+     - `l2_ac_t1_fu` (10h elapsed)
+     - `l2_ac_t2_ce` (9h elapsed)
+     - `l2_ac_t2_s2` (9h elapsed)
+     - `l2_ac_t2_e2` (8h elapsed)
    - Current hopper runners:
-     - `h2_ac_t1_e2`
-     - `h2_ac_t1_fu`
-     - `h2_ac_t1_s2`
+     - `h2_ac_t2_s2` (8h elapsed)
+     - `h2_ac_t1_co` (8h elapsed)
+     - `h2_ac_t1_ct` (7h elapsed)
    - **ModernTCN bottleneck** remains the dominant throughput limiter for non-e2 accel jobs
    - Partition constraints (`sinfo` verified): `gpu=756G`, `l40s=515G`, `hopper=2063754MB (~2.06TB)`; the earlier `hopper=201G` claim was a unit-reading error
 2. V739 status:
-   - **132/160 conditions landed** (+1 from 131, s2/e2 gap-filling)
-   - 5 af739 jobs live: `5 RUNNING + 0 PENDING`
+   - **132/160 conditions landed** (unchanged; s2/e2 gap-filling in progress)
+   - V739 gap-fill: 1 RUNNING + 5 PENDING (resubmitted 2026-03-31 11:30)
    - RUNNING:
-     - `t2_s2` as `5300059`
-     - `t1_s2` as `5299888`
-     - `t1_e2` as `5298285`
-     - `t2_e2` as `5298286`
-     - `t3_e2` as `5298287`
-   - Missing structure: `t1_e2=9`, `t1_s2=8`, `t2_e2=4`, `t2_s2=4`, `t3_e2=3` (28 total)
+     - `af739_t2_s2` as `5300059` (224G/9CPU, 1d3h elapsed)
+   - PENDING (resubmitted after failures):
+     - `af739_t1_e2` as `5302271` (189G/7CPU, resume from 4 saved records)
+     - `af739_t2_e2` as `5302272` (189G/7CPU, resume from 4 saved records)
+     - `af739_t3_e2` as `5302273` (189G/7CPU, resume from 4 saved records)
+     - `af739_t1_s2` as `5302274` (280G/9CPU, bumped from 224G after OOM at MaxRSS 234G)
+   - Missing structure: cos2=8+4=12, ces2=8+4+4=16 (28 total)
+   - V739 incremental save confirmed: all three e2 jobs saved 4 records each before TIMEOUT
    - V739 is empirically valid: 0 NaN/Inf, 0 fallback, 100% fairness pass
-   - The seed2 jobs required three repair rounds:
+   - The seed2 jobs required four repair rounds:
      - `150G` OOM
-     - `189G` OOM (`MaxRSS ≈ 198.18G`)
-     - `200G / 8 CPU` still OOMed for `t1_s2` on `5298049`
-   - the current state is:
-     - `5299888 af739_t1_s2` is now RUNNING at `224G / 9 CPU`
-     - `5298048 af739_t2_s2` also OOMed at `200G / 8 CPU` with `MaxRSS = 209713460K`
-     - `5300059 af739_t2_s2` is now also RUNNING at `224G / 9 CPU`
-   - `t1_e2`, `t2_e2`, `t3_e2`, and `gpu_cos2_t2` all hit the 2-day wall again in their repaired copies on 2026-03-29 and were explicitly resubmitted as:
-     - `5298285 af739_t1_e2`
-     - `5298286 af739_t2_e2`
-     - `5298287 af739_t3_e2`
-     - `5298288 gpu_cos2_t2`
+     - `189G` OOM
+     - `200G / 8 CPU` still OOMed for `t1_s2`
+     - `224G / 9 CPU` still OOMed for `t1_s2` (`MaxRSS ≈ 234G`)
+     - `280G / 9 CPU` is the current `t1_s2` resubmission
+   - `af739_t2_s2` is still RUNNING at `224G / 9 CPU`
 3. Finding H (discovered 2026-03-22):
    - 8 P15 models produce 100% constant predictions (0% fairness pass)
    - CFPT, DeformableTST, MICN, PathFormer, SEMPO, SparseTSF, TimeBridge, TimePerceiver
    - Added to AUDIT_EXCLUDED_MODELS in aggregate_block3_results.py
    - Removed from accel_v2 scripts → ~30% faster per job
-4. accel_v2 progress (current live reality):
-   - the gpu critical path is still actively running, but it is now split as:
-     - live gpu runners: `af739_t1_s2`, `gpu_cos2_t2`, `af739_t1_e2`, `af739_t2_e2`, `af739_t3_e2`
-     - repaired gpu runner: `af739_t2_s2` as `5300059`
-   - active accel_v2 runtime is now shared across `l40s` and `hopper`; hopper is no longer “queued only”
-   - live `l40s` runners at this moment are:
-     - `l2_ac_t1_e2`
-     - `l2_ac_t3_ce`
-     - `l2_ac_t1_ct`
-     - `l2_ac_t3_fu`
-   - `l2_ac_t2_s2` timed out at the 2-day wall on 2026-03-28 after advancing into the `investors_count` section and was resubmitted as `5294241`
-   - `l2_ac_t3_co` also timed out at the 2-day wall on 2026-03-30 while cleanly continuing the resumable `investors_count` section and has now been resubmitted as `5298506`
-   - the earlier short-lived `l40s` burst has not fully vanished; four `l40s` overflow jobs are still live while the rest are back in the pending backlog
-   - **ModernTCN remains the universal bottleneck** for non-`e2` accel paths and is still the main reason resumable copies keep timing out before the backlog clears
-   - `_requeue_handler()` remains present in the script surface; current progress still depends on partition availability more than on correctness bugs
+4. accel_v2 progress (verified 2026-03-31 11:30):
+   - gpu: only `af739_t2_s2` RUNNING; 5 resubmitted jobs PENDING
+   - l40s: 5R + 10PD; hopper: 3R + 15PD
+   - recent completions: +30 records (16152→16182) and +2 models @160 (75→77)
+   - **ModernTCN remains the universal bottleneck** for non-`e2` accel paths
 5. Critical gaps:
-   - s2 (core_only_seed2): `gpu_cos2_t2` remains the canonical task2 seed2 gap-fill and has now been **resubmitted again** as `5298288` after the latest 2-day timeout on `5290365`
-   - e2 (core_edgar_seed2): 2778 records (+54 from 2724), accel_v2 e2 scripts producing the bulk of recent growth
-   - V739: 28 missing s2+e2 conditions, and **all 5 required gap-fill jobs are covered by the queue** (`5 RUNNING + 0 PENDING`)
+   - s2 (core_only_seed2): `gpu_cos2_t2` resubmitted as `5302275` after 2d TIMEOUT (0 saves; 23 models too large for single 2d window)
+   - e2 (core_edgar_seed2): accel_v2 e2 scripts producing growth
+   - V739: 28 missing s2+e2 conditions; 1R (`af739_t2_s2` 5300059) + 4PD (resubmitted 5302271-5302274)
 6. Text embeddings:
    - `runs/text_embeddings/text_embeddings.parquet` — 5,774,931 rows, 64 PCA dims
    - Phase 12 all 48/48 complete. core_text+full coverage: 91/91 models
-7. Audit-excluded models: 24 total (was 23, added NegativeBinomialGLM as Structural)
+7. Audit-excluded models: 24 total (17 old + 7 Finding H + NegativeBinomialGLM)
 
 8. Local-only V740 truth that is now settled enough to cite:
    - the first corrected local head-to-head for `mb_t1_core_edgar_is_funded_h14` has landed
@@ -219,14 +213,20 @@ If any other document disagrees with this file, prefer this file and the evidenc
          "stable source coverage"; it is now a **real positive signal**
        - the text-gain question is now materially tighter for the binary lane,
          though not yet fully answered for funding/count slices
-   - two more serious promotion-lane probes have now been queued:
-     - `5300644` `v740_samf_bin4h`
+   - two more serious promotion-lane probes have now **completed**:
+     - `5300644` `v740_samf_bin4h` — **COMPLETED** (59s wall time)
        - `task1_outcome / core_edgar / is_funded / h={1,7,14,30}`
-     - `5300645` `v740_lgts_f4h`
+       - output: `runs/benchmarks/block3_phase9_localclear_20260331/samformer_binary_fullh_lane/`
+       - results: h1 MAE=0.3573, h7 MAE=0.3493, h14 MAE=0.3485, h30 MAE=0.3493
+       - all 4 horizons: coverage=1.0, fallback=0.0
+       - interpretation: SAMformer produces legitimate non-constant binary predictions across all horizons
+     - `5300645` `v740_lgts_f4h` — **COMPLETED** (87s wall time)
        - `task2_forecast / full / funding_raised_usd / h={1,7,14,30}`
-     - purpose:
-       - move `SAMformer` and `LightGTS` beyond single-condition promotion-positive
-         probes into the first more serious multi-horizon lane expansion
+       - output: `runs/benchmarks/block3_phase9_localclear_20260331/lightgts_funding_fullh_lane/`
+       - results: h1 MAE=201930.2455, h7 MAE=201930.2596, h14 MAE=201930.3049, h30 MAE=201930.5506
+       - all 4 horizons: coverage=1.0, fallback=0.0
+       - **WARNING**: val_loss stuck at 63T across all horizons, early-stopped at epoch 3 every time; near-identical MAE across horizons suggests degenerate/constant-like outputs
+       - interpretation: LightGTS funding lane technically non-fallback but likely collapsed to a near-constant predictor
    - all of these write to isolated output roots under `runs/benchmarks/block3_phase9_localclear_20260328/`, `runs/benchmarks/block3_phase9_localclear_20260329/`, `runs/benchmarks/block3_phase9_localclear_20260330/`, or `docs/references/v740_alpha_selective_smoke_20260331/` and do **not** count as canonical benchmark results
 10. `LightGTS` local integration has now crossed both the first real-data gate and the first narrow benchmark-clear gate:
    - the vendor repo audit and import smoke had already passed
@@ -418,10 +418,10 @@ If any other document disagrees with this file, prefer this file and the evidenc
 4. ~~Phase 12 text reruns to land.~~ ✅ DONE. core_text+full 91/91 models.
 5. ~~Phase 15 new TSLib models.~~ ✅ Submitted. 15 valid, 8 excluded (Finding H).
 6. ~~Cancel old v1 l40s/hopper jobs.~~ ✅ DONE. 8 old v1 jobs cancelled, freed L40S for v2.
-7. Complete V739 s2/e2 gap-fill (currently `5 RUNNING + 0 PENDING`; `af739_t1_s2` and `af739_t2_s2` are now both on the repaired `224G / 9 CPU` copies).
+7. Complete V739 s2/e2 gap-fill (1R + 4PD: `af739_t2_s2` running, `af739_t1_e2/t2_e2/t3_e2` resume from 4 saves each, `af739_t1_s2` resubmitted at 280G).
 8. Complete e2 gap for ETSformer/LightTS/Pyraformer/Reformer (0/28 e2 each — covered by accel_v2).
-9. Complete P15 model gap-fill to 160/160 via accel_v2 (54 total jobs, auto-requeue).
-10. g2_ac_v2 auto-requeue: e2/ct complete first run; co/s2/ce/fu need 2-3 requeues, with `gpu_cos2_t2` now corrected to the trimmed 23-model list.
+9. Complete P15 model gap-fill to 160/160 via accel_v2 (l40s+hopper active). P15 models at 85/160.
+10. `gpu_cos2_t2` resubmitted as `5302275` — 23 tslib_sota models × task2 cos2. Has resume logic.
 11. Local-only V740 work is now permitted via resumable side-paths that do **not** touch the canonical benchmark harness. The current completed local-only milestones are:
    - first corrected local `V739 vs V740` head-to-head (`mb_t1_core_edgar_is_funded_h14`)
    - larger-slice `full / funding_raised_usd / h=90 / input_size=120` audit

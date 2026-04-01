@@ -1,6 +1,6 @@
 # Phase 9 / V739 Current Snapshot
 
-> Generated: 2026-03-31T00:02:55.466812+00:00
+> Generated: 2026-04-01T00:08:14.793444+00:00
 > Canonical benchmark: `runs/benchmarks/block3_phase9_fair`
 
 ## Verified Current Facts
@@ -8,7 +8,7 @@
 | metric | value | evidence |
 | --- | --- | --- |
 | metrics_files | 137 | raw metrics scan |
-| raw_records | 16152 | raw metrics scan |
+| raw_records | 16182 | raw metrics scan |
 | raw_models | 137 | raw metrics scan |
 | raw_nonretired_models | 116 | raw metrics scan minus retired AutoFit legacy lines |
 | raw_retired_autofit_models | 21 | raw metrics scan |
@@ -30,13 +30,13 @@
 
 | metric | value |
 | --- | --- |
-| jobs_total | 42 |
-| running | 13 |
+| jobs_total | 38 |
+| running | 9 |
 | pending | 29 |
 | npin_pending | 29 |
 | cfisch_pending | 0 |
-| v739_pending | 0 |
-| v739_running | 5 |
+| v739_pending | 4 |
+| v739_running | 1 |
 
 ### Pending Reasons
 
@@ -151,21 +151,21 @@
 | LightTS | 93 | 113 |
 | Pyraformer | 93 | 113 |
 | Reformer | 93 | 113 |
-| CARD | 83 | 83 |
-| DUET | 83 | 83 |
-| FiLM | 83 | 83 |
-| FilterTS | 83 | 83 |
-| FreTS | 83 | 83 |
-| Fredformer | 83 | 83 |
-| ModernTCN | 83 | 83 |
-| NonstationaryTransformer | 83 | 83 |
-| PDF | 83 | 83 |
-| PIR | 83 | 83 |
-| SCINet | 83 | 83 |
-| SRSNet | 83 | 83 |
-| SegRNN | 83 | 83 |
-| TimeRecipe | 83 | 83 |
-| xPatch | 83 | 83 |
+| CARD | 85 | 85 |
+| DUET | 85 | 85 |
+| FiLM | 85 | 85 |
+| FilterTS | 85 | 85 |
+| FreTS | 85 | 85 |
+| Fredformer | 85 | 85 |
+| ModernTCN | 85 | 85 |
+| NonstationaryTransformer | 85 | 85 |
+| PDF | 85 | 85 |
+| PIR | 85 | 85 |
+| SCINet | 85 | 85 |
+| SRSNet | 85 | 85 |
+| SegRNN | 85 | 85 |
+| TimeRecipe | 85 | 85 |
+| xPatch | 85 | 85 |
 | CFPT | 69 | 69 |
 | DeformableTST | 69 | 69 |
 | MICN | 69 | 69 |
