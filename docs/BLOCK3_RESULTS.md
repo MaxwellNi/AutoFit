@@ -1,8 +1,8 @@
 # Block 3 Benchmark Results
 
-**Generated**: 2026-03-31 02:02:52
+**Generated**: 2026-04-03 11:12:40
 **Benchmark Dir**: `block3_phase9_fair`
-**Total Records (post-filter)**: 12300
+**Total Records (post-filter)**: 12422
 
 ## Overview
 
@@ -10,17 +10,17 @@
 
 | Metric | Value |
 |--------|-------|
-| Raw records | 16152 |
-| Filtered records | 12300 |
+| Raw records | 16284 |
+| Filtered records | 12422 |
 | Comparability filter | fairness_only=True, min_coverage=0.98 |
 | Models evaluated | 107 |
 | Non-retired models evaluated | 86 |
 | Retired AutoFit legacy lines still present | 21 |
 | Categories | autofit, deep_classical, foundation, irregular, ml_tabular, statistical, transformer_sota, tslib_sota |
 | Tasks | task1_outcome, task2_forecast, task3_risk_adjust |
-| Total evaluations | 12300 |
-| Real results | 12223 |
-| Fallback (mean) | 77 |
+| Total evaluations | 12422 |
+| Real results | 12344 |
+| Fallback (mean) | 78 |
 
 ## task1_outcome
 
@@ -168,7 +168,7 @@
 | NonstationaryTransformer | 1.07M | 1.05M | 1.04M | 1.86M | ✅ |
 | Fredformer | 1.08M | 1.07M | 986.3K | 1.05M | ✅ |
 | LightTS | 1.40M | 2.02M | 745.8K | 2.72M | ⚠️ fallback |
-| FilterTS | 5.32M | 2.60M | 4.13M | 8.89M | ✅ |
+| FilterTS | 5.32M | 2.60M | 4.13M | 8.89M | ⚠️ fallback |
 | SegRNN | 8.83M | 6.36M | 4.20M | 7.15M | ✅ |
 
 ## task2_forecast
@@ -473,45 +473,45 @@
 
 | Model | Avg (s) | Min (s) | Max (s) |
 |-------|--------:|--------:|--------:|
-| MSGNet | 14154.5 | 1121.9 | 105725.4 |
-| MambaSimple | 12549.3 | 865.8 | 49536.0 |
+| MSGNet | 14132.6 | 1121.9 | 105725.4 |
+| MambaSimple | 12526.8 | 865.8 | 49536.0 |
 | AutoFitV73 | 9873.9 | 8622.1 | 11439.7 |
 | AutoFitV731 | 9801.8 | 8645.2 | 11468.4 |
-| ModernTCN | 8080.5 | 788.0 | 31210.8 |
-| CARD | 7136.3 | 570.7 | 23557.2 |
-| FiLM | 6771.1 | 1584.7 | 22418.7 |
-| Fredformer | 6214.1 | 695.6 | 18666.2 |
+| ModernTCN | 8534.6 | 788.0 | 31210.8 |
+| CARD | 7204.0 | 570.7 | 23557.2 |
+| FiLM | 7071.9 | 1584.7 | 22418.7 |
+| Fredformer | 6088.6 | 695.6 | 18666.2 |
 | AutoFitV2 | 5703.1 | 5289.7 | 6442.9 |
 | AutoFitV3E | 5694.0 | 5297.2 | 6440.6 |
 | AutoFitV2E | 5661.1 | 5312.1 | 6142.5 |
 | AutoFitV4 | 5634.5 | 5287.4 | 6116.8 |
+| SCINet | 5578.0 | 274.2 | 25886.3 |
 | AutoFitV1 | 5327.1 | 4909.0 | 5738.7 |
 | AutoFitV3 | 5303.4 | 5035.0 | 5686.4 |
-| SCINet | 5286.7 | 274.2 | 25886.3 |
 | AutoFitV3Max | 5265.3 | 5008.3 | 5585.4 |
 | AutoFitV71 | 4852.1 | 4100.9 | 6149.3 |
 | AutoFitV72 | 4803.3 | 4169.5 | 5792.6 |
-| Reformer | 4124.2 | 926.5 | 17614.9 |
+| FreTS | 4138.1 | 307.8 | 13755.7 |
+| Reformer | 4100.3 | 926.5 | 17614.9 |
 | AutoFitV7 | 4062.8 | 3402.6 | 4780.2 |
 | AutoFitV6 | 3940.7 | 3597.3 | 4253.1 |
-| FreTS | 3911.7 | 307.8 | 13755.7 |
-| PIR | 3798.5 | 335.9 | 16062.2 |
-| Crossformer | 3135.9 | 277.7 | 9227.3 |
-| PAttn | 2812.8 | 283.1 | 14803.5 |
-| xPatch | 2011.3 | 207.0 | 11008.1 |
+| PIR | 3853.2 | 335.9 | 16062.2 |
+| Crossformer | 3119.2 | 277.7 | 9227.3 |
+| PAttn | 2792.0 | 283.1 | 14803.5 |
+| xPatch | 2167.1 | 207.0 | 11008.1 |
 | AutoFitV5 | 1824.4 | 1396.0 | 2267.0 |
 | BRITS | 1526.4 | 349.2 | 2770.7 |
 | iTransformer | 1466.2 | 927.9 | 1806.3 |
-| PDF | 1366.0 | 78.1 | 3909.5 |
+| PDF | 1372.5 | 78.1 | 3909.5 |
 | DUET | 1343.8 | 79.7 | 4508.6 |
-| NonstationaryTransformer | 1193.5 | 61.9 | 7899.8 |
+| NonstationaryTransformer | 1318.3 | 61.9 | 7899.8 |
 | MSTL | 1157.4 | 112.0 | 1982.0 |
-| FilterTS | 977.6 | 163.7 | 3535.8 |
-| LightTS | 866.9 | 137.8 | 3222.8 |
-| SegRNN | 837.0 | 98.5 | 4057.0 |
-| SRSNet | 804.7 | 136.4 | 2852.6 |
+| FilterTS | 1004.7 | 163.7 | 3535.8 |
+| SegRNN | 869.5 | 98.5 | 4057.0 |
+| LightTS | 863.6 | 137.8 | 3222.8 |
+| SRSNet | 859.5 | 136.4 | 2852.6 |
 | RandomForest | 776.4 | 224.6 | 4432.2 |
-| TimeRecipe | 669.4 | 31.0 | 2343.5 |
+| TimeRecipe | 701.8 | 31.0 | 2814.4 |
 | AutoARIMA | 639.3 | 213.1 | 1179.2 |
 | ExtraTrees | 613.7 | 71.5 | 3940.6 |
 | SOFTS | 466.8 | 329.9 | 708.1 |
@@ -680,7 +680,7 @@ Shows which task/category/ablation combinations have results.
 | task2_forecast | tslib_sota | core_edgar | 21 |
 | task2_forecast | tslib_sota | core_edgar_seed2 | 19 |
 | task2_forecast | tslib_sota | core_only | 21 |
-| task2_forecast | tslib_sota | core_only_seed2 | 19 |
+| task2_forecast | tslib_sota | core_only_seed2 | 21 |
 | task2_forecast | tslib_sota | core_text | 21 |
 | task2_forecast | tslib_sota | full | 21 |
 | task3_risk_adjust | autofit | core_edgar | 1 |
@@ -726,4 +726,4 @@ Shows which task/category/ablation combinations have results.
 | task3_risk_adjust | tslib_sota | full | 21 |
 
 ---
-_Last updated: 2026-03-31 02:02:53_
+_Last updated: 2026-04-03 11:12:40_

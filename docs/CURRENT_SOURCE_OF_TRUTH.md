@@ -1,10 +1,10 @@
 # Current Source of Truth
 
-> Last verified: 2026-03-31 11:30 CEST
-> Verified by direct scans of `runs/benchmarks/block3_phase9_fair/`, live `squeue -u npin`, `sacct`, benchmark aggregation scripts, Python record counting.
+> Last verified: 2026-04-03 09:15 UTC
+> Verification basis: direct raw metrics scan, regenerated `all_results.csv`, regenerated `docs/benchmarks/phase9_current_snapshot.{json,md}`, live `squeue -u npin`, targeted `squeue --start`, targeted `sacct`, and executed V740 local reference notes.
 
-This file is the authoritative documentation entry point for the current Block 3 project state.
-If any other document disagrees with this file, prefer this file and the evidence paths cited below.
+This file is the authoritative entry point for the current Block 3 project state.
+If another status document disagrees with this file, prefer this file plus the evidence paths named here.
 
 ## Authoritative Sources (Read in This Order)
 
@@ -15,433 +15,92 @@ If any other document disagrees with this file, prefer this file and the evidenc
 5. `docs/BLOCK3_MODEL_STATUS.md`
 6. `docs/BLOCK3_RESULTS.md`
 7. `docs/benchmarks/phase9_current_snapshot.md`
-8. `docs/V739_CURRENT_RUN_MONITOR.md`
-9. `docs/PHASE12_TEXT_RERUN_EXECUTION.md`
-10. `runs/benchmarks/block3_phase9_fair/all_results.csv`
-11. `runs/benchmarks/block3_phase9_fair/REPLICATION_MANIFEST.json`
+8. `docs/references/V740_ROADMAP_STATUS_20260330.md`
+9. `docs/references/V740_REPR_POSTAUDIT_GATE_20260402.md`
+10. `docs/references/V740_EDGAR_TEXT_ROOTCAUSE_AUDIT_20260402.md`
 
 ## Verified Current Facts
 
 | Fact | Current value | Evidence |
 | --- | --- | --- |
 | Canonical benchmark directory | `runs/benchmarks/block3_phase9_fair/` | direct scan |
-| Raw metric records | `16182` | direct Python scan 2026-03-31 (+30 from 16152) |
-| Raw models materialized | `137` | direct scan (116 real + 21 retired AutoFit@1) |
-| Audit-excluded models | `24` | AUDIT_EXCLUDED_MODELS (17 old + 7 Finding H) |
-| Active (leaderboard) models | `92` | 116 raw - 24 excluded |
-| Raw complete models (`@160`) | `77` | direct unique-condition scan (+2 from 75) |
-| Active complete models (`@160`) | `64` | 77 raw complete - 13 excluded complete models |
-| Incomplete active models | `28` | 92 - 64 |
-| Per-ablation | co=2849, s2=2139, ce=2780, e2=2778, ct=2764, fu=2767 | direct scan 2026-03-26 |
-| Conditions per model | `160` | t1(72) + t2(48) + t3(40) |
-| Current AutoFit baseline | `AutoFitV739` only | Root `AGENTS.md` |
-| V739 landed conditions | `132/160` | co=28, ce=28, ct=28, fu=28, s2/e2 gap-filling still in progress |
-| V739 quality | 0 NaN/Inf, 0 fallback, 100% fairness pass | direct scan |
-| V739 mean rank | **#13** (top 14%, 92 active models) | per-condition ranking (last computed) |
-| Post-filter distinct models in `all_results.csv` | `107` | includes 21 retired AutoFit legacy lines that still pass fairness/coverage filters |
-| Post-filter non-retired models | `86` | `all_results.csv` minus retired AutoFit legacy lines |
-| Text embedding artifacts | `AVAILABLE` | `runs/text_embeddings/embedding_metadata.json` |
-| Phase 12 text reruns | `48/48 COMPLETED` | core_text+full 91/91 models |
-| Phase 15 new models | 23 submitted, 15 valid, 8 excluded (Finding H), 78/160 | direct scan |
-| Live jobs | `38` (9R + 29PD) | direct `squeue -u npin` 2026-03-31 11:30: gpu 1R+5PD, l40s 5R+10PD, hopper 3R+14PD |
-| Clean full comparable frontier | `55` models @ shared `160/160` | post-filter `all_results.csv`, non-retired only |
+| Raw metric records | `16284` | raw metrics scan 2026-04-03 |
+| Raw models materialized | `137` | regenerated snapshot |
+| Raw non-retired models | `116` | regenerated snapshot |
+| Audit-excluded models | `24` | `AUDIT_EXCLUDED_MODELS` in `scripts/aggregate_block3_results.py` |
+| Active leaderboard models | `92` | `116 - 24` |
+| Raw complete models (`@160`) | `75` | regenerated snapshot |
+| Active complete models (`@160`) | `62` | `75 - 13` excluded-complete models |
+| Incomplete active models | `30` | `92 - 62` |
+| Filtered records in `all_results.csv` | `12422` | regenerated `scripts/aggregate_block3_results.py` output |
+| Filtered distinct models | `107` | regenerated `all_results.csv` |
+| Filtered non-retired models | `86` | regenerated snapshot |
+| Clean full comparable frontier (`160/160`, non-retired, post-filter) | `55` | regenerated snapshot |
+| Current valid AutoFit baseline | `AutoFitV739` only | root `AGENTS.md` |
+| V739 landed conditions | `132/160` | raw metrics scan |
+| V739 live jobs | `0` | live `squeue -u npin` |
+| Text embedding artifacts | `AVAILABLE` | `runs/text_embeddings/` plus regenerated snapshot |
+| Phase 12 text reruns | `48/48 completed` | existing phase-12 execution notes plus active artifacts |
+| V740 shared112 non-routed local line | `112/112 complete`, `15 win / 2 tie / 95 loss` | executed local reference docs |
+| V740 formal routed outputs | `0 landed` | no routed JSON outputs and no routed summary docs found under 20260402/20260403 roots |
 
-## What the Current Benchmark Means
+## What Changed Since The 2026-04-01 Snapshot
 
-1. Phase 7 and Phase 8 results are historical only. They are not valid current benchmark evidence.
-2. V734-V738 are retired because of oracle test-set leakage. They must not be used as baselines, ranking references, or implementation templates.
-3. The current clean AutoFit line starts at V739, which uses validation-based selection (`val_raw`) instead of oracle tables.
-4. The current physical Phase 9 fair benchmark has 6 ablations:
-   - `core_only` (co) — baseline numeric features
-   - `core_only_seed2` (s2) — seed stability check
-   - `core_edgar` (ce) — EDGAR features added
-   - `core_edgar_seed2` (e2) — EDGAR + seed2
-   - `core_text` (ct) — text embeddings added
-   - `full` (fu) — all features combined
-5. Text embedding artifacts exist. Phase 12 text reruns COMPLETED (48/48 jobs). `core_text` / `full` reflect real text features.
-6. Phase 15 added 23 new TSLib models. 8 produce 100% constant predictions (Finding H) and are excluded. 15 valid models remain at ~67/160 conditions.
+- Raw benchmark records increased from `16182` to `16284` (`+102`).
+- The filtered public surface also moved after a fresh aggregation rebuild: `12300 -> 12422`.
+- `V739` no longer has live queue presence; the latest repair wave ended in repeated `TIMEOUT` and `OUT_OF_MEMORY`, not fresh landings.
+- Formal routed V740 evidence is still `0 landed`, and the scheduler now places the queued routed jobs around `2026-04-12`.
 
 ## Current Execution Reality
 
-1. Live queue snapshot verified on 2026-03-31 11:30 CEST:
-   - `9 RUNNING` = `1 gpu + 5 l40s + 3 hopper`
-   - `29 PENDING` = `5 gpu + 10 l40s + 14 hopper`  (note: 15 hopper PENDING)
-   - **38 total**
-   - Current gpu runners:
-     - `af739_t2_s2` (`5300059`, running 1d3h, 224G)
-   - Current gpu pending (after resubmission 2026-03-31 11:30):
-     - `af739_t1_e2` (`5302271`, resubmitted after TIMEOUT)
-     - `af739_t2_e2` (`5302272`, resubmitted after TIMEOUT)
-     - `af739_t3_e2` (`5302273`, resubmitted after TIMEOUT)
-     - `af739_t1_s2` (`5302274`, resubmitted at 280G after OOM at 224G)
-     - `gpu_cos2_t2` (`5302275`, resubmitted after TIMEOUT)
-   - V740 GPU jobs COMPLETED since last snapshot:
-     - `v740_txtgain_bin` (`5300635`) — COMPLETED, text-gain binary audit
-     - `v740_samf_bin4h` (`5300644`) — COMPLETED, SAMformer multi-horizon lane
-     - `v740_lgts_f4h` (`5300645`) — COMPLETED, LightGTS multi-horizon lane
-   - GPU jobs that FAILED since last snapshot:
-     - `af739_t1_e2` (`5298285`) — TIMEOUT at 2d (saved 4 incremental records)
-     - `af739_t2_e2` (`5298286`) — TIMEOUT at 2d (saved 4 incremental records)
-     - `af739_t3_e2` (`5298287`) — TIMEOUT at 2d (saved 4 incremental records)
-     - `af739_t1_s2` (`5299888`) — OOM at 224G (MaxRSS 234G)
-     - `gpu_cos2_t2` (`5298288`) — TIMEOUT at 2d (0 incremental saves)
-   - Current l40s runners:
-     - `l2_ac_t1_co` (14h elapsed)
-     - `l2_ac_t1_fu` (10h elapsed)
-     - `l2_ac_t2_ce` (9h elapsed)
-     - `l2_ac_t2_s2` (9h elapsed)
-     - `l2_ac_t2_e2` (8h elapsed)
-   - Current hopper runners:
-     - `h2_ac_t2_s2` (8h elapsed)
-     - `h2_ac_t1_co` (8h elapsed)
-     - `h2_ac_t1_ct` (7h elapsed)
-   - **ModernTCN bottleneck** remains the dominant throughput limiter for non-e2 accel jobs
-   - Partition constraints (`sinfo` verified): `gpu=756G`, `l40s=515G`, `hopper=2063754MB (~2.06TB)`; the earlier `hopper=201G` claim was a unit-reading error
-2. V739 status:
-   - **132/160 conditions landed** (unchanged; s2/e2 gap-filling in progress)
-   - V739 gap-fill: 1 RUNNING + 5 PENDING (resubmitted 2026-03-31 11:30)
-   - RUNNING:
-     - `af739_t2_s2` as `5300059` (224G/9CPU, 1d3h elapsed)
-   - PENDING (resubmitted after failures):
-     - `af739_t1_e2` as `5302271` (189G/7CPU, resume from 4 saved records)
-     - `af739_t2_e2` as `5302272` (189G/7CPU, resume from 4 saved records)
-     - `af739_t3_e2` as `5302273` (189G/7CPU, resume from 4 saved records)
-     - `af739_t1_s2` as `5302274` (280G/9CPU, bumped from 224G after OOM at MaxRSS 234G)
-   - Missing structure: cos2=8+4=12, ces2=8+4+4=16 (28 total)
-   - V739 incremental save confirmed: all three e2 jobs saved 4 records each before TIMEOUT
-   - V739 is empirically valid: 0 NaN/Inf, 0 fallback, 100% fairness pass
-   - The seed2 jobs required four repair rounds:
-     - `150G` OOM
-     - `189G` OOM
-     - `200G / 8 CPU` still OOMed for `t1_s2`
-     - `224G / 9 CPU` still OOMed for `t1_s2` (`MaxRSS ≈ 234G`)
-     - `280G / 9 CPU` is the current `t1_s2` resubmission
-   - `af739_t2_s2` is still RUNNING at `224G / 9 CPU`
-3. Finding H (discovered 2026-03-22):
-   - 8 P15 models produce 100% constant predictions (0% fairness pass)
-   - CFPT, DeformableTST, MICN, PathFormer, SEMPO, SparseTSF, TimeBridge, TimePerceiver
-   - Added to AUDIT_EXCLUDED_MODELS in aggregate_block3_results.py
-   - Removed from accel_v2 scripts → ~30% faster per job
-4. accel_v2 progress (verified 2026-03-31 11:30):
-   - gpu: only `af739_t2_s2` RUNNING; 5 resubmitted jobs PENDING
-   - l40s: 5R + 10PD; hopper: 3R + 15PD
-   - recent completions: +30 records (16152→16182) and +2 models @160 (75→77)
-   - **ModernTCN remains the universal bottleneck** for non-`e2` accel paths
-5. Critical gaps:
-   - s2 (core_only_seed2): `gpu_cos2_t2` resubmitted as `5302275` after 2d TIMEOUT (0 saves; 23 models too large for single 2d window)
-   - e2 (core_edgar_seed2): accel_v2 e2 scripts producing growth
-   - V739: 28 missing s2+e2 conditions; 1R (`af739_t2_s2` 5300059) + 4PD (resubmitted 5302271-5302274)
-6. Text embeddings:
-   - `runs/text_embeddings/text_embeddings.parquet` — 5,774,931 rows, 64 PCA dims
-   - Phase 12 all 48/48 complete. core_text+full coverage: 91/91 models
-7. Audit-excluded models: 24 total (17 old + 7 Finding H + NegativeBinomialGLM)
+1. Live queue snapshot at verification time:
+   - `36` total jobs
+   - `8 RUNNING = 5 l40s + 3 hopper`
+   - `28 PENDING = 5 gpu + 9 l40s + 14 hopper`
+   - there are **no gpu RUNNING jobs**
+2. `V739` status is currently stalled, not actively progressing:
+   - `5298285`, `5298286`, `5298287` timed out at `189G`
+   - `5302271`, `5302272`, `5302273` timed out again at `189G`
+   - `5299888` OOMed at `224G` with `MaxRSS ~= 234.9G`
+   - `5300059` OOMed at `224G` with `MaxRSS ~= 234.9G`
+   - `5302274` OOMed again at `280G` with `MaxRSS ~= 293.6G`
+   - `5302275 gpu_cos2_t2` timed out at `150G`
+   - honest state: `V739` remains the only valid AutoFit baseline, but there is currently no live successful gap-fill job in queue
+3. Current canonical backlog surface from the regenerated snapshot:
+   - `XGBoost` at `159/160` and `XGBoostPoisson` at `157/160` remain the known structural OOM exceptions
+   - `AutoFitV739` remains at `132/160`
+   - `Chronos2` and `TTM` are at `114/160`
+   - `Crossformer`, `MSGNet`, `MambaSimple`, and `PAttn` are at `107/160`
+   - `ETSformer`, `LightTS`, `Pyraformer`, and `Reformer` are at `94/160`
+   - the 15 valid Phase 15 TSLib entrants are currently at `91/160`
+4. V740 local truth that is settled enough to cite today:
+   - shared112 non-routed aggregate is complete at `112/112` with `15/2/95`
+   - binary target split: `7/2/7`
+   - funding target split: `8/0/40`
+   - investors target split: `0/0/48`
+   - binary h1 post-audit rerun: `2/0/2`
+   - investors h1 post-audit rerun: `0/0/12`
+   - funding widened best-branch duel `5304260` is completed:
+     - `anchor_only_no_log_a085`: `20 wins / 28 losses`
+     - `scale_anchor_no_log_a085`: `20 wins / 28 losses`
+     - `full` funding cells remain `0 wins / 12 losses`
+   - EDGAR exact-day vs as-of misalignment is no longer a live root-cause hypothesis
+   - missing or failed text embeddings are no longer a live root-cause hypothesis
+5. V740 formal routed evidence is still absent:
+   - no routed summary markdown landed under `docs/references/V740_SHARED112_*ROUTED*_2026040*.md`
+   - no routed JSON outputs landed under `runs/benchmarks/v740_localclear_20260402/` or `runs/benchmarks/v740_localclear_20260403/`
+   - current pending routed jobs:
+     - `5305468 v740_112_inv` -> ETA `2026-04-12T11:20:00`
+     - `5305469 v740_112_bin` -> ETA `2026-04-12T12:10:00`
+     - `5305472 v740_112_invh1` -> ETA `2026-04-12T15:30:00`
+     - `5305473 v740_112_binh1` -> ETA `2026-04-12T15:40:00`
+   - related non-routed post-audit rerun job `5304393 v740_repr_pa` is also still pending, ETA `2026-04-11T21:20:00`
+   - honest state: the target-routed code path is real, but the first formal routed head-to-head results have not landed yet
 
-8. Local-only V740 truth that is now settled enough to cite:
-   - the first corrected local head-to-head for `mb_t1_core_edgar_is_funded_h14` has landed
-   - `V739` beats `V740-alpha` on that slice:
-     - `V739`: `MAE = 0.1623`, selected model `PatchTST`, fit time `301.3s`
-     - `V740-alpha`: `MAE = 0.2016`, fit time `38.9s`
-   - interpretation: `V740-alpha` is still much cheaper, but it is **not yet** strong enough to replace V739 on this audited binary EDGAR slice
-9. Local-only model-clear promotion state:
-   - `5294242` `v740_samf_clr` **completed successfully** for a narrow `SAMformer` benchmark-clear probe
-   - a second `SAMformer` funding-side tiny smoke is now also non-fallback:
-     - `task2_forecast / core_edgar / funding_raised_usd / h=30`
-     - `MAE = 265368.0`
-     - `constant_prediction = false`
-   - the first funding-side promotion probe `5299018` failed immediately due to
-     a submission-surface bug (`quick` preset cannot run `task2 / h=30`)
-   - the repaired funding promotion probe has now **completed successfully**:
-     - `5299636` `v740_samf_fu_clr`
-     - `MAE = 130514.7325`
-     - `RMSE = 174074.8917`
-     - `prediction_coverage_ratio = 1.0`
-     - `fairness_pass = true`
-   - the wider local lane-expansion follow-up has now also completed cleanly:
-     - `5300057` `v740_samf_lane`
-     - output root:
-       - `runs/benchmarks/block3_phase9_localclear_20260330/samformer_funding_h30_h60_lane/`
-     - landed audited result on the current harness surface:
-       - `task2_forecast / core_edgar / funding_raised_usd / h=30`
-       - `MAE = 130514.7325`
-       - `fairness_pass = true`
-     - current honest read:
-       - this is now a **promotion-positive** funding-side line for `SAMformer`
-   - `5294243` `v740_prop_clr` **failed before model execution** because `quick` preset does not support `h=30`
-   - `5294254` `v740_prop_std` **completed successfully** as the corrected `Prophet` resubmission on `bigmem`
-   - `5294255` `v740_tpfn26c` **completed successfully** as the first narrow `TabPFNClassifier` + official 2.6 checkpoint benchmark-clear probe
-   - `5294259` `v740_tpfn26r_fu` **completed successfully** as the first `TabPFNRegressor` funding narrow clear
-   - `5294260` `v740_tpfn26r_inv` **completed successfully**, but returned `fairness_pass = false` on the audited investors-count slice and therefore must be treated as a red-flag result rather than a promotable clear
-   - a fuller-source `LightGTS` tiny funding smoke is now also non-fallback:
-     - `task2_forecast / full / funding_raised_usd / h=30`
-     - `MAE = 445368.0`
-     - `constant_prediction = false`
-   - the fuller-source `LightGTS` promotion probe has now **completed successfully**:
-     - `5299637` `v740_lgts_fu_clr`
-     - `task2_forecast / full / funding_raised_usd / h=30`
-     - `MAE = 201930.5506`
-     - `RMSE = 205737.7476`
-     - `prediction_coverage_ratio = 1.0`
-     - `fairness_pass = true`
-   - the wider fuller-source lane-expansion follow-up has now also completed cleanly:
-     - `5300058` `v740_lgts_lane`
-     - output root:
-       - `runs/benchmarks/block3_phase9_localclear_20260330/lightgts_full_funding_h30_h60_lane/`
-     - landed audited result on the current harness surface:
-       - `task2_forecast / full / funding_raised_usd / h=30`
-       - `MAE = 201930.5506`
-       - `fairness_pass = true`
-     - current honest read:
-       - this is now a **promotion-positive** fuller-source funding line for `LightGTS`
-   - the more conservative `ElasTST` count-side repair probe has now also completed:
-     - `5299641` `v740_elas_i21_clr`
-     - `task2_forecast / core_edgar / investors_count / h=14`
-     - `input_size = 21`, `l_patch_size = 3_6`
-     - `MAE = 124.4985`
-     - `prediction_coverage_ratio = 1.0`
-     - `fairness_pass = false`
-   - the paired V740 text-gain audit has now completed cleanly:
-     - `5300635` `v740_txtgain_bin`
-     - scope:
-       - `task1_outcome / {core_edgar, full} / is_funded / h={14,60}`
-     - current audited evidence:
-       - `core_edgar / h=14`: `MAE = 0.3281`
-       - `full / h=14`: `MAE = 0.3264`
-       - `core_edgar / h=60`: `MAE = 0.3741`
-       - `full / h=60`: `MAE = 0.3056`
-     - current honest interpretation:
-       - on these audited fuller-source binary slices, text is no longer only
-         "stable source coverage"; it is now a **real positive signal**
-       - the text-gain question is now materially tighter for the binary lane,
-         though not yet fully answered for funding/count slices
-   - two more serious promotion-lane probes have now **completed**:
-     - `5300644` `v740_samf_bin4h` — **COMPLETED** (59s wall time)
-       - `task1_outcome / core_edgar / is_funded / h={1,7,14,30}`
-       - output: `runs/benchmarks/block3_phase9_localclear_20260331/samformer_binary_fullh_lane/`
-       - results: h1 MAE=0.3573, h7 MAE=0.3493, h14 MAE=0.3485, h30 MAE=0.3493
-       - all 4 horizons: coverage=1.0, fallback=0.0
-       - interpretation: SAMformer produces legitimate non-constant binary predictions across all horizons
-     - `5300645` `v740_lgts_f4h` — **COMPLETED** (87s wall time)
-       - `task2_forecast / full / funding_raised_usd / h={1,7,14,30}`
-       - output: `runs/benchmarks/block3_phase9_localclear_20260331/lightgts_funding_fullh_lane/`
-       - results: h1 MAE=201930.2455, h7 MAE=201930.2596, h14 MAE=201930.3049, h30 MAE=201930.5506
-       - all 4 horizons: coverage=1.0, fallback=0.0
-       - **WARNING**: val_loss stuck at 63T across all horizons, early-stopped at epoch 3 every time; near-identical MAE across horizons suggests degenerate/constant-like outputs
-       - interpretation: LightGTS funding lane technically non-fallback but likely collapsed to a near-constant predictor
-   - all of these write to isolated output roots under `runs/benchmarks/block3_phase9_localclear_20260328/`, `runs/benchmarks/block3_phase9_localclear_20260329/`, `runs/benchmarks/block3_phase9_localclear_20260330/`, or `docs/references/v740_alpha_selective_smoke_20260331/` and do **not** count as canonical benchmark results
-10. `LightGTS` local integration has now crossed both the first real-data gate and the first narrow benchmark-clear gate:
-   - the vendor repo audit and import smoke had already passed
-   - the first tiny real-data funding smoke at `input_size=96` produced **no training windows** and therefore fell back to a constant predictor
-   - a second tiny real-data funding smoke at `input_size=60`, `patch_len=15`, `stride=15` is now **non-fallback and non-constant**
-   - slice:
-     - `task2_forecast / core_edgar / funding_raised_usd / h=30`
-     - `4 entities / 300 train rows`
-   - result:
-     - `fit_seconds = 4.60`
-     - `prediction_std = 10802.78`
-     - `constant_prediction = false`
-     - `MAE = 445367.99`
-   - the first narrow benchmark-clear attempt (`5298059`) completed without model execution because the compute node could not see the vendor repo path (`/tmp/LightGTS`)
-   - after moving the official repo to the persistent user-local path `~/.cache/block3_optional_repos/LightGTS`, the repaired rerun (`5298289`) completed successfully
-   - narrow benchmark-clear result on the audited slice:
-     - `task2_forecast / core_edgar / funding_raised_usd / h=30`
-     - `MAE = 201930.5506`
-     - `RMSE = 205737.7476`
-     - `prediction_coverage_ratio = 1.0`
-     - `fairness_pass = true`
-     - `peak_rss_gb = 47.40`
-   - interpretation:
-     - `LightGTS` is now genuinely past the “import only” stage
-     - it has a real narrow harness clear
-     - it is still a local-clear side path and does **not** yet count as a canonical benchmark entrant
-11. `OLinear` has now crossed the same first serious local-only integration gates:
-   - the official repo is audited and pinned locally at:
-     - `~/.cache/block3_optional_repos/OLinear`
-     - HEAD `f168e01a3e0e316ad98330b5e77afed1f77b0af5`
-   - local integration is no longer blocked only on paper by artifact generation:
-     - a Block 3 vendor-path helper exists in `src/narrative/block3/models/optional_runtime.py`
-     - a real local wrapper exists in `src/narrative/block3/models/olinear_model.py`
-     - the model is now locally registered through `src/narrative/block3/models/deep_models.py`
-   - first tiny real-data funding smoke on:
-     - `task2_forecast / core_edgar / funding_raised_usd / h=30`
-     - is **non-fallback** and **non-constant**
-     - `fit_seconds = 15.35`
-     - `MAE = 265368.0`
-12. `ElasTST` is no longer docs-only:
-   - the official ProbTS repo is audited locally at:
-     - `~/.cache/block3_optional_repos/ProbTS`
-   - a local vendor-import wrapper now exists at:
-     - `src/narrative/block3/models/elastst_model.py`
-   - the first funding smoke on:
-     - `task2_forecast / core_edgar / funding_raised_usd / h=30`
-     - is **non-fallback** and **non-constant**
-     - `fit_seconds = 2.02`
-     - `MAE = 445367.47`
-   - the first shorter-context investors smoke on:
-     - `task2_forecast / core_edgar / investors_count / h=14`
-     - `input_size = 30`, `l_patch_size = 6_10`
-     - is also **non-fallback**
-     - `fit_seconds = 2.30`
-     - `MAE = 47.52`
-   - the first narrow benchmark-clear job has already completed successfully:
-     - `5298399 v740_elas_clr`
-     - `task2_forecast / core_edgar / funding_raised_usd / h=30`
-     - `MAE = 201925.6990`
-     - `RMSE = 205733.8504`
-     - `fairness_pass = true`
-     - `prediction_coverage_ratio = 1.0`
-     - `peak_rss_gb = 47.06`
-   - the second narrow benchmark-clear job has also completed:
-     - `5298437 v740_elas_inv_clr`
-     - `task2_forecast / core_edgar / investors_count / h=14`
-     - `input_size = 30`, `l_patch_size = 6_10`
-   - `MAE = 125.1687`
-   - `RMSE = 125.1687`
-   - `fairness_pass = false`
-   - `prediction_coverage_ratio = 1.0`
-   - `peak_rss_gb = 46.24`
-  - the more conservative count-side repair probe has now also completed:
-    - `5299641 v740_elas_i21_clr`
-    - `task2_forecast / core_edgar / investors_count / h=14`
-    - `input_size = 21`, `l_patch_size = 3_6`
-    - `MAE = 124.4985`
-    - `RMSE = 124.4985`
-    - `fairness_pass = false`
-    - `prediction_coverage_ratio = 1.0`
-    - `peak_rss_gb = 47.02`
-   - this remains a local-only side path and does **not** count as a canonical benchmark result
-   - first tiny real-data investors-count smoke on:
-     - `task2_forecast / core_edgar / investors_count / h=14`
-     - falls back to a constant predictor on that tiny slice
-   - first narrow benchmark-clear rerun:
-     - `5298296` `v740_olnr_clr`
-     - completed successfully on the real harness
-13. `UniTS` is also no longer docs-only:
-   - the official repo is audited locally at:
-     - `~/.cache/block3_optional_repos/UniTS`
-     - HEAD `0e0281482864017cac8832b2651906ff5375a34e`
-   - a forecasting-only Block 3 wrapper now exists at:
-     - `src/narrative/block3/models/units_model.py`
-   - first tiny funding smoke on:
-     - `task2_forecast / core_edgar / funding_raised_usd / h=30`
-     - is **non-fallback**
-     - `fit_seconds = 14.95`
-     - `MAE = 265368.0`
-   - first narrow benchmark-clear:
-     - `5298457 v740_units_clr`
-     - `MAE = 131725.2212`
-     - `RMSE = 174105.8744`
-     - `prediction_coverage_ratio = 1.0`
-     - `fairness_pass = true`
-   - `peak_rss_gb = 47.73`
-   - this remains a local-only side path and does **not** count as a canonical benchmark landing
-14. `OLinear` count-side is now settled enough for an honest decision:
-   - a richer local smoke on:
-     - `task2_forecast / core_edgar / investors_count / h=14`
-     - `input_size = 30`, `temp_patch_len = 6`, `temp_stride = 6`
-     - became **non-fallback** and **non-constant**
-     - `MAE = 0.0206`
-   - but the matching audited harness narrow clear:
-     - `5298523 v740_olnr_inv`
-     - finishes with `fairness_pass = false`
-     - and the log explicitly reports a constant `137.0` prediction on the audited slice
-   - the correct operational conclusion is therefore:
-     - keep `OLinear` as a promising **funding-side** entrant
-     - do **not** promote its count-side lane yet
-15. The first `CASA + TimeEmb`-inspired V740 alpha implementation pass is now audited on real freeze-backed slices:
-   - code surface:
-     - `src/narrative/block3/models/v740_alpha.py`
-   - new lightweight mechanisms:
-     - `CASALocalContextBlock` for cheap condition-aware local context mixing
-     - `StaticDynamicTimeFusion` for TimeEmb-style static/dynamic/source fusion
-   - three audited local smokes now exist:
-     - `task2_forecast / core_edgar / funding_raised_usd / h=30`
-       - `MAE = 182493.8486`
-       - `constant_prediction = false`
-     - `task1_outcome / core_edgar / is_funded / h=14`
-       - `MAE = 0.2853`
-       - `constant_prediction = false`
-     - `task2_forecast / core_edgar / funding_raised_usd / h=60`
-       - `MAE = 176137.8275`
-       - `constant_prediction = false`
-   - relative to the immediately prior audited alpha objective line, these new smokes show real directional improvement on the same funding and binary audited slices while staying non-degenerate
-16. The same `CASA + TimeEmb` alpha line now also has fuller-source audited evidence:
-   - `task1_outcome / full / is_funded / h=14`
-     - `MAE = 0.2758`
-     - `RMSE = 0.4962`
-     - `text_source_density = 1.0`
-     - `constant_prediction = false`
-   - `task1_outcome / full / is_funded / h=60`
-     - `MAE = 0.3296`
-     - `RMSE = 0.5366`
-     - `text_source_density = 1.0`
-     - `constant_prediction = false`
-   - `task2_forecast / full / funding_raised_usd / h=60`
-     - `MAE = 176137.0694`
-     - `RMSE = 367849.7154`
-     - `text_source_density = 1.0`
-     - `constant_prediction = false`
-   - `task2_forecast / full / funding_raised_usd / h=30`
-     - `MAE = 182491.8726`
-     - `RMSE = 364524.0365`
-     - `text_source_density = 1.0`
-     - `constant_prediction = false`
-   - current honest interpretation:
-     - the first fuller-source binary slice is slightly stronger than the
-       matching `core_edgar` audit,
-     - the fuller-source binary line stays non-degenerate even at `h=60`, but
-        is clearly harder than the matching `h=14` slice,
-     - while the fuller-source funding `h=60` slice is effectively tied with
-        `core_edgar`, and the newer fuller-source funding `h=30` slice is only
-        a tie / slight edge over the matching `core_edgar` audit, so text is
-        source-covered there but not yet proven as the main gain source.
-17. `UniTS` count-side now has a real harness-side decision:
-   - richer local smoke on:
-     - `task2_forecast / core_edgar / investors_count / h=14`
-     - `input_size = 30`, `patch_len = 5`, `stride = 5`
-     - had looked promising (`MAE = 0.0214`, non-constant)
-   - the follow-up real harness clear has now landed:
-     - `5298559 v740_units_inv_clr`
-   - audited result:
-     - `MAE = 6.1035e-05`
-     - `prediction_coverage_ratio = 1.0`
-     - `fairness_pass = false`
-   - log evidence shows a constant `136.9999` prediction on the audited slice
-   - current honest interpretation:
-     - `UniTS` remains promising on the funding lane,
-     - but its count-side lane is not promotable right now
+## Interpretation Rules
 
-## Current Priorities
-
-1. ~~Land the first valid V739 results.~~ ✅ DONE (124/160 conditions landed, 112 co+ce+ct+fu complete).
-2. ~~Finish gap-fill for partial models.~~ ✅ Current full-160 active frontier is 62 models; remaining incomplete active models are covered by accel_v2 or structural OOM exceptions.
-3. ~~Submit real text-enabled reruns.~~ ✅ Phase 12 DONE (48/48 COMPLETED).
-4. ~~Phase 12 text reruns to land.~~ ✅ DONE. core_text+full 91/91 models.
-5. ~~Phase 15 new TSLib models.~~ ✅ Submitted. 15 valid, 8 excluded (Finding H).
-6. ~~Cancel old v1 l40s/hopper jobs.~~ ✅ DONE. 8 old v1 jobs cancelled, freed L40S for v2.
-7. Complete V739 s2/e2 gap-fill (1R + 4PD: `af739_t2_s2` running, `af739_t1_e2/t2_e2/t3_e2` resume from 4 saves each, `af739_t1_s2` resubmitted at 280G).
-8. Complete e2 gap for ETSformer/LightTS/Pyraformer/Reformer (0/28 e2 each — covered by accel_v2).
-9. Complete P15 model gap-fill to 160/160 via accel_v2 (l40s+hopper active). P15 models at 85/160.
-10. `gpu_cos2_t2` resubmitted as `5302275` — 23 tslib_sota models × task2 cos2. Has resume logic.
-11. Local-only V740 work is now permitted via resumable side-paths that do **not** touch the canonical benchmark harness. The current completed local-only milestones are:
-   - first corrected local `V739 vs V740` head-to-head (`mb_t1_core_edgar_is_funded_h14`)
-   - larger-slice `full / funding_raised_usd / h=90 / input_size=120` audit
-   Both completed successfully on 2026-03-27 and are now recorded in the V740 research notes.
-
-## What Is No Longer Current
-
-1. Everything under `docs/_legacy_repo/` is historical archive material.
-2. The old V72/V73 truth-pack line under `docs/benchmarks/LEGACY__block3_truth_pack__v72_v73/` is historical evidence, not the current operational truth for Phase 9 / V739.
-3. Research/reference notes under `docs/references/` are background knowledge only. They are useful for design, but they are not status documents.
-4. Any archived local checklist copies under `docs/_legacy_repo/` are historical only and must not be treated as current execution truth.
-5. The archived large result table at `docs/_legacy_repo/BLOCK3_RESULTS_table_20260314.md` is preserved for traceability, not for current operational reading.
-
-## Validation Commands
-
-```bash
-/mnt/aiongpfs/projects/eint/envs/.micromamba/envs/insider/bin/python3 scripts/build_phase9_current_snapshot.py
-/mnt/aiongpfs/projects/eint/envs/.micromamba/envs/insider/bin/python3 scripts/aggregate_block3_results.py
-squeue -u npin,cfisch
-for jid in $(squeue -u npin,cfisch -h -o '%i %j' | awk '$2 ~ /(v739|af739)/ {print $1}'); do
-  scontrol show job "$jid" | egrep 'JobId=|JobName=|Command=|WorkDir=|StdOut=|StdErr='
-done
-```
+1. Phase 7 and Phase 8 are historical only.
+2. `V734` through `V738` are retired due to oracle leakage and must not be treated as current baselines.
+3. The canonical benchmark remains the read-only Phase 9 fair freeze under `runs/benchmarks/block3_phase9_fair/`.
+4. `docs/BLOCK3_RESULTS.md` is the filtered leaderboard view, `docs/benchmarks/phase9_current_snapshot.md` is the live artifact snapshot, and this file is the project-wide truth pack that reconciles them.
+5. All `V740_*` local notes are research evidence only unless and until a result is explicitly landed into the canonical benchmark.

@@ -1,118 +1,80 @@
-# V740 / Comparator Roadmap Status (2026-03-30)
+# V740 / Comparator Roadmap Status (Updated 2026-04-03)
 
-This note answers one narrow operational question:
+This note answers one operational question:
 
-> Of the concrete next-wave routes we said we would push, which are already
-> done to a meaningful evidence threshold, and which are still incomplete?
+> where does the V740 line truly stand after the April 1-3 local evidence wave?
 
-The threshold here is strict:
+Strict reading rules:
 
-- "done" means at least **real local-clear / audited evidence exists**
-- not just paper reading or wrapper scaffolding
-- not canonical benchmark landed unless explicitly stated
+- executed evidence only counts if the job actually ran and produced artifacts
+- queued jobs are not results
+- local V740 evidence is not canonical benchmark truth
 
-## 1. Comparator lane status
+## 1. Executed V740 State
 
-| Wave | Item | Current status | Best evidence today | Honest next step |
-| --- | --- | --- | --- | --- |
-| First | `TabPFNRegressor 2.6` | **narrow-clear evaluated; not promotable yet** | funding clear runs with `fairness_pass=true` but weak quality; investors clear returns `fairness_pass=false` | do not widen yet unless a new targeted count-safe setting emerges |
-| First | `SAMformer` | **binary narrow-clear done; funding probes promotion-positive; first serious multi-horizon lane now queued** | first audited clear: `MAE=0.3485`, `fairness_pass=true` on `task1_outcome/core_edgar/is_funded/h14`; second funding-side tiny smoke is non-fallback with `MAE=265368.0` on `task2_forecast/core_edgar/funding_raised_usd/h30`; first funding probe `5299018` failed only because `quick` preset cannot run `task2 / h=30`; repaired follow-up clear `5299636` lands with `MAE=130514.7325`, `fairness_pass=true`; wider lane `5300057` also completed cleanly on the current harness surface with the same funding-side result; the first more-serious multi-horizon follow-up is now queued as `5300644` on `task1_outcome/core_edgar/is_funded/h={1,7,14,30}` | read out `5300644` and decide whether `SAMformer` is ready to move beyond local-clear |
-| First | `Prophet` | **narrow-clear done; sanity baseline only** | corrected CPU-only narrow clear succeeds, but quality is weak | keep only as a reviewer-friendly sanity baseline |
-| Second | `LightGTS` | **narrow-clear done; fuller-source funding probes promotion-positive; first serious multi-horizon lane now queued** | repaired core-edgar narrow clear `MAE=201930.5506`, `fairness_pass=true`; fuller-source tiny funding smoke is also non-fallback with `MAE=445368.0`; matching promotion probe `5299637` on `full / funding / h=30` lands cleanly with `MAE=201930.5506`, `fairness_pass=true`; wider lane `5300058` also completed cleanly on the current harness surface with the same fuller-source funding result; the first more-serious multi-horizon follow-up is now queued as `5300645` on `task2_forecast/full/funding_raised_usd/h={1,7,14,30}` | read out `5300645` and decide whether `LightGTS` is ready to move beyond local-clear |
-| Second | `OLinear` | **funding narrow-clear done; count-side narrow-clear evaluated and failed fairness** | funding clear `MAE=131288.8062`, `fairness_pass=true`; count-side clear `5298523` ends with `fairness_pass=false` and constant `137.0` predictions on the audited harness slice | keep as a funding-side comparator only until count-side behavior is fixed |
-| Third | `ElasTST` | **funding-side clear; count-side now effectively stop** | funding clear succeeds; first investors clear runs but `fairness_pass=false`; the more conservative repair probe `5299641` from `input_size=21 / l_patch_size=3_6` also ends with `fairness_pass=false` | keep `ElasTST` funding-only unless a materially different count-safe design appears |
-| Third | `UniTS` | **funding narrow-clear done; count-side narrow-clear evaluated and failed fairness** | funding clear `MAE=131725.2212`, `fairness_pass=true`; count-side clear `5298559` ends with `fairness_pass=false` and constant `136.9999` predictions on the audited harness slice | keep `UniTS` as a funding-side comparator only until a materially different count-safe setting exists |
-
-## 2. V740 methodology lane status
-
-| Item | Current status | Best evidence today | Honest next step |
+| Lane | Current status | Best executed evidence today | Honest read |
 | --- | --- | --- | --- |
-| `DistDF` | **first and second engineering passes landed** | source-aware multistep alignment stays non-degenerate on funding and binary audits | continue tightening target-specific multistep behavior |
-| `Selective Learning` | **first and second engineering passes landed** | weighted objective remains stable; later passes improved audited slices rather than breaking them | continue auditing on harder binary and fuller-source slices |
-| `CASA` | **first lightweight code pass landed** | `CASALocalContextBlock` now materially improves audited `core_edgar` funding `h=30` and remains stable on fuller-source binary audits through `h=60` | keep testing on fuller-source and harder long-h slices |
-| `TimeEmb` | **first lightweight code pass landed** | `StaticDynamicTimeFusion` now supports stable fuller-source audits with `text_source_density=1.0`; the paired binary text-gain audit `5300635` has now completed and shows `full` beating `core_edgar` on both audited `is_funded` slices (`h=14` and `h=60`); funding remains a tie / slight edge rather than a decisive text win | treat binary fuller-source text gain as established enough for now, and keep the remaining open text question focused on funding/count behavior |
+| binary non-routed shared112 | complete | `16/16` complete, aggregate `7/2/7`; h1 post-audit rerun `2/0/2` | real binary competitiveness exists, but it is not yet dominant |
+| funding non-routed shared112 | complete | `48/48` complete, aggregate `8/0/40`; widened best-branch duel `5304260` finished `20/28` for both strongest branches | funding can be partially rescued, but this line is not a near-champion funding lane |
+| investors non-routed shared112 | complete | `48/48` complete, aggregate `0/0/48`; h1 post-audit rerun `0/0/12` | investors remains a structural failure lane |
+| EDGAR root-cause audit | complete | exact-day vs as-of join mismatch falsified on the freeze-backed daily surface | do not spend another cycle on EDGAR join semantics |
+| text root-cause audit | complete | embeddings are present and aligned; the current weakness is representation, not missing assets | do not spend another cycle on "missing text embeddings" stories |
+| target-routed implementation | code and smoke complete | routed decoder, count-anchor head, and count-jump path are live; routed smokes stayed non-constant | the implementation path is real code, not a design placeholder |
 
-## 3. What is actually done vs not done
+## 2. Executed Comparator State
 
-### Done to a meaningful evidence threshold
+| Comparator lane | Current status | Honest use today |
+| --- | --- | --- |
+| `SAMformer` | completed through a wider local-only lane | comparator evidence exists already; not a current queue blocker |
+| `LightGTS` | completed through a wider local-only lane | comparator evidence exists already; remains a local-only side path |
+| `OLinear` | funding-side local clear, count-side not promotable | funding-only comparator |
+| `ElasTST` | funding-side local clear, count-side not promotable | funding-only comparator |
+| `UniTS` | funding-side local clear, count-side not promotable | funding-only comparator |
 
-- `TabPFNRegressor 2.6` narrow-clear decision has been made:
-  - runnable,
-  - but not worth widening right now
-- `SAMformer`
-- `Prophet`
-- `LightGTS`
-- `OLinear` funding side
-- `ElasTST` funding side
-- `UniTS` funding side
-- `DistDF`
-- `Selective Learning`
-- first lightweight `CASA`
-- first lightweight `TimeEmb`
+## 3. What Has Not Landed Yet
 
-### Not done to the extreme yet
+| Item | Job(s) | Scope | Landed today | Current ETA |
+| --- | --- | --- | --- | --- |
+| post-audit repr rerun | `5304393 v740_repr_pa` | full binary + investors post-audit rerun | `0` new outputs from this pending job | `2026-04-11T21:20:00` |
+| full routed investors loop | `5305468 v740_112_inv` | shared112 investors routed loop | `0/48` cells | `2026-04-12T11:20:00` |
+| full routed binary loop | `5305469 v740_112_bin` | shared112 binary routed loop | `0/16` cells | `2026-04-12T12:10:00` |
+| routed investors h1 probe | `5305472 v740_112_invh1` | routed investors `h=1` probe | `0/12` cells | `2026-04-12T15:30:00` |
+| routed binary h1 probe | `5305473 v740_112_binh1` | routed binary `h=1` probe | `0/4` cells | `2026-04-12T15:40:00` |
+| routed summary docs | none landed | `docs/references/V740_SHARED112_*ROUTED*_2026040*.md` | `0` docs | blocked on queue |
+| routed JSON outputs | none landed | `runs/benchmarks/v740_localclear_20260402/` and `...20260403/` | `0` outputs | blocked on queue |
 
-- `OLinear` count-side recovery beyond the current failed narrow clear
-- `UniTS` count-side recovery beyond the current failed narrow clear
-- reading out the first more-serious `SAMformer` multi-horizon lane (`5300644`)
-- reading out the first more-serious `LightGTS` multi-horizon lane (`5300645`)
-- whether the newly established binary text gain also generalizes beyond the current fuller-source audited `is_funded` slices
-- canonical benchmark landing for any of the new local-clear entrants
+## 4. Progress Dashboard
 
-## 4. Current honest summary
+These bars track execution progress, not outcome quality.
 
-The earlier promised roadmap is **not fully complete to the extreme** yet.
+- Code path landing: `[##########]` complete
+- Shared112 non-routed diagnosis: `[##########]` `112/112` complete
+- Funding branch selection: `[##########]` complete through `g4`
+- Formal routed full cells: `[..........]` `0/64` landed
+- Formal routed h1 probes: `[..........]` `0/16` landed
+- Routed shared112 verdict: `[..........]` waiting on queue
+- Full160 local compare on routed line: `[..........]` not started
+- Canonical promotion decision: `[..........]` not started
 
-But it is no longer just a roadmap:
+## 5. Remaining-Time Reality
 
-- the first wave is effectively settled at narrow-clear level,
-- the second wave now has two real entrants (`LightGTS`, `OLinear`) beyond
-  docs-only status,
-- the third wave now has two real entrants (`ElasTST`, `UniTS`) beyond
-  docs-only status,
-- and the V740 methodology lane now has the first real code-and-audit evidence
-  for `DistDF`, `Selective Learning`, `CASA`, and `TimeEmb`.
+- The scheduler currently places `5304393 v740_repr_pa` on `2026-04-11T21:20:00`.
+- The first full routed job `5305468 v740_112_inv` is currently placed on `2026-04-12T11:20:00`.
+- The first routed binary job `5305469 v740_112_bin` is currently placed on `2026-04-12T12:10:00`.
+- The shorter h1 routed probes are not currently winning the queue race; they are also placed on `2026-04-12`.
+- Without a new backfill-friendly resubmission strategy, the first formal routed readout cannot honestly be expected before the April 11-12 window.
 
-That means the project has moved from:
+## 6. Current Blocker Ranking
 
-- "these are good ideas"
+1. gpu queue delay on the routed/post-audit V740 jobs
+2. the unresolved investors competitiveness gap
+3. funding reintegration after routing proves itself on binary and investors
+4. the fact that full160 routed local compare has not started
 
-to:
+## 7. Next Honest Sequence
 
-- "these are now audited engineering lines with real evidence, but several
-  still need a second or third expansion step before they can be called
-  complete."
-
-## 5. When This Actually Ends
-
-This line of work is not supposed to be open-ended forever. The practical
-finish line is reached when all four conditions below are true at the same
-time:
-
-1. the canonical benchmark backlog has converged except for the already-known
-   structural exceptions (`XGBoost@159`, `XGBoostPoisson@157`),
-2. the current next-wave entrants have all reached a real decision state:
-   - worth promoting,
-   - worth keeping as a local-clear side lane only,
-   - or not worth further spend right now,
-3. `V740` shows stable audited gains on:
-   - a hard binary slice,
-   - a funding slice,
-   - and at least one longer-h or fuller-source slice,
-   across consecutive mechanism iterations without fairness regression,
-4. the paper-facing accounting stops drifting:
-   - `55 @ 160`,
-   - `58 @ 112`,
-   - `62 raw active complete @ 160`,
-   - `86 non-retired post-filter models`,
-   and the docs no longer need frequent correction.
-
-As of 2026-03-30, we are not at that finish line yet. The remaining named gaps
-are still concrete rather than vague:
-
-- deciding whether `SAMformer` is ready to move beyond local-clear after `5300644`,
-- deciding whether `LightGTS` is ready to move beyond local-clear after `5300645`,
-- deciding whether the now-positive binary text-gain result also extends beyond the current audited `is_funded` fuller-source slices,
-- `UniTS` count-side recovery,
-- and getting at least one new entrant past local-clear into a more serious
-  benchmark lane.
+1. Let `5304393` or one of the routed jobs actually start and land real outputs.
+2. Read out `5305468` and `5305469` before making any claim about routed shared112 gains.
+3. If the routed path materially improves binary and investors, re-run a full routed shared112 package that includes funding again.
+4. Only then widen to a routed full160 local compare.
+5. Only after that should a canonical-promotion discussion reopen.

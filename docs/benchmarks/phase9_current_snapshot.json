@@ -1,11 +1,11 @@
 {
-  "generated_at_utc": "2026-04-01T00:08:14.793444+00:00",
+  "generated_at_utc": "2026-04-03T09:13:00.149757+00:00",
   "benchmark_dir": "runs/benchmarks/block3_phase9_fair",
   "filtered_csv": "runs/benchmarks/block3_phase9_fair/all_results.csv",
   "text_dir": "runs/text_embeddings",
   "raw": {
     "metrics_files": 137,
-    "raw_records": 16182,
+    "raw_records": 16284,
     "raw_models": 137,
     "raw_retired_autofit_models": 21,
     "raw_nonretired_models": 116,
@@ -116,26 +116,26 @@
       },
       {
         "model_name": "Crossformer",
-        "conditions": 105,
-        "records": 109
+        "conditions": 107,
+        "records": 111
       },
       {
         "model_name": "MSGNet",
-        "conditions": 105,
-        "records": 109
+        "conditions": 107,
+        "records": 111
       },
       {
         "model_name": "MambaSimple",
-        "conditions": 105,
-        "records": 109
-      },
-      {
-        "model_name": "MultiPatchFormer",
-        "conditions": 105,
-        "records": 109
+        "conditions": 107,
+        "records": 111
       },
       {
         "model_name": "PAttn",
+        "conditions": 107,
+        "records": 111
+      },
+      {
+        "model_name": "MultiPatchFormer",
         "conditions": 105,
         "records": 109
       },
@@ -146,98 +146,98 @@
       },
       {
         "model_name": "ETSformer",
-        "conditions": 93,
-        "records": 113
+        "conditions": 94,
+        "records": 114
       },
       {
         "model_name": "LightTS",
-        "conditions": 93,
-        "records": 113
+        "conditions": 94,
+        "records": 114
       },
       {
         "model_name": "Pyraformer",
-        "conditions": 93,
-        "records": 113
+        "conditions": 94,
+        "records": 114
       },
       {
         "model_name": "Reformer",
-        "conditions": 93,
-        "records": 113
+        "conditions": 94,
+        "records": 114
       },
       {
         "model_name": "CARD",
-        "conditions": 85,
-        "records": 85
+        "conditions": 91,
+        "records": 91
       },
       {
         "model_name": "DUET",
-        "conditions": 85,
-        "records": 85
+        "conditions": 91,
+        "records": 91
       },
       {
         "model_name": "FiLM",
-        "conditions": 85,
-        "records": 85
+        "conditions": 91,
+        "records": 91
       },
       {
         "model_name": "FilterTS",
-        "conditions": 85,
-        "records": 85
+        "conditions": 91,
+        "records": 91
       },
       {
         "model_name": "FreTS",
-        "conditions": 85,
-        "records": 85
+        "conditions": 91,
+        "records": 91
       },
       {
         "model_name": "Fredformer",
-        "conditions": 85,
-        "records": 85
+        "conditions": 91,
+        "records": 91
       },
       {
         "model_name": "ModernTCN",
-        "conditions": 85,
-        "records": 85
+        "conditions": 91,
+        "records": 91
       },
       {
         "model_name": "NonstationaryTransformer",
-        "conditions": 85,
-        "records": 85
+        "conditions": 91,
+        "records": 91
       },
       {
         "model_name": "PDF",
-        "conditions": 85,
-        "records": 85
+        "conditions": 91,
+        "records": 91
       },
       {
         "model_name": "PIR",
-        "conditions": 85,
-        "records": 85
+        "conditions": 91,
+        "records": 91
       },
       {
         "model_name": "SCINet",
-        "conditions": 85,
-        "records": 85
+        "conditions": 91,
+        "records": 91
       },
       {
         "model_name": "SRSNet",
-        "conditions": 85,
-        "records": 85
+        "conditions": 91,
+        "records": 91
       },
       {
         "model_name": "SegRNN",
-        "conditions": 85,
-        "records": 85
+        "conditions": 91,
+        "records": 91
       },
       {
         "model_name": "TimeRecipe",
-        "conditions": 85,
-        "records": 85
+        "conditions": 91,
+        "records": 91
       },
       {
         "model_name": "xPatch",
-        "conditions": 85,
-        "records": 85
+        "conditions": 91,
+        "records": 91
       },
       {
         "model_name": "CFPT",
@@ -408,7 +408,7 @@
       "ml_tabular": 1617,
       "statistical": 2400,
       "transformer_sota": 3680,
-      "tslib_sota": 3573
+      "tslib_sota": 3675
     },
     "v739_records": 132,
     "v739_conditions_landed": 132,
@@ -1208,7 +1208,7 @@
     ]
   },
   "filtered": {
-    "filtered_records": 12300,
+    "filtered_records": 12422,
     "filtered_models": 107,
     "filtered_retired_autofit_models": 21,
     "filtered_nonretired_models": 86,
@@ -1222,7 +1222,7 @@
       "ml_tabular": 1516,
       "statistical": 2240,
       "transformer_sota": 3040,
-      "tslib_sota": 1896
+      "tslib_sota": 2018
     },
     "filtered_autofit_models": [
       "AutoFitV1",
@@ -1252,44 +1252,39 @@
     ]
   },
   "slurm": {
-    "jobs_total": 38,
+    "jobs_total": 36,
     "state_counts": {
-      "PENDING": 29,
-      "RUNNING": 9
+      "PENDING": 28,
+      "RUNNING": 8
     },
     "user_state_counts": {
-      "npin|PENDING": 29,
-      "npin|RUNNING": 9
+      "npin|PENDING": 28,
+      "npin|RUNNING": 8
     },
     "partition_state_counts": {
       "gpu|PENDING": 5,
-      "gpu|RUNNING": 1,
       "hopper|PENDING": 14,
       "hopper|RUNNING": 3,
-      "l40s|PENDING": 10,
+      "l40s|PENDING": 9,
       "l40s|RUNNING": 5
     },
     "qos_state_counts": {
       "besteffort|PENDING": 14,
       "besteffort|RUNNING": 3,
-      "iris-snt|PENDING": 10,
+      "iris-snt|PENDING": 9,
       "iris-snt|RUNNING": 5,
-      "normal|PENDING": 5,
-      "normal|RUNNING": 1
+      "normal|PENDING": 5
     },
     "pending_reasons": {
-      "(Priority)": 28,
+      "(Priority)": 27,
       "(Resources)": 1
     },
-    "v739_jobs": 5,
-    "v739_state_counts": {
-      "PENDING": 4,
-      "RUNNING": 1
-    },
+    "v739_jobs": 0,
+    "v739_state_counts": {},
     "text_jobs": 0,
     "jobs": [
       {
-        "job_name": "gpu_cos2_t2",
+        "job_name": "v740_repr_pa",
         "user": "npin",
         "state": "PENDING",
         "partition": "gpu",
@@ -1297,7 +1292,7 @@
         "reason": "(Priority)"
       },
       {
-        "job_name": "af739_t1_s2",
+        "job_name": "v740_112_invh1",
         "user": "npin",
         "state": "PENDING",
         "partition": "gpu",
@@ -1305,7 +1300,7 @@
         "reason": "(Priority)"
       },
       {
-        "job_name": "af739_t3_e2",
+        "job_name": "v740_112_binh1",
         "user": "npin",
         "state": "PENDING",
         "partition": "gpu",
@@ -1313,7 +1308,7 @@
         "reason": "(Priority)"
       },
       {
-        "job_name": "af739_t2_e2",
+        "job_name": "v740_112_bin",
         "user": "npin",
         "state": "PENDING",
         "partition": "gpu",
@@ -1321,47 +1316,15 @@
         "reason": "(Priority)"
       },
       {
-        "job_name": "af739_t1_e2",
+        "job_name": "v740_112_inv",
         "user": "npin",
         "state": "PENDING",
         "partition": "gpu",
         "qos": "normal",
-        "reason": "(Priority)"
-      },
-      {
-        "job_name": "af739_t2_s2",
-        "user": "npin",
-        "state": "RUNNING",
-        "partition": "gpu",
-        "qos": "normal",
-        "reason": "iris-186"
-      },
-      {
-        "job_name": "h2_ac_t3_ce",
-        "user": "npin",
-        "state": "PENDING",
-        "partition": "hopper",
-        "qos": "besteffort",
         "reason": "(Priority)"
       },
       {
         "job_name": "h2_ac_t3_co",
-        "user": "npin",
-        "state": "PENDING",
-        "partition": "hopper",
-        "qos": "besteffort",
-        "reason": "(Priority)"
-      },
-      {
-        "job_name": "h2_ac_t3_ct",
-        "user": "npin",
-        "state": "PENDING",
-        "partition": "hopper",
-        "qos": "besteffort",
-        "reason": "(Priority)"
-      },
-      {
-        "job_name": "h2_ac_t1_e2",
         "user": "npin",
         "state": "PENDING",
         "partition": "hopper",
@@ -1401,6 +1364,22 @@
         "reason": "(Priority)"
       },
       {
+        "job_name": "h2_ac_t2_ct",
+        "user": "npin",
+        "state": "PENDING",
+        "partition": "hopper",
+        "qos": "besteffort",
+        "reason": "(Priority)"
+      },
+      {
+        "job_name": "h2_ac_t3_ct",
+        "user": "npin",
+        "state": "PENDING",
+        "partition": "hopper",
+        "qos": "besteffort",
+        "reason": "(Priority)"
+      },
+      {
         "job_name": "h2_ac_t3_e2",
         "user": "npin",
         "state": "PENDING",
@@ -1417,7 +1396,7 @@
         "reason": "(Priority)"
       },
       {
-        "job_name": "h2_ac_t2_ct",
+        "job_name": "h2_ac_t1_ce",
         "user": "npin",
         "state": "PENDING",
         "partition": "hopper",
@@ -1425,7 +1404,15 @@
         "reason": "(Priority)"
       },
       {
-        "job_name": "h2_ac_t1_ce",
+        "job_name": "h2_ac_t1_co",
+        "user": "npin",
+        "state": "PENDING",
+        "partition": "hopper",
+        "qos": "besteffort",
+        "reason": "(Priority)"
+      },
+      {
+        "job_name": "h2_ac_t1_ct",
         "user": "npin",
         "state": "PENDING",
         "partition": "hopper",
@@ -1449,7 +1436,7 @@
         "reason": "(Priority)"
       },
       {
-        "job_name": "h2_ac_t1_ct",
+        "job_name": "h2_ac_t3_ce",
         "user": "npin",
         "state": "RUNNING",
         "partition": "hopper",
@@ -1457,7 +1444,7 @@
         "reason": "iris-197"
       },
       {
-        "job_name": "h2_ac_t1_co",
+        "job_name": "h2_ac_t1_e2",
         "user": "npin",
         "state": "RUNNING",
         "partition": "hopper",
@@ -1473,68 +1460,12 @@
         "reason": "iris-197"
       },
       {
-        "job_name": "l2_ac_t3_ct",
-        "user": "npin",
-        "state": "PENDING",
-        "partition": "l40s",
-        "qos": "iris-snt",
-        "reason": "(Resources)"
-      },
-      {
-        "job_name": "l2_ac_t2_fu",
-        "user": "npin",
-        "state": "PENDING",
-        "partition": "l40s",
-        "qos": "iris-snt",
-        "reason": "(Priority)"
-      },
-      {
-        "job_name": "l2_ac_t1_s2",
-        "user": "npin",
-        "state": "PENDING",
-        "partition": "l40s",
-        "qos": "iris-snt",
-        "reason": "(Priority)"
-      },
-      {
-        "job_name": "l2_ac_t1_ce",
-        "user": "npin",
-        "state": "PENDING",
-        "partition": "l40s",
-        "qos": "iris-snt",
-        "reason": "(Priority)"
-      },
-      {
-        "job_name": "l2_ac_t3_e2",
-        "user": "npin",
-        "state": "PENDING",
-        "partition": "l40s",
-        "qos": "iris-snt",
-        "reason": "(Priority)"
-      },
-      {
-        "job_name": "l2_ac_t2_co",
-        "user": "npin",
-        "state": "PENDING",
-        "partition": "l40s",
-        "qos": "iris-snt",
-        "reason": "(Priority)"
-      },
-      {
-        "job_name": "l2_ac_t2_ct",
-        "user": "npin",
-        "state": "PENDING",
-        "partition": "l40s",
-        "qos": "iris-snt",
-        "reason": "(Priority)"
-      },
-      {
         "job_name": "l2_ac_t3_co",
         "user": "npin",
         "state": "PENDING",
         "partition": "l40s",
         "qos": "iris-snt",
-        "reason": "(Priority)"
+        "reason": "(Resources)"
       },
       {
         "job_name": "l2_ac_t3_ce",
@@ -1553,23 +1484,55 @@
         "reason": "(Priority)"
       },
       {
-        "job_name": "l2_ac_t2_e2",
+        "job_name": "l2_ac_t1_fu",
         "user": "npin",
-        "state": "RUNNING",
+        "state": "PENDING",
         "partition": "l40s",
         "qos": "iris-snt",
-        "reason": "iris-199"
+        "reason": "(Priority)"
+      },
+      {
+        "job_name": "l2_ac_t2_e2",
+        "user": "npin",
+        "state": "PENDING",
+        "partition": "l40s",
+        "qos": "iris-snt",
+        "reason": "(Priority)"
+      },
+      {
+        "job_name": "l2_ac_t1_ce",
+        "user": "npin",
+        "state": "PENDING",
+        "partition": "l40s",
+        "qos": "iris-snt",
+        "reason": "(Priority)"
       },
       {
         "job_name": "l2_ac_t2_ce",
         "user": "npin",
-        "state": "RUNNING",
+        "state": "PENDING",
         "partition": "l40s",
         "qos": "iris-snt",
-        "reason": "iris-198"
+        "reason": "(Priority)"
       },
       {
-        "job_name": "l2_ac_t2_s2",
+        "job_name": "l2_ac_t1_co",
+        "user": "npin",
+        "state": "PENDING",
+        "partition": "l40s",
+        "qos": "iris-snt",
+        "reason": "(Priority)"
+      },
+      {
+        "job_name": "l2_ac_t2_fu",
+        "user": "npin",
+        "state": "PENDING",
+        "partition": "l40s",
+        "qos": "iris-snt",
+        "reason": "(Priority)"
+      },
+      {
+        "job_name": "l2_ac_t2_ct",
         "user": "npin",
         "state": "RUNNING",
         "partition": "l40s",
@@ -1577,7 +1540,15 @@
         "reason": "iris-198"
       },
       {
-        "job_name": "l2_ac_t1_fu",
+        "job_name": "l2_ac_t3_e2",
+        "user": "npin",
+        "state": "RUNNING",
+        "partition": "l40s",
+        "qos": "iris-snt",
+        "reason": "iris-198"
+      },
+      {
+        "job_name": "l2_ac_t2_co",
         "user": "npin",
         "state": "RUNNING",
         "partition": "l40s",
@@ -1585,12 +1556,20 @@
         "reason": "iris-199"
       },
       {
-        "job_name": "l2_ac_t1_co",
+        "job_name": "l2_ac_t1_s2",
         "user": "npin",
         "state": "RUNNING",
         "partition": "l40s",
         "qos": "iris-snt",
-        "reason": "iris-198"
+        "reason": "iris-199"
+      },
+      {
+        "job_name": "l2_ac_t3_ct",
+        "user": "npin",
+        "state": "RUNNING",
+        "partition": "l40s",
+        "qos": "iris-snt",
+        "reason": "iris-199"
       }
     ]
   },
