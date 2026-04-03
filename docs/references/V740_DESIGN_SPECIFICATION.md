@@ -10,6 +10,23 @@
 > value-space, and source-aware EDGAR/text event-memory paths. The design is
 > therefore no longer only conceptual; the remaining work is to harden,
 > benchmark, and audit those paths carefully.
+>
+> 2026-04-02 local-only design implication:
+> the April 2 funding gates sharpen the method constraints substantially.
+> On the current audited V740 path:
+>
+> - `log1p` funding-domain training is a net-damage mechanism and should not be
+>   treated as an active candidate branch,
+> - source scaling by itself is near-inert on the tested funding cells,
+> - the dominant continuous-side improvement mechanism is a strong anchor,
+> - source scaling only matters when paired with that strong anchor on the
+>   hardest fuller-source funding cells,
+> - and binary guard cells do not differentiate funding variants because the
+>   effective funding controls are inactive on binary targets.
+>
+> This reinforces a central methodological point:
+> V740 must use target-aware regime logic internally rather than assuming one
+> shared continuous head recipe can cover funding, count, and binary behavior.
 
 ## 0. Design Reset
 
@@ -22,16 +39,16 @@ The current clean facts are already strong enough to support a more serious
 design target:
 
 - canonical benchmark root: `runs/benchmarks/block3_phase9_fair/`
-- current raw benchmark surface: **16,077** records
+- current raw benchmark surface: **16,299** records
 - raw models materialized: **137**
 - audit-excluded models: **24**
-- active leaderboard models: **92**
+- active leaderboard models: **90**
 - active complete models: **62 @160/160**
 - only valid current AutoFit baseline: **AutoFitV739**
 - V739 landed coverage: **132/160**
-- V739 clean comparable slice: **132 conditions**, **56 comparable non-retired models**
-- V739 current filtered-slice performance: mean rank **13.18**, rank position **14/56**,
-  median gap **1.52%**, mean gap **3.91%**, wins **17**
+- V739 clean comparable slice: **112 conditions**, **58 comparable non-retired models**
+- V739 current filtered-slice performance: mean rank **12.77**, rank position **13/58**,
+  median gap **1.24%**, mean gap **4.27%**, wins **17**
 
 These facts imply two things.
 

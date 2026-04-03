@@ -79,6 +79,8 @@ from typing import Any, Callable, Dict, List, Optional, Sequence, Tuple
 
 import numpy as np
 import pandas as pd
+
+from ..autofit_status import CURRENT_AUTOFIT_BASELINE, RETIRED_AUTOFIT_MODEL_NAMES
 try:
     from sklearn.metrics import (
         average_precision_score,
@@ -7724,4 +7726,14 @@ AUTOFIT_MODELS = {
     "AutoFitV737": get_autofit_v737,
     "AutoFitV738": get_autofit_v738,
     "AutoFitV739": get_autofit_v739,
+}
+
+ACTIVE_AUTOFIT_MODELS = {
+    CURRENT_AUTOFIT_BASELINE: AUTOFIT_MODELS[CURRENT_AUTOFIT_BASELINE],
+}
+
+RETIRED_AUTOFIT_MODELS = {
+    name: AUTOFIT_MODELS[name]
+    for name in RETIRED_AUTOFIT_MODEL_NAMES
+    if name in AUTOFIT_MODELS
 }

@@ -6,6 +6,7 @@ import csv
 import json
 import re
 import subprocess
+import sys
 from collections import Counter, defaultdict
 from datetime import datetime, timezone
 from pathlib import Path
@@ -13,6 +14,11 @@ from typing import Any, Dict, Iterable, List, Tuple
 
 
 ROOT = Path(__file__).resolve().parent.parent
+if str(ROOT) not in sys.path:
+    sys.path.insert(0, str(ROOT))
+
+from src.narrative.block3.autofit_status import CURRENT_AUTOFIT_BASELINE, is_retired_autofit_model
+
 DEFAULT_BENCH = ROOT / "runs" / "benchmarks" / "block3_phase9_fair"
 DEFAULT_FILTERED = DEFAULT_BENCH / "all_results.csv"
 DEFAULT_TEXT_DIR = ROOT / "runs" / "text_embeddings"
@@ -72,14 +78,19 @@ def _scan_raw_metrics(bench_dir: Path) -> Dict[str, Any]:
             category_counter[category] += 1
             model_conditions[model].add(_condition_key(row))
 
-    complete_models = sorted(k for k, v in model_conditions.items() if len(v) >= FULL_CONDITION_COUNT)
-    partial_models = sorted(k for k, v in model_conditions.items() if 0 < len(v) < FULL_CONDITION_COUNT)
     retired_autofit_models = sorted(
         model for model in model_conditions
-        if model.startswith("AutoFitV") and model != "AutoFitV739"
+        if is_retired_autofit_model(model)
     )
+    current_model_conditions = {
+        model: conds
+        for model, conds in model_conditions.items()
+        if not is_retired_autofit_model(model)
+    }
+    complete_models = sorted(k for k, v in current_model_conditions.items() if len(v) >= FULL_CONDITION_COUNT)
+    partial_models = sorted(k for k, v in current_model_conditions.items() if 0 < len(v) < FULL_CONDITION_COUNT)
     partial_detail = [
-        {"model_name": model, "conditions": len(model_conditions[model]), "records": model_counter[model]}
+        {"model_name": model, "conditions": len(current_model_conditions[model]), "records": model_counter[model]}
         for model in sorted(partial_models, key=lambda m: (-len(model_conditions[m]), m))
     ]
 
@@ -91,11 +102,12 @@ def _scan_raw_metrics(bench_dir: Path) -> Dict[str, Any]:
         "raw_records": len(rows),
         "raw_models": len(model_conditions),
         "raw_retired_autofit_models": len(retired_autofit_models),
-        "raw_nonretired_models": len(model_conditions) - len(retired_autofit_models),
+        "raw_nonretired_models": len(current_model_conditions),
         "raw_complete_models": len(complete_models),
         "raw_partial_models": len(partial_models),
         "raw_complete_model_names": complete_models,
         "raw_partial_detail": partial_detail,
+        "raw_retired_autofit_model_names": retired_autofit_models,
         "raw_category_records": dict(sorted(category_counter.items())),
         "v739_records": len(v739_rows),
         "v739_conditions_landed": len(v739_conditions),
@@ -115,30 +127,35 @@ def _scan_filtered(filtered_csv: Path) -> Dict[str, Any]:
     rows = _read_csv(filtered_csv)
     model_conditions: Dict[str, set] = defaultdict(set)
     category_counter: Counter[str] = Counter()
+    filtered_rows: List[Dict[str, str]] = []
 
     for row in rows:
         model = str(row.get("model_name", "UNKNOWN"))
+        if is_retired_autofit_model(model):
+            continue
         category = str(row.get("category", "unknown"))
+        filtered_rows.append(row)
         model_conditions[model].add(_condition_key(row))
         category_counter[category] += 1
 
     retired_autofit_models = sorted(
-        model for model in model_conditions
-        if model.startswith("AutoFitV") and model != "AutoFitV739"
+        model
+        for model in {str(row.get("model_name", "UNKNOWN")) for row in rows}
+        if is_retired_autofit_model(model)
     )
     complete = sum(1 for v in model_conditions.values() if len(v) >= FULL_CONDITION_COUNT)
     partial = sum(1 for v in model_conditions.values() if 0 < len(v) < FULL_CONDITION_COUNT)
     return {
-        "filtered_records": len(rows),
+        "filtered_records": len(filtered_rows),
         "filtered_models": len(model_conditions),
         "filtered_retired_autofit_models": len(retired_autofit_models),
-        "filtered_nonretired_models": len(model_conditions) - len(retired_autofit_models),
+        "filtered_nonretired_models": len(model_conditions),
         "filtered_complete_models": complete,
         "filtered_partial_models": partial,
         "filtered_categories": dict(sorted(category_counter.items())),
         "filtered_autofit_models": sorted(
             model for model, conds in model_conditions.items() if any(
-                row.get("category") == "autofit" and row.get("model_name") == model for row in rows
+                row.get("category") == "autofit" and row.get("model_name") == model for row in filtered_rows
             )
         ),
     }
@@ -312,14 +329,14 @@ def _write_outputs(snapshot: Dict[str, Any], json_path: Path, md_path: Path) -> 
                 {"metric": "metrics_files", "value": raw["metrics_files"], "evidence": "raw metrics scan"},
                 {"metric": "raw_records", "value": raw["raw_records"], "evidence": "raw metrics scan"},
                 {"metric": "raw_models", "value": raw["raw_models"], "evidence": "raw metrics scan"},
-                {"metric": "raw_nonretired_models", "value": raw["raw_nonretired_models"], "evidence": "raw metrics scan minus retired AutoFit legacy lines"},
-                {"metric": "raw_retired_autofit_models", "value": raw["raw_retired_autofit_models"], "evidence": "raw metrics scan"},
+                {"metric": "raw_nonretired_models", "value": raw["raw_nonretired_models"], "evidence": "raw metrics scan minus archived AutoFit-family lines"},
+                {"metric": "raw_retired_autofit_models", "value": raw["raw_retired_autofit_models"], "evidence": "raw metrics scan (archived AutoFit-family lines)"},
                 {"metric": "raw_complete_models", "value": raw["raw_complete_models"], "evidence": "raw metrics scan"},
                 {"metric": "raw_partial_models", "value": raw["raw_partial_models"], "evidence": "raw metrics scan"},
-                {"metric": "filtered_records", "value": filtered["filtered_records"], "evidence": "`all_results.csv`"},
-                {"metric": "filtered_models", "value": filtered["filtered_models"], "evidence": "`all_results.csv` (includes retired AutoFit legacy lines if they pass filters)"},
-                {"metric": "filtered_nonretired_models", "value": filtered["filtered_nonretired_models"], "evidence": "`all_results.csv` minus retired AutoFit legacy lines"},
-                {"metric": "filtered_retired_autofit_models", "value": filtered["filtered_retired_autofit_models"], "evidence": "`all_results.csv`"},
+                {"metric": "filtered_records", "value": filtered["filtered_records"], "evidence": "clean current-surface `all_results.csv`"},
+                {"metric": "filtered_models", "value": filtered["filtered_models"], "evidence": "clean current-surface `all_results.csv`"},
+                {"metric": "filtered_nonretired_models", "value": filtered["filtered_nonretired_models"], "evidence": "clean current-surface `all_results.csv`"},
+                {"metric": "filtered_retired_autofit_models", "value": filtered["filtered_retired_autofit_models"], "evidence": "archived AutoFit-family lines purged from current surface"},
                 {"metric": "filtered_complete_models", "value": filtered["filtered_complete_models"], "evidence": "`all_results.csv`"},
                 {"metric": "filtered_partial_models", "value": filtered["filtered_partial_models"], "evidence": "`all_results.csv`"},
                 {"metric": "v739_conditions_landed", "value": raw["v739_conditions_landed"], "evidence": "raw metrics scan"},
@@ -395,7 +412,7 @@ def _write_outputs(snapshot: Dict[str, Any], json_path: Path, md_path: Path) -> 
 
     md_lines.extend(
         [
-            "## Partial Raw Models",
+            "## Partial Current-Surface Raw Models",
             "",
             _render_table(raw["raw_partial_detail"], ["model_name", "conditions", "records"]),
             "",

@@ -21,6 +21,11 @@ from datetime import datetime
 import pandas as pd
 
 ROOT = Path(__file__).resolve().parent.parent
+if str(ROOT) not in sys.path:
+    sys.path.insert(0, str(ROOT))
+
+from src.narrative.block3.autofit_status import CURRENT_AUTOFIT_BASELINE, is_retired_autofit_model
+
 DEFAULT_BENCH = ROOT / "runs" / "benchmarks" / "block3_phase9_fair"
 DEFAULT_MD = ROOT / "docs" / "BLOCK3_RESULTS.md"
 
@@ -98,6 +103,19 @@ def apply_comparability_filter(
 
     out = df.copy()
 
+    # Layer 0: remove retired / invalid AutoFit-family lines from the active
+    # public surface. They remain in raw artifacts for auditability only.
+    if "model_name" in out.columns:
+        retired_mask = out["model_name"].map(is_retired_autofit_model)
+        n_retired = retired_mask.sum()
+        if n_retired > 0:
+            retired_models = sorted(out.loc[retired_mask, "model_name"].unique())
+            print(
+                f"  Archived AutoFit purge: dropped {n_retired} records from "
+                f"{len(retired_models)} models: {retired_models}"
+            )
+        out = out[~retired_mask]
+
     # Layer 1: Audit-validated exclusions
     if "model_name" in out.columns:
         excluded_mask = out["model_name"].isin(AUDIT_EXCLUDED_MODELS)
@@ -164,11 +182,6 @@ def generate_markdown(
 
     # Summary stats
     n_models = df["model_name"].nunique()
-    retired_autofit_models = sorted(
-        m for m in df["model_name"].unique()
-        if str(m).startswith("AutoFitV") and str(m) != "AutoFitV739"
-    )
-    nonretired_models = n_models - len(retired_autofit_models)
     n_tasks = df["task"].nunique()
     n_categories = df["category"].nunique()
     tasks = sorted(df["task"].unique())
@@ -181,22 +194,18 @@ def generate_markdown(
 
     lines.append("## Overview")
     lines.append("")
-    if retired_autofit_models:
-        lines.append(
-            f"> Note: the post-filter CSV still contains **{len(retired_autofit_models)} retired AutoFit legacy lines** "
-            f"(`{', '.join(retired_autofit_models[:5])}`{' ...' if len(retired_autofit_models) > 5 else ''}). "
-            "For current clean benchmark interpretation, treat `AutoFitV739` as the only valid AutoFit baseline and use the "
-            "`non-retired models` count below when comparing against the active frontier."
-        )
-        lines.append("")
+    lines.append(
+        f"> Current public AutoFit surface is clean: only `{CURRENT_AUTOFIT_BASELINE}` remains in the active environment and leaderboard outputs."
+    )
+    lines.append("")
     lines.append(f"| Metric | Value |")
     lines.append(f"|--------|-------|")
     lines.append(f"| Raw records | {raw_total} |")
     lines.append(f"| Filtered records | {len(df)} |")
     lines.append(f"| Comparability filter | fairness_only={fairness_only}, min_coverage={min_coverage:.2f} |")
     lines.append(f"| Models evaluated | {n_models} |")
-    lines.append(f"| Non-retired models evaluated | {nonretired_models} |")
-    lines.append(f"| Retired AutoFit legacy lines still present | {len(retired_autofit_models)} |")
+    lines.append(f"| Active AutoFit baseline | {CURRENT_AUTOFIT_BASELINE} |")
+    lines.append(f"| Archived AutoFit lines in current surface | 0 |")
     lines.append(f"| Categories | {', '.join(categories)} |")
     lines.append(f"| Tasks | {', '.join(tasks)} |")
     lines.append(f"| Total evaluations | {len(df)} |")

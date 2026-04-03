@@ -1,0 +1,376 @@
+{
+  "pointer_path": "docs/audits/FULL_SCALE_POINTER.yaml",
+  "embedding_root": "/mnt/aiongpfs/projects/eint/repo_root/runs/text_embeddings",
+  "embedding_lineage": {
+    "model": "Alibaba-NLP/gte-Qwen2-1.5B-instruct",
+    "raw_dim": 1536,
+    "pca_dim": 64,
+    "pca_explained_variance": 0.7016109518957345,
+    "max_length": 512,
+    "max_chars": 2048,
+    "text_columns_used": [
+      "headline",
+      "title",
+      "description_text",
+      "company_description",
+      "product_description",
+      "financial_condition",
+      "financial_forecasts",
+      "financial_risks",
+      "offering_purpose",
+      "use_of_funds_text",
+      "reasons_to_invest_text"
+    ]
+  },
+  "embedding_cardinality": {
+    "n_total_rows": 5774931,
+    "n_unique_texts": 69697,
+    "n_entities": 22569,
+    "unique_text_ratio": 0.01206888878845479
+  },
+  "coverage": {
+    "core_rows": 5774931,
+    "core_entities": 22569,
+    "embedding_rows_from_metadata": 5774931,
+    "global_row_parity_vs_core": 1.0,
+    "streamed_embedding_rows": 20000,
+    "sample_rows": 20000,
+    "sample_rows_with_embedding": 20000,
+    "sample_row_match_rate": 1.0,
+    "target_subsets": {
+      "funding_raised_usd": {
+        "eligible_rows": 18,
+        "embedding_match_rate": 1.0
+      },
+      "investors_count": {
+        "eligible_rows": 9613,
+        "embedding_match_rate": 1.0
+      },
+      "is_funded": {
+        "eligible_rows": 6371,
+        "embedding_match_rate": 1.0
+      }
+    }
+  },
+  "sample": {
+    "sampled_rows_after_join": 20000,
+    "top_abs_correlations": {
+      "funding_raised_usd": {
+        "top_abs_pearson": [
+          {
+            "dimension": "text_emb_21",
+            "correlation": -0.23629464210022766,
+            "abs_correlation": 0.23629464210022766
+          },
+          {
+            "dimension": "text_emb_20",
+            "correlation": 0.2188673381173352,
+            "abs_correlation": 0.2188673381173352
+          },
+          {
+            "dimension": "text_emb_31",
+            "correlation": -0.21180629517917154,
+            "abs_correlation": 0.21180629517917154
+          },
+          {
+            "dimension": "text_emb_17",
+            "correlation": 0.20840410526321407,
+            "abs_correlation": 0.20840410526321407
+          },
+          {
+            "dimension": "text_emb_12",
+            "correlation": -0.2032065101983233,
+            "abs_correlation": 0.2032065101983233
+          },
+          {
+            "dimension": "text_emb_44",
+            "correlation": -0.1941686957613275,
+            "abs_correlation": 0.1941686957613275
+          },
+          {
+            "dimension": "text_emb_3",
+            "correlation": 0.18951349461087866,
+            "abs_correlation": 0.18951349461087866
+          },
+          {
+            "dimension": "text_emb_48",
+            "correlation": 0.1703305598524654,
+            "abs_correlation": 0.1703305598524654
+          }
+        ],
+        "top_abs_spearman": [
+          {
+            "dimension": "text_emb_10",
+            "correlation": -0.4984520123839009,
+            "abs_correlation": 0.4984520123839009
+          },
+          {
+            "dimension": "text_emb_2",
+            "correlation": 0.46670114634491616,
+            "abs_correlation": 0.46670114634491616
+          },
+          {
+            "dimension": "text_emb_55",
+            "correlation": -0.4282765737874097,
+            "abs_correlation": 0.4282765737874097
+          },
+          {
+            "dimension": "text_emb_44",
+            "correlation": -0.4117647058823529,
+            "abs_correlation": 0.4117647058823529
+          },
+          {
+            "dimension": "text_emb_31",
+            "correlation": -0.3560371517027864,
+            "abs_correlation": 0.3560371517027864
+          },
+          {
+            "dimension": "text_emb_17",
+            "correlation": 0.32094943240454077,
+            "abs_correlation": 0.32094943240454077
+          },
+          {
+            "dimension": "text_emb_16",
+            "correlation": -0.3023735810113519,
+            "abs_correlation": 0.3023735810113519
+          },
+          {
+            "dimension": "text_emb_60",
+            "correlation": 0.3023735810113519,
+            "abs_correlation": 0.3023735810113519
+          }
+        ]
+      },
+      "investors_count": {
+        "top_abs_pearson": [
+          {
+            "dimension": "text_emb_0",
+            "correlation": -0.05080124529311716,
+            "abs_correlation": 0.05080124529311716
+          },
+          {
+            "dimension": "text_emb_1",
+            "correlation": 0.04806901770489906,
+            "abs_correlation": 0.04806901770489906
+          },
+          {
+            "dimension": "text_emb_9",
+            "correlation": -0.03501706797649921,
+            "abs_correlation": 0.03501706797649921
+          },
+          {
+            "dimension": "text_emb_10",
+            "correlation": -0.03253409821503845,
+            "abs_correlation": 0.03253409821503845
+          },
+          {
+            "dimension": "text_emb_27",
+            "correlation": -0.0290760157346817,
+            "abs_correlation": 0.0290760157346817
+          },
+          {
+            "dimension": "text_emb_58",
+            "correlation": -0.028660714673741778,
+            "abs_correlation": 0.028660714673741778
+          },
+          {
+            "dimension": "text_emb_8",
+            "correlation": 0.027523100810072965,
+            "abs_correlation": 0.027523100810072965
+          },
+          {
+            "dimension": "text_emb_25",
+            "correlation": -0.026460159880711386,
+            "abs_correlation": 0.026460159880711386
+          }
+        ],
+        "top_abs_spearman": [
+          {
+            "dimension": "text_emb_0",
+            "correlation": -0.11362071842285165,
+            "abs_correlation": 0.11362071842285165
+          },
+          {
+            "dimension": "text_emb_1",
+            "correlation": 0.07662386266842028,
+            "abs_correlation": 0.07662386266842028
+          },
+          {
+            "dimension": "text_emb_7",
+            "correlation": -0.06476611545302165,
+            "abs_correlation": 0.06476611545302165
+          },
+          {
+            "dimension": "text_emb_9",
+            "correlation": -0.055286217419959434,
+            "abs_correlation": 0.055286217419959434
+          },
+          {
+            "dimension": "text_emb_3",
+            "correlation": -0.05100125528994957,
+            "abs_correlation": 0.05100125528994957
+          },
+          {
+            "dimension": "text_emb_58",
+            "correlation": -0.0402954108152033,
+            "abs_correlation": 0.0402954108152033
+          },
+          {
+            "dimension": "text_emb_37",
+            "correlation": 0.03671151032166666,
+            "abs_correlation": 0.03671151032166666
+          },
+          {
+            "dimension": "text_emb_17",
+            "correlation": 0.035215704884297094,
+            "abs_correlation": 0.035215704884297094
+          }
+        ]
+      },
+      "is_funded": {
+        "top_abs_pearson": [
+          {
+            "dimension": "text_emb_0",
+            "correlation": 0.07715732756716534,
+            "abs_correlation": 0.07715732756716534
+          },
+          {
+            "dimension": "text_emb_1",
+            "correlation": -0.06316879468176241,
+            "abs_correlation": 0.06316879468176241
+          },
+          {
+            "dimension": "text_emb_8",
+            "correlation": -0.044213024731169594,
+            "abs_correlation": 0.044213024731169594
+          },
+          {
+            "dimension": "text_emb_4",
+            "correlation": -0.044171875981864804,
+            "abs_correlation": 0.044171875981864804
+          },
+          {
+            "dimension": "text_emb_3",
+            "correlation": 0.04385651641422212,
+            "abs_correlation": 0.04385651641422212
+          },
+          {
+            "dimension": "text_emb_9",
+            "correlation": 0.035349781045174035,
+            "abs_correlation": 0.035349781045174035
+          },
+          {
+            "dimension": "text_emb_7",
+            "correlation": 0.03513968488985984,
+            "abs_correlation": 0.03513968488985984
+          },
+          {
+            "dimension": "text_emb_21",
+            "correlation": 0.03265224029552709,
+            "abs_correlation": 0.03265224029552709
+          }
+        ],
+        "top_abs_spearman": [
+          {
+            "dimension": "text_emb_0",
+            "correlation": 0.0774276510775331,
+            "abs_correlation": 0.0774276510775331
+          },
+          {
+            "dimension": "text_emb_1",
+            "correlation": -0.06777577760837548,
+            "abs_correlation": 0.06777577760837548
+          },
+          {
+            "dimension": "text_emb_3",
+            "correlation": 0.038397343486602266,
+            "abs_correlation": 0.038397343486602266
+          },
+          {
+            "dimension": "text_emb_8",
+            "correlation": -0.03671665129341988,
+            "abs_correlation": 0.03671665129341988
+          },
+          {
+            "dimension": "text_emb_4",
+            "correlation": -0.0313214598345518,
+            "abs_correlation": 0.0313214598345518
+          },
+          {
+            "dimension": "text_emb_9",
+            "correlation": 0.029777841543034103,
+            "abs_correlation": 0.029777841543034103
+          },
+          {
+            "dimension": "text_emb_7",
+            "correlation": 0.029669357445914424,
+            "abs_correlation": 0.029669357445914424
+          },
+          {
+            "dimension": "text_emb_10",
+            "correlation": 0.02827853568796979,
+            "abs_correlation": 0.02827853568796979
+          }
+        ]
+      }
+    },
+    "raw_text_field_stats": {
+      "headline": {
+        "non_empty_rate": 0.617,
+        "avg_chars_non_empty": 287.9222042139384,
+        "median_chars_non_empty": 283.0
+      },
+      "title": {
+        "non_empty_rate": 0.599,
+        "avg_chars_non_empty": 42.30801335559266,
+        "median_chars_non_empty": 32.0
+      },
+      "description_text": {
+        "non_empty_rate": 0.7625,
+        "avg_chars_non_empty": 1790.2255737704918,
+        "median_chars_non_empty": 531.0
+      },
+      "company_description": {
+        "non_empty_rate": 0.0,
+        "avg_chars_non_empty": null,
+        "median_chars_non_empty": null
+      },
+      "product_description": {
+        "non_empty_rate": 0.088,
+        "avg_chars_non_empty": 1304.909090909091,
+        "median_chars_non_empty": 764.5
+      },
+      "financial_condition": {
+        "non_empty_rate": 0.006,
+        "avg_chars_non_empty": 6307.75,
+        "median_chars_non_empty": 6283.0
+      },
+      "financial_forecasts": {
+        "non_empty_rate": 0.0,
+        "avg_chars_non_empty": null,
+        "median_chars_non_empty": null
+      },
+      "financial_risks": {
+        "non_empty_rate": 0.031,
+        "avg_chars_non_empty": 17645.40322580645,
+        "median_chars_non_empty": 3588.5
+      },
+      "offering_purpose": {
+        "non_empty_rate": 0.0,
+        "avg_chars_non_empty": null,
+        "median_chars_non_empty": null
+      },
+      "use_of_funds_text": {
+        "non_empty_rate": 0.01,
+        "avg_chars_non_empty": 672.65,
+        "median_chars_non_empty": 539.5
+      },
+      "reasons_to_invest_text": {
+        "non_empty_rate": 0.556,
+        "avg_chars_non_empty": 687.8732014388489,
+        "median_chars_non_empty": 516.0
+      }
+    },
+    "raw_text_error": null
+  }
+}

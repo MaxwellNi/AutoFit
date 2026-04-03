@@ -1,25 +1,25 @@
 # Block 3 Benchmark Results
 
-**Generated**: 2026-04-03 11:12:40
+**Generated**: 2026-04-03 15:11:25
 **Benchmark Dir**: `block3_phase9_fair`
-**Total Records (post-filter)**: 12422
+**Total Records (post-filter)**: 11976
 
 ## Overview
 
-> Note: the post-filter CSV still contains **21 retired AutoFit legacy lines** (`AutoFitV1, AutoFitV2, AutoFitV2E, AutoFitV3, AutoFitV3E` ...). For current clean benchmark interpretation, treat `AutoFitV739` as the only valid AutoFit baseline and use the `non-retired models` count below when comparing against the active frontier.
+> Current public AutoFit surface is clean: only `AutoFitV739` remains in the active environment and leaderboard outputs.
 
 | Metric | Value |
 |--------|-------|
-| Raw records | 16284 |
-| Filtered records | 12422 |
+| Raw records | 16299 |
+| Filtered records | 11976 |
 | Comparability filter | fairness_only=True, min_coverage=0.98 |
-| Models evaluated | 107 |
-| Non-retired models evaluated | 86 |
-| Retired AutoFit legacy lines still present | 21 |
+| Models evaluated | 84 |
+| Active AutoFit baseline | AutoFitV739 |
+| Archived AutoFit lines in current surface | 0 |
 | Categories | autofit, deep_classical, foundation, irregular, ml_tabular, statistical, transformer_sota, tslib_sota |
 | Tasks | task1_outcome, task2_forecast, task3_risk_adjust |
-| Total evaluations | 12422 |
-| Real results | 12344 |
+| Total evaluations | 11976 |
+| Real results | 11898 |
 | Fallback (mean) | 78 |
 
 ## task1_outcome
@@ -28,30 +28,7 @@
 
 | Model | H=1 | H=7 | H=14 | H=30 | Status |
 |-------|-------:|-------:|-------:|-------:|--------|
-| AutoFitV738 | 380.4K | 380.7K | 381.3K | 384.2K | ✅ |
-| AutoFitV737 | 380.4K | 380.5K | 381.4K | 383.5K | ✅ |
 | AutoFitV739 | 380.8K | 380.9K | 381.0K | 380.3K | ✅ |
-| AutoFitV732 | 384.2K | 384.2K | 384.5K | 384.7K | ✅ |
-| AutoFitV736 | 384.2K | 384.4K | 385.2K | 387.3K | ✅ |
-| NFAdaptiveChampion | 385.0K | 384.6K | 385.5K | 386.9K | ✅ |
-| AutoFitV734 | 386.7K | 384.9K | 384.0K | 386.1K | ✅ |
-| AutoFitV735 | 388.1K | 385.5K | 384.2K | 386.9K | ✅ |
-| AutoFitV733 | 388.1K | 385.5K | 385.1K | 386.9K | ✅ |
-| AutoFitV1 | 393.2K | 393.2K | 393.2K | 393.2K | ✅ |
-| AutoFitV6 | 393.2K | 393.2K | 393.2K | 393.2K | ✅ |
-| AutoFitV3Max | 393.2K | 393.2K | 393.2K | 393.2K | ✅ |
-| AutoFitV3 | 393.2K | 393.2K | 393.2K | 393.2K | ✅ |
-| AutoFitV73 | 396.1K | 396.1K | 396.1K | 396.1K | ✅ |
-| AutoFitV731 | 396.1K | 396.1K | 396.1K | 396.1K | ✅ |
-| AutoFitV4 | 426.8K | 426.8K | 426.8K | 426.8K | ✅ |
-| AutoFitV3E | 429.6K | 429.6K | 429.6K | 429.6K | ✅ |
-| AutoFitV2 | 430.4K | 430.4K | 430.4K | 430.4K | ✅ |
-| AutoFitV2E | 430.4K | 430.4K | 430.4K | 430.4K | ✅ |
-| AutoFitV5 | 475.6K | 475.6K | 475.6K | 475.6K | ✅ |
-| AutoFitV71 | 482.9K | 483.5K | 483.5K | 483.5K | ✅ |
-| AutoFitV72 | 482.9K | 483.5K | 482.9K | 482.9K | ✅ |
-| AutoFitV7 | 488.4K | 488.4K | 488.4K | 488.4K | ✅ |
-| FusedChampion | 3.76M | 3.83M | 384.5K | 384.7K | ✅ |
 
 ### deep_classical
 
@@ -177,30 +154,7 @@
 
 | Model | H=1 | H=7 | H=14 | H=30 | Status |
 |-------|-------:|-------:|-------:|-------:|--------|
-| AutoFitV738 | 380.4K | 380.7K | 381.3K | 384.2K | ✅ |
-| AutoFitV737 | 380.4K | 380.5K | 381.4K | 383.5K | ✅ |
 | AutoFitV739 | 380.8K | 380.9K | 381.0K | 380.3K | ✅ |
-| AutoFitV732 | 384.2K | 384.2K | 384.5K | 384.7K | ✅ |
-| AutoFitV736 | 384.2K | 384.4K | 385.2K | 387.3K | ✅ |
-| NFAdaptiveChampion | 385.0K | 384.6K | 385.5K | 386.9K | ✅ |
-| AutoFitV734 | 386.7K | 384.9K | 384.0K | 386.1K | ✅ |
-| AutoFitV735 | 388.1K | 385.5K | 384.2K | 386.9K | ✅ |
-| AutoFitV733 | 388.1K | 385.5K | 385.1K | 386.9K | ✅ |
-| AutoFitV1 | 393.2K | 393.2K | 393.2K | 393.2K | ✅ |
-| AutoFitV6 | 393.2K | 393.2K | 393.2K | 393.2K | ✅ |
-| AutoFitV3Max | 393.2K | 393.2K | 393.2K | 393.2K | ✅ |
-| AutoFitV3 | 393.2K | 393.2K | 393.2K | 393.2K | ✅ |
-| AutoFitV73 | 396.1K | 396.1K | 396.1K | 396.1K | ✅ |
-| AutoFitV731 | 396.1K | 396.1K | 396.1K | 396.1K | ✅ |
-| AutoFitV4 | 426.8K | 426.8K | 426.8K | 426.8K | ✅ |
-| AutoFitV3E | 430.0K | 429.6K | 429.6K | 429.6K | ✅ |
-| AutoFitV2 | 430.4K | 430.4K | 430.4K | 430.4K | ✅ |
-| AutoFitV2E | 430.4K | 430.4K | 430.4K | 430.4K | ✅ |
-| AutoFitV5 | 475.6K | 491.0K | 475.6K | 475.6K | ✅ |
-| AutoFitV71 | 482.9K | 483.5K | 483.5K | 482.9K | ✅ |
-| AutoFitV72 | 483.0K | 482.9K | 482.9K | 483.5K | ✅ |
-| AutoFitV7 | 488.4K | 488.4K | 488.4K | 488.4K | ✅ |
-| FusedChampion | 3.76M | 3.83M | 384.5K | 384.7K | ✅ |
 
 ### deep_classical
 
@@ -326,30 +280,7 @@
 
 | Model | H=1 | H=7 | H=14 | H=30 | Status |
 |-------|-------:|-------:|-------:|-------:|--------|
-| AutoFitV738 | 380.4K | 380.7K | 381.3K | 384.2K | ✅ |
-| AutoFitV737 | 380.4K | 380.5K | 381.4K | 383.5K | ✅ |
 | AutoFitV739 | 380.8K | 380.9K | 381.0K | 380.3K | ✅ |
-| AutoFitV732 | 384.2K | 384.2K | 384.5K | 384.7K | ✅ |
-| AutoFitV736 | 384.2K | 384.4K | 385.2K | 387.3K | ✅ |
-| NFAdaptiveChampion | 385.0K | 384.6K | 385.5K | 386.9K | ✅ |
-| AutoFitV734 | 386.7K | 384.9K | 384.0K | 386.1K | ✅ |
-| AutoFitV735 | 388.1K | 385.5K | 384.2K | 386.9K | ✅ |
-| AutoFitV733 | 388.1K | 385.5K | 385.1K | 386.9K | ✅ |
-| AutoFitV1 | 393.2K | 393.2K | 393.2K | 393.2K | ✅ |
-| AutoFitV6 | 393.2K | 393.2K | 393.2K | 393.2K | ✅ |
-| AutoFitV3Max | 393.2K | 393.2K | 393.2K | 393.2K | ✅ |
-| AutoFitV3 | 393.2K | 393.2K | 393.2K | 393.2K | ✅ |
-| AutoFitV73 | 396.1K | 396.1K | 396.1K | 396.1K | ✅ |
-| AutoFitV731 | 396.1K | 396.1K | 396.1K | 396.1K | ✅ |
-| AutoFitV4 | 426.8K | 426.8K | 426.8K | 426.8K | ✅ |
-| AutoFitV3E | 429.6K | 429.6K | 429.6K | 429.6K | ✅ |
-| AutoFitV2 | 430.4K | 430.4K | 430.4K | 430.4K | ✅ |
-| AutoFitV2E | 430.4K | 430.4K | 430.4K | 430.4K | ✅ |
-| AutoFitV5 | 475.6K | 475.6K | 475.6K | 475.6K | ✅ |
-| AutoFitV71 | 482.9K | 482.9K | 483.0K | 482.9K | ✅ |
-| AutoFitV72 | 482.9K | 482.9K | 483.0K | 482.9K | ✅ |
-| AutoFitV7 | 488.4K | 488.4K | 488.4K | 488.4K | ✅ |
-| FusedChampion | 3.76M | 3.83M | 384.5K | 384.7K | ✅ |
 
 ### deep_classical
 
@@ -475,43 +406,29 @@
 |-------|--------:|--------:|--------:|
 | MSGNet | 14132.6 | 1121.9 | 105725.4 |
 | MambaSimple | 12526.8 | 865.8 | 49536.0 |
-| AutoFitV73 | 9873.9 | 8622.1 | 11439.7 |
-| AutoFitV731 | 9801.8 | 8645.2 | 11468.4 |
-| ModernTCN | 8534.6 | 788.0 | 31210.8 |
-| CARD | 7204.0 | 570.7 | 23557.2 |
-| FiLM | 7071.9 | 1584.7 | 22418.7 |
-| Fredformer | 6088.6 | 695.6 | 18666.2 |
-| AutoFitV2 | 5703.1 | 5289.7 | 6442.9 |
-| AutoFitV3E | 5694.0 | 5297.2 | 6440.6 |
-| AutoFitV2E | 5661.1 | 5312.1 | 6142.5 |
-| AutoFitV4 | 5634.5 | 5287.4 | 6116.8 |
-| SCINet | 5578.0 | 274.2 | 25886.3 |
-| AutoFitV1 | 5327.1 | 4909.0 | 5738.7 |
-| AutoFitV3 | 5303.4 | 5035.0 | 5686.4 |
-| AutoFitV3Max | 5265.3 | 5008.3 | 5585.4 |
-| AutoFitV71 | 4852.1 | 4100.9 | 6149.3 |
-| AutoFitV72 | 4803.3 | 4169.5 | 5792.6 |
-| FreTS | 4138.1 | 307.8 | 13755.7 |
+| ModernTCN | 8610.4 | 788.0 | 31210.8 |
+| CARD | 7231.9 | 570.7 | 23557.2 |
+| FiLM | 7179.4 | 1584.7 | 22418.7 |
+| Fredformer | 6098.9 | 695.6 | 18666.2 |
+| SCINet | 5647.5 | 274.2 | 25886.3 |
+| FreTS | 4212.2 | 307.8 | 13755.7 |
 | Reformer | 4100.3 | 926.5 | 17614.9 |
-| AutoFitV7 | 4062.8 | 3402.6 | 4780.2 |
-| AutoFitV6 | 3940.7 | 3597.3 | 4253.1 |
-| PIR | 3853.2 | 335.9 | 16062.2 |
+| PIR | 3838.0 | 335.9 | 16062.2 |
 | Crossformer | 3119.2 | 277.7 | 9227.3 |
 | PAttn | 2792.0 | 283.1 | 14803.5 |
-| xPatch | 2167.1 | 207.0 | 11008.1 |
-| AutoFitV5 | 1824.4 | 1396.0 | 2267.0 |
+| xPatch | 2206.4 | 207.0 | 11008.1 |
 | BRITS | 1526.4 | 349.2 | 2770.7 |
 | iTransformer | 1466.2 | 927.9 | 1806.3 |
-| PDF | 1372.5 | 78.1 | 3909.5 |
+| NonstationaryTransformer | 1383.9 | 61.9 | 7899.8 |
+| PDF | 1379.0 | 78.1 | 3909.5 |
 | DUET | 1343.8 | 79.7 | 4508.6 |
-| NonstationaryTransformer | 1318.3 | 61.9 | 7899.8 |
 | MSTL | 1157.4 | 112.0 | 1982.0 |
-| FilterTS | 1004.7 | 163.7 | 3535.8 |
-| SegRNN | 869.5 | 98.5 | 4057.0 |
+| FilterTS | 1031.7 | 163.7 | 3535.8 |
+| SegRNN | 874.5 | 98.5 | 4057.0 |
+| SRSNet | 874.3 | 136.4 | 2852.6 |
 | LightTS | 863.6 | 137.8 | 3222.8 |
-| SRSNet | 859.5 | 136.4 | 2852.6 |
 | RandomForest | 776.4 | 224.6 | 4432.2 |
-| TimeRecipe | 701.8 | 31.0 | 2814.4 |
+| TimeRecipe | 706.2 | 31.0 | 2814.4 |
 | AutoARIMA | 639.3 | 213.1 | 1179.2 |
 | ExtraTrees | 613.7 | 71.5 | 3940.6 |
 | SOFTS | 466.8 | 329.9 | 708.1 |
@@ -521,19 +438,15 @@
 | RMoK | 287.0 | 165.1 | 470.1 |
 | Autoformer | 279.9 | 152.3 | 465.4 |
 | Informer | 262.6 | 113.5 | 368.5 |
-| NFAdaptiveChampion | 256.5 | 77.3 | 407.6 |
 | TimesNet | 250.7 | 125.8 | 463.3 |
 | HistGradientBoosting | 216.7 | 6.8 | 1640.3 |
 | TimeMixer | 185.2 | 140.6 | 292.3 |
-| AutoFitV734 | 175.2 | 72.4 | 379.9 |
 | TSMixer | 165.9 | 107.6 | 270.0 |
 | TSMixerx | 153.5 | 113.0 | 228.4 |
 | HoltWinters | 144.3 | 41.8 | 278.8 |
 | XGBoost | 137.7 | 24.5 | 733.0 |
 | XGBoostPoisson | 135.5 | 30.8 | 336.4 |
-| AutoFitV733 | 122.7 | 35.7 | 295.0 |
 | AutoTheta | 112.1 | 50.0 | 201.1 |
-| AutoFitV735 | 106.7 | 25.5 | 293.8 |
 | TFT | 103.6 | 71.1 | 167.4 |
 | VanillaTransformer | 86.5 | 50.2 | 217.3 |
 | AutoETS | 80.3 | 8.6 | 157.5 |
@@ -546,8 +459,6 @@
 | TiDE | 47.2 | 20.3 | 104.3 |
 | TCN | 42.3 | 12.1 | 77.7 |
 | LSTM | 42.2 | 16.2 | 76.7 |
-| AutoFitV736 | 41.6 | 34.0 | 50.6 |
-| AutoFitV737 | 40.9 | 33.1 | 51.2 |
 | GRU | 40.6 | 11.8 | 80.1 |
 | BiTCN | 39.1 | 21.8 | 83.5 |
 | MLP | 37.2 | 9.2 | 71.6 |
@@ -557,7 +468,6 @@
 | NBEATSx | 32.9 | 9.3 | 79.2 |
 | NBEATS | 31.9 | 9.3 | 74.5 |
 | CatBoost | 31.4 | 2.2 | 288.7 |
-| FusedChampion | 30.9 | 7.8 | 59.8 |
 | Chronos2 | 30.4 | 7.9 | 57.1 |
 | DeepNPTS | 30.2 | 14.1 | 75.4 |
 | NLinear | 29.9 | 11.8 | 73.6 |
@@ -565,8 +475,6 @@
 | TTM | 28.9 | 7.2 | 56.7 |
 | LightGBMTweedie | 25.7 | 4.7 | 415.7 |
 | LightGBM | 24.8 | 4.7 | 562.0 |
-| AutoFitV738 | 19.5 | 14.7 | 25.1 |
-| AutoFitV732 | 16.3 | 8.0 | 26.0 |
 | Timer | 16.3 | 2.9 | 56.5 |
 | Chronos | 16.1 | 2.7 | 55.8 |
 | ChronosBolt | 15.4 | 2.6 | 55.3 |
@@ -588,9 +496,9 @@ Shows which task/category/ablation combinations have results.
 | Task | Category | Ablation | Models |
 |------|----------|----------|-------:|
 | task1_outcome | autofit | core_edgar | 1 |
-| task1_outcome | autofit | core_edgar_seed2 | 24 |
+| task1_outcome | autofit | core_edgar_seed2 | 1 |
 | task1_outcome | autofit | core_only | 1 |
-| task1_outcome | autofit | core_only_seed2 | 24 |
+| task1_outcome | autofit | core_only_seed2 | 1 |
 | task1_outcome | autofit | core_text | 1 |
 | task1_outcome | autofit | full | 1 |
 | task1_outcome | deep_classical | core_edgar | 9 |
@@ -636,9 +544,9 @@ Shows which task/category/ablation combinations have results.
 | task1_outcome | tslib_sota | core_text | 21 |
 | task1_outcome | tslib_sota | full | 21 |
 | task2_forecast | autofit | core_edgar | 1 |
-| task2_forecast | autofit | core_edgar_seed2 | 24 |
+| task2_forecast | autofit | core_edgar_seed2 | 1 |
 | task2_forecast | autofit | core_only | 1 |
-| task2_forecast | autofit | core_only_seed2 | 24 |
+| task2_forecast | autofit | core_only_seed2 | 1 |
 | task2_forecast | autofit | core_text | 1 |
 | task2_forecast | autofit | full | 1 |
 | task2_forecast | deep_classical | core_edgar | 9 |
@@ -684,7 +592,7 @@ Shows which task/category/ablation combinations have results.
 | task2_forecast | tslib_sota | core_text | 21 |
 | task2_forecast | tslib_sota | full | 21 |
 | task3_risk_adjust | autofit | core_edgar | 1 |
-| task3_risk_adjust | autofit | core_edgar_seed2 | 24 |
+| task3_risk_adjust | autofit | core_edgar_seed2 | 1 |
 | task3_risk_adjust | autofit | core_only | 1 |
 | task3_risk_adjust | autofit | core_text | 1 |
 | task3_risk_adjust | autofit | full | 1 |
@@ -726,4 +634,4 @@ Shows which task/category/ablation combinations have results.
 | task3_risk_adjust | tslib_sota | full | 21 |
 
 ---
-_Last updated: 2026-04-03 11:12:40_
+_Last updated: 2026-04-03 15:11:26_

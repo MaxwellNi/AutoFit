@@ -1,6 +1,6 @@
 # Block 3 Full SOTA Benchmark
 
-> Last verified: 2026-03-27 17:10 CET
+> Last verified: 2026-04-03 14:13 UTC
 > Source: `runs/benchmarks/block3_phase9_fair/all_results.csv`
 > Scope: **current clean shared leaderboard** over all **non-retired**, **post-filter**, **160/160 complete** models.
 
@@ -72,7 +72,7 @@ ablations are excluded:
 | 1 | PatchTST | 4.616 | 2 | 112 |
 | 2 | NHITS | 4.710 | 12 | 112 |
 | 3 | NBEATS | 5.670 | 45 | 112 |
-| 4 | NBEATSx | 5.804 | 41 | 112 |
+| 4 | NBEATSx | 5.804 | 0 | 112 |
 | 5 | ChronosBolt | 7.973 | 0 | 112 |
 | 6 | TCN | 10.777 | 0 | 112 |
 | 7 | Chronos | 10.911 | 7 | 112 |
@@ -87,46 +87,46 @@ ablations are excluded:
 | 16 | NLinear | 15.170 | 0 | 112 |
 | 17 | Informer | 15.420 | 0 | 112 |
 | 18 | DilatedRNN | 15.643 | 0 | 112 |
-| 19 | DeepNPTS | 17.759 | 12 | 112 |
+| 19 | DeepNPTS | 17.438 | 12 | 112 |
 | 20 | BiTCN | 18.545 | 0 | 112 |
 | 21 | DLinear | 19.661 | 0 | 112 |
-| 22 | TiDE | 20.009 | 0 | 112 |
-| 23 | FEDformer | 27.223 | 0 | 112 |
-| 24 | Autoformer | 28.661 | 0 | 112 |
-| 25 | TTM | 28.829 | 0 | 112 |
-| 26 | Timer | 28.996 | 0 | 112 |
-| 27 | Chronos2 | 30.212 | 0 | 112 |
-| 28 | TimeMixer | 31.750 | 0 | 112 |
-| 29 | RMoK | 33.152 | 0 | 112 |
-| 30 | TSMixer | 36.768 | 0 | 112 |
-| 31 | iTransformer | 36.991 | 0 | 112 |
-| 32 | SOFTS | 37.250 | 0 | 112 |
-| 33 | WindowAverage | 37.902 | 0 | 112 |
-| 34 | SF_SeasonalNaive | 38.250 | 0 | 112 |
-| 35 | MSTL | 38.777 | 0 | 112 |
-| 36 | RandomForest | 39.071 | 0 | 112 |
-| 37 | AutoETS | 40.071 | 0 | 112 |
-| 38 | Naive | 40.196 | 0 | 112 |
-| 39 | CrostonOptimized | 40.357 | 0 | 112 |
-| 40 | CrostonClassic | 42.071 | 0 | 112 |
-| 41 | DynamicOptimizedTheta | 42.607 | 0 | 112 |
-| 42 | LightGBMTweedie | 42.996 | 0 | 112 |
-| 43 | VanillaTransformer | 43.554 | 0 | 112 |
-| 44 | TSMixerx | 43.696 | 0 | 112 |
-| 45 | AutoARIMA | 43.902 | 0 | 112 |
-| 46 | ExtraTrees | 43.946 | 0 | 112 |
-| 47 | HistoricAverage | 43.964 | 0 | 112 |
-| 48 | Holt | 44.098 | 0 | 112 |
-| 49 | CrostonSBA | 45.143 | 0 | 112 |
-| 50 | LightGBM | 45.397 | 0 | 112 |
-| 51 | TimesFM | 45.714 | 0 | 112 |
-| 52 | AutoTheta | 46.080 | 0 | 112 |
-| 53 | HoltWinters | 46.188 | 0 | 112 |
-| 54 | HistGradientBoosting | 48.205 | 0 | 112 |
-| 55 | CatBoost | 50.125 | 0 | 112 |
-| 56 | GRU-D | 50.268 | 0 | 112 |
-| 57 | BRITS | 50.500 | 0 | 112 |
-| 58 | SAITS | 51.170 | 0 | 112 |
+| 22 | TiDE | 19.920 | 0 | 112 |
+| 23 | FEDformer | 27.080 | 0 | 112 |
+| 24 | Autoformer | 28.241 | 0 | 112 |
+| 25 | Timer | 28.460 | 0 | 112 |
+| 26 | TTM | 28.473 | 0 | 112 |
+| 27 | Chronos2 | 29.487 | 0 | 112 |
+| 28 | TimeMixer | 31.250 | 0 | 112 |
+| 29 | RMoK | 32.652 | 0 | 112 |
+| 30 | TSMixer | 36.268 | 0 | 112 |
+| 31 | iTransformer | 36.330 | 0 | 112 |
+| 32 | SOFTS | 36.661 | 0 | 112 |
+| 33 | WindowAverage | 37.223 | 0 | 112 |
+| 34 | SF_SeasonalNaive | 37.571 | 0 | 112 |
+| 35 | RandomForest | 38.250 | 0 | 112 |
+| 36 | MSTL | 38.455 | 0 | 112 |
+| 37 | AutoETS | 39.393 | 0 | 112 |
+| 38 | Naive | 39.518 | 0 | 112 |
+| 39 | CrostonOptimized | 39.679 | 0 | 112 |
+| 40 | CrostonClassic | 41.250 | 0 | 112 |
+| 41 | DynamicOptimizedTheta | 41.929 | 0 | 112 |
+| 42 | LightGBMTweedie | 42.281 | 0 | 112 |
+| 43 | TSMixerx | 42.875 | 0 | 112 |
+| 44 | VanillaTransformer | 42.875 | 0 | 112 |
+| 45 | ExtraTrees | 43.125 | 0 | 112 |
+| 46 | HistoricAverage | 43.143 | 0 | 112 |
+| 47 | AutoARIMA | 43.223 | 0 | 112 |
+| 48 | Holt | 43.384 | 0 | 112 |
+| 49 | CrostonSBA | 44.321 | 0 | 112 |
+| 50 | LightGBM | 44.576 | 0 | 112 |
+| 51 | TimesFM | 44.893 | 0 | 112 |
+| 52 | AutoTheta | 45.366 | 0 | 112 |
+| 53 | HoltWinters | 45.473 | 0 | 112 |
+| 54 | HistGradientBoosting | 47.384 | 0 | 112 |
+| 55 | CatBoost | 49.304 | 0 | 112 |
+| 56 | GRU-D | 49.446 | 0 | 112 |
+| 57 | BRITS | 49.679 | 0 | 112 |
+| 58 | SAITS | 50.348 | 0 | 112 |
 
 ## Current Clean Full Leaderboard
 
@@ -134,7 +134,7 @@ ablations are excluded:
 | --- | --- | ---: | ---: | ---: |
 | 1 | PatchTST | 4.275 | 4 | 160 |
 | 2 | NHITS | 4.375 | 21 | 160 |
-| 3 | NBEATS | 5.412 | 6 | 160 |
+| 3 | NBEATS | 5.412 | 65 | 160 |
 | 4 | NBEATSx | 5.412 | 3 | 160 |
 | 5 | ChronosBolt | 7.425 | 0 | 160 |
 | 6 | KAN | 10.406 | 16 | 160 |

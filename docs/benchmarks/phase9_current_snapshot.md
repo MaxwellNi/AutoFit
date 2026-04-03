@@ -1,6 +1,6 @@
 # Phase 9 / V739 Current Snapshot
 
-> Generated: 2026-04-03T09:13:00.149757+00:00
+> Generated: 2026-04-03T13:11:50.677076+00:00
 > Canonical benchmark: `runs/benchmarks/block3_phase9_fair`
 
 ## Verified Current Facts
@@ -8,18 +8,18 @@
 | metric | value | evidence |
 | --- | --- | --- |
 | metrics_files | 137 | raw metrics scan |
-| raw_records | 16284 | raw metrics scan |
+| raw_records | 16299 | raw metrics scan |
 | raw_models | 137 | raw metrics scan |
-| raw_nonretired_models | 116 | raw metrics scan minus retired AutoFit legacy lines |
-| raw_retired_autofit_models | 21 | raw metrics scan |
+| raw_nonretired_models | 114 | raw metrics scan minus archived AutoFit-family lines |
+| raw_retired_autofit_models | 23 | raw metrics scan (archived AutoFit-family lines) |
 | raw_complete_models | 75 | raw metrics scan |
-| raw_partial_models | 62 | raw metrics scan |
-| filtered_records | 12422 | `all_results.csv` |
-| filtered_models | 107 | `all_results.csv` (includes retired AutoFit legacy lines if they pass filters) |
-| filtered_nonretired_models | 86 | `all_results.csv` minus retired AutoFit legacy lines |
-| filtered_retired_autofit_models | 21 | `all_results.csv` |
+| raw_partial_models | 39 | raw metrics scan |
+| filtered_records | 11976 | clean current-surface `all_results.csv` |
+| filtered_models | 84 | clean current-surface `all_results.csv` |
+| filtered_nonretired_models | 84 | clean current-surface `all_results.csv` |
+| filtered_retired_autofit_models | 0 | archived AutoFit-family lines purged from current surface |
 | filtered_complete_models | 55 | `all_results.csv` |
-| filtered_partial_models | 52 | `all_results.csv` |
+| filtered_partial_models | 29 | `all_results.csv` |
 | v739_conditions_landed | 132 | raw metrics scan |
 | v739_jobs_live | 0 | `squeue -u npin,cfisch` |
 | v739_canonical_phase9_scripts | 13 | V739 script scan |
@@ -30,10 +30,10 @@
 
 | metric | value |
 | --- | --- |
-| jobs_total | 36 |
+| jobs_total | 34 |
 | running | 8 |
-| pending | 28 |
-| npin_pending | 28 |
+| pending | 26 |
+| npin_pending | 26 |
 | cfisch_pending | 0 |
 | v739_pending | 0 |
 | v739_running | 0 |
@@ -42,7 +42,7 @@
 
 | reason | count |
 | --- | --- |
-| (Priority) | 27 |
+| (Priority) | 25 |
 | (Resources) | 1 |
 
 ## Text Embedding Artifacts
@@ -132,7 +132,7 @@
 | .slurm_scripts/phase12/rerun/cf_p12_af39_t3_ct.sh | canonical_phase9_fair | runs/benchmarks/block3_phase9_fair/task3_risk_adjust/autofit/core_text |
 | .slurm_scripts/phase12/rerun/cf_p12_af39_t3_fu.sh | canonical_phase9_fair | runs/benchmarks/block3_phase9_fair/task3_risk_adjust/autofit/full |
 
-## Partial Raw Models
+## Partial Current-Surface Raw Models
 
 | model_name | conditions | records |
 | --- | --- | --- |
@@ -151,21 +151,21 @@
 | LightTS | 94 | 114 |
 | Pyraformer | 94 | 114 |
 | Reformer | 94 | 114 |
-| CARD | 91 | 91 |
-| DUET | 91 | 91 |
-| FiLM | 91 | 91 |
-| FilterTS | 91 | 91 |
-| FreTS | 91 | 91 |
-| Fredformer | 91 | 91 |
-| ModernTCN | 91 | 91 |
-| NonstationaryTransformer | 91 | 91 |
-| PDF | 91 | 91 |
-| PIR | 91 | 91 |
-| SCINet | 91 | 91 |
-| SRSNet | 91 | 91 |
-| SegRNN | 91 | 91 |
-| TimeRecipe | 91 | 91 |
-| xPatch | 91 | 91 |
+| CARD | 92 | 92 |
+| DUET | 92 | 92 |
+| FiLM | 92 | 92 |
+| FilterTS | 92 | 92 |
+| FreTS | 92 | 92 |
+| Fredformer | 92 | 92 |
+| ModernTCN | 92 | 92 |
+| NonstationaryTransformer | 92 | 92 |
+| PDF | 92 | 92 |
+| PIR | 92 | 92 |
+| SCINet | 92 | 92 |
+| SRSNet | 92 | 92 |
+| SegRNN | 92 | 92 |
+| TimeRecipe | 92 | 92 |
+| xPatch | 92 | 92 |
 | CFPT | 69 | 69 |
 | DeformableTST | 69 | 69 |
 | MICN | 69 | 69 |
@@ -175,26 +175,3 @@
 | TimeBridge | 69 | 69 |
 | TimePerceiver | 69 | 69 |
 | NegativeBinomialGLM | 21 | 21 |
-| AutoFitV1 | 20 | 20 |
-| AutoFitV2 | 20 | 20 |
-| AutoFitV2E | 20 | 20 |
-| AutoFitV3 | 20 | 20 |
-| AutoFitV3E | 20 | 20 |
-| AutoFitV3Max | 20 | 20 |
-| AutoFitV4 | 20 | 20 |
-| AutoFitV5 | 20 | 20 |
-| AutoFitV6 | 20 | 20 |
-| AutoFitV7 | 20 | 20 |
-| AutoFitV71 | 20 | 20 |
-| AutoFitV72 | 20 | 20 |
-| AutoFitV73 | 20 | 20 |
-| AutoFitV731 | 20 | 20 |
-| AutoFitV732 | 20 | 20 |
-| AutoFitV733 | 20 | 20 |
-| AutoFitV734 | 20 | 20 |
-| AutoFitV735 | 20 | 20 |
-| AutoFitV736 | 20 | 20 |
-| AutoFitV737 | 20 | 20 |
-| AutoFitV738 | 20 | 20 |
-| FusedChampion | 20 | 20 |
-| NFAdaptiveChampion | 20 | 20 |

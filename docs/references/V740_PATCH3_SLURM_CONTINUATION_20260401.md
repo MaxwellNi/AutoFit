@@ -36,16 +36,16 @@ Current partial patch3 full-loop state before SLURM resume:
 - `5304057 v740_fnd_g2`: completed, controlled funding mechanism split gate for `runs/benchmarks/v740_localclear_20260401/v740_funding_patchsplit_gate_20260402/`
 - `5304068 v740_fnd_g3`: completed, no-log funding sub-split gate for `runs/benchmarks/v740_localclear_20260401/v740_funding_nolog_subsplit_gate_20260402/`
 - `5304260 v740_fnd_g4`: completed, widened best-branch funding duel for `runs/benchmarks/v740_localclear_20260401/v740_funding_bestbranch_duel_20260402/`
+- `5304393 v740_repr_pa`: completed, output roots
+  - `runs/benchmarks/v740_localclear_20260402/v740_shared112_binary_postaudit_20260402/`
+  - `runs/benchmarks/v740_localclear_20260402/v740_shared112_investors_postaudit_20260402/`
+- `5305473 v740_112_binh1`: completed, output root `runs/benchmarks/v740_localclear_20260403/v740_shared112_binary_routed_h1_probe_20260403/`
 
 ### Pending jobs
 
-- `5304393 v740_repr_pa`: pending, output roots
-  - `runs/benchmarks/v740_localclear_20260402/v740_shared112_binary_postaudit_20260402/`
-  - `runs/benchmarks/v740_localclear_20260402/v740_shared112_investors_postaudit_20260402/`
 - `5305468 v740_112_inv`: pending, output root `runs/benchmarks/v740_localclear_20260402/v740_shared112_investors_routed_loop_20260402/`
 - `5305469 v740_112_bin`: pending, output root `runs/benchmarks/v740_localclear_20260402/v740_shared112_binary_routed_guard_20260402/`
 - `5305472 v740_112_invh1`: pending, output root `runs/benchmarks/v740_localclear_20260403/v740_shared112_investors_routed_h1_probe_20260403/`
-- `5305473 v740_112_binh1`: pending, output root `runs/benchmarks/v740_localclear_20260403/v740_shared112_binary_routed_h1_probe_20260403/`
 
 The completed `v740_112_bin` result from 2026-04-01 is a separate non-routed binary-loop landing and must not overwrite the patch3-resume path.
 Patch3 continuation should keep using the dedicated interrupted-run root below.
@@ -61,7 +61,7 @@ Patch3 continuation should keep using the dedicated interrupted-run root below.
   - `is_funded`: `7/2/7`
   - `funding_raised_usd`: `8/0/40`
   - `investors_count`: `0/0/48`
-- current active April V740 local validation jobs: `5`, all still `PENDING` on `gpu`
+- current active April V740 local validation jobs: `3`, all still `PENDING` on `gpu`
 
 ## Funding Gate Summary
 
@@ -104,12 +104,12 @@ Patch3 continuation should keep using the dedicated interrupted-run root below.
   - job: `5305468 v740_112_inv`
   - output root: `runs/benchmarks/v740_localclear_20260402/v740_shared112_investors_routed_loop_20260402/`
   - summary target: `docs/references/V740_SHARED112_INVESTORS_ROUTED_LOOP_20260402.md`
-  - current scheduler ETA: `2026-04-12T11:20:00`
+  - current scheduler ETA: `2026-04-09T22:50:00`
 - script: `.slurm_scripts/v740_local/v740_shared112_binary_loop_gpu.sh`
   - job: `5305469 v740_112_bin`
   - output root: `runs/benchmarks/v740_localclear_20260402/v740_shared112_binary_routed_guard_20260402/`
   - summary target: `docs/references/V740_SHARED112_BINARY_ROUTED_GUARD_20260402.md`
-  - current scheduler ETA: `2026-04-12T12:10:00`
+  - current scheduler ETA: `2026-04-09T22:50:00`
 
 ### Faster routed h1 probes
 
@@ -117,18 +117,19 @@ Patch3 continuation should keep using the dedicated interrupted-run root below.
   - job: `5305472 v740_112_invh1`
   - output root: `runs/benchmarks/v740_localclear_20260403/v740_shared112_investors_routed_h1_probe_20260403/`
   - summary target: `docs/references/V740_SHARED112_INVESTORS_ROUTED_H1_PROBE_20260403.md`
-  - current scheduler ETA: `2026-04-12T15:30:00`
+  - current scheduler ETA: `2026-04-09T22:50:00`
 - script: `.slurm_scripts/v740_local/v740_shared112_binary_h1_routed_probe_gpu.sh`
   - job: `5305473 v740_112_binh1`
   - output root: `runs/benchmarks/v740_localclear_20260403/v740_shared112_binary_routed_h1_probe_20260403/`
   - summary target: `docs/references/V740_SHARED112_BINARY_ROUTED_H1_PROBE_20260403.md`
-  - current scheduler ETA: `2026-04-12T15:40:00`
+  - state: `COMPLETED` (`00:04:09`)
 
 ### Honest current state
 
-- no routed summary markdown has landed yet
-- no routed JSON outputs have landed yet
-- the routed path is therefore still an execution plan, not executed evidence
+- full post-audit reruns have landed via `5304393`: binary `10/0/6` (`32` JSON) and investors `0/0/48` (`96` JSON)
+- one routed summary markdown has landed: binary h1 probe `2/0/2` across `4` cells
+- one routed JSON root has landed under `runs/benchmarks/v740_localclear_20260403/v740_shared112_binary_routed_h1_probe_20260403/` with `8` JSON files
+- the routed path is now partially executed evidence, but routed full loops and routed investors h1 are still pending
 
 ## Intended Resume Path
 

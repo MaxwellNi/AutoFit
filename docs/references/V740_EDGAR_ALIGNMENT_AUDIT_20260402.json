@@ -1,0 +1,302 @@
+{
+  "pointer_path": "docs/audits/FULL_SCALE_POINTER.yaml",
+  "tolerance_days": 90,
+  "core": {
+    "rows": 5774931,
+    "rows_with_cik": 1480780,
+    "rows_without_cik": 4294151,
+    "cik_row_rate": 0.25641518487407033,
+    "unique_entities": 22569,
+    "unique_ciks": 7606
+  },
+  "edgar": {
+    "rows": 1325506,
+    "unique_ciks": 7605,
+    "core_cik_overlap_rate": 0.9998685248488036
+  },
+  "join_comparison": {
+    "exact_day": {
+      "matched_rows": 1476214,
+      "match_rate_rows_with_cik": 0.9969164899579951
+    },
+    "asof_backward": {
+      "matched_rows": 1476214,
+      "match_rate_rows_with_cik": 0.9969164899579951,
+      "coverage_gain_rows": 0,
+      "coverage_gain_rate": 0.0,
+      "lag_days": {
+        "mean": 0.0,
+        "median": 0.0,
+        "p10": 0.0,
+        "p90": 0.0,
+        "max": 0.0
+      },
+      "same_day_share_among_matches": 1.0,
+      "le_7_share_among_matches": 1.0,
+      "le_30_share_among_matches": 1.0,
+      "days_31_90_share_among_matches": 0.0
+    }
+  },
+  "target_subsets": {
+    "funding_raised_usd": {
+      "eligible_rows": 199756,
+      "exact_match_rate": 0.9939826588437894,
+      "asof_match_rate": 0.9939826588437894
+    },
+    "investors_count": {
+      "eligible_rows": 1144132,
+      "exact_match_rate": 0.9976270220568956,
+      "asof_match_rate": 0.9976270220568956
+    },
+    "is_funded": {
+      "eligible_rows": 539050,
+      "exact_match_rate": 0.9925183192653743,
+      "asof_match_rate": 0.9925183192653743
+    }
+  },
+  "entity_coverage": {
+    "min_rows_per_entity": 10,
+    "eligible_entities": 8746,
+    "exact_rate": {
+      "mean": 0.9961125085753487,
+      "median": 1.0,
+      "p10": 1.0,
+      "p90": 1.0,
+      "max": 1.0
+    },
+    "asof_rate": {
+      "mean": 0.9961125085753487,
+      "median": 1.0,
+      "p10": 1.0,
+      "p90": 1.0,
+      "max": 1.0
+    },
+    "coverage_gain": {
+      "mean": 0.0,
+      "median": 0.0,
+      "p10": 0.0,
+      "p90": 0.0,
+      "max": 0.0
+    }
+  },
+  "top_entity_gains": [
+    {
+      "entity_id": "smallchange|smallchange_Alchemy_Springs_0",
+      "cik": "0001877762",
+      "rows": 1165,
+      "exact_rate": 1.0,
+      "asof_rate": 1.0,
+      "coverage_gain": 0.0,
+      "median_lag": 0.0
+    },
+    {
+      "entity_id": "smallchange|smallchange_BIPOC_Homeownership_0",
+      "cik": "0001880617",
+      "rows": 1165,
+      "exact_rate": 1.0,
+      "asof_rate": 1.0,
+      "coverage_gain": 0.0,
+      "median_lag": 0.0
+    },
+    {
+      "entity_id": "smallchange|smallchange_Bungalow_gardens_0",
+      "cik": "0001778493",
+      "rows": 1165,
+      "exact_rate": 1.0,
+      "asof_rate": 1.0,
+      "coverage_gain": 0.0,
+      "median_lag": 0.0
+    },
+    {
+      "entity_id": "smallchange|smallchange_Golaski_Labs_0",
+      "cik": "0001750307",
+      "rows": 1165,
+      "exact_rate": 1.0,
+      "asof_rate": 1.0,
+      "coverage_gain": 0.0,
+      "median_lag": 0.0
+    },
+    {
+      "entity_id": "smallchange|smallchange_Sharswood_0",
+      "cik": "0001798376",
+      "rows": 1165,
+      "exact_rate": 1.0,
+      "asof_rate": 1.0,
+      "coverage_gain": 0.0,
+      "median_lag": 0.0
+    },
+    {
+      "entity_id": "smallchange|smallchange_renovare_development_0",
+      "cik": "0001911704",
+      "rows": 1165,
+      "exact_rate": 1.0,
+      "asof_rate": 1.0,
+      "coverage_gain": 0.0,
+      "median_lag": 0.0
+    },
+    {
+      "entity_id": "smallchange|smallchange_starter_home_two_0",
+      "cik": "0001704091",
+      "rows": 1165,
+      "exact_rate": 1.0,
+      "asof_rate": 1.0,
+      "coverage_gain": 0.0,
+      "median_lag": 0.0
+    },
+    {
+      "entity_id": "flashfunders|flashfunders_adomani_0",
+      "cik": "0001563568",
+      "rows": 1154,
+      "exact_rate": 1.0,
+      "asof_rate": 1.0,
+      "coverage_gain": 0.0,
+      "median_lag": 0.0
+    },
+    {
+      "entity_id": "flashfunders|flashfunders_mobilespike_0",
+      "cik": "0001674319",
+      "rows": 1154,
+      "exact_rate": 1.0,
+      "asof_rate": 1.0,
+      "coverage_gain": 0.0,
+      "median_lag": 0.0
+    },
+    {
+      "entity_id": "flashfunders|flashfunders_mobilespike_1",
+      "cik": "0001674319",
+      "rows": 1154,
+      "exact_rate": 1.0,
+      "asof_rate": 1.0,
+      "coverage_gain": 0.0,
+      "median_lag": 0.0
+    },
+    {
+      "entity_id": "flashfunders|flashfunders_soliton_0",
+      "cik": "0001548187",
+      "rows": 1154,
+      "exact_rate": 1.0,
+      "asof_rate": 1.0,
+      "coverage_gain": 0.0,
+      "median_lag": 0.0
+    },
+    {
+      "entity_id": "smallchange|smallchange_Lake_Noire_Take_Two_0",
+      "cik": "0001904386",
+      "rows": 1093,
+      "exact_rate": 1.0,
+      "asof_rate": 1.0,
+      "coverage_gain": 0.0,
+      "median_lag": 0.0
+    }
+  ],
+  "top_entity_staleness": [
+    {
+      "entity_id": "smallchange|smallchange_Alchemy_Springs_0",
+      "cik": "0001877762",
+      "rows": 1165,
+      "exact_rate": 1.0,
+      "asof_rate": 1.0,
+      "coverage_gain": 0.0,
+      "median_lag": 0.0
+    },
+    {
+      "entity_id": "smallchange|smallchange_BIPOC_Homeownership_0",
+      "cik": "0001880617",
+      "rows": 1165,
+      "exact_rate": 1.0,
+      "asof_rate": 1.0,
+      "coverage_gain": 0.0,
+      "median_lag": 0.0
+    },
+    {
+      "entity_id": "smallchange|smallchange_Bungalow_gardens_0",
+      "cik": "0001778493",
+      "rows": 1165,
+      "exact_rate": 1.0,
+      "asof_rate": 1.0,
+      "coverage_gain": 0.0,
+      "median_lag": 0.0
+    },
+    {
+      "entity_id": "smallchange|smallchange_Golaski_Labs_0",
+      "cik": "0001750307",
+      "rows": 1165,
+      "exact_rate": 1.0,
+      "asof_rate": 1.0,
+      "coverage_gain": 0.0,
+      "median_lag": 0.0
+    },
+    {
+      "entity_id": "smallchange|smallchange_Sharswood_0",
+      "cik": "0001798376",
+      "rows": 1165,
+      "exact_rate": 1.0,
+      "asof_rate": 1.0,
+      "coverage_gain": 0.0,
+      "median_lag": 0.0
+    },
+    {
+      "entity_id": "smallchange|smallchange_renovare_development_0",
+      "cik": "0001911704",
+      "rows": 1165,
+      "exact_rate": 1.0,
+      "asof_rate": 1.0,
+      "coverage_gain": 0.0,
+      "median_lag": 0.0
+    },
+    {
+      "entity_id": "smallchange|smallchange_starter_home_two_0",
+      "cik": "0001704091",
+      "rows": 1165,
+      "exact_rate": 1.0,
+      "asof_rate": 1.0,
+      "coverage_gain": 0.0,
+      "median_lag": 0.0
+    },
+    {
+      "entity_id": "flashfunders|flashfunders_adomani_0",
+      "cik": "0001563568",
+      "rows": 1154,
+      "exact_rate": 1.0,
+      "asof_rate": 1.0,
+      "coverage_gain": 0.0,
+      "median_lag": 0.0
+    },
+    {
+      "entity_id": "flashfunders|flashfunders_mobilespike_0",
+      "cik": "0001674319",
+      "rows": 1154,
+      "exact_rate": 1.0,
+      "asof_rate": 1.0,
+      "coverage_gain": 0.0,
+      "median_lag": 0.0
+    },
+    {
+      "entity_id": "flashfunders|flashfunders_mobilespike_1",
+      "cik": "0001674319",
+      "rows": 1154,
+      "exact_rate": 1.0,
+      "asof_rate": 1.0,
+      "coverage_gain": 0.0,
+      "median_lag": 0.0
+    },
+    {
+      "entity_id": "flashfunders|flashfunders_soliton_0",
+      "cik": "0001548187",
+      "rows": 1154,
+      "exact_rate": 1.0,
+      "asof_rate": 1.0,
+      "coverage_gain": 0.0,
+      "median_lag": 0.0
+    },
+    {
+      "entity_id": "smallchange|smallchange_Lake_Noire_Take_Two_0",
+      "cik": "0001904386",
+      "rows": 1093,
+      "exact_rate": 1.0,
+      "asof_rate": 1.0,
+      "coverage_gain": 0.0,
+      "median_lag": 0.0
+    }
+  ]
+}

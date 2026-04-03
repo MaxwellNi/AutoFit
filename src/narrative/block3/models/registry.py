@@ -33,8 +33,10 @@ Unified interface for all 143+ registered models across 8 categories:
                            CFPT, DeformableTST, ModernTCN, PathFormer, SEMPO,
                            TimePerceiver, TimeBridge, TQNet, PIR, CARD, PDF,
                            TimeRecipe, DUET, SRSNet
-  - autofit         (22): V1–V7, V71–V73, V731–V733, V734, V735, V736, V739,
-                           FusedChampion, NFAdaptiveChampion
+    - autofit          (1): AutoFitV739 only in the active current registry
+
+Historical AutoFit-family implementations remain in source for archival and
+audit purposes, but are intentionally excluded from the active registry.
 """
 from __future__ import annotations
 
@@ -50,7 +52,8 @@ from .deep_models import (
     get_deep_model,
 )
 from .irregular_models import IRREGULAR_MODELS, get_irregular_model
-from .autofit_wrapper import AUTOFIT_MODELS
+from ..autofit_status import CURRENT_AUTOFIT_BASELINE, get_retired_autofit_reason, is_retired_autofit_model
+from .autofit_wrapper import ACTIVE_AUTOFIT_MODELS
 from .tslib_models import TSLIB_MODELS
 
 
@@ -66,7 +69,7 @@ MODEL_CATEGORIES: Dict[str, List[str]] = {
     "foundation":       list(FOUNDATION_MODELS.keys()),
     "irregular":        list(IRREGULAR_MODELS.keys()),
     "tslib_sota":       list(TSLIB_MODELS.keys()),
-    "autofit":          list(AUTOFIT_MODELS.keys()),
+    "autofit":          list(ACTIVE_AUTOFIT_MODELS.keys()),
 }
 
 # Flattened registry for direct lookup
@@ -78,7 +81,7 @@ _ALL_MODELS.update(TRANSFORMER_MODELS)
 _ALL_MODELS.update(FOUNDATION_MODELS)
 _ALL_MODELS.update(IRREGULAR_MODELS)
 _ALL_MODELS.update(TSLIB_MODELS)
-_ALL_MODELS.update(AUTOFIT_MODELS)
+_ALL_MODELS.update(ACTIVE_AUTOFIT_MODELS)
 
 
 # ============================================================================
@@ -88,6 +91,12 @@ _ALL_MODELS.update(AUTOFIT_MODELS)
 def get_model(name: str, **kwargs) -> ModelBase:
     """Get a model instance by name."""
     if name not in _ALL_MODELS:
+        if is_retired_autofit_model(name):
+            raise ValueError(
+                f"Retired AutoFit model blocked from current registry: {name}. "
+                f"Reason: {get_retired_autofit_reason(name)}. "
+                f"Only {CURRENT_AUTOFIT_BASELINE} remains active."
+            )
         raise ValueError(
             f"Unknown model: {name}. "
             f"Use list_models() to see available models."
