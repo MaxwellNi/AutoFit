@@ -119,11 +119,27 @@ def _parse_args() -> argparse.Namespace:
         default=0,
         help="Optional limit on the number of cases to run after filtering.",
     )
+    ap.add_argument(
+        "--skip-existing",
+        action="store_true",
+        help="Reuse an existing per-case JSON artifact instead of recomputing it.",
+    )
     return ap.parse_args()
 
 
-def _run_one(case: Dict[str, Any], variant: Dict[str, Any], output_dir: Path) -> Dict[str, Any]:
+def _run_one(
+    case: Dict[str, Any],
+    variant: Dict[str, Any],
+    output_dir: Path,
+    skip_existing: bool = False,
+) -> Dict[str, Any]:
     out_json = output_dir / f"{case['name']}__{variant['name']}.json"
+    if skip_existing and out_json.exists():
+        existing = json.loads(out_json.read_text(encoding="utf-8"))
+        existing.setdefault("case", case["name"])
+        existing.setdefault("variant", variant["name"])
+        existing.setdefault("json_path", str(out_json))
+        return existing
     cmd = [
         sys.executable,
         str(SMOKE_SLICE_SCRIPT),
@@ -232,7 +248,7 @@ def main() -> int:
     for case in cases:
         for variant in VARIANTS:
             print(f"[v740-ablation] running {case['name']} / {variant['name']}", flush=True)
-            results.append(_run_one(case, variant, args.output_dir))
+            results.append(_run_one(case, variant, args.output_dir, skip_existing=args.skip_existing))
     _write_summary(args.summary_md, results)
     print(f"[v740-ablation] wrote summary to {args.summary_md}", flush=True)
     return 0

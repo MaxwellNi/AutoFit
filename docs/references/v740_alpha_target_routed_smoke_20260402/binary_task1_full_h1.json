@@ -1,0 +1,105 @@
+{
+  "task": "task1_outcome",
+  "ablation": "full",
+  "target": "is_funded",
+  "horizon": 1,
+  "input_size": 60,
+  "horizon_to_context_ratio": 0.016666666666666666,
+  "train_rows": 600,
+  "val_rows": 344,
+  "test_rows": 307,
+  "train_matrix_rows": 600,
+  "test_matrix_rows": 307,
+  "feature_count": 169,
+  "selected_entities": 6,
+  "edgar_cols_used": 39,
+  "text_cols_used": 64,
+  "coverage_ratio": 1.0,
+  "constant_prediction": false,
+  "prediction_std": 0.18694163107053358,
+  "binary_train_rate": 0.7575757503509521,
+  "binary_event_rate": 0.7575757503509521,
+  "binary_transition_rate": 0.008658008649945259,
+  "binary_pos_weight": 1.0,
+  "binary_temperature": 0.35,
+  "teacher_distill_enabled": true,
+  "event_head_enabled": true,
+  "task_mod_enabled": false,
+  "binary_teacher_weight": 0.12820086616226734,
+  "binary_event_weight": 0.16538831183313032,
+  "teacher_logistic_mix": 0.4654891789341386,
+  "teacher_tree_mix": 0.5345108210658613,
+  "edgar_source_density": 0.7683333333333333,
+  "text_source_density": 1.0,
+  "funding_log_domain": false,
+  "funding_source_scaling": false,
+  "funding_anchor_enabled": false,
+  "funding_anchor_strength": 0.0,
+  "regime_info": {
+    "task": "task1_outcome",
+    "target": "is_funded",
+    "ablation": "full",
+    "horizon": 1,
+    "binary_target": true,
+    "funding_target": false,
+    "teacher_distill_enabled": true,
+    "event_head_enabled": true,
+    "task_mod_enabled": false,
+    "requested": {
+      "funding_log_domain": true,
+      "funding_source_scaling": true,
+      "funding_anchor": true,
+      "funding_anchor_strength": 0.85
+    },
+    "effective": {
+      "funding_log_domain": false,
+      "funding_source_scaling": false,
+      "funding_anchor": false,
+      "funding_anchor_strength": 0.0
+    },
+    "source_scales": {
+      "edgar": 1.0,
+      "text": 1.0
+    },
+    "source_stats": {
+      "row_density": {
+        "edgar": 0.7683333333333333,
+        "text": 1.0
+      },
+      "event_density": {
+        "edgar": 0.6461038961038961,
+        "text": 0.9307359307359307
+      },
+      "text_change_density": 0.0
+    },
+    "state_stream": {
+      "feature_cols": 8,
+      "excluded_source_cols": 103
+    },
+    "target_routing": {
+      "enabled": true,
+      "experts": 3,
+      "count_anchor_enabled": true,
+      "count_anchor_strength": 0.7,
+      "stats": {
+        "mean_weights": [
+          0.8946964740753174,
+          0.004046070855110884,
+          0.10125744342803955
+        ],
+        "dominant_expert": 0,
+        "dominant_share": 1.0,
+        "entropy": 0.32168641686439514,
+        "mean_gate": 0.5040493011474609
+      }
+    }
+  },
+  "metrics": {
+    "mae": 0.3180591667902198,
+    "rmse": 0.4761028316682352,
+    "smape": 58.1504643781775,
+    "mape": 16.29286350432792
+  },
+  "wall_time_seconds": 68.175,
+  "json_path": "docs/references/v740_alpha_target_routed_smoke_20260402/binary_task1_full_h1.json"
+}

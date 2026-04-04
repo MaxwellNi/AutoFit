@@ -378,6 +378,55 @@ def _positive_int(value: str) -> int:
     return ivalue
 
 
+def _nonnegative_float(value: str) -> float:
+    fvalue = float(value)
+    if fvalue < 0.0:
+        raise argparse.ArgumentTypeError("value must be a non-negative float")
+    return fvalue
+
+
+def add_v740_funding_regime_args(ap: argparse.ArgumentParser) -> argparse.ArgumentParser:
+    ap.add_argument("--disable-funding-log-domain", action="store_true")
+    ap.add_argument("--disable-funding-source-scaling", action="store_true")
+    ap.add_argument("--disable-funding-anchor", action="store_true")
+    ap.add_argument("--funding-anchor-strength", type=_nonnegative_float, default=0.85)
+    return ap
+
+
+def v740_funding_regime_kwargs_from_args(args: argparse.Namespace) -> Dict[str, Any]:
+    return {
+        "enable_funding_log_domain": not getattr(args, "disable_funding_log_domain", False),
+        "enable_funding_source_scaling": not getattr(args, "disable_funding_source_scaling", False),
+        "enable_funding_anchor": not getattr(args, "disable_funding_anchor", False),
+        "funding_anchor_strength": float(getattr(args, "funding_anchor_strength", 0.85)),
+    }
+
+
+def add_v740_target_regime_args(ap: argparse.ArgumentParser) -> argparse.ArgumentParser:
+    ap.add_argument("--disable-target-routing", action="store_true")
+    ap.add_argument("--target-route-experts", type=_positive_int, default=3)
+    ap.add_argument("--disable-count-anchor", action="store_true")
+    ap.add_argument("--count-anchor-strength", type=_nonnegative_float, default=0.70)
+    ap.add_argument("--disable-count-jump", action="store_true")
+    ap.add_argument("--count-jump-strength", type=_nonnegative_float, default=0.30)
+    ap.add_argument("--disable-count-sparsity-gate", action="store_true")
+    ap.add_argument("--count-sparsity-gate-strength", type=_nonnegative_float, default=0.75)
+    return ap
+
+
+def v740_target_regime_kwargs_from_args(args: argparse.Namespace) -> Dict[str, Any]:
+    return {
+        "enable_target_routing": not getattr(args, "disable_target_routing", False),
+        "target_route_experts": int(getattr(args, "target_route_experts", 3)),
+        "enable_count_anchor": not getattr(args, "disable_count_anchor", False),
+        "count_anchor_strength": float(getattr(args, "count_anchor_strength", 0.70)),
+        "enable_count_jump": not getattr(args, "disable_count_jump", False),
+        "count_jump_strength": float(getattr(args, "count_jump_strength", 0.30)),
+        "enable_count_sparsity_gate": not getattr(args, "disable_count_sparsity_gate", False),
+        "count_sparsity_gate_strength": float(getattr(args, "count_sparsity_gate_strength", 0.75)),
+    }
+
+
 def _parse_args() -> argparse.Namespace:
     ap = argparse.ArgumentParser(description=__doc__)
     ap.add_argument("--task", required=True, choices=["task1_outcome", "task2_forecast", "task3_risk_adjust"])
@@ -399,6 +448,8 @@ def _parse_args() -> argparse.Namespace:
     ap.add_argument("--disable-teacher-distill", action="store_true")
     ap.add_argument("--disable-event-head", action="store_true")
     ap.add_argument("--disable-task-modulation", action="store_true")
+    add_v740_funding_regime_args(ap)
+    add_v740_target_regime_args(ap)
     ap.add_argument("--output-json", type=Path, default=None)
     ap.add_argument("--output-preds", type=Path, default=None)
     ap.add_argument(
@@ -426,6 +477,7 @@ def _summarize_result(
     coverage = float(finite.mean()) if len(preds) else 0.0
     std = float(np.nanstd(preds)) if len(preds) else 0.0
     constant_prediction = bool(len(preds) > 1 and std < 1e-8)
+    regime_info = model.get_regime_info() if hasattr(model, "get_regime_info") else None
     return {
         "task": args.task,
         "ablation": args.ablation,
@@ -461,6 +513,19 @@ def _summarize_result(
         "teacher_tree_mix": float(getattr(model, "_teacher_tree_mix", 0.0)) if getattr(model, "_binary_target", False) else None,
         "edgar_source_density": float(getattr(model, "_edgar_source_density", 0.0)),
         "text_source_density": float(getattr(model, "_text_source_density", 0.0)),
+        "funding_log_domain": bool(getattr(model, "_funding_log_domain", False)),
+        "funding_source_scaling": bool(getattr(model, "_funding_source_scaling", False)),
+        "funding_anchor_enabled": bool(getattr(model, "_funding_anchor_enabled", False)),
+        "funding_anchor_strength": float(getattr(model, "_effective_funding_anchor_strength", 0.0)),
+        "target_routing_enabled": bool(getattr(model, "enable_target_routing", False)),
+        "target_route_experts": int(getattr(model, "target_route_experts", 0)),
+        "count_anchor_enabled": bool(getattr(model, "enable_count_anchor", False)),
+        "count_anchor_strength": float(getattr(model, "count_anchor_strength", 0.0)),
+        "count_jump_enabled": bool(getattr(model, "enable_count_jump", False)),
+        "count_jump_strength": float(getattr(model, "count_jump_strength", 0.0)),
+        "count_sparsity_gate_enabled": bool(getattr(model, "enable_count_sparsity_gate", False)),
+        "count_sparsity_gate_strength": float(getattr(model, "count_sparsity_gate_strength", 0.0)),
+        "regime_info": regime_info,
         "metrics": metrics,
     }
 
@@ -522,6 +587,8 @@ def main() -> int:
         enable_teacher_distill=not args.disable_teacher_distill,
         enable_event_head=not args.disable_event_head,
         enable_task_modulation=not args.disable_task_modulation,
+        **v740_funding_regime_kwargs_from_args(args),
+        **v740_target_regime_kwargs_from_args(args),
         seed=args.seed,
     )
     t_fit = time.time()
@@ -552,6 +619,7 @@ def main() -> int:
     metrics = _compute_metrics(y_test.values, preds)
     summary = _summarize_result(args, train, val, test, X_train, X_test, y_test, preds, metrics, model)
     summary["wall_time_seconds"] = round(time.time() - t0, 3)
+    summary["json_path"] = str(args.output_json) if args.output_json is not None else None
 
     print(json.dumps(summary, indent=2, ensure_ascii=False))
 

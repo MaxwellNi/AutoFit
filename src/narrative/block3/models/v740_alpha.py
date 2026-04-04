@@ -36,6 +36,7 @@ from .v740_multisource_features import (
     DualClockConfig,
     build_dual_clock_memory_for_entity,
     build_source_native_edgar_memory,
+    build_source_native_text_memory,
     infer_edgar_columns,
     infer_text_columns,
 )
@@ -57,6 +58,28 @@ def _build_edgar_memory(
     if "edgar_filed_date" in entity_df.columns or "cutoff_ts" in entity_df.columns:
         return build_source_native_edgar_memory(entity_df, prediction_time, source_cols, cfg)
     return build_dual_clock_memory_for_entity(entity_df, prediction_time, source_cols, cfg)
+
+
+def _build_text_memory(
+    entity_df: pd.DataFrame,
+    prediction_time: pd.Timestamp,
+    source_cols: List[str],
+    cfg: DualClockConfig,
+) -> Dict[str, np.ndarray]:
+    event_col = "snapshot_ts" if "snapshot_ts" in entity_df.columns else cfg.time_col
+    return build_source_native_text_memory(entity_df, prediction_time, source_cols, cfg, event_col=event_col)
+
+
+def _select_state_feature_cols(
+    train_raw: pd.DataFrame,
+    target: str,
+    max_covariates: int,
+    source_exclude: List[str],
+) -> List[str]:
+    if not source_exclude:
+        return _select_feature_cols(train_raw, target, max_covariates)
+    state_df = train_raw.drop(columns=[c for c in source_exclude if c in train_raw.columns], errors="ignore")
+    return _select_feature_cols(state_df, target, max_covariates)
 
 
 @dataclass
@@ -114,20 +137,25 @@ def _window_teacher_features(
         tb = text_bucket[i] if i < len(text_bucket) else None
         for recent, bucket in ((er, eb), (tr, tb)):
             if recent is not None and recent.size:
+                active_mask = recent[:, 2] > 0.0
                 row.extend([
-                    float(np.sum(recent[:, 2] > 0.0)),
-                    float(np.mean(recent[:, 0][recent[:, 2] > 0.0])) if np.any(recent[:, 2] > 0.0) else 0.0,
+                    float(np.sum(active_mask)),
+                    float(np.mean(recent[:, 0][active_mask])) if np.any(active_mask) else 0.0,
+                    float(np.mean(np.abs(recent[:, 3][active_mask]))) if np.any(active_mask) and recent.shape[1] > 3 else 0.0,
+                    float(np.mean(np.abs(recent[:, 4][active_mask]))) if np.any(active_mask) and recent.shape[1] > 4 else 0.0,
                 ])
             else:
-                row.extend([0.0, 0.0])
+                row.extend([0.0, 0.0, 0.0, 0.0])
             if bucket is not None and bucket.size:
                 row.extend([
                     float(np.sum(bucket[:, 0])),
                     float(np.max(bucket[:, 0])),
                     float(np.mean(bucket[:, 0])),
+                    float(np.mean(np.abs(bucket[:, 4]))) if bucket.shape[1] > 4 else 0.0,
+                    float(np.mean(np.abs(bucket[:, 5]))) if bucket.shape[1] > 5 else 0.0,
                 ])
             else:
-                row.extend([0.0, 0.0, 0.0])
+                row.extend([0.0, 0.0, 0.0, 0.0, 0.0])
         feats.append(np.asarray(row, dtype=np.float32))
     if not feats:
         return np.zeros((0, 1), dtype=np.float32)
@@ -198,7 +226,7 @@ def _build_v740_windows(
 
         last_time = times.iloc[-1]
         edgar_context_mem = _build_edgar_memory(grp, last_time, edgar_cols, dual_clock_cfg)
-        text_context_mem = build_dual_clock_memory_for_entity(grp, last_time, text_cols, dual_clock_cfg)
+        text_context_mem = _build_text_memory(grp, last_time, text_cols, dual_clock_cfg)
         context_memory[str(eid)] = {
             "edgar_recent": edgar_context_mem["recent_tokens"],
             "edgar_bucket": edgar_context_mem["bucket_tokens"],
@@ -232,12 +260,12 @@ def _build_v740_windows(
                 edgar_recent = np.zeros((dual_clock_cfg.max_events, 3), dtype=np.float32)
                 edgar_bucket = np.zeros((len(dual_clock_cfg.recency_buckets) + 1, 4), dtype=np.float32)
             if text_cols:
-                text_mem = build_dual_clock_memory_for_entity(prefix, pred_time, text_cols, dual_clock_cfg)
+                text_mem = _build_text_memory(prefix, pred_time, text_cols, dual_clock_cfg)
                 text_recent = text_mem["recent_tokens"]
                 text_bucket = text_mem["bucket_tokens"]
             else:
-                text_recent = np.zeros((dual_clock_cfg.max_events, 3), dtype=np.float32)
-                text_bucket = np.zeros((len(dual_clock_cfg.recency_buckets) + 1, 4), dtype=np.float32)
+                text_recent = np.zeros((dual_clock_cfg.max_events, 5), dtype=np.float32)
+                text_bucket = np.zeros((len(dual_clock_cfg.recency_buckets) + 1, 6), dtype=np.float32)
 
             entity_x.append(x_win.astype(np.float32, copy=False))
             entity_y.append(y_win.astype(np.float32, copy=False))
@@ -582,6 +610,82 @@ def _torch_imports():
 
             return self.out(torch.cat([recent_feat, bucket_feat], dim=-1))
 
+    class BinaryHistoryKernel(nn.Module):
+        """DeepNPTS-style convex-combination shortcut for binary targets."""
+
+        def __init__(self, seq_len: int, hidden_dim: int, cond_dim: int, horizon: int):
+            super().__init__()
+            self.seq_len = seq_len
+            self.horizon = horizon
+            self.summary_dim = 7
+            self.history_proj = nn.Sequential(
+                nn.Linear(seq_len * 2 + self.summary_dim + cond_dim, hidden_dim),
+                nn.GELU(),
+                nn.Linear(hidden_dim, hidden_dim),
+                nn.GELU(),
+            )
+            self.weight_head = nn.Linear(hidden_dim, seq_len * horizon)
+            self.prior_head = nn.Sequential(
+                nn.Linear(hidden_dim + self.summary_dim + 1, hidden_dim),
+                nn.GELU(),
+                nn.Linear(hidden_dim, horizon),
+            )
+            self.mix_gate = nn.Sequential(
+                nn.Linear(hidden_dim * 3 + cond_dim + self.summary_dim + 1, hidden_dim),
+                nn.GELU(),
+                nn.Linear(hidden_dim, horizon),
+                nn.Sigmoid(),
+            )
+
+        def forward(
+            self,
+            target_hist: torch.Tensor,
+            pooled: torch.Tensor,
+            memory_feat: torch.Tensor,
+            value_feat: torch.Tensor,
+            cond: torch.Tensor,
+            event_logits: torch.Tensor,
+            base_logits: torch.Tensor,
+        ) -> torch.Tensor:
+            B, L = target_hist.shape
+            if L != self.seq_len:
+                raise ValueError(f"BinaryHistoryKernel expected seq_len={self.seq_len}, got {L}")
+
+            hist = target_hist.float().clamp(0.0, 1.0)
+            delta = torch.cat([hist[:, :1] * 0.0, hist[:, 1:] - hist[:, :-1]], dim=1)
+
+            def _recent_mean(width: int) -> torch.Tensor:
+                width = min(width, L)
+                return hist[:, -width:].mean(dim=1, keepdim=True)
+
+            summary = torch.cat(
+                [
+                    hist[:, -1:].detach(),
+                    hist.mean(dim=1, keepdim=True),
+                    _recent_mean(3),
+                    _recent_mean(7),
+                    _recent_mean(14),
+                    delta.abs().mean(dim=1, keepdim=True),
+                    hist.std(dim=1, keepdim=True, unbiased=False),
+                ],
+                dim=-1,
+            )
+            history_ctx = self.history_proj(torch.cat([hist, delta, summary, cond], dim=-1))
+            weight_logits = self.weight_head(history_ctx).reshape(B, L, self.horizon)
+            recency_bias = torch.linspace(-0.15, 0.15, L, device=hist.device, dtype=hist.dtype).view(1, L, 1)
+            weights = torch.softmax(weight_logits + recency_bias, dim=1)
+            kernel_probs = (weights * hist.unsqueeze(-1)).sum(dim=1)
+
+            event_prob = torch.sigmoid(event_logits).unsqueeze(-1)
+            prior_probs = torch.sigmoid(self.prior_head(torch.cat([history_ctx, summary, event_prob], dim=-1)))
+            base_probs = torch.sigmoid(base_logits)
+            gate = self.mix_gate(
+                torch.cat([pooled, memory_feat, value_feat, cond, summary, event_prob], dim=-1)
+            )
+            shortcut_probs = 0.7 * kernel_probs + 0.3 * prior_probs
+            final_probs = (1.0 - gate) * base_probs + gate * shortcut_probs
+            return final_probs.clamp(1e-4, 1.0 - 1e-4)
+
     class InvariantVariantFusion(nn.Module):
         def __init__(self, hidden_dim: int, cond_dim: int):
             super().__init__()
@@ -628,6 +732,196 @@ def _torch_imports():
             mod = pooled * (1.0 + scale) + bias
             return mod + 0.1 * self.residual(torch.cat([pooled, task_vec], dim=-1))
 
+    class TargetRoutedDecoder(nn.Module):
+        def __init__(
+            self,
+            hidden_dim: int,
+            cond_dim: int,
+            num_targets: int = 4,
+            num_experts: int = 3,
+        ):
+            super().__init__()
+            self.summary_dim = 6
+            self.num_experts = max(1, int(num_experts))
+            route_in_dim = hidden_dim * 5 + cond_dim + self.summary_dim
+            self.route_ctx = nn.Sequential(
+                nn.Linear(route_in_dim, hidden_dim),
+                nn.GELU(),
+                nn.Linear(hidden_dim, hidden_dim),
+                nn.GELU(),
+            )
+            self.route_logits = nn.Sequential(
+                nn.Linear(route_in_dim, hidden_dim),
+                nn.GELU(),
+                nn.Linear(hidden_dim, self.num_experts),
+            )
+            self.target_route_bias = nn.Embedding(num_targets, self.num_experts)
+            self.target_residual = nn.Embedding(num_targets, hidden_dim)
+            self.shared_proj = nn.Sequential(
+                nn.Linear(hidden_dim, hidden_dim),
+                nn.GELU(),
+                nn.Linear(hidden_dim, hidden_dim),
+            )
+            self.experts = nn.ModuleList([
+                nn.Sequential(
+                    nn.Linear(hidden_dim + self.summary_dim, hidden_dim),
+                    nn.GELU(),
+                    nn.Linear(hidden_dim, hidden_dim),
+                )
+                for _ in range(self.num_experts)
+            ])
+            self.mix_gate = nn.Sequential(
+                nn.Linear(hidden_dim * 2 + cond_dim + self.summary_dim, hidden_dim),
+                nn.GELU(),
+                nn.Linear(hidden_dim, hidden_dim),
+                nn.Sigmoid(),
+            )
+            self.out = nn.Sequential(
+                nn.Linear(hidden_dim * 3, hidden_dim),
+                nn.GELU(),
+                nn.Linear(hidden_dim, hidden_dim),
+            )
+
+        def _history_summary(self, target_hist: torch.Tensor) -> torch.Tensor:
+            recent_width = min(7, target_hist.shape[1])
+            long_width = min(21, target_hist.shape[1])
+            recent = target_hist[:, -recent_width:]
+            long = target_hist[:, -long_width:]
+            step = recent[:, 1:] - recent[:, :-1] if recent.shape[1] > 1 else recent[:, :1] * 0.0
+            return torch.cat(
+                [
+                    target_hist[:, -1:],
+                    recent.mean(dim=1, keepdim=True),
+                    long.mean(dim=1, keepdim=True),
+                    recent.std(dim=1, keepdim=True, unbiased=False),
+                    step.mean(dim=1, keepdim=True),
+                    (recent.abs() > 1e-6).float().mean(dim=1, keepdim=True),
+                ],
+                dim=-1,
+            )
+
+        def forward(
+            self,
+            pooled: torch.Tensor,
+            memory_feat: torch.Tensor,
+            value_feat: torch.Tensor,
+            edgar_feat: torch.Tensor,
+            text_feat: torch.Tensor,
+            cond: torch.Tensor,
+            target_hist: torch.Tensor,
+            target_idx: torch.Tensor,
+        ) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
+            hist_summary = self._history_summary(target_hist)
+            route_in = torch.cat(
+                [pooled, memory_feat, value_feat, edgar_feat, text_feat, cond, hist_summary],
+                dim=-1,
+            )
+            route_ctx = self.route_ctx(route_in)
+            route_logits = self.route_logits(route_in) + self.target_route_bias(target_idx)
+            route_weights = torch.softmax(route_logits, dim=-1)
+            expert_in = torch.cat([route_ctx, hist_summary], dim=-1)
+            expert_outputs = torch.stack([expert(expert_in) for expert in self.experts], dim=1)
+            routed = torch.sum(expert_outputs * route_weights.unsqueeze(-1), dim=1)
+            shared = self.shared_proj(pooled)
+            gate = self.mix_gate(torch.cat([shared, routed, cond, hist_summary], dim=-1))
+            decoded = shared + gate * routed + 0.05 * self.target_residual(target_idx)
+            return self.out(torch.cat([pooled, decoded, route_ctx], dim=-1)), route_weights, gate
+
+    class CountStructureHead(nn.Module):
+        def __init__(
+            self,
+            hidden_dim: int,
+            cond_dim: int,
+            horizon: int,
+            anchor_strength: float = 0.70,
+            jump_strength: float = 0.30,
+        ):
+            super().__init__()
+            self.horizon = horizon
+            self.anchor_strength = float(max(0.0, anchor_strength))
+            self.jump_strength = float(max(0.0, jump_strength))
+            anchor_ctx_dim = hidden_dim + cond_dim + 7
+            self.level_refine = nn.Sequential(
+                nn.Linear(anchor_ctx_dim, hidden_dim),
+                nn.GELU(),
+                nn.Linear(hidden_dim, horizon),
+            )
+            self.growth_head = nn.Sequential(
+                nn.Linear(hidden_dim, hidden_dim),
+                nn.GELU(),
+                nn.Linear(hidden_dim, horizon),
+            )
+            self.growth_gate = nn.Sequential(
+                nn.Linear(anchor_ctx_dim, hidden_dim),
+                nn.GELU(),
+                nn.Linear(hidden_dim, horizon),
+                nn.Sigmoid(),
+            )
+            self.jump_basis = nn.Sequential(
+                nn.Linear(hidden_dim, hidden_dim),
+                nn.GELU(),
+                nn.Linear(hidden_dim, horizon),
+            )
+            self.jump_gate = nn.Sequential(
+                nn.Linear(anchor_ctx_dim, hidden_dim),
+                nn.GELU(),
+                nn.Linear(hidden_dim, horizon),
+                nn.Sigmoid(),
+            )
+            self.jump_scale = nn.Sequential(
+                nn.Linear(anchor_ctx_dim, hidden_dim),
+                nn.GELU(),
+                nn.Linear(hidden_dim, 1),
+                nn.Tanh(),
+            )
+            self.residual_head = nn.Sequential(
+                nn.Linear(hidden_dim, hidden_dim),
+                nn.GELU(),
+                nn.Linear(hidden_dim, horizon),
+            )
+
+        def forward(self, hidden: torch.Tensor, cond: torch.Tensor, target_hist: torch.Tensor) -> torch.Tensor:
+            recent_width = min(5, target_hist.shape[1])
+            recent = target_hist[:, -recent_width:]
+            anchor_last = target_hist[:, -1:]
+            anchor_mean = recent.mean(dim=1, keepdim=True)
+            anchor_std = recent.std(dim=1, keepdim=True, unbiased=False)
+            step = recent[:, 1:] - recent[:, :-1] if recent.shape[1] > 1 else recent[:, :1] * 0.0
+            jump_last = step[:, -1:] if step.shape[1] > 0 else anchor_last * 0.0
+            jump_mean = step.mean(dim=1, keepdim=True) if step.shape[1] > 0 else anchor_last * 0.0
+            jump_energy = step.abs().mean(dim=1, keepdim=True) if step.shape[1] > 0 else anchor_last * 0.0
+            jump_peak = step.abs().amax(dim=1, keepdim=True) if step.shape[1] > 0 else anchor_last * 0.0
+            anchor_ctx = torch.cat(
+                [
+                    hidden,
+                    cond,
+                    anchor_last,
+                    anchor_mean,
+                    anchor_std,
+                    jump_last,
+                    jump_mean,
+                    jump_energy,
+                    jump_peak,
+                ],
+                dim=-1,
+            )
+            anchor_level = 0.75 * anchor_last + 0.25 * anchor_mean
+            anchor_path = anchor_level.expand(-1, self.horizon) + 0.10 * self.level_refine(anchor_ctx)
+            growth = torch.cumsum(torch.nn.functional.softplus(self.growth_head(hidden)), dim=-1)
+            growth_gate = self.growth_gate(anchor_ctx)
+            jump_entry = 0.60 * jump_last + 0.30 * jump_mean + 0.10 * (anchor_last - anchor_mean)
+            jump_profile = self.jump_basis(hidden)
+            jump_gate = self.jump_gate(anchor_ctx)
+            jump_scale = self.jump_scale(anchor_ctx) * torch.log1p(jump_peak + jump_energy + anchor_std)
+            jump_path = jump_gate * (jump_profile + jump_entry.expand(-1, self.horizon))
+            residual = 0.15 * self.residual_head(hidden)
+            return (
+                anchor_path
+                + self.anchor_strength * growth_gate * growth
+                + self.jump_strength * jump_scale * jump_path
+                + residual
+            )
+
     class V740AlphaNet(nn.Module):
         def __init__(
             self,
@@ -636,11 +930,28 @@ def _torch_imports():
             horizon: int,
             hidden_dim: int = 64,
             cond_dim: int = 16,
+            enable_continuous_anchor: bool = True,
+            continuous_anchor_strength: float = 0.85,
+            enable_target_routing: bool = True,
+            target_route_experts: int = 3,
+            enable_count_anchor: bool = True,
+            count_anchor_strength: float = 0.70,
+            enable_count_jump: bool = True,
+            count_jump_strength: float = 0.30,
+            enable_count_sparsity_gate: bool = True,
+            count_sparsity_gate_strength: float = 0.75,
         ):
             super().__init__()
             self.seq_len = seq_len
             self.horizon = horizon
             self.task_mod_enabled = True
+            self.continuous_anchor_enabled = bool(enable_continuous_anchor)
+            self.continuous_anchor_strength = float(max(0.0, continuous_anchor_strength))
+            self.target_routing_enabled = bool(enable_target_routing)
+            self.count_anchor_enabled = bool(enable_count_anchor)
+            self.count_jump_enabled = bool(enable_count_jump)
+            self.count_sparsity_gate_enabled = bool(enable_count_sparsity_gate)
+            self.count_sparsity_gate_strength = float(min(1.0, max(0.0, count_sparsity_gate_strength)))
             self.input_proj = nn.Conv1d(in_channels, hidden_dim, kernel_size=1)
             self.decomp = MovingAverageDecomposition(kernel_size=5)
             self.multi_res = MultiResolutionBlock(hidden_dim, hidden_dim)
@@ -651,11 +962,38 @@ def _torch_imports():
             self.cond_encoder = ConditionEncoder(emb_dim=cond_dim, seq_len=seq_len)
             self.edgar_memory = EventMemoryEncoder(hidden_dim)
             self.text_memory = EventMemoryEncoder(hidden_dim)
+            self.binary_kernel = BinaryHistoryKernel(
+                seq_len=seq_len,
+                hidden_dim=hidden_dim,
+                cond_dim=cond_dim,
+                horizon=horizon,
+            )
             self.fusion = InvariantVariantFusion(hidden_dim, cond_dim)
             self.task_mod = TaskSpecificModulator(hidden_dim)
             self.static_proj = StaticSummaryProjector(max(1, in_channels - 1), hidden_dim)
             self.time_fusion = StaticDynamicTimeFusion(hidden_dim, cond_dim)
             self.backbone_norm = nn.LayerNorm(hidden_dim)
+            self.target_decoder = TargetRoutedDecoder(
+                hidden_dim=hidden_dim,
+                cond_dim=cond_dim,
+                num_targets=4,
+                num_experts=target_route_experts,
+            )
+            self.continuous_decoder = nn.Sequential(
+                nn.Linear(hidden_dim, hidden_dim),
+                nn.GELU(),
+                nn.Linear(hidden_dim, hidden_dim),
+            )
+            self.count_decoder = nn.Sequential(
+                nn.Linear(hidden_dim, hidden_dim),
+                nn.GELU(),
+                nn.Linear(hidden_dim, hidden_dim),
+            )
+            self.binary_decoder = nn.Sequential(
+                nn.Linear(hidden_dim, hidden_dim),
+                nn.GELU(),
+                nn.Linear(hidden_dim, hidden_dim),
+            )
             self.combine = nn.Sequential(
                 nn.Linear(hidden_dim * 7 + cond_dim, hidden_dim * 2),
                 nn.GELU(),
@@ -666,6 +1004,12 @@ def _torch_imports():
                 nn.GELU(),
                 nn.Linear(hidden_dim, horizon),
             )
+            self.continuous_anchor_gate = nn.Sequential(
+                nn.Linear(hidden_dim + cond_dim + 1, hidden_dim),
+                nn.GELU(),
+                nn.Linear(hidden_dim, horizon),
+                nn.Sigmoid(),
+            )
             self.binary_head = nn.Sequential(
                 nn.Linear(hidden_dim, hidden_dim),
                 nn.GELU(),
@@ -675,6 +1019,18 @@ def _torch_imports():
                 nn.Linear(hidden_dim, hidden_dim),
                 nn.GELU(),
                 nn.Linear(hidden_dim, horizon),
+            )
+            self.count_occurrence_head = nn.Sequential(
+                nn.Linear(hidden_dim + cond_dim + 5, hidden_dim),
+                nn.GELU(),
+                nn.Linear(hidden_dim, horizon),
+            )
+            self.count_structure_head = CountStructureHead(
+                hidden_dim=hidden_dim,
+                cond_dim=cond_dim,
+                horizon=horizon,
+                anchor_strength=count_anchor_strength,
+                jump_strength=count_jump_strength if enable_count_jump else 0.0,
             )
             self.event_head = nn.Sequential(
                 nn.Linear(hidden_dim, hidden_dim),
@@ -746,13 +1102,109 @@ def _torch_imports():
                 count_bias = torch.zeros((x.shape[0], self.horizon), device=x.device, dtype=pooled.dtype)
                 binary_bias = torch.zeros((x.shape[0], self.horizon), device=x.device, dtype=pooled.dtype)
                 event_bias = torch.zeros((x.shape[0],), device=x.device, dtype=pooled.dtype)
-            return {
-                "continuous": self.shared_head(pooled) + shared_bias,
-                "count": self.count_head(pooled) + count_bias,
-                "binary": self.binary_head(pooled) + binary_bias,
-                "event": self.event_head(pooled).squeeze(-1) + event_bias,
-                "uncertainty": torch.nn.functional.softplus(self.uncertainty_head(pooled)),
+            pooled = self.backbone_norm(pooled)
+            if self.target_routing_enabled:
+                decoded, route_weights, route_gate = self.target_decoder(
+                    pooled,
+                    memory_feat,
+                    value_feat,
+                    edgar_feat,
+                    text_feat,
+                    cond,
+                    target_hist,
+                    target_idx,
+                )
+            else:
+                decoded = pooled
+                route_weights = None
+                route_gate = None
+            continuous_feat = self.continuous_decoder(decoded)
+            count_feat = self.count_decoder(decoded)
+            binary_feat = self.binary_decoder(decoded)
+            recent_width = min(4, target_hist.shape[1])
+            anchor_term = torch.zeros((x.shape[0], self.horizon), device=x.device, dtype=pooled.dtype)
+            if self.continuous_anchor_enabled and self.continuous_anchor_strength > 0.0:
+                anchor_level = 0.7 * target_hist[:, -1:] + 0.3 * target_hist[:, -recent_width:].mean(dim=1, keepdim=True)
+                continuous_anchor = self.continuous_anchor_gate(torch.cat([continuous_feat, cond, anchor_level], dim=-1))
+                anchor_term = self.continuous_anchor_strength * continuous_anchor * anchor_level.expand(-1, self.horizon)
+            event_logits = self.event_head(binary_feat).squeeze(-1) + event_bias
+            binary_logits = self.binary_head(binary_feat) + binary_bias
+            binary_probs = self.binary_kernel(
+                target_hist,
+                binary_feat,
+                memory_feat,
+                value_feat,
+                cond,
+                event_logits=event_logits,
+                base_logits=binary_logits,
+            )
+            count_raw = self.count_head(count_feat) + count_bias
+            if self.count_anchor_enabled:
+                count_raw = count_raw + self.count_structure_head(count_feat, cond, target_hist)
+            count_out = torch.nn.functional.softplus(count_raw)
+            count_sparsity_gate = None
+            count_occurrence_logits = None
+            if self.count_sparsity_gate_enabled:
+                count_recent_width = min(7, target_hist.shape[1])
+                count_recent = torch.relu(target_hist[:, -count_recent_width:])
+                count_last = count_recent[:, -1:]
+                count_mean = count_recent.mean(dim=1, keepdim=True)
+                count_peak = count_recent.amax(dim=1, keepdim=True)
+                count_nonzero = (count_recent > 0.5).float().mean(dim=1, keepdim=True)
+                count_step = count_recent[:, 1:] - count_recent[:, :-1] if count_recent.shape[1] > 1 else count_recent[:, :1] * 0.0
+                count_jump = count_step.abs().mean(dim=1, keepdim=True) if count_step.shape[1] > 0 else count_last * 0.0
+                activity_logit = (
+                    -1.35
+                    + 2.50 * count_nonzero
+                    + 0.30 * torch.log1p(count_last)
+                    + 0.20 * torch.log1p(count_mean)
+                    + 0.20 * torch.log1p(count_peak)
+                    + 0.15 * torch.log1p(count_jump)
+                )
+                count_occurrence_input = torch.cat(
+                    [
+                        count_feat,
+                        cond,
+                        torch.cat(
+                            [
+                                torch.log1p(count_last),
+                                torch.log1p(count_mean),
+                                torch.log1p(count_peak),
+                                count_nonzero,
+                                torch.log1p(count_jump),
+                            ],
+                            dim=-1,
+                        ),
+                    ],
+                    dim=-1,
+                )
+                count_occurrence_logits = self.count_occurrence_head(count_occurrence_input)
+                count_occurrence_logits = count_occurrence_logits + self.count_sparsity_gate_strength * activity_logit.expand(-1, self.horizon)
+                count_sparsity_gate = torch.sigmoid(count_occurrence_logits)
+                count_gate_scale = 1.0 - self.count_sparsity_gate_strength * (1.0 - count_sparsity_gate)
+                count_out = count_out * count_gate_scale
+            continuous = (
+                self.shared_head(continuous_feat)
+                + shared_bias
+                + anchor_term
+            )
+            outputs = {
+                "continuous": continuous,
+                "count": count_out,
+                "binary": torch.logit(binary_probs),
+                "event": event_logits,
+                "uncertainty": torch.nn.functional.softplus(self.uncertainty_head(decoded)),
+                "target_hist_last": target_hist[:, -1:],
             }
+            if count_sparsity_gate is not None:
+                outputs["count_sparsity_gate"] = count_sparsity_gate.expand(-1, self.horizon)
+            if count_occurrence_logits is not None:
+                outputs["count_occurrence_logits"] = count_occurrence_logits
+            if route_weights is not None:
+                outputs["target_route_weights"] = route_weights
+            if route_gate is not None:
+                outputs["target_route_gate"] = route_gate
+            return outputs
 
     return torch, nn, V740AlphaNet
 
@@ -793,6 +1245,18 @@ class V740AlphaPrototypeWrapper(ModelBase):
         enable_task_modulation: bool = True,
         enable_selective_learning: bool = True,
         enable_distdf_loss: bool = True,
+        enable_funding_log_domain: bool = True,
+        enable_funding_source_scaling: bool = True,
+        enable_funding_anchor: bool = True,
+        funding_anchor_strength: float = 0.85,
+        enable_target_routing: bool = True,
+        target_route_experts: int = 3,
+        enable_count_anchor: bool = True,
+        count_anchor_strength: float = 0.70,
+        enable_count_jump: bool = True,
+        count_jump_strength: float = 0.30,
+        enable_count_sparsity_gate: bool = True,
+        count_sparsity_gate_strength: float = 0.75,
         seed: int = 42,
         **kwargs,
     ):
@@ -819,6 +1283,19 @@ class V740AlphaPrototypeWrapper(ModelBase):
         self.enable_task_modulation = enable_task_modulation
         self.enable_selective_learning = enable_selective_learning
         self.enable_distdf_loss = enable_distdf_loss
+        self.enable_funding_log_domain = enable_funding_log_domain
+        self.enable_funding_source_scaling = enable_funding_source_scaling
+        self.enable_funding_anchor = enable_funding_anchor
+        self.funding_anchor_strength = max(0.0, float(funding_anchor_strength))
+        self.enable_target_routing = enable_target_routing
+        self.target_route_experts = max(1, int(target_route_experts))
+        self.enable_count_anchor = enable_count_anchor
+        self.count_anchor_strength = max(0.0, float(count_anchor_strength))
+        self.enable_count_jump = enable_count_jump
+        self.count_jump_strength = max(0.0, float(count_jump_strength))
+        self.enable_count_sparsity_gate = enable_count_sparsity_gate
+        self.count_sparsity_gate_strength = min(1.0, max(0.0, float(count_sparsity_gate_strength)))
+        self._effective_count_sparsity_gate_strength = self.count_sparsity_gate_strength
         self.seed = seed
         self._network = None
         self._device = None
@@ -827,6 +1304,7 @@ class V740AlphaPrototypeWrapper(ModelBase):
         self._feature_cols: List[str] = []
         self._edgar_cols: List[str] = []
         self._text_cols: List[str] = []
+        self._source_state_exclude_cols: List[str] = []
         self._fallback_value = 0.0
         self._binary_target = False
         self._nonnegative_target = False
@@ -834,6 +1312,7 @@ class V740AlphaPrototypeWrapper(ModelBase):
         self._binary_pos_weight = 1.0
         self._binary_rate_floor = 0.05
         self._binary_temperature = 1.0
+        self._binary_logit_bias = 0.0
         self._binary_teacher_weight = 0.10
         self._binary_event_weight = 0.15
         self._teacher_logistic_mix = 0.4
@@ -842,11 +1321,22 @@ class V740AlphaPrototypeWrapper(ModelBase):
         self._binary_event_rate = 0.5
         self._binary_transition_rate = 0.5
         self._edgar_source_density = 0.0
+        self._edgar_event_density = 0.0
         self._text_source_density = 0.0
+        self._text_event_density = 0.0
+        self._text_change_density = 0.0
         self._target_name = "funding_raised_usd"
         self._task_name = "task1_outcome"
         self._ablation_name = "core_only"
         self._horizon = 1
+        self._funding_target = False
+        self._funding_log_domain = False
+        self._funding_source_scaling = False
+        self._funding_anchor_enabled = False
+        self._effective_funding_anchor_strength = 0.0
+        self._funding_edgar_scale = 1.0
+        self._funding_text_scale = 1.0
+        self._target_route_stats: Dict[str, object] = {}
         self._dual_clock_cfg = DualClockConfig(max_events=max_event_tokens)
 
     def _weighted_reduce(self, torch, values, sample_weight=None):
@@ -912,8 +1402,18 @@ class V740AlphaPrototypeWrapper(ModelBase):
                 counts = counts / float(counts.max())
             return counts
 
+        def _recent_feature_mean(recent: Optional[np.ndarray], feature_idx: int) -> np.ndarray:
+            if recent is None or len(recent) == 0 or recent.shape[2] <= feature_idx:
+                return np.zeros((n,), dtype=np.float32)
+            present = (recent[:, :, 2] > 0.0).astype(np.float32)
+            denom = np.clip(present.sum(axis=1), 1.0, None)
+            values = np.abs(recent[:, :, feature_idx]).astype(np.float32) * present
+            return values.sum(axis=1) / denom
+
         edgar_activity = 0.7 * _recent_activity(train_edgar_recent) + 0.3 * _bucket_activity(train_edgar_bucket)
         text_activity = 0.7 * _recent_activity(train_text_recent) + 0.3 * _bucket_activity(train_text_bucket)
+        text_novelty = np.clip(_recent_feature_mean(train_text_recent, 3), 0.0, 1.0)
+        text_activity = text_activity * (0.5 + 0.5 * text_novelty)
 
         if self._binary_target:
             event_mask = (train_y.max(axis=1) > 0.5).astype(np.float32)
@@ -930,6 +1430,11 @@ class V740AlphaPrototypeWrapper(ModelBase):
             )
             delta_norm = _normalize(target_delta)
             weights += 0.08 * delta_norm
+            if self._funding_log_domain:
+                last_level = _normalize(train_x[:, 0, -1])
+                recent_active = np.mean(train_x[:, 0, :] > math.log1p(1.0), axis=1).astype(np.float32)
+                future_active = np.mean(train_y > math.log1p(1.0), axis=1).astype(np.float32)
+                weights += 0.10 * last_level + 0.06 * recent_active + 0.08 * future_active
             weights += (0.04 + 0.08 * horizon_factor) * edgar_activity
             weights += (0.02 + 0.05 * horizon_factor) * text_activity
         if self._has_edgar_path():
@@ -958,11 +1463,208 @@ class V740AlphaPrototypeWrapper(ModelBase):
             arr = np.zeros((0, *default_shape), dtype=np.float32)
         return torch.tensor(arr, dtype=torch.float32)
 
+    def _summarize_recent_memory(
+        self,
+        recent: Optional[np.ndarray],
+        novelty_idx: Optional[int] = None,
+    ) -> Dict[str, float]:
+        if recent is None or len(recent) == 0:
+            return {"coverage": 0.0, "event_density": 0.0, "novelty": 0.0}
+        arr = np.asarray(recent, dtype=np.float32)
+        if arr.ndim != 3 or arr.shape[2] < 3:
+            return {"coverage": 0.0, "event_density": 0.0, "novelty": 0.0}
+        present = arr[:, :, 2] > 0.0
+        coverage = float(present.any(axis=1).mean())
+        event_density = float(present.sum(axis=1).mean() / max(arr.shape[1], 1))
+        novelty = 0.0
+        if novelty_idx is not None and arr.shape[2] > novelty_idx and present.any():
+            novelty = float(np.clip(np.mean(np.abs(arr[:, :, novelty_idx][present])), 0.0, 1.0))
+        return {
+            "coverage": coverage,
+            "event_density": event_density,
+            "novelty": novelty,
+        }
+
+    def _configure_continuous_regime(self) -> None:
+        self._funding_target = self._target_name == "funding_raised_usd" and not self._binary_target
+        self._funding_log_domain = self._funding_target and self.enable_funding_log_domain
+        self._funding_source_scaling = self._funding_target and self.enable_funding_source_scaling
+        self._funding_anchor_enabled = (
+            self._funding_target
+            and self.enable_funding_anchor
+            and self.funding_anchor_strength > 0.0
+        )
+        self._effective_funding_anchor_strength = (
+            self.funding_anchor_strength if self._funding_anchor_enabled else 0.0
+        )
+
+    def _refresh_count_gate_regime(self) -> None:
+        if not self.enable_count_sparsity_gate:
+            self._effective_count_sparsity_gate_strength = 0.0
+            return
+        if self._target_name != "investors_count":
+            self._effective_count_sparsity_gate_strength = self.count_sparsity_gate_strength
+            return
+        if self._task_name != "task2_forecast":
+            self._effective_count_sparsity_gate_strength = 0.0
+            return
+        source_signal = float(np.clip(max(self._edgar_source_density, self._text_source_density), 0.0, 1.0))
+        if self._has_edgar_path() or self._has_text_path():
+            source_scale = 0.35 + 0.65 * source_signal
+        else:
+            source_scale = 0.35
+        self._effective_count_sparsity_gate_strength = float(
+            np.clip(self.count_sparsity_gate_strength * source_scale, 0.0, 1.0)
+        )
+
+    def get_regime_info(self) -> Dict[str, object]:
+        count_source_signal = float(np.clip(max(self._edgar_source_density, self._text_source_density), 0.0, 1.0))
+        return {
+            "task": self._task_name,
+            "target": self._target_name,
+            "ablation": self._ablation_name,
+            "horizon": int(self._horizon),
+            "binary_target": bool(self._binary_target),
+            "funding_target": bool(self._funding_target),
+            "teacher_distill_enabled": bool(self.enable_teacher_distill),
+            "event_head_enabled": bool(self.enable_event_head),
+            "task_mod_enabled": bool(self._effective_task_modulation),
+            "requested": {
+                "funding_log_domain": bool(self.enable_funding_log_domain),
+                "funding_source_scaling": bool(self.enable_funding_source_scaling),
+                "funding_anchor": bool(self.enable_funding_anchor),
+                "funding_anchor_strength": float(self.funding_anchor_strength),
+            },
+            "effective": {
+                "funding_log_domain": bool(self._funding_log_domain),
+                "funding_source_scaling": bool(self._funding_source_scaling),
+                "funding_anchor": bool(self._funding_anchor_enabled),
+                "funding_anchor_strength": float(self._effective_funding_anchor_strength),
+            },
+            "source_scales": {
+                "edgar": float(self._funding_edgar_scale),
+                "text": float(self._funding_text_scale),
+            },
+            "source_stats": {
+                "row_density": {
+                    "edgar": float(self._edgar_source_density),
+                    "text": float(self._text_source_density),
+                },
+                "event_density": {
+                    "edgar": float(self._edgar_event_density),
+                    "text": float(self._text_event_density),
+                },
+                "text_change_density": float(self._text_change_density),
+            },
+            "state_stream": {
+                "feature_cols": len(self._feature_cols),
+                "excluded_source_cols": len(self._source_state_exclude_cols),
+            },
+            "target_routing": {
+                "enabled": bool(self.enable_target_routing),
+                "experts": int(self.target_route_experts),
+                "count_anchor_enabled": bool(self.enable_count_anchor),
+                "count_anchor_strength": float(self.count_anchor_strength),
+                "count_jump_enabled": bool(self.enable_count_jump),
+                "count_jump_strength": float(self.count_jump_strength),
+                "count_sparsity_gate_enabled": bool(self.enable_count_sparsity_gate),
+                "count_sparsity_gate_strength": float(self.count_sparsity_gate_strength),
+                "effective_count_sparsity_gate_strength": float(self._effective_count_sparsity_gate_strength),
+                "count_positive_transform": "softplus",
+                "count_sparsity_gate_type": (
+                    "learned_occurrence_with_history_prior_task2_only"
+                    if self.enable_count_sparsity_gate
+                    else "disabled"
+                ),
+                "count_sparsity_gate_source_signal": count_source_signal,
+                "stats": self._target_route_stats,
+            },
+        }
+
+    def _update_target_route_stats(self, outputs) -> None:
+        route_weights = outputs.get("target_route_weights") if isinstance(outputs, dict) else None
+        if route_weights is None:
+            self._target_route_stats = {}
+            return
+        route_np = route_weights.detach().cpu().numpy()
+        if route_np.size == 0:
+            self._target_route_stats = {}
+            return
+        route_mean = route_np.mean(axis=0)
+        top_idx = route_np.argmax(axis=1)
+        top_counts = np.bincount(top_idx, minlength=route_np.shape[1])
+        dominant = int(route_mean.argmax())
+        entropy = float(
+            -np.mean(np.sum(route_np * np.log(np.clip(route_np, 1e-8, 1.0)), axis=1))
+        )
+        stats: Dict[str, object] = {
+            "mean_weights": [float(x) for x in route_mean.tolist()],
+            "dominant_expert": dominant,
+            "dominant_share": float(top_counts[dominant] / max(len(top_idx), 1)),
+            "entropy": entropy,
+        }
+        route_gate = outputs.get("target_route_gate")
+        if route_gate is not None:
+            stats["mean_gate"] = float(route_gate.detach().mean().cpu())
+        self._target_route_stats = stats
+
+    def _refresh_source_scales(self) -> None:
+        edgar_scale = 1.0
+        text_scale = 1.0
+        edgar_signal = max(float(self._edgar_source_density), float(self._edgar_event_density))
+        text_signal = 0.5 * float(self._text_source_density) + 0.5 * float(self._text_event_density)
+        text_change = float(np.clip(self._text_change_density, 0.0, 1.0))
+        if self._funding_source_scaling:
+            if self._has_edgar_path():
+                edgar_scale = 1.03 + 0.12 * edgar_signal
+                if self._horizon >= 14:
+                    edgar_scale += 0.05
+                if self._horizon >= 30:
+                    edgar_scale += 0.05
+            if self._has_text_path():
+                text_scale = 0.35 if self._ablation_name == "core_text" else 0.22
+                if self._horizon >= 14:
+                    text_scale *= 0.60
+                if self._horizon >= 30:
+                    text_scale *= 0.60
+                text_scale *= 1.0 - 0.25 * text_signal
+                text_scale *= 0.35 + 0.65 * text_change
+                text_scale *= 0.80 + 0.20 * text_signal
+        self._funding_edgar_scale = float(np.clip(edgar_scale, 0.75, 1.25))
+        self._funding_text_scale = float(np.clip(text_scale, 0.05, 1.0))
+
+    def _transform_continuous_array(self, values: np.ndarray) -> np.ndarray:
+        arr = np.asarray(values, dtype=np.float32)
+        if self._funding_log_domain:
+            return np.log1p(np.clip(arr, 0.0, None)).astype(np.float32, copy=False)
+        return arr.astype(np.float32, copy=False)
+
+    def _inverse_continuous_array(self, values: np.ndarray) -> np.ndarray:
+        arr = np.asarray(values, dtype=np.float32)
+        if self._funding_log_domain:
+            return np.expm1(np.clip(arr, 0.0, 25.0)).astype(np.float32, copy=False)
+        return arr.astype(np.float32, copy=False)
+
+    def _apply_source_tensor_scales(self, edgar_recent, edgar_bucket, text_recent, text_bucket):
+        if self._funding_source_scaling:
+            if edgar_recent is not None:
+                edgar_recent = edgar_recent * self._funding_edgar_scale
+            if edgar_bucket is not None:
+                edgar_bucket = edgar_bucket * self._funding_edgar_scale
+            if text_recent is not None:
+                text_recent = text_recent * self._funding_text_scale
+            if text_bucket is not None:
+                text_bucket = text_bucket * self._funding_text_scale
+        return edgar_recent, edgar_bucket, text_recent, text_bucket
+
     def _configure_binary_regime(self) -> None:
         teacher_weight = 0.08
         event_weight = 0.12
         logistic_mix = 0.45
         tree_mix = 0.55
+        edgar_signal = max(float(self._edgar_source_density), float(self._edgar_event_density))
+        text_signal = 0.5 * float(self._text_source_density) + 0.5 * float(self._text_event_density)
+        text_signal *= 0.5 + 0.5 * float(np.clip(self._text_change_density, 0.0, 1.0))
 
         pos_balance = 1.0 - abs(self._binary_train_rate - 0.5) / 0.5
         event_sparsity = 1.0 - self._binary_event_rate
@@ -970,18 +1672,18 @@ class V740AlphaPrototypeWrapper(ModelBase):
 
         teacher_weight += 0.03 * event_sparsity
         teacher_weight += 0.02 * transition_sparsity
-        teacher_weight += 0.04 * self._edgar_source_density
-        teacher_weight -= 0.03 * self._text_source_density
+        teacher_weight += 0.04 * edgar_signal
+        teacher_weight -= 0.03 * text_signal
         teacher_weight += 0.01 * pos_balance
 
         event_weight += 0.04 * transition_sparsity
-        event_weight += 0.02 * self._edgar_source_density
-        event_weight -= 0.03 * self._text_source_density
+        event_weight += 0.02 * edgar_signal
+        event_weight -= 0.03 * text_signal
         event_weight += 0.01 * pos_balance
 
-        logistic_mix += 0.25 * self._text_source_density
+        logistic_mix += 0.25 * text_signal
         logistic_mix += 0.10 * pos_balance
-        logistic_mix -= 0.20 * self._edgar_source_density
+        logistic_mix -= 0.20 * edgar_signal
         logistic_mix = float(np.clip(logistic_mix, 0.20, 0.80))
         tree_mix = 1.0 - logistic_mix
 
@@ -1076,13 +1778,66 @@ class V740AlphaPrototypeWrapper(ModelBase):
                 + self._binary_teacher_weight * teacher_align
             )
         if self._target_name == "investors_count":
-            pred = torch.relu(outputs["count"])
+            pred = outputs["count"].clamp_min(0.0)
+            gate_strength_ratio = float(
+                np.clip(
+                    self._effective_count_sparsity_gate_strength / max(self.count_sparsity_gate_strength, 1e-6),
+                    0.0,
+                    1.0,
+                )
+            )
             base = self._weighted_reduce(
                 torch,
                 torch.nn.functional.smooth_l1_loss(pred, target, reduction="none"),
                 sample_weight=sample_weight,
             )
-            neg_penalty = self._weighted_reduce(torch, torch.relu(-outputs["count"]), sample_weight=sample_weight)
+            sparse_over = self._weighted_reduce(
+                torch,
+                torch.relu(pred - target) / (1.0 + torch.log1p(torch.relu(target))),
+                sample_weight=sample_weight,
+            )
+            quiet_mask = (target.max(dim=1, keepdim=True).values < 0.5).to(target.dtype)
+            quiet_penalty = self._weighted_reduce(
+                torch,
+                pred * quiet_mask,
+                sample_weight=sample_weight,
+            )
+            gate_penalty = torch.zeros((), dtype=target.dtype, device=target.device)
+            gate = outputs.get("count_sparsity_gate") if isinstance(outputs, dict) else None
+            if gate is not None:
+                target_activity = (target > 0.5).to(target.dtype).mean(dim=1, keepdim=True)
+                gate_penalty = self._weighted_reduce(
+                    torch,
+                    (gate.mean(dim=1, keepdim=True) - target_activity) ** 2,
+                    sample_weight=sample_weight,
+                )
+            occurrence_bce = torch.zeros((), dtype=target.dtype, device=target.device)
+            occurrence_logits = outputs.get("count_occurrence_logits") if isinstance(outputs, dict) else None
+            if occurrence_logits is not None:
+                occurrence_target = (target > 0.5).to(target.dtype)
+                occurrence_rate = occurrence_target.mean().clamp(1e-4, 1.0 - 1e-4)
+                occurrence_pos_weight = ((1.0 - occurrence_rate) / occurrence_rate).clamp(1.0, 25.0)
+                occurrence_bce = self._weighted_reduce(
+                    torch,
+                    torch.nn.functional.binary_cross_entropy_with_logits(
+                        occurrence_logits,
+                        occurrence_target,
+                        pos_weight=occurrence_pos_weight,
+                        reduction="none",
+                    ),
+                    sample_weight=sample_weight,
+                )
+            entry_jump = torch.zeros((), dtype=target.dtype, device=target.device)
+            hist_last = outputs.get("target_hist_last") if isinstance(outputs, dict) else None
+            if hist_last is not None:
+                pred_entry = pred[:, :1] - hist_last
+                tgt_entry = target[:, :1] - hist_last
+                entry_weight = 1.0 + torch.log1p(torch.abs(tgt_entry))
+                entry_jump = self._weighted_reduce(
+                    torch,
+                    torch.nn.functional.smooth_l1_loss(pred_entry, tgt_entry, reduction="none") * entry_weight,
+                    sample_weight=sample_weight,
+                )
             distdf = torch.zeros((), dtype=target.dtype, device=target.device)
             if self.enable_distdf_loss:
                 pred_mean = pred.mean(dim=1)
@@ -1111,8 +1866,53 @@ class V740AlphaPrototypeWrapper(ModelBase):
                     torch.nn.functional.smooth_l1_loss(pred_step, tgt_step, reduction="none"),
                     sample_weight=sample_weight,
                 )
-            return base + 0.05 * neg_penalty + 0.05 * distdf
+            return (
+                base
+                + (0.06 * gate_strength_ratio) * occurrence_bce
+                + 0.08 * entry_jump
+                + 0.08 * sparse_over
+                + 0.08 * quiet_penalty
+                + 0.05 * distdf
+                + (0.04 * gate_strength_ratio) * gate_penalty
+            )
         pred = outputs["continuous"]
+        if self._funding_log_domain:
+            base = self._weighted_reduce(
+                torch,
+                torch.nn.functional.smooth_l1_loss(pred, target, reduction="none"),
+                sample_weight=sample_weight,
+            )
+            pred_pos = torch.clamp(pred, min=0.0)
+            target_pos = torch.clamp(target, min=0.0)
+            floor_penalty = self._weighted_reduce(torch, torch.relu(-pred), sample_weight=sample_weight)
+            last_align = self._weighted_reduce(
+                torch,
+                torch.nn.functional.smooth_l1_loss(pred_pos[:, -1], target_pos[:, -1], reduction="none"),
+                sample_weight=sample_weight,
+            )
+            distdf = torch.zeros((), dtype=target.dtype, device=target.device)
+            if self.enable_distdf_loss:
+                pred_mean = pred_pos.mean(dim=1)
+                tgt_mean = target_pos.mean(dim=1)
+                pred_std = pred_pos.std(dim=1, unbiased=False).clamp_min(1e-6)
+                tgt_std = target_pos.std(dim=1, unbiased=False).clamp_min(1e-6)
+                pred_step = pred_pos[:, 1:] - pred_pos[:, :-1] if pred_pos.shape[1] > 1 else pred_pos[:, :1] * 0.0
+                tgt_step = target_pos[:, 1:] - target_pos[:, :-1] if target_pos.shape[1] > 1 else target_pos[:, :1] * 0.0
+                distdf = self._weighted_reduce(
+                    torch,
+                    torch.nn.functional.smooth_l1_loss(pred_mean, tgt_mean, reduction="none")
+                    + 0.5 * torch.nn.functional.smooth_l1_loss(
+                        torch.log1p(pred_std),
+                        torch.log1p(tgt_std),
+                        reduction="none",
+                    ),
+                    sample_weight=sample_weight,
+                ) + 0.25 * self._weighted_reduce(
+                    torch,
+                    torch.nn.functional.smooth_l1_loss(pred_step, tgt_step, reduction="none"),
+                    sample_weight=sample_weight,
+                )
+            return base + 0.08 * last_align + 0.05 * floor_penalty + 0.05 * distdf
         base = self._weighted_reduce(
             torch,
             torch.nn.functional.smooth_l1_loss(pred, target, reduction="none"),
@@ -1181,6 +1981,7 @@ class V740AlphaPrototypeWrapper(ModelBase):
         self._fallback_value = float(np.nanmedian(finite)) if len(finite) else 0.0
         self._binary_target = _detect_binary(y_arr)
         self._nonnegative_target = _detect_nonnegative(y_arr)
+        self._configure_continuous_regime()
         self._binary_temperature = 1.0
         self._effective_task_modulation = self.enable_task_modulation and not self._binary_target
 
@@ -1189,11 +1990,23 @@ class V740AlphaPrototypeWrapper(ModelBase):
             self._fitted = True
             return self
 
-        self._feature_cols = _select_feature_cols(train_raw, self._target_name, self.max_covariates)
         self._text_cols = infer_text_columns(train_raw) if self._has_text_path() else []
         self._edgar_cols = infer_edgar_columns(train_raw) if self._has_edgar_path() else []
+        self._source_state_exclude_cols = sorted(set(self._text_cols) | set(self._edgar_cols))
+        self._feature_cols = _select_state_feature_cols(
+            train_raw,
+            self._target_name,
+            self.max_covariates,
+            self._source_state_exclude_cols,
+        )
+        window_train_raw = train_raw
+        if self._funding_log_domain and self._target_name in train_raw.columns:
+            window_train_raw = train_raw.copy()
+            window_train_raw[self._target_name] = self._transform_continuous_array(
+                pd.Series(train_raw[self._target_name], dtype="float64").to_numpy()
+            )
         entity_windows = _build_v740_windows(
-            train_raw=train_raw,
+            train_raw=window_train_raw,
             target=self._target_name,
             feature_cols=self._feature_cols,
             input_size=self.input_size,
@@ -1222,6 +2035,7 @@ class V740AlphaPrototypeWrapper(ModelBase):
             self._text_source_density = float(train_raw[self._text_cols].notna().any(axis=1).mean())
         else:
             self._text_source_density = 0.0
+        self._refresh_count_gate_regime()
 
         if self._binary_target:
             train_window_y = np.stack(entity_windows.train_y).astype(np.float32, copy=False)
@@ -1237,7 +2051,6 @@ class V740AlphaPrototypeWrapper(ModelBase):
             transition_targets = ((event_targets > 0.5) & (current_state <= 0.5)).astype(np.float32)
             self._binary_event_rate = float(event_targets.mean()) if len(event_targets) else 0.5
             self._binary_transition_rate = float(transition_targets.mean()) if len(transition_targets) else 0.5
-            self._configure_binary_regime()
 
         train_x_np = np.stack(entity_windows.train_x).astype(np.float32, copy=False)
         train_y_np = np.stack(entity_windows.train_y).astype(np.float32, copy=False)
@@ -1261,6 +2074,14 @@ class V740AlphaPrototypeWrapper(ModelBase):
             if entity_windows.train_text_bucket
             else None
         )
+        edgar_stats = self._summarize_recent_memory(train_edgar_recent_np, novelty_idx=None)
+        text_stats = self._summarize_recent_memory(train_text_recent_np, novelty_idx=3)
+        self._edgar_event_density = float(edgar_stats["event_density"])
+        self._text_event_density = float(text_stats["event_density"])
+        self._text_change_density = float(text_stats["novelty"])
+        self._refresh_source_scales()
+        if self._binary_target:
+            self._configure_binary_regime()
         train_x = torch.tensor(train_x_np, dtype=torch.float32)
         train_y = torch.tensor(train_y_np, dtype=torch.float32)
         train_sample_weight = torch.tensor(
@@ -1287,12 +2108,18 @@ class V740AlphaPrototypeWrapper(ModelBase):
         train_text_recent = self._memory_batch(
             torch,
             entity_windows.train_text_recent,
-            (self._dual_clock_cfg.max_events, 3 + len(self._text_cols)),
+            (self._dual_clock_cfg.max_events, 5 + len(self._text_cols)),
         )
         train_text_bucket = self._memory_batch(
             torch,
             entity_windows.train_text_bucket,
-            (len(self._dual_clock_cfg.recency_buckets) + 1, 4 + len(self._text_cols)),
+            (len(self._dual_clock_cfg.recency_buckets) + 1, 6 + len(self._text_cols)),
+        )
+        train_edgar_recent, train_edgar_bucket, train_text_recent, train_text_bucket = self._apply_source_tensor_scales(
+            train_edgar_recent,
+            train_edgar_bucket,
+            train_text_recent,
+            train_text_bucket,
         )
         val_x = torch.tensor(np.stack(entity_windows.val_x), dtype=torch.float32) if entity_windows.val_x else None
         val_y = torch.tensor(np.stack(entity_windows.val_y), dtype=torch.float32) if entity_windows.val_y else None
@@ -1309,13 +2136,19 @@ class V740AlphaPrototypeWrapper(ModelBase):
         val_text_recent = self._memory_batch(
             torch,
             entity_windows.val_text_recent,
-            (self._dual_clock_cfg.max_events, 3 + len(self._text_cols)),
+            (self._dual_clock_cfg.max_events, 5 + len(self._text_cols)),
         ) if entity_windows.val_text_recent else None
         val_text_bucket = self._memory_batch(
             torch,
             entity_windows.val_text_bucket,
-            (len(self._dual_clock_cfg.recency_buckets) + 1, 4 + len(self._text_cols)),
+            (len(self._dual_clock_cfg.recency_buckets) + 1, 6 + len(self._text_cols)),
         ) if entity_windows.val_text_bucket else None
+        val_edgar_recent, val_edgar_bucket, val_text_recent, val_text_bucket = self._apply_source_tensor_scales(
+            val_edgar_recent,
+            val_edgar_bucket,
+            val_text_recent,
+            val_text_bucket,
+        )
 
         train_teacher_probs = None
         if self._binary_target and self.enable_teacher_distill and len(entity_windows.train_x) >= 16:
@@ -1373,6 +2206,16 @@ class V740AlphaPrototypeWrapper(ModelBase):
             seq_len=train_x.shape[2],
             horizon=self._horizon,
             hidden_dim=self.hidden_dim,
+            enable_continuous_anchor=self._funding_anchor_enabled,
+            continuous_anchor_strength=self._effective_funding_anchor_strength,
+            enable_target_routing=self.enable_target_routing,
+            target_route_experts=self.target_route_experts,
+            enable_count_anchor=self.enable_count_anchor,
+            count_anchor_strength=self.count_anchor_strength,
+            enable_count_jump=self.enable_count_jump,
+            count_jump_strength=self.count_jump_strength,
+            enable_count_sparsity_gate=self.enable_count_sparsity_gate,
+            count_sparsity_gate_strength=self._effective_count_sparsity_gate_strength,
         ).to(self._device)
         self._network.task_mod_enabled = self._effective_task_modulation
         optimizer = torch.optim.AdamW(
@@ -1393,7 +2236,7 @@ class V740AlphaPrototypeWrapper(ModelBase):
         sampler = None
         shuffle = True
         if self._binary_target and len(train_dataset) > 1:
-            window_targets = train_y[:, -1].detach().cpu().numpy()
+            window_targets = train_y.max(dim=1).values.detach().cpu().numpy()
             classes = (window_targets > 0.5).astype(np.int64)
             class_counts = np.bincount(classes, minlength=2)
             if np.all(class_counts > 0):
@@ -1506,17 +2349,29 @@ class V740AlphaPrototypeWrapper(ModelBase):
                 val_logits = val_out["binary"]
                 val_target = val_y.to(self._device)
                 best_temp = 1.0
+                best_bias = 0.0
                 best_score = float("inf")
-                for temp in (0.7, 0.85, 1.0, 1.2, 1.5, 2.0, 3.0):
-                    scaled = val_logits / temp
-                    probs = torch.sigmoid(scaled)
-                    bce = torch.nn.functional.binary_cross_entropy_with_logits(scaled, val_target)
-                    brier = torch.mean((probs - val_target) ** 2)
-                    score = float((bce + 0.2 * brier).cpu())
-                    if score < best_score:
-                        best_score = score
-                        best_temp = float(temp)
+                if self._horizon <= 7:
+                    temp_candidates = (0.35, 0.5, 0.65, 0.8, 1.0, 1.25, 1.6, 2.2, 3.0)
+                    bias_candidates = (-0.35, -0.2, -0.1, 0.0, 0.1, 0.2, 0.35)
+                else:
+                    temp_candidates = (0.5, 0.7, 0.85, 1.0, 1.2, 1.5, 2.0, 3.0)
+                    bias_candidates = (-0.2, -0.1, 0.0, 0.1, 0.2)
+                target_rate = val_target.mean()
+                for temp in temp_candidates:
+                    for bias in bias_candidates:
+                        scaled = val_logits / temp + bias
+                        probs = torch.sigmoid(scaled)
+                        mae = torch.mean(torch.abs(probs - val_target))
+                        brier = torch.mean((probs - val_target) ** 2)
+                        rate_gap = torch.abs(probs.mean() - target_rate)
+                        score = float((mae + 0.20 * brier + 0.05 * rate_gap).cpu())
+                        if score < best_score:
+                            best_score = score
+                            best_temp = float(temp)
+                            best_bias = float(bias)
                 self._binary_temperature = best_temp
+                self._binary_logit_bias = best_bias
 
         self._fitted = True
         return self
@@ -1603,6 +2458,12 @@ class V740AlphaPrototypeWrapper(ModelBase):
                 dtype=torch.float32,
                 device=self._device,
             )
+            edgar_recent, edgar_bucket, text_recent, text_bucket = self._apply_source_tensor_scales(
+                edgar_recent,
+                edgar_bucket,
+                text_recent,
+                text_bucket,
+            )
             with torch.no_grad():
                 task_idx, target_idx, horizon_value, ablation_idx = self._token_tensor(torch, len(unique_entities))
                 outputs = self._network(
@@ -1616,12 +2477,13 @@ class V740AlphaPrototypeWrapper(ModelBase):
                     text_recent=text_recent,
                     text_bucket=text_bucket,
                 )
+            self._update_target_route_stats(outputs)
             if self._binary_target:
-                raw = torch.sigmoid(outputs["binary"] / self._binary_temperature).cpu().numpy()
+                raw = torch.sigmoid(outputs["binary"] / self._binary_temperature + self._binary_logit_bias).cpu().numpy()
             elif self._target_name == "investors_count":
-                raw = torch.relu(outputs["count"]).cpu().numpy()
+                raw = outputs["count"].cpu().numpy()
             else:
-                raw = outputs["continuous"].cpu().numpy()
+                raw = self._inverse_continuous_array(outputs["continuous"].cpu().numpy())
             idx = min(req_horizon - 1, raw.shape[1] - 1)
             preds_map = {eid: float(raw[i, idx]) for i, eid in enumerate(unique_entities)}
 

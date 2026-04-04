@@ -101,6 +101,88 @@ def _event_payload_matrix(df: pd.DataFrame, source_cols: Sequence[str]) -> np.nd
     return vals
 
 
+def _normalized_l2_shift(current: np.ndarray, previous: np.ndarray) -> float:
+    current = np.asarray(current, dtype=np.float32)
+    previous = np.asarray(previous, dtype=np.float32)
+    if current.size == 0 or previous.size == 0:
+        return 0.0
+    delta = current - previous
+    denom = float(np.sqrt(max(delta.size, 1)))
+    if denom <= 0.0:
+        return 0.0
+    return float(np.linalg.norm(delta) / denom)
+
+
+def _cosine_shift(current: np.ndarray, previous: np.ndarray) -> float:
+    current = np.asarray(current, dtype=np.float32)
+    previous = np.asarray(previous, dtype=np.float32)
+    if current.size == 0 or previous.size == 0:
+        return 0.0
+    current_norm = float(np.linalg.norm(current))
+    previous_norm = float(np.linalg.norm(previous))
+    if current_norm <= 1e-8 and previous_norm <= 1e-8:
+        return 0.0
+    if current_norm <= 1e-8 or previous_norm <= 1e-8:
+        return 1.0
+    cosine = float(np.dot(current, previous) / (current_norm * previous_norm))
+    cosine = float(np.clip(cosine, -1.0, 1.0))
+    return float(1.0 - cosine)
+
+
+def _dedupe_text_events(
+    entity_df: pd.DataFrame,
+    source_cols: Sequence[str],
+    event_col: str,
+    fallback_col: str,
+    min_l2_shift: float,
+    min_cosine_shift: float,
+    refresh_days: int,
+) -> Dict[str, np.ndarray | pd.DataFrame]:
+    work = entity_df.copy()
+    work["_event_time"] = _ensure_event_time(work, event_col, fallback_col)
+    work = work[work["_event_time"].notna()]
+    work = work.sort_values("_event_time").reset_index(drop=True)
+    payload = _event_payload_matrix(work, source_cols)
+    if work.empty or len(payload) == 0:
+        return {
+            "events": work.iloc[0:0].copy(),
+            "payload": np.zeros((0, len(source_cols)), dtype=np.float32),
+            "gap_days": np.zeros((0,), dtype=np.float32),
+            "novelty_l2": np.zeros((0,), dtype=np.float32),
+            "cosine_shift": np.zeros((0,), dtype=np.float32),
+        }
+
+    keep_idx = [0]
+    gap_days = [0.0]
+    novelty_l2 = [0.0]
+    cosine_shift = [0.0]
+    last_payload = payload[0]
+    last_time = work.loc[0, "_event_time"]
+
+    for idx in range(1, len(work)):
+        event_time = work.loc[idx, "_event_time"]
+        gap = float((event_time - last_time).total_seconds() / 86400.0)
+        l2_shift = _normalized_l2_shift(payload[idx], last_payload)
+        cos_shift = _cosine_shift(payload[idx], last_payload)
+        if l2_shift > min_l2_shift or cos_shift > min_cosine_shift or gap >= float(refresh_days):
+            keep_idx.append(idx)
+            gap_days.append(max(gap, 0.0))
+            novelty_l2.append(l2_shift)
+            cosine_shift.append(cos_shift)
+            last_payload = payload[idx]
+            last_time = event_time
+
+    kept = work.iloc[keep_idx].reset_index(drop=True)
+    kept_payload = payload[np.asarray(keep_idx, dtype=np.int64)]
+    return {
+        "events": kept,
+        "payload": kept_payload.astype(np.float32, copy=False),
+        "gap_days": np.asarray(gap_days, dtype=np.float32),
+        "novelty_l2": np.asarray(novelty_l2, dtype=np.float32),
+        "cosine_shift": np.asarray(cosine_shift, dtype=np.float32),
+    }
+
+
 def _ensure_event_time(df: pd.DataFrame, event_col: str, fallback_col: str) -> pd.Series:
     if event_col in df.columns:
         series = pd.to_datetime(df[event_col], errors="coerce", utc=True)
@@ -322,6 +404,132 @@ def build_source_native_edgar_memory(
     }
 
 
+def build_source_native_text_memory(
+    entity_df: pd.DataFrame,
+    prediction_time: pd.Timestamp,
+    source_cols: Sequence[str],
+    cfg: DualClockConfig | None = None,
+    event_col: str | None = None,
+    min_l2_shift: float = 1e-4,
+    min_cosine_shift: float = 1e-4,
+    refresh_days: int = 90,
+) -> Dict[str, np.ndarray]:
+    """Build text memory from semantic state changes rather than daily repeats.
+
+    The active benchmark surface carries one embedding row per entity-day, but
+    the same semantic text can repeat across many consecutive days. This helper
+    treats text as an event source by retaining the first observed text state
+    and later rows only when the embedding materially changes.
+
+    Recent token layout:
+    [time_since_event_days, inter_event_gap_days, presence_ratio,
+     novelty_l2, cosine_shift, payload...]
+
+    Bucket token layout:
+    [event_count, min_age, max_age, mean_age, novelty_mean,
+     cosine_shift_mean, payload_mean...]
+    """
+    cfg = cfg or DualClockConfig()
+    recent_width = 5 + len(source_cols)
+    bucket_width = 6 + len(source_cols)
+    if entity_df.empty or not source_cols:
+        return {
+            "recent_tokens": np.zeros((cfg.max_events, recent_width), dtype=np.float32),
+            "bucket_tokens": np.zeros((len(cfg.recency_buckets) + 1, bucket_width), dtype=np.float32),
+        }
+
+    work = entity_df.copy()
+    event_col = event_col or cfg.time_col
+    work["_event_time"] = _ensure_event_time(work, event_col, cfg.time_col)
+    work = work[work["_event_time"].notna()]
+    work = work[work["_event_time"] <= prediction_time]
+    work = work[_source_presence_mask(work, source_cols)]
+    if work.empty:
+        return {
+            "recent_tokens": np.zeros((cfg.max_events, recent_width), dtype=np.float32),
+            "bucket_tokens": np.zeros((len(cfg.recency_buckets) + 1, bucket_width), dtype=np.float32),
+        }
+
+    deduped = _dedupe_text_events(
+        work,
+        source_cols=source_cols,
+        event_col="_event_time",
+        fallback_col=cfg.time_col,
+        min_l2_shift=float(min_l2_shift),
+        min_cosine_shift=float(min_cosine_shift),
+        refresh_days=int(refresh_days),
+    )
+    events = deduped["events"]
+    payload = deduped["payload"]
+    gap_days = deduped["gap_days"]
+    novelty_l2 = deduped["novelty_l2"]
+    cosine_shift = deduped["cosine_shift"]
+    if len(events) == 0:
+        return {
+            "recent_tokens": np.zeros((cfg.max_events, recent_width), dtype=np.float32),
+            "bucket_tokens": np.zeros((len(cfg.recency_buckets) + 1, bucket_width), dtype=np.float32),
+        }
+
+    event_age_days = (
+        prediction_time - events["_event_time"]
+    ).dt.total_seconds().to_numpy(dtype=np.float64) / 86400.0
+    order = np.argsort(event_age_days)
+    event_age_days = event_age_days[order]
+    payload = payload[order]
+    gap_days = gap_days[order]
+    novelty_l2 = novelty_l2[order]
+    cosine_shift = cosine_shift[order]
+    presence_ratio = np.ones_like(event_age_days, dtype=np.float32)
+
+    recent_idx = np.arange(min(cfg.max_events, len(event_age_days)))
+    recent_tokens = np.concatenate(
+        [
+            event_age_days[recent_idx, None].astype(np.float32),
+            gap_days[recent_idx, None].astype(np.float32),
+            presence_ratio[recent_idx, None].astype(np.float32),
+            novelty_l2[recent_idx, None].astype(np.float32),
+            cosine_shift[recent_idx, None].astype(np.float32),
+            payload[recent_idx],
+        ],
+        axis=1,
+    )
+    if len(recent_tokens) < cfg.max_events:
+        pad = np.zeros((cfg.max_events - len(recent_tokens), recent_width), dtype=np.float32)
+        recent_tokens = np.vstack([recent_tokens, pad])
+
+    edges = [0.0] + [float(x) for x in cfg.recency_buckets] + [float("inf")]
+    bucket_rows: List[np.ndarray] = []
+    for left, right in zip(edges[:-1], edges[1:]):
+        mask = (event_age_days >= left) & (event_age_days <= right)
+        if not mask.any():
+            bucket_rows.append(np.zeros((bucket_width,), dtype=np.float32))
+            continue
+        ages = event_age_days[mask].astype(np.float32, copy=False)
+        payload_mean = _safe_numeric_mean(payload[mask], dim=0)
+        row = np.concatenate(
+            [
+                np.array(
+                    [
+                        float(mask.sum()),
+                        float(ages.min()),
+                        float(ages.max()),
+                        float(ages.mean()),
+                        float(np.mean(novelty_l2[mask])) if mask.any() else 0.0,
+                        float(np.mean(cosine_shift[mask])) if mask.any() else 0.0,
+                    ],
+                    dtype=np.float32,
+                ),
+                payload_mean,
+            ]
+        )
+        bucket_rows.append(row.astype(np.float32, copy=False))
+
+    return {
+        "recent_tokens": recent_tokens.astype(np.float32, copy=False),
+        "bucket_tokens": np.vstack(bucket_rows),
+    }
+
+
 def infer_text_columns(df: pd.DataFrame) -> List[str]:
     return [c for c in df.columns if c.startswith("text_emb_")]
 
@@ -362,6 +570,7 @@ __all__ = [
     "build_recency_bucket_tokens",
     "build_dual_clock_memory_for_entity",
     "build_source_native_edgar_memory",
+    "build_source_native_text_memory",
     "infer_text_columns",
     "infer_edgar_columns",
     "infer_numeric_source_columns",

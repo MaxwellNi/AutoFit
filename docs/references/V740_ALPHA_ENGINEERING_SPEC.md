@@ -223,6 +223,110 @@
 > - fuller-source long-h funding is now stable and source-covered,
 > - but text is not yet proven to be the primary gain source on the current
 >   audited funding slice.
+>
+> 2026-04-02 local-only gate update:
+> shared112 local V740 coverage is now complete (`112/112`), and the current
+> honest aggregate remains `15 wins / 2 ties / 95 losses`.
+> The main engineering interpretation is now sharper:
+>
+> - binary is a live lane, not a generic collapse case;
+>   `full` and `core_edgar` still contain the only real local win structure,
+> - funding should currently avoid `log1p` training-domain transforms on the
+>   audited V740 path;
+>   the first April 2 split gate showed log-domain variants are catastrophic,
+> - the second April 2 no-log sub-split then showed that the dominant funding
+>   rescue mechanism is a **strong continuous anchor**, not source scaling,
+> - source scaling only becomes meaningfully useful when paired with the strong
+>   anchor, mainly on the hardest fuller-source short-horizon funding cells,
+> - `investors_count` remains a separate head / target-geometry problem and is
+>   still not explained by funding-side fixes,
+> - the current investors repair path is now explicitly jump-aware at the
+>   history-to-forecast boundary, rather than only matching within-forecast
+>   smoothness statistics.
+>
+> Current engineering consequence:
+> the next widening step should compare only the two best no-log funding
+> branches (`anchor_only_no_log_a085` and `scale_anchor_no_log_a085`) on the
+> broader 48-cell local funding surface rather than reopening weaker variants.
+>
+> 2026-04-02 representation-path implementation update:
+> the first post-audit code change now attacks the text/EDGAR root cause at
+> the representation layer rather than by adding another local gate.
+> Two concrete changes are now in the alpha path:
+>
+> 1. **source columns are removed from the dense daily state stream before
+>    feature selection**
+>    - `text_emb_*` and EDGAR columns are no longer allowed to enter the
+>      regular `core` state stream as ordinary daily covariates,
+>    - they are now consumed only through the dedicated source-memory path,
+>      which avoids double-counting the same source both as dense daily state
+>      and as sparse event memory.
+> 2. **text memory is now change-driven rather than daily-row-driven**
+>    - the active benchmark surface still provides one text-embedding row per
+>      entity-day,
+>    - but alpha now collapses repeated identical or near-identical text states
+>      into sparse text events,
+>    - and recent/bucket text tokens now carry explicit semantic-change
+>      features (`novelty_l2`, `cosine_shift`) rather than treating every daily
+>      embedding row as a fresh semantic event.
+>
+> This update is intentionally local-only and pre-benchmark, but it is the
+> first implementation step that is directly faithful to the 2026-04-02 audit:
+>
+> - EDGAR/text should not be re-litigated as a missing-asset problem,
+> - text in particular should not be consumed as a pseudo-dense daily source,
+> - and V740 should stop leaking source-specific columns back into the regular
+>   state stream when the architecture claim is that those sources are sparse
+>   event memories.
+>
+> The practical expectation is not "instant win". The honest expected effect is
+> narrower but more important: cleaner attribution, less repeated-template
+> contamination from text, and a more faithful platform for the next target-side
+> work on binary/funding/investors heads.
+>
+> 2026-04-02 target-side decoder update:
+> the first explicit solution-class change recommended by the post-audit gate is
+> now implemented inside the alpha package without turning it into a runtime
+> ensemble.
+>
+> Two concrete target-side mechanisms are now in the code path:
+>
+> 1. **target-routed expert decoding**
+>    - the shared trunk now feeds a lightweight routed decoder with a shared
+>      path plus a small expert bank,
+>    - routing is conditioned by both the target prior and per-window history /
+>      source state, so `funding_raised_usd`, `investors_count`, and
+>      `is_funded` no longer rely on the same final latent geometry,
+>    - routing statistics are exposed through `regime_info` for local audit.
+> 2. **count-structured anchor + jump head**
+>    - `investors_count` now receives an anchored count decoder built from the
+>      recent count level plus routed cumulative-growth terms,
+>    - the same head now also carries a jump-aware residual branch that
+>      explicitly models the entry transition from the last observed count into
+>      the first forecast step, which is the key h=1 failure mode on step-like
+>      investor trajectories,
+>    - local smoke and shared112 loop scripts now expose target-routing,
+>      count-anchor, and count-jump knobs directly so routed branches can be
+>      audited as first-class variants rather than hidden defaults,
+>    - this is intended to attack the investors lane as a target-geometry
+>      problem rather than by reusing the funding or binary heads.
+>
+> The first tiny real-data smoke evidence for this update is now written under
+> `docs/references/v740_alpha_target_routed_smoke_20260402/`.
+> On audited `task1_outcome / full / h=1` slices with 6 entities and 600 train
+> rows:
+>
+> - `investors_count` completes cleanly, remains non-constant, and reaches
+>   `MAE = 0.7121`,
+> - `is_funded` also remains non-constant and reaches `MAE = 0.3181`,
+> - both runs emit non-uniform route weights through `regime_info`, which is
+>   enough to say the new decoder is active rather than dead code.
+>
+> This is still only tiny local smoke evidence, not a benchmark or champion-loop
+> result. The honest interpretation is narrower: the target-specialization path
+> is now real code, it executes on real freeze-backed slices, and it is strong
+> enough to justify continuing on target-side decoding rather than reopening
+> another purely shared representation tweak.
 
 ## 1. Purpose
 

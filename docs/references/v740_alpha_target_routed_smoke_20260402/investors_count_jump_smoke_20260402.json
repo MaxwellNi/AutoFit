@@ -1,0 +1,113 @@
+{
+  "task": "task1_outcome",
+  "ablation": "full",
+  "target": "investors_count",
+  "horizon": 1,
+  "input_size": 60,
+  "horizon_to_context_ratio": 0.016666666666666666,
+  "train_rows": 600,
+  "val_rows": 498,
+  "test_rows": 486,
+  "train_matrix_rows": 600,
+  "test_matrix_rows": 486,
+  "feature_count": 169,
+  "selected_entities": 6,
+  "edgar_cols_used": 39,
+  "text_cols_used": 64,
+  "coverage_ratio": 1.0,
+  "constant_prediction": false,
+  "prediction_std": 10.466014018661475,
+  "binary_train_rate": null,
+  "binary_event_rate": null,
+  "binary_transition_rate": null,
+  "binary_pos_weight": null,
+  "binary_temperature": null,
+  "teacher_distill_enabled": true,
+  "event_head_enabled": true,
+  "task_mod_enabled": true,
+  "binary_teacher_weight": null,
+  "binary_event_weight": null,
+  "teacher_logistic_mix": null,
+  "teacher_tree_mix": null,
+  "edgar_source_density": 1.0,
+  "text_source_density": 1.0,
+  "funding_log_domain": false,
+  "funding_source_scaling": false,
+  "funding_anchor_enabled": false,
+  "funding_anchor_strength": 0.0,
+  "target_routing_enabled": true,
+  "target_route_experts": 3,
+  "count_anchor_enabled": true,
+  "count_anchor_strength": 0.7,
+  "count_jump_enabled": true,
+  "count_jump_strength": 0.3,
+  "regime_info": {
+    "task": "task1_outcome",
+    "target": "investors_count",
+    "ablation": "full",
+    "horizon": 1,
+    "binary_target": false,
+    "funding_target": false,
+    "teacher_distill_enabled": true,
+    "event_head_enabled": true,
+    "task_mod_enabled": true,
+    "requested": {
+      "funding_log_domain": true,
+      "funding_source_scaling": true,
+      "funding_anchor": true,
+      "funding_anchor_strength": 0.85
+    },
+    "effective": {
+      "funding_log_domain": false,
+      "funding_source_scaling": false,
+      "funding_anchor": false,
+      "funding_anchor_strength": 0.0
+    },
+    "source_scales": {
+      "edgar": 1.0,
+      "text": 1.0
+    },
+    "source_stats": {
+      "row_density": {
+        "edgar": 1.0,
+        "text": 1.0
+      },
+      "event_density": {
+        "edgar": 0.42034313725490197,
+        "text": 1.0
+      },
+      "text_change_density": 0.0
+    },
+    "state_stream": {
+      "feature_cols": 4,
+      "excluded_source_cols": 103
+    },
+    "target_routing": {
+      "enabled": true,
+      "experts": 3,
+      "count_anchor_enabled": true,
+      "count_anchor_strength": 0.7,
+      "count_jump_enabled": true,
+      "count_jump_strength": 0.3,
+      "stats": {
+        "mean_weights": [
+          4.063491724082269e-05,
+          0.9999265670776367,
+          3.2764353818492964e-05
+        ],
+        "dominant_expert": 1,
+        "dominant_share": 1.0,
+        "entropy": 0.000777651381213218,
+        "mean_gate": 0.5149173140525818
+      }
+    }
+  },
+  "metrics": {
+    "mae": 1.5409876505533855,
+    "rmse": 1.6752641686519514,
+    "smape": 3.4543451510977237,
+    "mape": 3.3821607510056895
+  },
+  "wall_time_seconds": 74.266,
+  "json_path": "docs/references/v740_alpha_target_routed_smoke_20260402/investors_count_jump_smoke_20260402.json"
+}

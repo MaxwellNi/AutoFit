@@ -32,11 +32,15 @@ from src.narrative.block3.unified_protocol import (
 )
 
 from scripts.run_v740_alpha_smoke_slice import (
+    add_v740_funding_regime_args,
+    add_v740_target_regime_args,
     _compute_metrics,
     _downsample_binary_preserve_time,
     _downsample_preserve_time,
     _load_smoke_frame,
     _prepare_features,
+    v740_funding_regime_kwargs_from_args,
+    v740_target_regime_kwargs_from_args,
 )
 
 DEFAULT_CASES: List[Dict[str, Any]] = [
@@ -148,6 +152,8 @@ def _parse_args() -> argparse.Namespace:
         action="store_true",
         help="Skip a case/model pair when its JSON artifact already exists.",
     )
+    add_v740_funding_regime_args(ap)
+    add_v740_target_regime_args(ap)
     return ap.parse_args()
 
 
@@ -181,7 +187,7 @@ def _build_case_frame(case: Dict[str, Any], temporal_config: TemporalSplitConfig
     return train, val, test
 
 
-def _instantiate_model(model_id: str):
+def _instantiate_model(model_id: str, args: argparse.Namespace):
     if model_id == "v740_alpha":
         return V740AlphaPrototypeWrapper(
             input_size=60,
@@ -195,6 +201,8 @@ def _instantiate_model(model_id: str):
             enable_teacher_distill=True,
             enable_event_head=True,
             enable_task_modulation=True,
+            **v740_funding_regime_kwargs_from_args(args),
+            **v740_target_regime_kwargs_from_args(args),
             seed=42,
         )
     if model_id == "v739":
@@ -208,6 +216,7 @@ def _run_model(
     train: pd.DataFrame,
     val: pd.DataFrame,
     test: pd.DataFrame,
+    args: argparse.Namespace,
 ) -> Dict[str, Any]:
     X_train, y_train = _prepare_features(train, case["target"])
     X_test, y_test = _prepare_features(test, case["target"])
@@ -217,7 +226,7 @@ def _run_model(
             f"train={len(X_train)} test={len(X_test)}"
         )
 
-    model = _instantiate_model(model_id)
+    model = _instantiate_model(model_id, args)
     t0 = time.time()
     model.fit(
         X_train,
@@ -252,6 +261,7 @@ def _run_model(
         routing = getattr(model, "_routing_info")
         if isinstance(routing, dict):
             selected_model = routing.get("selected_model")
+    regime_info = model.get_regime_info() if hasattr(model, "get_regime_info") else None
 
     return {
         "model_id": model_id,
@@ -271,6 +281,19 @@ def _run_model(
         "binary_teacher_weight": float(getattr(model, "_binary_teacher_weight", 0.0)) if getattr(model, "_binary_target", False) else None,
         "binary_event_weight": float(getattr(model, "_binary_event_weight", 0.0)) if getattr(model, "_binary_target", False) else None,
         "task_mod_enabled": bool(getattr(model, "_effective_task_modulation", getattr(model, "enable_task_modulation", False))),
+        "funding_log_domain": bool(getattr(model, "_funding_log_domain", False)),
+        "funding_source_scaling": bool(getattr(model, "_funding_source_scaling", False)),
+        "funding_anchor_enabled": bool(getattr(model, "_funding_anchor_enabled", False)),
+        "funding_anchor_strength": float(getattr(model, "_effective_funding_anchor_strength", 0.0)),
+        "target_routing_enabled": bool(getattr(model, "enable_target_routing", False)),
+        "target_route_experts": int(getattr(model, "target_route_experts", 0)),
+        "count_anchor_enabled": bool(getattr(model, "enable_count_anchor", False)),
+        "count_anchor_strength": float(getattr(model, "count_anchor_strength", 0.0)),
+        "count_jump_enabled": bool(getattr(model, "enable_count_jump", False)),
+        "count_jump_strength": float(getattr(model, "count_jump_strength", 0.0)),
+        "count_sparsity_gate_enabled": bool(getattr(model, "enable_count_sparsity_gate", False)),
+        "count_sparsity_gate_strength": float(getattr(model, "count_sparsity_gate_strength", 0.0)),
+        "regime_info": regime_info,
     }
 
 
@@ -379,7 +402,8 @@ def main() -> int:
             if args.skip_existing and out_path.exists():
                 try:
                     existing = json.loads(out_path.read_text(encoding="utf-8"))
-                    existing.setdefault("json_path", str(out_path))
+                    existing["json_path"] = str(out_path)
+                    out_path.write_text(json.dumps(existing, indent=2, sort_keys=True), encoding="utf-8")
                     results.append(existing)
                     print(
                         f"[v740-mini] skip-existing {case['name']} / {model_id}",
@@ -392,10 +416,10 @@ def main() -> int:
                         flush=True,
                     )
             try:
-                summary = _run_model(model_id, case, train, val, test)
+                summary = _run_model(model_id, case, train, val, test, args)
                 row.update(summary)
-                out_path.write_text(json.dumps(row, indent=2, sort_keys=True), encoding="utf-8")
                 row["json_path"] = str(out_path)
+                out_path.write_text(json.dumps(row, indent=2, sort_keys=True), encoding="utf-8")
                 print(
                     f"[v740-mini] finished {case['name']} / {model_id} "
                     f"mae={summary.get('metrics', {}).get('mae')}",

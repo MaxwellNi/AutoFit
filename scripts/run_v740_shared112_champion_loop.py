@@ -363,6 +363,8 @@ def _run_local_model(
         "count_anchor_strength": float(getattr(model, "count_anchor_strength", 0.0)),
         "count_jump_enabled": bool(getattr(model, "enable_count_jump", False)),
         "count_jump_strength": float(getattr(model, "count_jump_strength", 0.0)),
+        "count_sparsity_gate_enabled": bool(getattr(model, "enable_count_sparsity_gate", False)),
+        "count_sparsity_gate_strength": float(getattr(model, "count_sparsity_gate_strength", 0.0)),
         "regime_info": regime_info,
     }
 
