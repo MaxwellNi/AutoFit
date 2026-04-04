@@ -4,6 +4,12 @@ This note answers one operational question:
 
 > where does the V740 line truly stand after the April 1-3 local evidence wave?
 
+For the forward execution sequence after the 2026-04-04 planning refresh, use:
+
+- `docs/V740_MASTER_EXECUTION_PLAN.md`
+
+This file should now be read as a status snapshot, not as the full execution roadmap.
+
 Strict reading rules:
 
 - executed evidence only counts if the job actually ran and produced artifacts

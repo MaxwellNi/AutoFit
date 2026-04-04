@@ -21,6 +21,17 @@ If another status document disagrees with this file, prefer this file plus the e
 11. `docs/references/V740_REPR_POSTAUDIT_GATE_20260402.md`
 12. `docs/references/V740_EDGAR_TEXT_ROOTCAUSE_AUDIT_20260402.md`
 
+## Execution Planning Companion
+
+For forward-looking execution sequencing, use:
+
+- `docs/V740_MASTER_EXECUTION_PLAN.md`
+
+This file remains the current-state truth pack.
+`docs/V740_MASTER_EXECUTION_PLAN.md` is the operational roadmap and should not
+be treated as a source of current benchmark facts unless those facts are also
+reflected here or in the evidence files it cites.
+
 ## Verified Current Facts
 
 | Fact | Current value | Evidence |

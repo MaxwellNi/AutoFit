@@ -51,3 +51,7 @@ The next focused backfill should stay narrow:
 - compare current default vs `--disable-count-sparsity-gate` and one route-off control
 
 That is the shortest path to confirming whether the local task2 gain persists on the benchmark-style duel surface.
+
+Forward execution after this point is tracked in:
+
+- `docs/V740_MASTER_EXECUTION_PLAN.md`
