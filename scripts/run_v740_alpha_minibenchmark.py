@@ -134,7 +134,7 @@ def _parse_args() -> argparse.Namespace:
     ap.add_argument(
         "--models",
         default="v740_alpha,v739",
-        help="Comma-separated local models to run. Supported: v740_alpha,v739",
+        help="Comma-separated local models to run. Supported: v740_alpha,v741_lite,v739",
     )
     ap.add_argument(
         "--case-substr",
@@ -155,6 +155,13 @@ def _parse_args() -> argparse.Namespace:
     add_v740_funding_regime_args(ap)
     add_v740_target_regime_args(ap)
     return ap.parse_args()
+
+
+def _normalize_local_model_id(model_id: str, args: argparse.Namespace) -> str:
+    model_id = model_id.strip()
+    if model_id == "v740_alpha" and getattr(args, "enable_v741_lite", False):
+        return "v741_lite"
+    return model_id
 
 
 def _make_temporal_config() -> TemporalSplitConfig:
@@ -188,7 +195,10 @@ def _build_case_frame(case: Dict[str, Any], temporal_config: TemporalSplitConfig
 
 
 def _instantiate_model(model_id: str, args: argparse.Namespace):
-    if model_id == "v740_alpha":
+    if model_id in {"v740_alpha", "v741_lite"}:
+        target_kwargs = v740_target_regime_kwargs_from_args(args)
+        if model_id == "v741_lite":
+            target_kwargs["enable_v741_lite"] = True
         return V740AlphaPrototypeWrapper(
             input_size=60,
             hidden_dim=64,
@@ -202,7 +212,7 @@ def _instantiate_model(model_id: str, args: argparse.Namespace):
             enable_event_head=True,
             enable_task_modulation=True,
             **v740_funding_regime_kwargs_from_args(args),
-            **v740_target_regime_kwargs_from_args(args),
+            **target_kwargs,
             seed=42,
         )
     if model_id == "v739":
@@ -293,6 +303,11 @@ def _run_model(
         "count_jump_strength": float(getattr(model, "count_jump_strength", 0.0)),
         "count_sparsity_gate_enabled": bool(getattr(model, "enable_count_sparsity_gate", False)),
         "count_sparsity_gate_strength": float(getattr(model, "count_sparsity_gate_strength", 0.0)),
+        "count_source_routing_enabled": bool(getattr(model, "enable_count_source_routing", False)),
+        "count_route_experts": int(getattr(model, "count_route_experts", 0)),
+        "count_route_floor": float(getattr(model, "count_route_floor", 0.0)),
+        "count_route_entropy_strength": float(getattr(model, "count_route_entropy_strength", 0.0)),
+        "count_active_loss_strength": float(getattr(model, "count_active_loss_strength", 0.0)),
         "regime_info": regime_info,
     }
 
@@ -370,7 +385,14 @@ def _write_summary(path: Path, results: List[Dict[str, Any]]) -> None:
 
 def main() -> int:
     args = _parse_args()
-    models = [m.strip() for m in args.models.split(",") if m.strip()]
+    models = []
+    seen_models = set()
+    for raw_model_id in [m.strip() for m in args.models.split(",") if m.strip()]:
+        model_id = _normalize_local_model_id(raw_model_id, args)
+        if model_id in seen_models:
+            continue
+        seen_models.add(model_id)
+        models.append(model_id)
     args.output_dir.mkdir(parents=True, exist_ok=True)
     temporal_config = _make_temporal_config()
     cases = DEFAULT_CASES

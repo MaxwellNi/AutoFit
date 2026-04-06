@@ -98,6 +98,20 @@ class _V740Windows:
     val_text_bucket: List[np.ndarray]
     contexts: Dict[str, np.ndarray]
     context_memory: Dict[str, Dict[str, np.ndarray]]
+    window_stats: Dict[str, object]
+
+
+def _left_pad_last_dim(arr: np.ndarray, target_width: int) -> np.ndarray:
+    arr = np.asarray(arr, dtype=np.float32)
+    if arr.shape[-1] >= target_width:
+        return arr[..., -target_width:].astype(np.float32, copy=False)
+    pad = target_width - arr.shape[-1]
+    if arr.shape[-1] <= 0:
+        out_shape = list(arr.shape)
+        out_shape[-1] = target_width
+        return np.zeros(tuple(out_shape), dtype=np.float32)
+    pad_block = np.repeat(arr[..., :1], pad, axis=-1)
+    return np.concatenate([pad_block, arr], axis=-1).astype(np.float32, copy=False)
 
 
 def _window_teacher_features(
@@ -178,6 +192,9 @@ def _build_v740_windows(
     edgar_cols: List[str],
     text_cols: List[str],
     dual_clock_cfg: DualClockConfig,
+    enable_window_repair: bool = False,
+    min_history_points: int = 8,
+    target_windows_per_entity: int = 6,
 ) -> _V740Windows:
     train_x: List[np.ndarray] = []
     train_y: List[np.ndarray] = []
@@ -193,6 +210,15 @@ def _build_v740_windows(
     val_text_bucket: List[np.ndarray] = []
     contexts: Dict[str, np.ndarray] = {}
     context_memory: Dict[str, Dict[str, np.ndarray]] = {}
+    entities_considered = 0
+    entities_with_windows = 0
+    short_context_entities = 0
+    step_reduced_entities = 0
+    repaired_entities = 0
+    effective_contexts: List[int] = []
+    effective_steps: List[int] = []
+    min_history_points = max(2, int(min_history_points))
+    target_windows_per_entity = max(1, int(target_windows_per_entity))
 
     if train_raw is None or "entity_id" not in train_raw.columns:
         return _V740Windows(
@@ -200,6 +226,20 @@ def _build_v740_windows(
             train_edgar_recent, train_edgar_bucket, train_text_recent, train_text_bucket,
             val_edgar_recent, val_edgar_bucket, val_text_recent, val_text_bucket,
             contexts, context_memory,
+            {
+                "repair_enabled": bool(enable_window_repair),
+                "requested_input_size": int(input_size),
+                "requested_step": int(step),
+                "min_history_points": int(min_history_points),
+                "target_windows_per_entity": int(target_windows_per_entity),
+                "entities_considered": 0,
+                "entities_with_windows": 0,
+                "short_context_entities": 0,
+                "step_reduced_entities": 0,
+                "repaired_entities": 0,
+                "train_windows": 0,
+                "val_windows": 0,
+            },
         )
 
     rng = np.random.RandomState(seed)
@@ -210,11 +250,23 @@ def _build_v740_windows(
         grp = grp.sort_values("crawled_date_day").reset_index(drop=True)
         if target not in grp.columns:
             continue
+        entities_considered += 1
 
         y_arr = pd.Series(grp[target], dtype="float64").ffill().bfill().fillna(0.0).to_numpy(dtype=np.float32)
         times = pd.to_datetime(grp["crawled_date_day"], errors="coerce")
-        if len(y_arr) < input_size + horizon or times.isna().all():
+        if len(y_arr) <= horizon or times.isna().all():
             continue
+        available_history = len(y_arr) - horizon
+        if available_history <= 0:
+            continue
+        if enable_window_repair:
+            effective_input_size = min(int(input_size), int(available_history))
+            if effective_input_size < min_history_points:
+                continue
+        else:
+            if len(y_arr) < input_size + horizon:
+                continue
+            effective_input_size = int(input_size)
 
         channels = [y_arr]
         for col in feature_cols:
@@ -222,7 +274,8 @@ def _build_v740_windows(
                 vals = pd.Series(grp[col], dtype="float64").ffill().bfill().fillna(0.0).to_numpy(dtype=np.float32)
                 channels.append(vals)
         series = np.stack(channels, axis=0)
-        contexts[str(eid)] = series[:, -input_size:].astype(np.float32, copy=False)
+        context_width = min(int(input_size), series.shape[1])
+        contexts[str(eid)] = _left_pad_last_dim(series[:, -context_width:], int(input_size))
 
         last_time = times.iloc[-1]
         edgar_context_mem = _build_edgar_memory(grp, last_time, edgar_cols, dual_clock_cfg)
@@ -240,11 +293,19 @@ def _build_v740_windows(
         entity_edgar_bucket: List[np.ndarray] = []
         entity_text_recent: List[np.ndarray] = []
         entity_text_bucket: List[np.ndarray] = []
-        limit = len(y_arr) - input_size - horizon + 1
-        for t in range(0, limit, step):
-            x_win = series[:, t : t + input_size]
-            y_win = y_arr[t + input_size : t + input_size + horizon]
-            end_idx = t + input_size - 1
+        limit = len(y_arr) - effective_input_size - horizon + 1
+        if limit <= 0:
+            continue
+        entity_step = int(step)
+        if enable_window_repair:
+            desired_windows = min(target_windows_per_entity, limit)
+            if desired_windows > 0:
+                entity_step = max(1, min(int(step), int(math.ceil(limit / desired_windows))))
+        for t in range(0, limit, entity_step):
+            x_slice = series[:, t : t + effective_input_size]
+            x_win = _left_pad_last_dim(x_slice, int(input_size))
+            y_win = y_arr[t + effective_input_size : t + effective_input_size + horizon]
+            end_idx = t + effective_input_size - 1
             pred_time = times.iloc[end_idx]
             if pd.isna(pred_time):
                 continue
@@ -276,6 +337,16 @@ def _build_v740_windows(
 
         if not entity_x:
             continue
+        entities_with_windows += 1
+        effective_contexts.append(int(effective_input_size))
+        effective_steps.append(int(entity_step))
+        if effective_input_size < int(input_size):
+            short_context_entities += 1
+            repaired_entities += 1
+        elif entity_step < int(step):
+            repaired_entities += 1
+        if entity_step < int(step):
+            step_reduced_entities += 1
 
         n_val = 0
         if len(entity_x) >= 4:
@@ -319,6 +390,25 @@ def _build_v740_windows(
             val_idx, val_x, val_y, val_edgar_recent, val_edgar_bucket, val_text_recent, val_text_bucket,
         )
 
+    window_stats: Dict[str, object] = {
+        "repair_enabled": bool(enable_window_repair),
+        "requested_input_size": int(input_size),
+        "requested_step": int(step),
+        "min_history_points": int(min_history_points),
+        "target_windows_per_entity": int(target_windows_per_entity),
+        "entities_considered": int(entities_considered),
+        "entities_with_windows": int(entities_with_windows),
+        "short_context_entities": int(short_context_entities),
+        "step_reduced_entities": int(step_reduced_entities),
+        "repaired_entities": int(repaired_entities),
+        "mean_effective_input_size": float(np.mean(effective_contexts)) if effective_contexts else 0.0,
+        "min_effective_input_size": int(min(effective_contexts)) if effective_contexts else 0,
+        "mean_effective_step": float(np.mean(effective_steps)) if effective_steps else float(step),
+        "min_effective_step": int(min(effective_steps)) if effective_steps else int(step),
+        "train_windows": int(len(train_x)),
+        "val_windows": int(len(val_x)),
+    }
+
     return _V740Windows(
         train_x=train_x,
         train_y=train_y,
@@ -334,6 +424,7 @@ def _build_v740_windows(
         val_text_bucket=val_text_bucket,
         contexts=contexts,
         context_memory=context_memory,
+        window_stats=window_stats,
     )
 
 
@@ -922,6 +1013,550 @@ def _torch_imports():
                 + residual
             )
 
+    class CountSourceRoutedDecoder(nn.Module):
+        def __init__(
+            self,
+            hidden_dim: int,
+            cond_dim: int,
+            num_ablations: int,
+            num_experts: int = 3,
+            route_floor: float = 0.10,
+        ):
+            super().__init__()
+            self.num_experts = max(1, int(num_experts))
+            self.route_floor = float(min(0.45, max(0.0, route_floor)))
+            self.history_dim = 6
+            self.source_dim = 6
+            self.ablation_dim = max(8, hidden_dim // 4)
+            self.ablation_embed = nn.Embedding(num_ablations, self.ablation_dim)
+            self.ablation_bias = nn.Embedding(num_ablations, self.num_experts)
+
+            route_in_dim = hidden_dim * 6 + cond_dim + self.history_dim + self.source_dim + self.ablation_dim
+            expert_in_dim = hidden_dim * 2 + self.history_dim + self.source_dim + self.ablation_dim
+            self.shared_proj = nn.Sequential(
+                nn.Linear(hidden_dim * 2, hidden_dim),
+                nn.GELU(),
+                nn.Linear(hidden_dim, hidden_dim),
+            )
+            self.route_ctx = nn.Sequential(
+                nn.Linear(route_in_dim, hidden_dim),
+                nn.GELU(),
+                nn.Linear(hidden_dim, hidden_dim),
+            )
+            self.route_logits = nn.Sequential(
+                nn.Linear(route_in_dim, hidden_dim),
+                nn.GELU(),
+                nn.Linear(hidden_dim, self.num_experts),
+            )
+            self.experts = nn.ModuleList([
+                nn.Sequential(
+                    nn.Linear(expert_in_dim, hidden_dim),
+                    nn.GELU(),
+                    nn.Linear(hidden_dim, hidden_dim),
+                )
+                for _ in range(self.num_experts)
+            ])
+            self.mix_gate = nn.Sequential(
+                nn.Linear(hidden_dim * 2 + cond_dim + self.history_dim + self.source_dim, hidden_dim),
+                nn.GELU(),
+                nn.Linear(hidden_dim, hidden_dim),
+                nn.Sigmoid(),
+            )
+            self.out = nn.Sequential(
+                nn.Linear(hidden_dim * 3, hidden_dim),
+                nn.GELU(),
+                nn.Linear(hidden_dim, hidden_dim),
+            )
+
+        def _history_summary(self, target_hist: torch.Tensor) -> torch.Tensor:
+            recent_width = min(7, target_hist.shape[1])
+            recent = torch.relu(target_hist[:, -recent_width:])
+            step = recent[:, 1:] - recent[:, :-1] if recent.shape[1] > 1 else recent[:, :1] * 0.0
+            jump_peak = step.abs().amax(dim=1, keepdim=True) if step.shape[1] > 0 else recent[:, -1:] * 0.0
+            jump_mean = step.abs().mean(dim=1, keepdim=True) if step.shape[1] > 0 else recent[:, -1:] * 0.0
+            return torch.cat(
+                [
+                    torch.log1p(recent[:, -1:]),
+                    torch.log1p(recent.mean(dim=1, keepdim=True)),
+                    torch.log1p(recent.amax(dim=1, keepdim=True)),
+                    (recent > 0.5).float().mean(dim=1, keepdim=True),
+                    torch.log1p(jump_mean),
+                    torch.log1p(jump_peak),
+                ],
+                dim=-1,
+            )
+
+        def _source_summary(
+            self,
+            edgar_feat: torch.Tensor,
+            text_feat: torch.Tensor,
+            edgar_active_flag: Optional[torch.Tensor] = None,
+            text_active_flag: Optional[torch.Tensor] = None,
+        ) -> torch.Tensor:
+            edgar_energy = torch.sqrt(edgar_feat.pow(2).mean(dim=1, keepdim=True).clamp_min(0.0))
+            text_energy = torch.sqrt(text_feat.pow(2).mean(dim=1, keepdim=True).clamp_min(0.0))
+            if edgar_active_flag is None:
+                edgar_active = (edgar_energy > 1e-6).to(edgar_feat.dtype)
+            else:
+                edgar_active = edgar_active_flag.to(device=edgar_feat.device, dtype=edgar_feat.dtype)
+            if text_active_flag is None:
+                text_active = (text_energy > 1e-6).to(text_feat.dtype)
+            else:
+                text_active = text_active_flag.to(device=text_feat.device, dtype=text_feat.dtype)
+            edgar_energy = edgar_energy * edgar_active
+            text_energy = text_energy * text_active
+            both_active = edgar_active * text_active
+            source_gap = torch.log1p(edgar_energy) - torch.log1p(text_energy)
+            return torch.cat(
+                [
+                    torch.log1p(edgar_energy),
+                    torch.log1p(text_energy),
+                    edgar_active,
+                    text_active,
+                    both_active,
+                    source_gap,
+                ],
+                dim=-1,
+            )
+
+        def forward(
+            self,
+            count_feat: torch.Tensor,
+            decoded: torch.Tensor,
+            memory_feat: torch.Tensor,
+            value_feat: torch.Tensor,
+            edgar_feat: torch.Tensor,
+            text_feat: torch.Tensor,
+            cond: torch.Tensor,
+            target_hist: torch.Tensor,
+            ablation_idx: torch.Tensor,
+            edgar_active_flag: Optional[torch.Tensor] = None,
+            text_active_flag: Optional[torch.Tensor] = None,
+        ) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
+            hist_summary = self._history_summary(target_hist)
+            source_summary = self._source_summary(
+                edgar_feat,
+                text_feat,
+                edgar_active_flag=edgar_active_flag,
+                text_active_flag=text_active_flag,
+            )
+            ablation_feat = self.ablation_embed(ablation_idx)
+            route_in = torch.cat(
+                [
+                    count_feat,
+                    decoded,
+                    memory_feat,
+                    value_feat,
+                    edgar_feat,
+                    text_feat,
+                    cond,
+                    hist_summary,
+                    source_summary,
+                    ablation_feat,
+                ],
+                dim=-1,
+            )
+            shared = self.shared_proj(torch.cat([count_feat, decoded], dim=-1))
+            route_ctx = self.route_ctx(route_in)
+            route_logits = self.route_logits(route_in) + self.ablation_bias(ablation_idx)
+            route_weights = torch.softmax(route_logits, dim=-1)
+            if self.route_floor > 0.0 and self.num_experts > 1:
+                route_weights = (1.0 - self.route_floor) * route_weights + (self.route_floor / self.num_experts)
+            expert_in = torch.cat([shared, route_ctx, hist_summary, source_summary, ablation_feat], dim=-1)
+            expert_outputs = torch.stack([expert(expert_in) for expert in self.experts], dim=1)
+            routed = torch.sum(expert_outputs * route_weights.unsqueeze(-1), dim=1)
+            gate = self.mix_gate(torch.cat([shared, routed, cond, hist_summary, source_summary], dim=-1))
+            mixed = shared + gate * routed
+            return self.out(torch.cat([count_feat, mixed, route_ctx], dim=-1)), route_weights, gate
+
+    class HurdleCountHead(nn.Module):
+        def __init__(
+            self,
+            hidden_dim: int,
+            cond_dim: int,
+            horizon: int,
+            occurrence_prior_strength: float = 0.75,
+            enable_source_specialists: bool = False,
+        ):
+            super().__init__()
+            self.horizon = horizon
+            self.occurrence_prior_strength = float(max(0.0, occurrence_prior_strength))
+            self.enable_source_specialists = bool(enable_source_specialists)
+            self.history_dim = 6
+            self.source_dim = 5
+            self.num_profiles = 3
+            self.num_source_classes = 4
+            self.source_class_names = ("no_source", "text_light", "edgar_rich", "full_rich")
+
+            profile_in_dim = cond_dim + self.history_dim + self.source_dim
+            expert_in_dim = hidden_dim + cond_dim + self.history_dim + self.source_dim
+            temporal_in_dim = expert_in_dim + 1
+
+            self.profile_router = nn.Sequential(
+                nn.Linear(profile_in_dim, hidden_dim),
+                nn.GELU(),
+                nn.Linear(hidden_dim, self.num_profiles),
+            )
+            self.occurrence_experts = nn.ModuleList([
+                nn.Sequential(
+                    nn.Linear(expert_in_dim, hidden_dim),
+                    nn.GELU(),
+                    nn.Linear(hidden_dim, horizon),
+                )
+                for _ in range(self.num_profiles)
+            ])
+            self.intensity_experts = nn.ModuleList([
+                nn.Sequential(
+                    nn.Linear(expert_in_dim, hidden_dim),
+                    nn.GELU(),
+                    nn.Linear(hidden_dim, horizon),
+                )
+                for _ in range(self.num_profiles)
+            ])
+            self.source_occurrence_experts = nn.ModuleList([
+                nn.Sequential(
+                    nn.Linear(expert_in_dim, hidden_dim),
+                    nn.GELU(),
+                    nn.Linear(hidden_dim, horizon),
+                )
+                for _ in range(self.num_source_classes)
+            ])
+            self.source_intensity_experts = nn.ModuleList([
+                nn.Sequential(
+                    nn.Linear(expert_in_dim, hidden_dim),
+                    nn.GELU(),
+                    nn.Linear(hidden_dim, horizon),
+                )
+                for _ in range(self.num_source_classes)
+            ])
+            self.short_occurrence = nn.Sequential(
+                nn.Linear(temporal_in_dim, hidden_dim),
+                nn.GELU(),
+                nn.Linear(hidden_dim, horizon),
+            )
+            self.long_occurrence = nn.Sequential(
+                nn.Linear(temporal_in_dim, hidden_dim),
+                nn.GELU(),
+                nn.Linear(hidden_dim, horizon),
+            )
+            self.short_intensity = nn.Sequential(
+                nn.Linear(temporal_in_dim, hidden_dim),
+                nn.GELU(),
+                nn.Linear(hidden_dim, horizon),
+            )
+            self.long_intensity = nn.Sequential(
+                nn.Linear(temporal_in_dim, hidden_dim),
+                nn.GELU(),
+                nn.Linear(hidden_dim, horizon),
+            )
+            self.horizon_gate = nn.Sequential(
+                nn.Linear(cond_dim + self.history_dim + 1, hidden_dim),
+                nn.GELU(),
+                nn.Linear(hidden_dim, 1),
+                nn.Sigmoid(),
+            )
+            self.zero_bias = nn.Sequential(
+                nn.Linear(profile_in_dim, hidden_dim),
+                nn.GELU(),
+                nn.Linear(hidden_dim, horizon),
+            )
+            self.source_occurrence_gate = nn.Sequential(
+                nn.Linear(profile_in_dim + 1, hidden_dim),
+                nn.GELU(),
+                nn.Linear(hidden_dim, 1),
+                nn.Sigmoid(),
+            )
+            self.source_intensity_gate = nn.Sequential(
+                nn.Linear(profile_in_dim + 1, hidden_dim),
+                nn.GELU(),
+                nn.Linear(hidden_dim, 1),
+                nn.Sigmoid(),
+            )
+            self.positive_residual = nn.Sequential(
+                nn.Linear(expert_in_dim, hidden_dim),
+                nn.GELU(),
+                nn.Linear(hidden_dim, horizon),
+            )
+            self.positive_gate = nn.Sequential(
+                nn.Linear(expert_in_dim, hidden_dim),
+                nn.GELU(),
+                nn.Linear(hidden_dim, horizon),
+                nn.Sigmoid(),
+            )
+
+        def _history_summary(self, target_hist: torch.Tensor) -> tuple[torch.Tensor, torch.Tensor]:
+            recent_width = min(7, target_hist.shape[1])
+            recent = torch.relu(target_hist[:, -recent_width:])
+            step = recent[:, 1:] - recent[:, :-1] if recent.shape[1] > 1 else recent[:, :1] * 0.0
+            last = torch.log1p(recent[:, -1:])
+            mean = torch.log1p(recent.mean(dim=1, keepdim=True))
+            peak = torch.log1p(recent.amax(dim=1, keepdim=True))
+            nonzero = (recent > 0.5).float().mean(dim=1, keepdim=True)
+            jump_mean = torch.log1p(step.abs().mean(dim=1, keepdim=True)) if step.shape[1] > 0 else last * 0.0
+            jump_peak = torch.log1p(step.abs().amax(dim=1, keepdim=True)) if step.shape[1] > 0 else last * 0.0
+            activity_prior = (
+                -1.20
+                + 2.15 * nonzero
+                + 0.30 * last
+                + 0.20 * mean
+                + 0.12 * peak
+                + 0.15 * jump_mean
+            )
+            hist_summary = torch.cat([last, mean, peak, nonzero, jump_mean, jump_peak], dim=-1)
+            return hist_summary, activity_prior
+
+        def _source_summary(
+            self,
+            edgar_feat: torch.Tensor,
+            text_feat: torch.Tensor,
+            edgar_active_flag: Optional[torch.Tensor] = None,
+            text_active_flag: Optional[torch.Tensor] = None,
+        ) -> torch.Tensor:
+            edgar_energy = torch.sqrt(edgar_feat.pow(2).mean(dim=1, keepdim=True).clamp_min(0.0))
+            text_energy = torch.sqrt(text_feat.pow(2).mean(dim=1, keepdim=True).clamp_min(0.0))
+            if edgar_active_flag is None:
+                edgar_active = (edgar_energy > 1e-6).to(edgar_feat.dtype)
+            else:
+                edgar_active = edgar_active_flag.to(device=edgar_feat.device, dtype=edgar_feat.dtype)
+            if text_active_flag is None:
+                text_active = (text_energy > 1e-6).to(text_feat.dtype)
+            else:
+                text_active = text_active_flag.to(device=text_feat.device, dtype=text_feat.dtype)
+            edgar_energy = edgar_energy * edgar_active
+            text_energy = text_energy * text_active
+            source_gap = torch.log1p(edgar_energy) - torch.log1p(text_energy)
+            return torch.cat(
+                [
+                    torch.log1p(edgar_energy),
+                    torch.log1p(text_energy),
+                    edgar_active,
+                    text_active,
+                    source_gap,
+                ],
+                dim=-1,
+            )
+
+        def _source_class_weights(self, source_summary: torch.Tensor) -> torch.Tensor:
+            edgar_active = source_summary[:, 2:3]
+            text_active = source_summary[:, 3:4]
+            no_source = (1.0 - edgar_active) * (1.0 - text_active)
+            text_light = text_active * (1.0 - edgar_active)
+            edgar_rich = edgar_active * (1.0 - text_active)
+            full_rich = edgar_active * text_active
+            weights = torch.cat([no_source, text_light, edgar_rich, full_rich], dim=-1)
+            return weights / weights.sum(dim=-1, keepdim=True).clamp_min(1.0)
+
+        def forward(
+            self,
+            hidden: torch.Tensor,
+            cond: torch.Tensor,
+            target_hist: torch.Tensor,
+            edgar_feat: torch.Tensor,
+            text_feat: torch.Tensor,
+            horizon_value: torch.Tensor,
+            edgar_active_flag: Optional[torch.Tensor] = None,
+            text_active_flag: Optional[torch.Tensor] = None,
+        ) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor]:
+            hist_summary, activity_prior = self._history_summary(target_hist)
+            source_summary = self._source_summary(
+                edgar_feat,
+                text_feat,
+                edgar_active_flag=edgar_active_flag,
+                text_active_flag=text_active_flag,
+            )
+            profile_in = torch.cat([cond, hist_summary, source_summary], dim=-1)
+            expert_in = torch.cat([hidden, cond, hist_summary, source_summary], dim=-1)
+            horizon_feat = (
+                torch.log1p(horizon_value.float()).unsqueeze(-1) / math.log1p(365.0)
+            )
+            temporal_in = torch.cat([expert_in, horizon_feat], dim=-1)
+
+            profile_logits = self.profile_router(profile_in)
+            profile_weights = torch.softmax(profile_logits, dim=-1)
+            occurrence_expert = torch.stack([head(expert_in) for head in self.occurrence_experts], dim=1)
+            intensity_expert = torch.stack([head(expert_in) for head in self.intensity_experts], dim=1)
+            occurrence_profile = torch.sum(occurrence_expert * profile_weights.unsqueeze(-1), dim=1)
+            intensity_profile = torch.sum(intensity_expert * profile_weights.unsqueeze(-1), dim=1)
+
+            source_class_weights = profile_in.new_zeros((profile_in.shape[0], self.num_source_classes))
+            source_occurrence = occurrence_profile * 0.0
+            source_intensity = intensity_profile * 0.0
+            if self.enable_source_specialists:
+                source_class_weights = self._source_class_weights(source_summary)
+                source_occurrence_expert = torch.stack(
+                    [head(expert_in) for head in self.source_occurrence_experts],
+                    dim=1,
+                )
+                source_intensity_expert = torch.stack(
+                    [head(expert_in) for head in self.source_intensity_experts],
+                    dim=1,
+                )
+                source_occ_gate = self.source_occurrence_gate(torch.cat([profile_in, horizon_feat], dim=-1))
+                source_int_gate = self.source_intensity_gate(torch.cat([profile_in, horizon_feat], dim=-1))
+                source_occurrence = source_occ_gate * torch.sum(
+                    source_occurrence_expert * source_class_weights.unsqueeze(-1),
+                    dim=1,
+                )
+                source_intensity = source_int_gate * torch.sum(
+                    source_intensity_expert * source_class_weights.unsqueeze(-1),
+                    dim=1,
+                )
+
+            horizon_mix = self.horizon_gate(torch.cat([cond, hist_summary, horizon_feat], dim=-1))
+            occurrence_base = (
+                (1.0 - horizon_mix) * self.short_occurrence(temporal_in)
+                + horizon_mix * self.long_occurrence(temporal_in)
+            )
+            intensity_base = (
+                (1.0 - horizon_mix) * self.short_intensity(temporal_in)
+                + horizon_mix * self.long_intensity(temporal_in)
+            )
+
+            active_anchor = (
+                0.55 * hist_summary[:, 0:1]
+                + 0.30 * hist_summary[:, 1:2]
+                + 0.15 * hist_summary[:, 2:3]
+            )
+            positive_raw = (
+                active_anchor.expand(-1, self.horizon)
+                + intensity_base
+                + intensity_profile
+                + source_intensity
+                + self.positive_gate(expert_in) * self.positive_residual(expert_in)
+            )
+            occurrence_logits = (
+                occurrence_base
+                + occurrence_profile
+                + source_occurrence
+                + self.zero_bias(profile_in)
+                + self.occurrence_prior_strength * activity_prior.expand(-1, self.horizon)
+            )
+            return (
+                positive_raw,
+                occurrence_logits,
+                profile_weights,
+                horizon_mix.expand(-1, self.horizon),
+                source_class_weights,
+            )
+
+    class LiteInvestorsHead(nn.Module):
+        def __init__(
+            self,
+            hidden_dim: int,
+            cond_dim: int,
+            horizon: int,
+            delta_bucket_values: Optional[List[float]] = None,
+        ):
+            super().__init__()
+            self.horizon = int(horizon)
+            if delta_bucket_values is None:
+                delta_bucket_values = [-16.0, -8.0, -4.0, -2.0, -1.0, 0.0, 1.0, 2.0, 4.0, 8.0, 16.0]
+            bucket_tensor = torch.tensor(delta_bucket_values, dtype=torch.float32)
+            self.register_buffer("delta_bucket_values", bucket_tensor)
+            self.history_dim = 7
+            self.source_dim = 4
+            core_in_dim = hidden_dim + cond_dim + self.history_dim + self.source_dim + 1
+            self.anchor_refine = nn.Sequential(
+                nn.Linear(core_in_dim, hidden_dim),
+                nn.GELU(),
+                nn.Linear(hidden_dim, horizon),
+            )
+            self.occurrence_head = nn.Sequential(
+                nn.Linear(core_in_dim, hidden_dim),
+                nn.GELU(),
+                nn.Linear(hidden_dim, horizon),
+            )
+            self.state_head = nn.Sequential(
+                nn.Linear(core_in_dim, hidden_dim),
+                nn.GELU(),
+                nn.Linear(hidden_dim, horizon * len(delta_bucket_values)),
+            )
+            self.residual_head = nn.Sequential(
+                nn.Linear(core_in_dim, hidden_dim),
+                nn.GELU(),
+                nn.Linear(hidden_dim, horizon),
+                nn.Tanh(),
+            )
+            self.residual_gate = nn.Sequential(
+                nn.Linear(core_in_dim, hidden_dim),
+                nn.GELU(),
+                nn.Linear(hidden_dim, horizon),
+                nn.Sigmoid(),
+            )
+
+        def _history_summary(self, target_hist: torch.Tensor) -> tuple[torch.Tensor, torch.Tensor]:
+            recent_width = min(7, target_hist.shape[1])
+            recent = torch.relu(target_hist[:, -recent_width:])
+            step = recent[:, 1:] - recent[:, :-1] if recent.shape[1] > 1 else recent[:, :1] * 0.0
+            last = recent[:, -1:]
+            mean = recent.mean(dim=1, keepdim=True)
+            peak = recent.amax(dim=1, keepdim=True)
+            nonzero = (recent > 0.5).float().mean(dim=1, keepdim=True)
+            jump_last = step[:, -1:] if step.shape[1] > 0 else last * 0.0
+            jump_mean = step.mean(dim=1, keepdim=True) if step.shape[1] > 0 else last * 0.0
+            jump_peak = step.abs().amax(dim=1, keepdim=True) if step.shape[1] > 0 else last * 0.0
+            hist_summary = torch.cat(
+                [
+                    torch.log1p(last),
+                    torch.log1p(mean),
+                    torch.log1p(peak),
+                    nonzero,
+                    jump_last,
+                    jump_mean,
+                    torch.log1p(jump_peak.abs()),
+                ],
+                dim=-1,
+            )
+            active_prior = (
+                -1.15
+                + 2.25 * nonzero
+                + 0.35 * torch.log1p(last)
+                + 0.20 * torch.log1p(mean)
+                + 0.12 * torch.log1p(peak)
+                + 0.15 * torch.log1p(jump_peak.abs())
+            )
+            return hist_summary, active_prior
+
+        def forward(
+            self,
+            hidden: torch.Tensor,
+            cond: torch.Tensor,
+            target_hist: torch.Tensor,
+            horizon_value: torch.Tensor,
+            edgar_active_flag: torch.Tensor,
+            text_active_flag: torch.Tensor,
+        ) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor]:
+            hist_summary, active_prior = self._history_summary(target_hist)
+            horizon_feat = (
+                torch.log1p(horizon_value.float()).unsqueeze(-1) / math.log1p(365.0)
+            )
+            source_summary = torch.cat(
+                [
+                    edgar_active_flag,
+                    text_active_flag,
+                    edgar_active_flag * text_active_flag,
+                    text_active_flag - edgar_active_flag,
+                ],
+                dim=-1,
+            )
+            core = torch.cat([hidden, cond, hist_summary, source_summary, horizon_feat], dim=-1)
+            last_level = torch.relu(target_hist[:, -1:])
+            recent_mean = torch.relu(target_hist[:, -min(5, target_hist.shape[1]):]).mean(dim=1, keepdim=True)
+            base_anchor = 0.80 * last_level + 0.20 * recent_mean
+            anchor_path = base_anchor.expand(-1, self.horizon) + 0.10 * self.anchor_refine(core)
+            occurrence_logits = self.occurrence_head(core) + active_prior.expand(-1, self.horizon)
+            state_logits = self.state_head(core).view(-1, self.horizon, self.delta_bucket_values.numel())
+            state_probs = torch.softmax(state_logits, dim=-1)
+            expected_delta = torch.sum(
+                state_probs * self.delta_bucket_values.view(1, 1, -1),
+                dim=-1,
+            )
+            residual = 0.35 * self.residual_gate(core) * self.residual_head(core)
+            count_positive = torch.relu(anchor_path + expected_delta + residual)
+            count_occurrence_prob = torch.sigmoid(occurrence_logits)
+            count_out = count_occurrence_prob * count_positive
+            return count_out, occurrence_logits, count_positive, state_logits, anchor_path
+
     class V740AlphaNet(nn.Module):
         def __init__(
             self,
@@ -940,6 +1575,12 @@ def _torch_imports():
             count_jump_strength: float = 0.30,
             enable_count_sparsity_gate: bool = True,
             count_sparsity_gate_strength: float = 0.75,
+            enable_count_source_routing: bool = True,
+            count_route_experts: int = 3,
+            count_route_floor: float = 0.10,
+            enable_count_hurdle_head: bool = False,
+            enable_count_source_specialists: bool = False,
+            enable_v741_lite: bool = False,
         ):
             super().__init__()
             self.seq_len = seq_len
@@ -952,6 +1593,10 @@ def _torch_imports():
             self.count_jump_enabled = bool(enable_count_jump)
             self.count_sparsity_gate_enabled = bool(enable_count_sparsity_gate)
             self.count_sparsity_gate_strength = float(min(1.0, max(0.0, count_sparsity_gate_strength)))
+            self.count_source_routing_enabled = bool(enable_count_source_routing)
+            self.count_hurdle_head_enabled = bool(enable_count_hurdle_head)
+            self.count_source_specialists_enabled = bool(enable_count_source_specialists)
+            self.v741_lite_enabled = bool(enable_v741_lite)
             self.input_proj = nn.Conv1d(in_channels, hidden_dim, kernel_size=1)
             self.decomp = MovingAverageDecomposition(kernel_size=5)
             self.multi_res = MultiResolutionBlock(hidden_dim, hidden_dim)
@@ -1025,12 +1670,31 @@ def _torch_imports():
                 nn.GELU(),
                 nn.Linear(hidden_dim, horizon),
             )
+            self.lite_investors_head = LiteInvestorsHead(
+                hidden_dim=hidden_dim,
+                cond_dim=cond_dim,
+                horizon=horizon,
+            )
+            self.count_hurdle_head = HurdleCountHead(
+                hidden_dim=hidden_dim,
+                cond_dim=cond_dim,
+                horizon=horizon,
+                occurrence_prior_strength=count_sparsity_gate_strength,
+                enable_source_specialists=enable_count_source_specialists,
+            )
             self.count_structure_head = CountStructureHead(
                 hidden_dim=hidden_dim,
                 cond_dim=cond_dim,
                 horizon=horizon,
                 anchor_strength=count_anchor_strength,
                 jump_strength=count_jump_strength if enable_count_jump else 0.0,
+            )
+            self.count_source_decoder = CountSourceRoutedDecoder(
+                hidden_dim=hidden_dim,
+                cond_dim=cond_dim,
+                num_ablations=6,
+                num_experts=count_route_experts,
+                route_floor=count_route_floor,
             )
             self.event_head = nn.Sequential(
                 nn.Linear(hidden_dim, hidden_dim),
@@ -1046,6 +1710,27 @@ def _torch_imports():
                 nn.GELU(),
                 nn.Linear(hidden_dim, horizon),
             )
+
+        def _source_activity_flag(
+            self,
+            recent_tokens: Optional[torch.Tensor],
+            bucket_tokens: Optional[torch.Tensor],
+            batch_size: int,
+            device: torch.device,
+            dtype: torch.dtype,
+        ) -> torch.Tensor:
+            active = torch.zeros((batch_size, 1), device=device, dtype=dtype)
+            if recent_tokens is not None and recent_tokens.numel() > 0 and recent_tokens.shape[-1] > 2:
+                active = torch.maximum(
+                    active,
+                    (recent_tokens[:, :, 2] > 0.0).any(dim=1, keepdim=True).to(dtype=dtype),
+                )
+            if bucket_tokens is not None and bucket_tokens.numel() > 0 and bucket_tokens.shape[-1] > 0:
+                active = torch.maximum(
+                    active,
+                    (bucket_tokens[:, :, 0] > 0.0).any(dim=1, keepdim=True).to(dtype=dtype),
+                )
+            return active
 
         def forward(
             self,
@@ -1078,6 +1763,20 @@ def _torch_imports():
             static_feat = self.static_proj(static_summary)
             edgar_feat = self.edgar_memory(edgar_recent, edgar_bucket, x.shape[0], x.device)
             text_feat = self.text_memory(text_recent, text_bucket, x.shape[0], x.device)
+            edgar_active_flag = self._source_activity_flag(
+                edgar_recent,
+                edgar_bucket,
+                x.shape[0],
+                x.device,
+                pooled.dtype,
+            )
+            text_active_flag = self._source_activity_flag(
+                text_recent,
+                text_bucket,
+                x.shape[0],
+                x.device,
+                pooled.dtype,
+            )
             time_fused = self.time_fusion(
                 pooled,
                 memory_feat,
@@ -1121,6 +1820,22 @@ def _torch_imports():
             continuous_feat = self.continuous_decoder(decoded)
             count_feat = self.count_decoder(decoded)
             binary_feat = self.binary_decoder(decoded)
+            count_route_weights = None
+            count_route_gate = None
+            if self.count_source_routing_enabled:
+                count_feat, count_route_weights, count_route_gate = self.count_source_decoder(
+                    count_feat,
+                    decoded,
+                    memory_feat,
+                    value_feat,
+                    edgar_feat,
+                    text_feat,
+                    cond,
+                    target_hist,
+                    ablation_idx,
+                    edgar_active_flag=edgar_active_flag,
+                    text_active_flag=text_active_flag,
+                )
             recent_width = min(4, target_hist.shape[1])
             anchor_term = torch.zeros((x.shape[0], self.horizon), device=x.device, dtype=pooled.dtype)
             if self.continuous_anchor_enabled and self.continuous_anchor_strength > 0.0:
@@ -1138,12 +1853,20 @@ def _torch_imports():
                 event_logits=event_logits,
                 base_logits=binary_logits,
             )
-            count_raw = self.count_head(count_feat) + count_bias
+            count_base_raw = self.count_head(count_feat) + count_bias
             if self.count_anchor_enabled:
-                count_raw = count_raw + self.count_structure_head(count_feat, cond, target_hist)
-            count_out = torch.nn.functional.softplus(count_raw)
+                count_base_raw = count_base_raw + self.count_structure_head(count_feat, cond, target_hist)
+            count_base = torch.nn.functional.softplus(count_base_raw)
             count_sparsity_gate = None
             count_occurrence_logits = None
+            count_positive = None
+            count_occurrence_prob = None
+            count_profile_weights = None
+            count_horizon_mix = None
+            count_hurdle_blend = None
+            count_source_class_weights = None
+            count_state_logits = None
+            count_anchor_path = None
             if self.count_sparsity_gate_enabled:
                 count_recent_width = min(7, target_hist.shape[1])
                 count_recent = torch.relu(target_hist[:, -count_recent_width:])
@@ -1178,11 +1901,111 @@ def _torch_imports():
                     ],
                     dim=-1,
                 )
-                count_occurrence_logits = self.count_occurrence_head(count_occurrence_input)
-                count_occurrence_logits = count_occurrence_logits + self.count_sparsity_gate_strength * activity_logit.expand(-1, self.horizon)
-                count_sparsity_gate = torch.sigmoid(count_occurrence_logits)
-                count_gate_scale = 1.0 - self.count_sparsity_gate_strength * (1.0 - count_sparsity_gate)
-                count_out = count_out * count_gate_scale
+                legacy_count_occurrence_logits = self.count_occurrence_head(count_occurrence_input)
+                legacy_count_occurrence_logits = legacy_count_occurrence_logits + self.count_sparsity_gate_strength * activity_logit.expand(-1, self.horizon)
+                legacy_count_gate = torch.sigmoid(legacy_count_occurrence_logits)
+                legacy_count_scale = 1.0 - self.count_sparsity_gate_strength * (1.0 - legacy_count_gate)
+                count_base = count_base * legacy_count_scale
+            else:
+                legacy_count_gate = None
+            if self.count_hurdle_head_enabled:
+                (
+                    count_positive_raw,
+                    count_occurrence_logits,
+                    count_profile_weights,
+                    count_horizon_mix,
+                    count_source_class_weights,
+                ) = self.count_hurdle_head(
+                    count_feat,
+                    cond,
+                    target_hist,
+                    edgar_feat,
+                    text_feat,
+                    horizon_value,
+                    edgar_active_flag=edgar_active_flag,
+                    text_active_flag=text_active_flag,
+                )
+                if self.count_anchor_enabled:
+                    count_positive_raw = count_positive_raw + 0.25 * self.count_structure_head(count_feat, cond, target_hist)
+                count_positive = torch.nn.functional.softplus(count_positive_raw + count_bias)
+                count_occurrence_prob = torch.sigmoid(count_occurrence_logits)
+                hurdle_count = count_occurrence_prob * count_positive
+                horizon_scale = torch.clamp(
+                    torch.log1p(horizon_value.float()).unsqueeze(-1) / math.log1p(30.0),
+                    0.0,
+                    1.0,
+                )
+                task1_mask = (task_idx == 0).to(pooled.dtype).unsqueeze(-1)
+                task2_mask = (task_idx == 1).to(pooled.dtype).unsqueeze(-1)
+                task3_mask = (task_idx == 2).to(pooled.dtype).unsqueeze(-1)
+                edgar_active = (edgar_feat.pow(2).mean(dim=1, keepdim=True) > 1e-6).to(pooled.dtype)
+                if self.count_source_specialists_enabled and count_source_class_weights is not None:
+                    no_source = count_source_class_weights[:, 0:1]
+                    text_light = count_source_class_weights[:, 1:2]
+                    edgar_rich = count_source_class_weights[:, 2:3]
+                    full_rich = count_source_class_weights[:, 3:4]
+                    count_hurdle_blend = (
+                        0.08
+                        + 0.12 * horizon_scale
+                        + 0.04 * task1_mask
+                        + 0.10 * task3_mask
+                        + 0.22 * no_source * horizon_scale
+                        + 0.10 * text_light * horizon_scale
+                        + 0.06 * full_rich * torch.maximum(horizon_scale, torch.full_like(horizon_scale, 0.35))
+                        - 0.18 * task2_mask * edgar_rich
+                        - 0.12 * (1.0 - horizon_scale) * edgar_rich
+                        - 0.08 * (1.0 - horizon_scale) * full_rich
+                    )
+                else:
+                    count_hurdle_blend = (
+                        0.18
+                        + 0.28 * horizon_scale
+                        + 0.05 * task1_mask
+                        + 0.15 * task3_mask
+                        - 0.12 * task2_mask * edgar_active
+                        - 0.08 * (1.0 - horizon_scale) * edgar_active
+                        + 0.10 * (1.0 - edgar_active) * horizon_scale
+                    )
+                count_hurdle_blend = torch.clamp(count_hurdle_blend, 0.05, 0.70)
+                count_out = (1.0 - count_hurdle_blend) * count_base + count_hurdle_blend * hurdle_count
+                if legacy_count_gate is not None:
+                    count_sparsity_gate = (
+                        (1.0 - count_hurdle_blend) * legacy_count_gate
+                        + count_hurdle_blend * count_occurrence_prob
+                    )
+                else:
+                    count_sparsity_gate = count_occurrence_prob
+            else:
+                count_out = count_base
+                count_occurrence_logits = legacy_count_occurrence_logits if self.count_sparsity_gate_enabled else None
+                count_sparsity_gate = legacy_count_gate
+            investor_mask = (target_idx == 1).to(pooled.dtype).unsqueeze(-1)
+            if self.v741_lite_enabled:
+                (
+                    lite_count_out,
+                    lite_count_occurrence_logits,
+                    lite_count_positive,
+                    lite_count_state_logits,
+                    lite_anchor_path,
+                ) = self.lite_investors_head(
+                    count_feat,
+                    cond,
+                    target_hist,
+                    horizon_value,
+                    edgar_active_flag=edgar_active_flag,
+                    text_active_flag=text_active_flag,
+                )
+                count_out = (1.0 - investor_mask) * count_out + investor_mask * lite_count_out
+                count_occurrence_logits = lite_count_occurrence_logits
+                count_occurrence_prob = torch.sigmoid(lite_count_occurrence_logits)
+                count_positive = lite_count_positive
+                count_sparsity_gate = count_occurrence_prob
+                count_state_logits = lite_count_state_logits
+                count_anchor_path = lite_anchor_path
+                count_profile_weights = None
+                count_horizon_mix = None
+                count_hurdle_blend = None
+                count_source_class_weights = None
             continuous = (
                 self.shared_head(continuous_feat)
                 + shared_bias
@@ -1200,10 +2023,31 @@ def _torch_imports():
                 outputs["count_sparsity_gate"] = count_sparsity_gate.expand(-1, self.horizon)
             if count_occurrence_logits is not None:
                 outputs["count_occurrence_logits"] = count_occurrence_logits
+            if count_occurrence_prob is not None:
+                outputs["count_occurrence_prob"] = count_occurrence_prob
+            if count_positive is not None:
+                outputs["count_positive"] = count_positive
+            if count_state_logits is not None:
+                outputs["count_state_logits"] = count_state_logits
+                outputs["count_state_bucket_values"] = self.lite_investors_head.delta_bucket_values
+            if count_anchor_path is not None:
+                outputs["count_anchor_path"] = count_anchor_path
+            if count_profile_weights is not None:
+                outputs["count_profile_weights"] = count_profile_weights
+            if count_horizon_mix is not None:
+                outputs["count_horizon_mix"] = count_horizon_mix
+            if count_hurdle_blend is not None:
+                outputs["count_hurdle_blend"] = count_hurdle_blend.expand(-1, self.horizon)
+            if count_source_class_weights is not None:
+                outputs["count_source_class_weights"] = count_source_class_weights
             if route_weights is not None:
                 outputs["target_route_weights"] = route_weights
             if route_gate is not None:
                 outputs["target_route_gate"] = route_gate
+            if count_route_weights is not None:
+                outputs["count_route_weights"] = count_route_weights
+            if count_route_gate is not None:
+                outputs["count_route_gate"] = count_route_gate
             return outputs
 
     return torch, nn, V740AlphaNet
@@ -1257,6 +2101,17 @@ class V740AlphaPrototypeWrapper(ModelBase):
         count_jump_strength: float = 0.30,
         enable_count_sparsity_gate: bool = True,
         count_sparsity_gate_strength: float = 0.75,
+        enable_count_source_routing: bool = True,
+        count_route_experts: int = 3,
+        count_route_floor: float = 0.10,
+        count_route_entropy_strength: float = 0.03,
+        count_active_loss_strength: float = 0.08,
+        enable_count_hurdle_head: bool = False,
+        enable_count_source_specialists: bool = False,
+        enable_v741_lite: bool = False,
+        enable_window_repair: bool = False,
+        min_window_history: int = 8,
+        target_windows_per_entity: int = 6,
         seed: int = 42,
         **kwargs,
     ):
@@ -1295,7 +2150,24 @@ class V740AlphaPrototypeWrapper(ModelBase):
         self.count_jump_strength = max(0.0, float(count_jump_strength))
         self.enable_count_sparsity_gate = enable_count_sparsity_gate
         self.count_sparsity_gate_strength = min(1.0, max(0.0, float(count_sparsity_gate_strength)))
+        self.enable_count_source_routing = enable_count_source_routing
+        self.count_route_experts = max(1, int(count_route_experts))
+        self.count_route_floor = min(0.45, max(0.0, float(count_route_floor)))
+        self.count_route_entropy_strength = max(0.0, float(count_route_entropy_strength))
+        self.count_active_loss_strength = max(0.0, float(count_active_loss_strength))
+        self.enable_count_hurdle_head = enable_count_hurdle_head
+        self.enable_count_source_specialists = enable_count_source_specialists
+        self.enable_v741_lite = enable_v741_lite
+        self.enable_window_repair = enable_window_repair
+        self.min_window_history = max(2, int(min_window_history))
+        self.target_windows_per_entity = max(1, int(target_windows_per_entity))
         self._effective_count_sparsity_gate_strength = self.count_sparsity_gate_strength
+        self._effective_target_routing = bool(self.enable_target_routing)
+        self._effective_count_source_routing = False
+        self._effective_count_source_specialists = False
+        self._effective_count_route_floor = 0.0
+        self._effective_count_route_entropy_strength = 0.0
+        self._effective_count_active_loss_strength = 0.0
         self.seed = seed
         self._network = None
         self._device = None
@@ -1337,7 +2209,25 @@ class V740AlphaPrototypeWrapper(ModelBase):
         self._funding_edgar_scale = 1.0
         self._funding_text_scale = 1.0
         self._target_route_stats: Dict[str, object] = {}
+        self._count_route_stats: Dict[str, object] = {}
+        self._count_specialist_stats: Dict[str, object] = {}
+        self._window_stats: Dict[str, object] = {}
+        self._count_source_specialist_names = ["no_source", "text_light", "edgar_rich", "full_rich"]
+        self._v741_lite_delta_buckets = [-16.0, -8.0, -4.0, -2.0, -1.0, 0.0, 1.0, 2.0, 4.0, 8.0, 16.0]
         self._dual_clock_cfg = DualClockConfig(max_events=max_event_tokens)
+
+    def _refresh_target_route_regime(self) -> None:
+        self._effective_target_routing = bool(self.enable_target_routing and not self.enable_v741_lite)
+
+    def _count_delta_bucket_targets(self, torch, target: torch.Tensor, hist_last: torch.Tensor) -> torch.Tensor:
+        bucket_values = torch.tensor(
+            self._v741_lite_delta_buckets,
+            dtype=target.dtype,
+            device=target.device,
+        )
+        delta = target - hist_last.expand(-1, target.shape[1])
+        distances = torch.abs(delta.unsqueeze(-1) - bucket_values.view(1, 1, -1))
+        return distances.argmin(dim=-1)
 
     def _weighted_reduce(self, torch, values, sample_weight=None):
         if values.ndim > 1:
@@ -1499,26 +2389,155 @@ class V740AlphaPrototypeWrapper(ModelBase):
         )
 
     def _refresh_count_gate_regime(self) -> None:
-        if not self.enable_count_sparsity_gate:
+        if self.enable_v741_lite and self._target_name == "investors_count":
+            self._effective_count_sparsity_gate_strength = 0.0
+            return
+        if not self.enable_count_sparsity_gate and not self.enable_count_hurdle_head:
             self._effective_count_sparsity_gate_strength = 0.0
             return
         if self._target_name != "investors_count":
-            self._effective_count_sparsity_gate_strength = self.count_sparsity_gate_strength
+            self._effective_count_sparsity_gate_strength = (
+                self.count_sparsity_gate_strength if self.enable_count_sparsity_gate else 0.0
+            )
+            return
+        source_signal = float(
+            np.clip(
+                max(
+                    self._edgar_source_density,
+                    self._edgar_event_density,
+                    0.5 * (self._text_source_density + self._text_event_density),
+                ),
+                0.0,
+                1.0,
+            )
+        )
+        if self.enable_count_hurdle_head:
+            task_scale = 0.25
+            if self._task_name == "task2_forecast":
+                task_scale = 0.70
+            elif self._task_name == "task3_risk_adjust":
+                task_scale = 0.45
+            source_scale = 0.35 + 0.65 * source_signal
+            if self._has_edgar_path():
+                source_scale = max(source_scale, 0.55)
+            elif self._has_text_path():
+                source_scale = max(source_scale, 0.40)
+            self._effective_count_sparsity_gate_strength = float(
+                np.clip(self.count_sparsity_gate_strength * task_scale * source_scale, 0.10, 0.90)
+            )
+            return
+        if not self.enable_count_sparsity_gate:
+            self._effective_count_sparsity_gate_strength = 0.0
             return
         if self._task_name != "task2_forecast":
             self._effective_count_sparsity_gate_strength = 0.0
             return
-        source_signal = float(np.clip(max(self._edgar_source_density, self._text_source_density), 0.0, 1.0))
-        if self._has_edgar_path() or self._has_text_path():
-            source_scale = 0.35 + 0.65 * source_signal
-        else:
-            source_scale = 0.35
+        source_scale = source_signal if self._has_edgar_path() else 0.0
         self._effective_count_sparsity_gate_strength = float(
             np.clip(self.count_sparsity_gate_strength * source_scale, 0.0, 1.0)
         )
 
+    def _refresh_count_route_regime(self) -> None:
+        if self.enable_v741_lite and self._target_name == "investors_count":
+            self._effective_count_source_routing = False
+            self._effective_count_route_floor = 0.0
+            self._effective_count_route_entropy_strength = 0.0
+            self._effective_count_active_loss_strength = 0.0
+            return
+        if self._target_name != "investors_count":
+            self._effective_count_source_routing = False
+            self._effective_count_route_floor = 0.0
+            self._effective_count_route_entropy_strength = 0.0
+            self._effective_count_active_loss_strength = 0.0
+            return
+
+        task_scale = 1.10
+        if self._task_name == "task2_forecast":
+            task_scale = 1.00
+        elif self._task_name == "task3_risk_adjust":
+            task_scale = 0.85
+        self._effective_count_active_loss_strength = float(
+            np.clip(self.count_active_loss_strength * task_scale, 0.0, 0.30)
+        )
+
+        if self.enable_count_hurdle_head:
+            if not self.enable_count_source_routing or self.count_route_experts <= 1:
+                self._effective_count_source_routing = False
+                self._effective_count_route_floor = 0.0
+                self._effective_count_route_entropy_strength = 0.0
+                return
+            source_signal = float(
+                np.clip(
+                    max(
+                        self._edgar_source_density,
+                        self._edgar_event_density,
+                        0.5 * (self._text_source_density + self._text_event_density),
+                    ),
+                    0.0,
+                    1.0,
+                )
+            )
+            route_scale = 0.65 + 0.35 * (1.0 - source_signal)
+            if self._has_edgar_path():
+                route_scale = max(route_scale, 0.55)
+            elif self._has_text_path():
+                route_scale = max(route_scale, 0.45)
+            self._effective_count_source_routing = True
+            self._effective_count_route_floor = float(
+                np.clip(self.count_route_floor * route_scale, 0.0, 0.35)
+            )
+            self._effective_count_route_entropy_strength = float(
+                np.clip(self.count_route_entropy_strength * (0.75 + 0.25 * (1.0 - source_signal)), 0.0, 0.25)
+            )
+            self._effective_count_active_loss_strength = float(
+                np.clip(self.count_active_loss_strength * (task_scale + 0.10), 0.0, 0.35)
+            )
+            return
+
+        if not self.enable_count_source_routing or self.count_route_experts <= 1:
+            self._effective_count_source_routing = False
+            self._effective_count_route_floor = 0.0
+            self._effective_count_route_entropy_strength = 0.0
+            return
+
+        source_signal = float(
+            np.clip(
+                max(
+                    self._edgar_source_density,
+                    self._edgar_event_density,
+                ),
+                0.0,
+                1.0,
+            )
+        )
+        has_source_path = self._has_edgar_path()
+        if has_source_path and source_signal >= 0.75:
+            self._effective_count_source_routing = False
+            self._effective_count_route_floor = 0.0
+            self._effective_count_route_entropy_strength = 0.0
+            return
+
+        route_scale = 1.0 if not has_source_path else float(np.clip(1.0 - 0.75 * source_signal, 0.25, 1.0))
+        self._effective_count_source_routing = True
+        self._effective_count_route_floor = float(
+            np.clip(self.count_route_floor * route_scale, 0.0, 0.45)
+        )
+        self._effective_count_route_entropy_strength = float(
+            np.clip(self.count_route_entropy_strength * route_scale, 0.0, 0.25)
+        )
+
+    def _refresh_count_specialist_regime(self) -> None:
+        self._effective_count_source_specialists = bool(
+            self.enable_count_source_specialists
+            and self.enable_count_hurdle_head
+            and self._target_name == "investors_count"
+            and not self.enable_v741_lite
+        )
+
     def get_regime_info(self) -> Dict[str, object]:
-        count_source_signal = float(np.clip(max(self._edgar_source_density, self._text_source_density), 0.0, 1.0))
+        count_source_signal = float(
+            np.clip(max(self._edgar_source_density, self._edgar_event_density), 0.0, 1.0)
+        )
         return {
             "task": self._task_name,
             "target": self._target_name,
@@ -1562,7 +2581,12 @@ class V740AlphaPrototypeWrapper(ModelBase):
             },
             "target_routing": {
                 "enabled": bool(self.enable_target_routing),
+                "effective_enabled": bool(self._effective_target_routing),
                 "experts": int(self.target_route_experts),
+                "count_head_type": (
+                    "typed_state_delta" if self.enable_v741_lite and self._target_name == "investors_count"
+                    else ("hurdle_zero_inflated" if self.enable_count_hurdle_head else "softplus_regression")
+                ),
                 "count_anchor_enabled": bool(self.enable_count_anchor),
                 "count_anchor_strength": float(self.count_anchor_strength),
                 "count_jump_enabled": bool(self.enable_count_jump),
@@ -1579,34 +2603,107 @@ class V740AlphaPrototypeWrapper(ModelBase):
                 "count_sparsity_gate_source_signal": count_source_signal,
                 "stats": self._target_route_stats,
             },
+            "count_source_routing": {
+                "enabled": bool(self.enable_count_source_routing),
+                "effective_enabled": bool(self._effective_count_source_routing),
+                "experts": int(self.count_route_experts),
+                "requested_route_floor": float(self.count_route_floor),
+                "effective_route_floor": float(self._effective_count_route_floor),
+                "requested_entropy_strength": float(self.count_route_entropy_strength),
+                "effective_entropy_strength": float(self._effective_count_route_entropy_strength),
+                "requested_active_loss_strength": float(self.count_active_loss_strength),
+                "effective_active_loss_strength": float(self._effective_count_active_loss_strength),
+                "source_signal": count_source_signal,
+                "stats": self._count_route_stats,
+            },
+            "count_source_specialists": {
+                "enabled": bool(self.enable_count_source_specialists),
+                "effective_enabled": bool(self._effective_count_source_specialists),
+                "class_names": list(self._count_source_specialist_names),
+                "stats": self._count_specialist_stats,
+            },
+            "single_model_lite": {
+                "enabled": bool(self.enable_v741_lite),
+                "delta_buckets": list(self._v741_lite_delta_buckets),
+                "target_head_types": {
+                    "is_funded": "calibrated_logit",
+                    "funding_raised_usd": "anchor_residual",
+                    "investors_count": "typed_state_delta" if self.enable_v741_lite else "legacy_count_path",
+                },
+            },
+            "windowing": {
+                "repair_enabled": bool(self.enable_window_repair),
+                "min_window_history": int(self.min_window_history),
+                "target_windows_per_entity": int(self.target_windows_per_entity),
+                "stats": self._window_stats,
+            },
         }
+
+    def _summarize_route_stats(self, route_weights, route_gate=None) -> Dict[str, object]:
+        if route_weights is None:
+            return {}
+        route_np = route_weights.detach().cpu().numpy()
+        if route_np.size == 0:
+            return {}
+        route_mean = route_np.mean(axis=0)
+        top_idx = route_np.argmax(axis=1)
+        top_counts = np.bincount(top_idx, minlength=route_np.shape[1])
+        dominant = int(route_mean.argmax())
+        stats: Dict[str, object] = {
+            "mean_weights": [float(x) for x in route_mean.tolist()],
+            "dominant_expert": dominant,
+            "dominant_share": float(top_counts[dominant] / max(len(top_idx), 1)),
+            "entropy": float(-np.mean(np.sum(route_np * np.log(np.clip(route_np, 1e-8, 1.0)), axis=1))),
+        }
+        if route_gate is not None:
+            stats["mean_gate"] = float(route_gate.detach().mean().cpu())
+        return stats
 
     def _update_target_route_stats(self, outputs) -> None:
         route_weights = outputs.get("target_route_weights") if isinstance(outputs, dict) else None
         if route_weights is None:
             self._target_route_stats = {}
             return
-        route_np = route_weights.detach().cpu().numpy()
-        if route_np.size == 0:
-            self._target_route_stats = {}
-            return
-        route_mean = route_np.mean(axis=0)
-        top_idx = route_np.argmax(axis=1)
-        top_counts = np.bincount(top_idx, minlength=route_np.shape[1])
-        dominant = int(route_mean.argmax())
-        entropy = float(
-            -np.mean(np.sum(route_np * np.log(np.clip(route_np, 1e-8, 1.0)), axis=1))
+        self._target_route_stats = self._summarize_route_stats(
+            route_weights,
+            outputs.get("target_route_gate"),
         )
-        stats: Dict[str, object] = {
-            "mean_weights": [float(x) for x in route_mean.tolist()],
-            "dominant_expert": dominant,
-            "dominant_share": float(top_counts[dominant] / max(len(top_idx), 1)),
-            "entropy": entropy,
+
+    def _update_count_route_stats(self, outputs) -> None:
+        route_weights = outputs.get("count_route_weights") if isinstance(outputs, dict) else None
+        if route_weights is None:
+            self._count_route_stats = {}
+            return
+        self._count_route_stats = self._summarize_route_stats(
+            route_weights,
+            outputs.get("count_route_gate"),
+        )
+
+    def _update_count_specialist_stats(self, outputs) -> None:
+        specialist_weights = outputs.get("count_source_class_weights") if isinstance(outputs, dict) else None
+        if specialist_weights is None:
+            self._count_specialist_stats = {}
+            return
+        stats = self._summarize_route_stats(specialist_weights)
+        if not stats:
+            self._count_specialist_stats = {}
+            return
+        mean_weights = stats.get("mean_weights", [])
+        dominant_idx = int(stats.get("dominant_expert", 0))
+        dominant_class = (
+            self._count_source_specialist_names[dominant_idx]
+            if 0 <= dominant_idx < len(self._count_source_specialist_names)
+            else str(dominant_idx)
+        )
+        self._count_specialist_stats = {
+            "mean_class_weights": {
+                name: float(mean_weights[idx]) if idx < len(mean_weights) else 0.0
+                for idx, name in enumerate(self._count_source_specialist_names)
+            },
+            "dominant_class": dominant_class,
+            "dominant_share": float(stats.get("dominant_share", 0.0)),
+            "entropy": float(stats.get("entropy", 0.0)),
         }
-        route_gate = outputs.get("target_route_gate")
-        if route_gate is not None:
-            stats["mean_gate"] = float(route_gate.detach().mean().cpu())
-        self._target_route_stats = stats
 
     def _refresh_source_scales(self) -> None:
         edgar_scale = 1.0
@@ -1786,6 +2883,115 @@ class V740AlphaPrototypeWrapper(ModelBase):
                     1.0,
                 )
             )
+            occurrence_target = (target > 0.5).to(target.dtype)
+            occurrence_logits = outputs.get("count_occurrence_logits") if isinstance(outputs, dict) else None
+            occurrence_bce = torch.zeros((), dtype=target.dtype, device=target.device)
+            if occurrence_logits is not None:
+                occurrence_rate = occurrence_target.mean().clamp(1e-4, 1.0 - 1e-4)
+                occurrence_pos_weight = ((1.0 - occurrence_rate) / occurrence_rate).clamp(1.0, 25.0)
+                occurrence_bce = self._weighted_reduce(
+                    torch,
+                    torch.nn.functional.binary_cross_entropy_with_logits(
+                        occurrence_logits,
+                        occurrence_target,
+                        pos_weight=occurrence_pos_weight,
+                        reduction="none",
+                    ),
+                    sample_weight=sample_weight,
+                )
+            if self.enable_count_hurdle_head:
+                count_positive = outputs.get("count_positive") if isinstance(outputs, dict) else None
+                if count_positive is None:
+                    count_positive = pred
+                base = self._weighted_reduce(
+                    torch,
+                    torch.nn.functional.smooth_l1_loss(pred, target, reduction="none"),
+                    sample_weight=sample_weight,
+                )
+                sparse_over = self._weighted_reduce(
+                    torch,
+                    torch.relu(pred - target) / (1.0 + torch.log1p(torch.relu(target))),
+                    sample_weight=sample_weight,
+                )
+                active_mass = occurrence_target.mean().clamp_min(1e-4)
+                positive_log_mae = self._weighted_reduce(
+                    torch,
+                    torch.nn.functional.smooth_l1_loss(
+                        torch.log1p(count_positive),
+                        torch.log1p(target.clamp_min(0.0)),
+                        reduction="none",
+                    ) * occurrence_target,
+                    sample_weight=sample_weight,
+                ) / active_mass
+                inactive_penalty = self._weighted_reduce(
+                    torch,
+                    pred * (1.0 - occurrence_target),
+                    sample_weight=sample_weight,
+                )
+                quiet_mask = (target.max(dim=1, keepdim=True).values < 0.5).to(target.dtype)
+                quiet_penalty = self._weighted_reduce(
+                    torch,
+                    pred * quiet_mask,
+                    sample_weight=sample_weight,
+                )
+                entry_jump = torch.zeros((), dtype=target.dtype, device=target.device)
+                hist_last = outputs.get("target_hist_last") if isinstance(outputs, dict) else None
+                if hist_last is not None:
+                    pred_entry = pred[:, :1] - hist_last
+                    tgt_entry = target[:, :1] - hist_last
+                    entry_weight = 1.0 + torch.log1p(torch.abs(tgt_entry))
+                    entry_jump = self._weighted_reduce(
+                        torch,
+                        torch.nn.functional.smooth_l1_loss(pred_entry, tgt_entry, reduction="none") * entry_weight,
+                        sample_weight=sample_weight,
+                    )
+                route_entropy_penalty = torch.zeros((), dtype=target.dtype, device=target.device)
+                route_weights = outputs.get("count_route_weights") if isinstance(outputs, dict) else None
+                if (
+                    route_weights is not None
+                    and route_weights.shape[1] > 1
+                    and self._effective_count_route_entropy_strength > 0.0
+                ):
+                    entropy = -torch.sum(route_weights * torch.log(route_weights.clamp_min(1e-6)), dim=1)
+                    entropy_floor = 0.60 * math.log(route_weights.shape[1])
+                    route_entropy_penalty = self._weighted_reduce(
+                        torch,
+                        torch.relu(torch.full_like(entropy, entropy_floor) - entropy),
+                        sample_weight=sample_weight,
+                    )
+                distdf = torch.zeros((), dtype=target.dtype, device=target.device)
+                if self.enable_distdf_loss:
+                    pred_mean = pred.mean(dim=1)
+                    tgt_mean = target.mean(dim=1)
+                    pred_std = pred.std(dim=1, unbiased=False)
+                    tgt_std = target.std(dim=1, unbiased=False)
+                    pred_step = pred[:, 1:] - pred[:, :-1] if pred.shape[1] > 1 else pred[:, :1] * 0.0
+                    tgt_step = target[:, 1:] - target[:, :-1] if target.shape[1] > 1 else target[:, :1] * 0.0
+                    distdf = self._weighted_reduce(
+                        torch,
+                        torch.nn.functional.smooth_l1_loss(pred_mean, tgt_mean, reduction="none")
+                        + 0.5 * torch.nn.functional.smooth_l1_loss(
+                            torch.log1p(pred_std),
+                            torch.log1p(tgt_std),
+                            reduction="none",
+                        ),
+                        sample_weight=sample_weight,
+                    ) + 0.25 * self._weighted_reduce(
+                        torch,
+                        torch.nn.functional.smooth_l1_loss(pred_step, tgt_step, reduction="none"),
+                        sample_weight=sample_weight,
+                    )
+                return (
+                    base
+                    + (0.10 + 0.08 * gate_strength_ratio) * occurrence_bce
+                    + 0.20 * positive_log_mae
+                    + 0.08 * sparse_over
+                    + 0.10 * inactive_penalty
+                    + 0.10 * quiet_penalty
+                    + 0.08 * entry_jump
+                    + 0.05 * distdf
+                    + self._effective_count_route_entropy_strength * route_entropy_penalty
+                )
             base = self._weighted_reduce(
                 torch,
                 torch.nn.functional.smooth_l1_loss(pred, target, reduction="none"),
@@ -1811,22 +3017,19 @@ class V740AlphaPrototypeWrapper(ModelBase):
                     (gate.mean(dim=1, keepdim=True) - target_activity) ** 2,
                     sample_weight=sample_weight,
                 )
-            occurrence_bce = torch.zeros((), dtype=target.dtype, device=target.device)
-            occurrence_logits = outputs.get("count_occurrence_logits") if isinstance(outputs, dict) else None
-            if occurrence_logits is not None:
-                occurrence_target = (target > 0.5).to(target.dtype)
-                occurrence_rate = occurrence_target.mean().clamp(1e-4, 1.0 - 1e-4)
-                occurrence_pos_weight = ((1.0 - occurrence_rate) / occurrence_rate).clamp(1.0, 25.0)
-                occurrence_bce = self._weighted_reduce(
+            active_log_mae = torch.zeros((), dtype=target.dtype, device=target.device)
+            if self._effective_count_active_loss_strength > 0.0 and bool((occurrence_target > 0.5).any()):
+                active_log_loss = torch.nn.functional.smooth_l1_loss(
+                    torch.log1p(pred),
+                    torch.log1p(target.clamp_min(0.0)),
+                    reduction="none",
+                ) * occurrence_target
+                active_mass = occurrence_target.mean().clamp_min(1e-4)
+                active_log_mae = self._weighted_reduce(
                     torch,
-                    torch.nn.functional.binary_cross_entropy_with_logits(
-                        occurrence_logits,
-                        occurrence_target,
-                        pos_weight=occurrence_pos_weight,
-                        reduction="none",
-                    ),
+                    active_log_loss,
                     sample_weight=sample_weight,
-                )
+                ) / active_mass
             entry_jump = torch.zeros((), dtype=target.dtype, device=target.device)
             hist_last = outputs.get("target_hist_last") if isinstance(outputs, dict) else None
             if hist_last is not None:
@@ -1866,14 +3069,30 @@ class V740AlphaPrototypeWrapper(ModelBase):
                     torch.nn.functional.smooth_l1_loss(pred_step, tgt_step, reduction="none"),
                     sample_weight=sample_weight,
                 )
+            route_entropy_penalty = torch.zeros((), dtype=target.dtype, device=target.device)
+            route_weights = outputs.get("count_route_weights") if isinstance(outputs, dict) else None
+            if (
+                route_weights is not None
+                and route_weights.shape[1] > 1
+                and self._effective_count_route_entropy_strength > 0.0
+            ):
+                entropy = -torch.sum(route_weights * torch.log(route_weights.clamp_min(1e-6)), dim=1)
+                entropy_floor = 0.60 * math.log(route_weights.shape[1])
+                route_entropy_penalty = self._weighted_reduce(
+                    torch,
+                    torch.relu(torch.full_like(entropy, entropy_floor) - entropy),
+                    sample_weight=sample_weight,
+                )
             return (
                 base
                 + (0.06 * gate_strength_ratio) * occurrence_bce
+                + self._effective_count_active_loss_strength * active_log_mae
                 + 0.08 * entry_jump
                 + 0.08 * sparse_over
                 + 0.08 * quiet_penalty
                 + 0.05 * distdf
                 + (0.04 * gate_strength_ratio) * gate_penalty
+                + self._effective_count_route_entropy_strength * route_entropy_penalty
             )
         pred = outputs["continuous"]
         if self._funding_log_domain:
@@ -1982,6 +3201,7 @@ class V740AlphaPrototypeWrapper(ModelBase):
         self._binary_target = _detect_binary(y_arr)
         self._nonnegative_target = _detect_nonnegative(y_arr)
         self._configure_continuous_regime()
+        self._refresh_target_route_regime()
         self._binary_temperature = 1.0
         self._effective_task_modulation = self.enable_task_modulation and not self._binary_target
 
@@ -2019,9 +3239,13 @@ class V740AlphaPrototypeWrapper(ModelBase):
             edgar_cols=self._edgar_cols,
             text_cols=self._text_cols,
             dual_clock_cfg=self._dual_clock_cfg,
+            enable_window_repair=self.enable_window_repair,
+            min_history_points=self.min_window_history,
+            target_windows_per_entity=self.target_windows_per_entity,
         )
         self._contexts = entity_windows.contexts
         self._context_memory = entity_windows.context_memory
+        self._window_stats = entity_windows.window_stats
         if not entity_windows.train_x:
             logger.warning("  [V740-alpha] No windows; fallback-only mode")
             self._fitted = True
@@ -2035,8 +3259,6 @@ class V740AlphaPrototypeWrapper(ModelBase):
             self._text_source_density = float(train_raw[self._text_cols].notna().any(axis=1).mean())
         else:
             self._text_source_density = 0.0
-        self._refresh_count_gate_regime()
-
         if self._binary_target:
             train_window_y = np.stack(entity_windows.train_y).astype(np.float32, copy=False)
             binary_train = np.isfinite(train_window_y)
@@ -2080,6 +3302,9 @@ class V740AlphaPrototypeWrapper(ModelBase):
         self._text_event_density = float(text_stats["event_density"])
         self._text_change_density = float(text_stats["novelty"])
         self._refresh_source_scales()
+        self._refresh_count_gate_regime()
+        self._refresh_count_route_regime()
+        self._refresh_count_specialist_regime()
         if self._binary_target:
             self._configure_binary_regime()
         train_x = torch.tensor(train_x_np, dtype=torch.float32)
@@ -2208,7 +3433,7 @@ class V740AlphaPrototypeWrapper(ModelBase):
             hidden_dim=self.hidden_dim,
             enable_continuous_anchor=self._funding_anchor_enabled,
             continuous_anchor_strength=self._effective_funding_anchor_strength,
-            enable_target_routing=self.enable_target_routing,
+            enable_target_routing=self._effective_target_routing,
             target_route_experts=self.target_route_experts,
             enable_count_anchor=self.enable_count_anchor,
             count_anchor_strength=self.count_anchor_strength,
@@ -2216,6 +3441,12 @@ class V740AlphaPrototypeWrapper(ModelBase):
             count_jump_strength=self.count_jump_strength,
             enable_count_sparsity_gate=self.enable_count_sparsity_gate,
             count_sparsity_gate_strength=self._effective_count_sparsity_gate_strength,
+            enable_count_source_routing=self._effective_count_source_routing,
+            count_route_experts=self.count_route_experts,
+            count_route_floor=self._effective_count_route_floor,
+            enable_count_hurdle_head=self.enable_count_hurdle_head and self._target_name == "investors_count",
+            enable_count_source_specialists=self._effective_count_source_specialists,
+            enable_v741_lite=self.enable_v741_lite,
         ).to(self._device)
         self._network.task_mod_enabled = self._effective_task_modulation
         optimizer = torch.optim.AdamW(
@@ -2478,6 +3709,8 @@ class V740AlphaPrototypeWrapper(ModelBase):
                     text_bucket=text_bucket,
                 )
             self._update_target_route_stats(outputs)
+            self._update_count_route_stats(outputs)
+            self._update_count_specialist_stats(outputs)
             if self._binary_target:
                 raw = torch.sigmoid(outputs["binary"] / self._binary_temperature + self._binary_logit_bias).cpu().numpy()
             elif self._target_name == "investors_count":

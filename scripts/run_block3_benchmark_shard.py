@@ -43,6 +43,8 @@ Usage:
 from __future__ import annotations
 
 import argparse
+from contextlib import contextmanager
+import fcntl
 import gc
 import json
 import logging
@@ -50,6 +52,7 @@ import os
 import resource
 import subprocess
 import sys
+import tempfile
 import time
 import traceback
 from dataclasses import asdict, dataclass, field
@@ -128,7 +131,7 @@ def _sigterm_handler(signum, frame):
     if _ACTIVE_SHARD is not None:
         _ACTIVE_SHARD.manifest.status = "partial_timeout"
         _ACTIVE_SHARD.manifest.finished_at = datetime.now(timezone.utc).isoformat()
-        _ACTIVE_SHARD._save_outputs(partial=False)
+        _ACTIVE_SHARD._save_outputs(partial=True, status_override="partial_timeout")
         logger.warning(f"Saved {len(_ACTIVE_SHARD.metrics)} metric records before exit")
     sys.exit(128 + signum)
 
@@ -365,6 +368,7 @@ class BenchmarkShard:
         # Results storage
         self.metrics: List[ModelMetrics] = []
         self.predictions: List[pd.DataFrame] = []
+        self._flushed_prediction_frames = 0
         
         # Initialize manifest
         self.manifest = ShardManifest(
@@ -386,6 +390,144 @@ class BenchmarkShard:
         )
         
         set_global_seed(seed)
+
+    @staticmethod
+    def _metric_key(record: Dict[str, Any]) -> Tuple[str, str, int]:
+        """Stable dedup key for a saved metric record."""
+        return (
+            str(record.get("model_name", "")),
+            str(record.get("target", "")),
+            int(record.get("horizon", 0) or 0),
+        )
+
+    @contextmanager
+    def _output_lock(self):
+        """Serialize writes to a shard directory on shared storage."""
+        if not self.output_dir:
+            yield
+            return
+
+        lock_path = self.output_dir / ".save.lock"
+        with open(lock_path, "a+", encoding="utf-8") as lock_file:
+            fcntl.flock(lock_file.fileno(), fcntl.LOCK_EX)
+            try:
+                yield
+            finally:
+                fcntl.flock(lock_file.fileno(), fcntl.LOCK_UN)
+
+    def _atomic_write_text(self, path: Path, text: str):
+        """Atomically replace a text file inside the shard directory."""
+        fd, tmp_name = tempfile.mkstemp(
+            prefix=f".{path.name}.",
+            suffix=".tmp",
+            dir=path.parent,
+            text=True,
+        )
+        try:
+            with os.fdopen(fd, "w", encoding="utf-8") as handle:
+                handle.write(text)
+                handle.flush()
+                os.fsync(handle.fileno())
+            os.replace(tmp_name, path)
+        finally:
+            if os.path.exists(tmp_name):
+                os.unlink(tmp_name)
+
+    def _atomic_write_parquet(self, df: pd.DataFrame, path: Path):
+        """Atomically replace a parquet file inside the shard directory."""
+        fd, tmp_name = tempfile.mkstemp(
+            prefix=f".{path.name}.",
+            suffix=".tmp",
+            dir=path.parent,
+            text=False,
+        )
+        os.close(fd)
+        try:
+            tmp_path = Path(tmp_name)
+            df.to_parquet(tmp_path, index=False)
+            os.replace(tmp_path, path)
+        finally:
+            if os.path.exists(tmp_name):
+                os.unlink(tmp_name)
+
+    def _load_json_payload(self, path: Path) -> Union[Dict[str, Any], List[Any], None]:
+        """Best-effort JSON load that tolerates missing/corrupt files."""
+        if not path.exists():
+            return None
+        try:
+            return json.loads(path.read_text())
+        except Exception as exc:
+            logger.warning(f"Could not read {path.name}: {exc}")
+            return None
+
+    def _all_task_targets(self) -> List[str]:
+        """Return the full target set for this task, ignoring per-job filters."""
+        task_config = self.tasks_config.get("tasks", {}).get(self.task, {})
+        targets = task_config.get("targets", [{"name": "funding_raised_usd"}])
+        if targets and isinstance(targets[0], dict):
+            return [str(t["name"]) for t in targets]
+        return [str(t) for t in targets]
+
+    def _build_manifest_payload(
+        self,
+        metrics_records: List[Dict[str, Any]],
+        partial: bool,
+        status_override: Optional[str],
+        existing_manifest: Optional[Dict[str, Any]],
+    ) -> Dict[str, Any]:
+        """Build a directory-level manifest summary from merged on-disk state."""
+        manifest_dict = self.manifest.to_dict()
+        if existing_manifest:
+            started_candidates = [
+                existing_manifest.get("started_at"),
+                manifest_dict.get("started_at"),
+            ]
+            started_candidates = [s for s in started_candidates if s]
+            if started_candidates:
+                manifest_dict["started_at"] = min(started_candidates)
+
+            finished_candidates = [
+                existing_manifest.get("finished_at"),
+                manifest_dict.get("finished_at"),
+            ]
+            finished_candidates = [s for s in finished_candidates if s]
+            manifest_dict["finished_at"] = max(finished_candidates) if finished_candidates else None
+
+        merged_models = sorted(
+            {
+                *self.models,
+                *[
+                    str(rec.get("model_name"))
+                    for rec in metrics_records
+                    if rec.get("model_name")
+                ],
+            }
+        )
+        expected_keys = {
+            (model_name, target, horizon)
+            for model_name in merged_models
+            for target in self._all_task_targets()
+            for horizon in self.preset_config.horizons
+        }
+        completed_keys = {self._metric_key(rec) for rec in metrics_records}
+        completion_ratio = (
+            float(len(completed_keys)) / float(len(expected_keys)) if expected_keys else 1.0
+        )
+
+        manifest_dict["models"] = merged_models or manifest_dict.get("models", [])
+        manifest_dict["completed_metric_records"] = len(completed_keys)
+        manifest_dict["expected_metric_records"] = len(expected_keys)
+        manifest_dict["completion_ratio"] = completion_ratio
+        manifest_dict["concurrent_safe_write"] = True
+
+        if status_override:
+            manifest_dict["status"] = status_override
+        elif expected_keys and expected_keys.issubset(completed_keys):
+            manifest_dict["status"] = "completed"
+        else:
+            manifest_dict["status"] = "partial" if partial else "running"
+
+        return manifest_dict
     
     def _get_git_hash(self) -> str:
         """Get current git commit hash."""
@@ -1251,8 +1393,9 @@ class BenchmarkShard:
                         except (ImportError, RuntimeError):
                             pass
                     
-                    # Incremental save after each target-horizon combo
-                    self._save_outputs(partial=True)
+                        # Incremental save after each model-target-horizon combo.
+                        # This is the real resumability boundary for long-running shards.
+                        self._save_outputs(partial=True)
             
             self.manifest.status = "completed"
             self.manifest.finished_at = datetime.now(timezone.utc).isoformat()
@@ -1271,57 +1414,78 @@ class BenchmarkShard:
         
         return True
     
-    def _save_outputs(self, partial: bool = False):
+    def _save_outputs(self, partial: bool = False, status_override: Optional[str] = None):
         """Save shard outputs. Called incrementally and at final completion."""
         if not self.output_dir:
             logger.warning("No output directory specified, skipping save")
             return
-        
-        # Save manifest
+
         manifest_path = self.output_dir / "MANIFEST.json"
-        manifest_dict = self.manifest.to_dict()
-        if partial:
-            manifest_dict["status"] = "partial"
-        manifest_path.write_text(
-            json.dumps(manifest_dict, indent=2),
-            encoding="utf-8",
-        )
-        if not partial:
-            logger.info(f"Saved manifest to {manifest_path}")
-        
-        # Save metrics (merge with other jobs' results to avoid overwriting)
-        if self.metrics:
-            metrics_records = [m.to_dict() for m in self.metrics]
-            metrics_path = self.output_dir / "metrics.json"
-            # Re-read file to merge with records written by other concurrent jobs
-            my_keys = {(r["model_name"], r.get("target",""), r.get("horizon",0))
-                       for r in metrics_records}
-            if metrics_path.exists():
-                try:
-                    on_disk = json.loads(metrics_path.read_text())
-                    if isinstance(on_disk, list):
-                        # Keep records from other models not in our batch
-                        for rec in on_disk:
-                            key = (rec.get("model_name",""), rec.get("target",""), rec.get("horizon",0))
-                            if key not in my_keys:
-                                metrics_records.append(rec)
-                except Exception:
-                    pass  # if file is corrupt, just save our records
-            metrics_path.write_text(
-                json.dumps(metrics_records, indent=2),
-                encoding="utf-8",
+        metrics_path = self.output_dir / "metrics.json"
+        pred_path = self.output_dir / "predictions.parquet"
+
+        with self._output_lock():
+            existing_manifest = self._load_json_payload(manifest_path)
+            if not isinstance(existing_manifest, dict):
+                existing_manifest = None
+
+            existing_metrics = self._load_json_payload(metrics_path)
+            merged_metrics: Dict[Tuple[str, str, int], Dict[str, Any]] = {}
+            if isinstance(existing_metrics, list):
+                for rec in existing_metrics:
+                    if isinstance(rec, dict):
+                        merged_metrics[self._metric_key(rec)] = rec
+
+            for rec in (m.to_dict() for m in self.metrics):
+                merged_metrics[self._metric_key(rec)] = rec
+
+            metrics_records = sorted(
+                merged_metrics.values(),
+                key=lambda rec: (
+                    str(rec.get("target", "")),
+                    int(rec.get("horizon", 0) or 0),
+                    str(rec.get("model_name", "")),
+                ),
+            )
+
+            if metrics_records:
+                self._atomic_write_text(
+                    metrics_path,
+                    json.dumps(metrics_records, indent=2),
+                )
+                if partial:
+                    logger.info(f"  [incremental] Saved {len(metrics_records)} metric records")
+                else:
+                    logger.info(f"Saved metrics to {metrics_path}")
+
+            new_prediction_frames = self.predictions[self._flushed_prediction_frames :]
+            if new_prediction_frames:
+                pred_df = pd.concat(new_prediction_frames, ignore_index=True)
+                if pred_path.exists():
+                    try:
+                        existing_pred_df = pd.read_parquet(pred_path)
+                        pred_df = pd.concat([existing_pred_df, pred_df], ignore_index=True)
+                    except Exception as exc:
+                        logger.warning(f"Could not merge existing predictions.parquet: {exc}")
+                self._atomic_write_parquet(pred_df, pred_path)
+                self._flushed_prediction_frames = len(self.predictions)
+                if partial:
+                    logger.info(f"  [incremental] Saved predictions to {pred_path}")
+                else:
+                    logger.info(f"Saved predictions to {pred_path}")
+
+            manifest_dict = self._build_manifest_payload(
+                metrics_records=metrics_records,
+                partial=partial,
+                status_override=status_override,
+                existing_manifest=existing_manifest,
+            )
+            self._atomic_write_text(
+                manifest_path,
+                json.dumps(manifest_dict, indent=2),
             )
             if not partial:
-                logger.info(f"Saved metrics to {metrics_path}")
-            else:
-                logger.info(f"  [incremental] Saved {len(metrics_records)} metric records")
-        
-        # Save predictions (only on final save to avoid large IO)
-        if not partial and self.predictions:
-            pred_df = pd.concat(self.predictions, ignore_index=True)
-            pred_path = self.output_dir / "predictions.parquet"
-            pred_df.to_parquet(pred_path)
-            logger.info(f"Saved predictions to {pred_path}")
+                logger.info(f"Saved manifest to {manifest_path}")
 
 
 # =============================================================================

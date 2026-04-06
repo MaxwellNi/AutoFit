@@ -27,6 +27,19 @@ DEFAULT_MD = ROOT / "docs" / "benchmarks" / "phase9_current_snapshot.md"
 FULL_CONDITION_COUNT = 160
 
 
+def _resolve_from_root(path: Path) -> Path:
+    if path.is_absolute():
+        return path.resolve()
+    return (ROOT / path).resolve()
+
+
+def _root_relative_str(path: Path) -> str:
+    try:
+        return str(path.relative_to(ROOT))
+    except ValueError:
+        return str(path)
+
+
 def _utc_now() -> str:
     return datetime.now(timezone.utc).isoformat()
 
@@ -232,6 +245,7 @@ def _run_squeue() -> Dict[str, Any]:
 
 
 def _scan_text_embeddings(text_dir: Path) -> Dict[str, Any]:
+    text_dir = _resolve_from_root(text_dir)
     meta = _read_json(text_dir / "embedding_metadata.json", default={}) or {}
     parquet_path = text_dir / "text_embeddings.parquet"
     pca_path = text_dir / "pca_model.pkl"
@@ -241,8 +255,8 @@ def _scan_text_embeddings(text_dir: Path) -> Dict[str, Any]:
         "files_present": files,
         "artifacts_complete": parquet_path.exists() and pca_path.exists() and bool(meta),
         "metadata": meta,
-        "parquet_path": str(parquet_path.relative_to(ROOT)) if parquet_path.exists() else None,
-        "pca_model_path": str(pca_path.relative_to(ROOT)) if pca_path.exists() else None,
+        "parquet_path": _root_relative_str(parquet_path) if parquet_path.exists() else None,
+        "pca_model_path": _root_relative_str(pca_path) if pca_path.exists() else None,
     }
 
 
@@ -430,6 +444,12 @@ def main() -> None:
     parser.add_argument("--md-out", type=Path, default=DEFAULT_MD)
     args = parser.parse_args()
 
+    args.bench_dir = _resolve_from_root(args.bench_dir)
+    args.filtered_csv = _resolve_from_root(args.filtered_csv)
+    args.text_dir = _resolve_from_root(args.text_dir)
+    args.json_out = _resolve_from_root(args.json_out)
+    args.md_out = _resolve_from_root(args.md_out)
+
     raw = _scan_raw_metrics(args.bench_dir)
     filtered = _scan_filtered(args.filtered_csv)
     slurm = _run_squeue()
@@ -438,9 +458,9 @@ def main() -> None:
 
     snapshot = {
         "generated_at_utc": _utc_now(),
-        "benchmark_dir": str(args.bench_dir.relative_to(ROOT)),
-        "filtered_csv": str(args.filtered_csv.relative_to(ROOT)),
-        "text_dir": str(args.text_dir.relative_to(ROOT)),
+        "benchmark_dir": _root_relative_str(args.bench_dir),
+        "filtered_csv": _root_relative_str(args.filtered_csv),
+        "text_dir": _root_relative_str(args.text_dir),
         "raw": raw,
         "filtered": filtered,
         "slurm": slurm,
@@ -450,8 +470,8 @@ def main() -> None:
 
     _write_outputs(snapshot, args.json_out, args.md_out)
     print(json.dumps({
-        "json_out": str(args.json_out.relative_to(ROOT)),
-        "md_out": str(args.md_out.relative_to(ROOT)),
+        "json_out": _root_relative_str(args.json_out),
+        "md_out": _root_relative_str(args.md_out),
         "raw_records": raw["raw_records"],
         "filtered_records": filtered["filtered_records"],
         "v739_conditions_landed": raw["v739_conditions_landed"],

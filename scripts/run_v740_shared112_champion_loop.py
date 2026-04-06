@@ -98,7 +98,7 @@ def _parse_args() -> argparse.Namespace:
     ap.add_argument(
         "--models",
         default="v740_alpha,incumbent",
-        help="Comma-separated models. Special tokens: v740_alpha, incumbent, v739",
+        help="Comma-separated models. Special tokens: v740_alpha, v741_lite, incumbent, v739",
     )
     ap.add_argument(
         "--profile",
@@ -134,6 +134,13 @@ def _parse_args() -> argparse.Namespace:
     add_v740_funding_regime_args(ap)
     add_v740_target_regime_args(ap)
     return ap.parse_args()
+
+
+def _normalize_local_model_token(token: str, args: argparse.Namespace) -> str:
+    token = token.strip()
+    if token == "v740_alpha" and getattr(args, "enable_v741_lite", False):
+        return "v741_lite"
+    return token
 
 
 def _task_budget(task: str, target: str, horizon: int, profile: str) -> tuple[int, int]:
@@ -235,7 +242,10 @@ def _load_shared112_surface(csv_path: Path, profile: str) -> Dict[str, Any]:
 
 
 def _instantiate_model(model_token: str, resolved_name: str, args: argparse.Namespace):
-    if model_token == "v740_alpha":
+    if model_token in {"v740_alpha", "v741_lite"}:
+        target_kwargs = v740_target_regime_kwargs_from_args(args)
+        if model_token == "v741_lite":
+            target_kwargs["enable_v741_lite"] = True
         return V740AlphaPrototypeWrapper(
             input_size=args.input_size,
             hidden_dim=args.hidden_dim,
@@ -249,7 +259,7 @@ def _instantiate_model(model_token: str, resolved_name: str, args: argparse.Name
             enable_event_head=not args.disable_event_head,
             enable_task_modulation=not args.disable_task_modulation,
             **v740_funding_regime_kwargs_from_args(args),
-            **v740_target_regime_kwargs_from_args(args),
+            **target_kwargs,
             seed=args.seed,
         )
     if model_token == "v739":
@@ -257,7 +267,7 @@ def _instantiate_model(model_token: str, resolved_name: str, args: argparse.Name
     return get_model(resolved_name)
 
 
-def _resolve_model_specs(raw_models: List[str], case: Dict[str, Any]) -> List[Dict[str, str]]:
+def _resolve_model_specs(raw_models: List[str], case: Dict[str, Any], args: argparse.Namespace) -> List[Dict[str, str]]:
     specs: List[Dict[str, str]] = []
     seen: set[tuple[str, str]] = set()
     for token in raw_models:
@@ -267,9 +277,10 @@ def _resolve_model_specs(raw_models: List[str], case: Dict[str, Any]) -> List[Di
         if token == "incumbent":
             resolved = case["incumbent_model"]
             label = f"incumbent__{resolved}"
-        elif token == "v740_alpha":
-            resolved = "v740_alpha"
-            label = "v740_alpha"
+        elif token in {"v740_alpha", "v741_lite"}:
+            token = _normalize_local_model_token(token, args)
+            resolved = token
+            label = token
         elif token == "v739":
             resolved = "AutoFitV739"
             label = "v739"
@@ -299,7 +310,7 @@ def _run_local_model(
         raise RuntimeError(
             f"Insufficient rows for {case['name']} / {resolved_name}: train={len(X_train)} test={len(X_test)}"
         )
-    if model_token not in {"v740_alpha", "v739"} and not check_model_available(resolved_name):
+    if model_token not in {"v740_alpha", "v741_lite", "v739"} and not check_model_available(resolved_name):
         raise RuntimeError(f"Model {resolved_name} is not available in this environment")
 
     model = _instantiate_model(model_token, resolved_name, args)
@@ -365,33 +376,65 @@ def _run_local_model(
         "count_jump_strength": float(getattr(model, "count_jump_strength", 0.0)),
         "count_sparsity_gate_enabled": bool(getattr(model, "enable_count_sparsity_gate", False)),
         "count_sparsity_gate_strength": float(getattr(model, "count_sparsity_gate_strength", 0.0)),
+        "count_source_routing_enabled": bool(getattr(model, "enable_count_source_routing", False)),
+        "count_route_experts": int(getattr(model, "count_route_experts", 0)),
+        "count_route_floor": float(getattr(model, "count_route_floor", 0.0)),
+        "count_route_entropy_strength": float(getattr(model, "count_route_entropy_strength", 0.0)),
+        "count_active_loss_strength": float(getattr(model, "count_active_loss_strength", 0.0)),
         "regime_info": regime_info,
     }
 
 
-def _classify_case(case_rows: Dict[str, Dict[str, Any]], tie_tol_pct: float) -> str:
-    v740 = case_rows.get("v740_alpha")
+def _pick_primary_candidate_label(results: List[Dict[str, Any]]) -> str:
+    labels: List[str] = []
+    seen = set()
+    for row in results:
+        label = str(row.get("model_label", "")).strip()
+        if not label or label.startswith("incumbent__") or label in seen:
+            continue
+        seen.add(label)
+        labels.append(label)
+    for preferred in ("v741_lite", "v740_alpha", "v739"):
+        if preferred in seen:
+            return preferred
+    return labels[0] if labels else "v740_alpha"
+
+
+def _classify_case(case_rows: Dict[str, Dict[str, Any]], tie_tol_pct: float, candidate_label: str) -> str:
+    candidate = case_rows.get(candidate_label)
     incumbent_key = next((k for k in case_rows if k.startswith("incumbent__")), None)
     incumbent = case_rows.get(incumbent_key) if incumbent_key else None
-    if not v740 or not incumbent:
+    if not candidate or not incumbent:
         return "incomplete"
-    if v740.get("error") or incumbent.get("error"):
+    if candidate.get("error") or incumbent.get("error"):
         return "error"
-    v740_mae = v740.get("metrics", {}).get("mae")
+    candidate_mae = candidate.get("metrics", {}).get("mae")
     inc_mae = incumbent.get("metrics", {}).get("mae")
-    if v740_mae is None or inc_mae is None:
+    if candidate_mae is None or inc_mae is None:
         return "error"
     denom = max(abs(float(inc_mae)), 1e-9)
-    rel = abs(float(v740_mae) - float(inc_mae)) / denom * 100.0
+    rel = abs(float(candidate_mae) - float(inc_mae)) / denom * 100.0
     if rel <= tie_tol_pct:
         return "tie"
-    return "win" if float(v740_mae) < float(inc_mae) else "loss"
+    return "win" if float(candidate_mae) < float(inc_mae) else "loss"
+
+
+def _display_candidate_name(candidate_label: str) -> str:
+    if candidate_label == "v741_lite":
+        return "V741-Lite"
+    if candidate_label == "v740_alpha":
+        return "V740-alpha"
+    if candidate_label == "v739":
+        return "V739"
+    return candidate_label
 
 
 def _write_summary(path: Path, manifest: Dict[str, Any], results: List[Dict[str, Any]], tie_tol_pct: float) -> None:
     by_case: Dict[str, Dict[str, Dict[str, Any]]] = defaultdict(dict)
     for row in results:
         by_case[row["case_name"]][row["model_label"]] = row
+    candidate_label = _pick_primary_candidate_label(results)
+    candidate_display = _display_candidate_name(candidate_label)
 
     outcome_counts = Counter()
     gap_rows: List[Dict[str, Any]] = []
@@ -404,26 +447,26 @@ def _write_summary(path: Path, manifest: Dict[str, Any], results: List[Dict[str,
 
     for case in manifest["cells"]:
         case_rows = by_case.get(case["name"], {})
-        outcome = _classify_case(case_rows, tie_tol_pct)
+        outcome = _classify_case(case_rows, tie_tol_pct, candidate_label)
         outcome_counts[outcome] += 1
         task_summary[case["task"]][outcome] += 1
         target_summary[case["target"]][outcome] += 1
         ablation_summary[case["ablation"]][outcome] += 1
 
-        v740 = case_rows.get("v740_alpha")
+        candidate = case_rows.get(candidate_label)
         inc_key = f"incumbent__{case['incumbent_model']}"
         incumbent = case_rows.get(inc_key)
-        if v740:
+        if candidate:
             total_v740 += 1
-            if v740.get("error"):
+            if candidate.get("error"):
                 failures += 1
-            if v740.get("constant_prediction"):
+            if candidate.get("constant_prediction"):
                 constants += 1
-        if v740 and incumbent and not v740.get("error") and not incumbent.get("error"):
-            v740_mae = v740.get("metrics", {}).get("mae")
+        if candidate and incumbent and not candidate.get("error") and not incumbent.get("error"):
+            candidate_mae = candidate.get("metrics", {}).get("mae")
             inc_mae = incumbent.get("metrics", {}).get("mae")
-            if v740_mae is not None and inc_mae is not None:
-                gap_pct = (float(v740_mae) / max(float(inc_mae), 1e-9) - 1.0) * 100.0
+            if candidate_mae is not None and inc_mae is not None:
+                gap_pct = (float(candidate_mae) / max(float(inc_mae), 1e-9) - 1.0) * 100.0
                 gap_rows.append({
                     "case": case["name"],
                     "task": case["task"],
@@ -431,7 +474,7 @@ def _write_summary(path: Path, manifest: Dict[str, Any], results: List[Dict[str,
                     "target": case["target"],
                     "horizon": case["horizon"],
                     "incumbent_model": case["incumbent_model"],
-                    "v740_mae": float(v740_mae),
+                    "candidate_mae": float(candidate_mae),
                     "incumbent_mae": float(inc_mae),
                     "gap_pct": float(gap_pct),
                     "outcome": outcome,
@@ -443,22 +486,23 @@ def _write_summary(path: Path, manifest: Dict[str, Any], results: List[Dict[str,
     )[:20]
 
     lines = [
-        "# V740 Shared-112 Champion Loop",
+        "# Shared-112 Champion Loop",
         "",
         "Generated by `scripts/run_v740_shared112_champion_loop.py`.",
         "",
         "This report is a fast local engineering loop, not a canonical benchmark landing.",
-        "Each row compares V740 and the incumbent benchmark champion on the **same local freeze-backed slice**.",
+        f"Each row compares {candidate_display} and the incumbent benchmark champion on the **same local freeze-backed slice**.",
         "",
         "## Surface",
         "",
         f"- Shared surface: `{manifest['n_models']} models / {manifest['n_cells']} cells`",
+        f"- Primary candidate: `{candidate_label}`",
         f"- Tie tolerance: `{tie_tol_pct:.3f}%` relative MAE difference",
-        f"- V740 rows attempted: `{total_v740}`",
-        f"- V740 failures: `{failures}`",
-        f"- V740 constant predictions: `{constants}`",
+        f"- {candidate_display} rows attempted: `{total_v740}`",
+        f"- {candidate_display} failures: `{failures}`",
+        f"- {candidate_display} constant predictions: `{constants}`",
         "",
-        "## V740 vs Incumbent",
+        f"## {candidate_display} vs Incumbent",
         "",
         f"- Wins: `{outcome_counts.get('win', 0)}`",
         f"- Ties: `{outcome_counts.get('tie', 0)}`",
@@ -497,35 +541,35 @@ def _write_summary(path: Path, manifest: Dict[str, Any], results: List[Dict[str,
         "",
         "## Worst Local Losses",
         "",
-        "| Case | Incumbent | V740 MAE | Incumbent MAE | Gap % |",
+        f"| Case | Incumbent | {candidate_display} MAE | Incumbent MAE | Gap % |",
         "|---|---|---:|---:|---:|",
     ])
     for row in worst_losses:
         lines.append(
-            f"| {row['case']} | {row['incumbent_model']} | {row['v740_mae']:.4f} | {row['incumbent_mae']:.4f} | {row['gap_pct']:.2f} |"
+            f"| {row['case']} | {row['incumbent_model']} | {row['candidate_mae']:.4f} | {row['incumbent_mae']:.4f} | {row['gap_pct']:.2f} |"
         )
 
     lines.extend([
         "",
         "## Per-Cell Summary",
         "",
-        "| Case | Incumbent | Benchmark MAE | V740 Local MAE | Incumbent Local MAE | Outcome | Const | Error |",
+        f"| Case | Incumbent | Benchmark MAE | {candidate_display} Local MAE | Incumbent Local MAE | Outcome | Const | Error |",
         "|---|---|---:|---:|---:|---|---|---|",
     ])
     for case in manifest["cells"]:
         case_rows = by_case.get(case["name"], {})
-        v740 = case_rows.get("v740_alpha", {})
+        candidate = case_rows.get(candidate_label, {})
         incumbent = case_rows.get(f"incumbent__{case['incumbent_model']}", {})
         lines.append(
             "| {case_name} | {incumbent_name} | {bench_mae} | {v740_mae} | {inc_mae} | {outcome} | {const} | {error} |".format(
                 case_name=case["name"],
                 incumbent_name=case["incumbent_model"],
                 bench_mae=_fmt(case.get("incumbent_benchmark_mae")),
-                v740_mae=_fmt(v740.get("metrics", {}).get("mae") if isinstance(v740.get("metrics"), dict) else None),
+                v740_mae=_fmt(candidate.get("metrics", {}).get("mae") if isinstance(candidate.get("metrics"), dict) else None),
                 inc_mae=_fmt(incumbent.get("metrics", {}).get("mae") if isinstance(incumbent.get("metrics"), dict) else None),
-                outcome=_classify_case(case_rows, tie_tol_pct),
-                const=v740.get("constant_prediction", "-"),
-                error=(v740.get("error") or incumbent.get("error") or "-")[:120],
+                outcome=_classify_case(case_rows, tie_tol_pct, candidate_label),
+                const=candidate.get("constant_prediction", "-"),
+                error=(candidate.get("error") or incumbent.get("error") or "-")[:120],
             )
         )
 
@@ -577,7 +621,7 @@ def main() -> int:
             flush=True,
         )
         train, val, test = _build_case_frame(case, temporal_config)
-        model_specs = _resolve_model_specs(raw_models, case)
+        model_specs = _resolve_model_specs(raw_models, case, args)
         for spec in model_specs:
             model_token = spec["token"]
             resolved = spec["resolved"]

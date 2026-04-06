@@ -403,6 +403,11 @@ def v740_funding_regime_kwargs_from_args(args: argparse.Namespace) -> Dict[str, 
 
 
 def add_v740_target_regime_args(ap: argparse.ArgumentParser) -> argparse.ArgumentParser:
+    ap.add_argument(
+        "--enable-v741-lite",
+        action="store_true",
+        help="Force the single-model V741-Lite regime: no routing family, typed anchors, typed investors head.",
+    )
     ap.add_argument("--disable-target-routing", action="store_true")
     ap.add_argument("--target-route-experts", type=_positive_int, default=3)
     ap.add_argument("--disable-count-anchor", action="store_true")
@@ -411,11 +416,44 @@ def add_v740_target_regime_args(ap: argparse.ArgumentParser) -> argparse.Argumen
     ap.add_argument("--count-jump-strength", type=_nonnegative_float, default=0.30)
     ap.add_argument("--disable-count-sparsity-gate", action="store_true")
     ap.add_argument("--count-sparsity-gate-strength", type=_nonnegative_float, default=0.75)
+    ap.add_argument("--disable-count-source-routing", action="store_true")
+    ap.add_argument("--count-route-experts", type=_positive_int, default=3)
+    ap.add_argument("--count-route-floor", type=_nonnegative_float, default=0.10)
+    ap.add_argument("--count-route-entropy-strength", type=_nonnegative_float, default=0.03)
+    ap.add_argument("--count-active-loss-strength", type=_nonnegative_float, default=0.08)
+    ap.add_argument(
+        "--enable-count-hurdle-head",
+        action="store_true",
+        help="Use the V741-style explicit hurdle/zero-inflated count head for investors_count.",
+    )
+    ap.add_argument(
+        "--enable-count-source-specialists",
+        action="store_true",
+        help="Enable V741 source-class specialists for investors_count hurdle routing.",
+    )
+    ap.add_argument(
+        "--enable-window-repair",
+        action="store_true",
+        help="Allow padded short-context windows and denser per-entity stepping for V741-style local repairs.",
+    )
+    ap.add_argument(
+        "--min-window-history",
+        type=_positive_int,
+        default=8,
+        help="Minimum real history points required before padded window repair is allowed.",
+    )
+    ap.add_argument(
+        "--target-windows-per-entity",
+        type=_positive_int,
+        default=6,
+        help="Target minimum windows per entity when adaptive window repair is enabled.",
+    )
     return ap
 
 
 def v740_target_regime_kwargs_from_args(args: argparse.Namespace) -> Dict[str, Any]:
     return {
+        "enable_v741_lite": bool(getattr(args, "enable_v741_lite", False)),
         "enable_target_routing": not getattr(args, "disable_target_routing", False),
         "target_route_experts": int(getattr(args, "target_route_experts", 3)),
         "enable_count_anchor": not getattr(args, "disable_count_anchor", False),
@@ -424,6 +462,16 @@ def v740_target_regime_kwargs_from_args(args: argparse.Namespace) -> Dict[str, A
         "count_jump_strength": float(getattr(args, "count_jump_strength", 0.30)),
         "enable_count_sparsity_gate": not getattr(args, "disable_count_sparsity_gate", False),
         "count_sparsity_gate_strength": float(getattr(args, "count_sparsity_gate_strength", 0.75)),
+        "enable_count_source_routing": not getattr(args, "disable_count_source_routing", False),
+        "count_route_experts": int(getattr(args, "count_route_experts", 3)),
+        "count_route_floor": float(getattr(args, "count_route_floor", 0.10)),
+        "count_route_entropy_strength": float(getattr(args, "count_route_entropy_strength", 0.03)),
+        "count_active_loss_strength": float(getattr(args, "count_active_loss_strength", 0.08)),
+        "enable_count_hurdle_head": bool(getattr(args, "enable_count_hurdle_head", False)),
+        "enable_count_source_specialists": bool(getattr(args, "enable_count_source_specialists", False)),
+        "enable_window_repair": bool(getattr(args, "enable_window_repair", False)),
+        "min_window_history": int(getattr(args, "min_window_history", 8)),
+        "target_windows_per_entity": int(getattr(args, "target_windows_per_entity", 6)),
     }
 
 
@@ -517,6 +565,7 @@ def _summarize_result(
         "funding_source_scaling": bool(getattr(model, "_funding_source_scaling", False)),
         "funding_anchor_enabled": bool(getattr(model, "_funding_anchor_enabled", False)),
         "funding_anchor_strength": float(getattr(model, "_effective_funding_anchor_strength", 0.0)),
+        "v741_lite_enabled": bool(getattr(model, "enable_v741_lite", False)),
         "target_routing_enabled": bool(getattr(model, "enable_target_routing", False)),
         "target_route_experts": int(getattr(model, "target_route_experts", 0)),
         "count_anchor_enabled": bool(getattr(model, "enable_count_anchor", False)),
@@ -525,6 +574,16 @@ def _summarize_result(
         "count_jump_strength": float(getattr(model, "count_jump_strength", 0.0)),
         "count_sparsity_gate_enabled": bool(getattr(model, "enable_count_sparsity_gate", False)),
         "count_sparsity_gate_strength": float(getattr(model, "count_sparsity_gate_strength", 0.0)),
+        "count_source_routing_enabled": bool(getattr(model, "enable_count_source_routing", False)),
+        "count_route_experts": int(getattr(model, "count_route_experts", 0)),
+        "count_route_floor": float(getattr(model, "count_route_floor", 0.0)),
+        "count_route_entropy_strength": float(getattr(model, "count_route_entropy_strength", 0.0)),
+        "count_active_loss_strength": float(getattr(model, "count_active_loss_strength", 0.0)),
+        "count_hurdle_head_enabled": bool(getattr(model, "enable_count_hurdle_head", False)),
+        "count_source_specialists_enabled": bool(getattr(model, "enable_count_source_specialists", False)),
+        "window_repair_enabled": bool(getattr(model, "enable_window_repair", False)),
+        "min_window_history": int(getattr(model, "min_window_history", 0)),
+        "target_windows_per_entity": int(getattr(model, "target_windows_per_entity", 0)),
         "regime_info": regime_info,
         "metrics": metrics,
     }
