@@ -408,6 +408,11 @@ def add_v740_target_regime_args(ap: argparse.ArgumentParser) -> argparse.Argumen
         action="store_true",
         help="Force the single-model V741-Lite regime: no routing family, typed anchors, typed investors head.",
     )
+    ap.add_argument(
+        "--enable-v742-unified",
+        action="store_true",
+        help="Force the single-path V742 unified financing-process regime with shared cross-target consistency.",
+    )
     ap.add_argument("--disable-target-routing", action="store_true")
     ap.add_argument("--target-route-experts", type=_positive_int, default=3)
     ap.add_argument("--disable-count-anchor", action="store_true")
@@ -448,12 +453,50 @@ def add_v740_target_regime_args(ap: argparse.ArgumentParser) -> argparse.Argumen
         default=6,
         help="Target minimum windows per entity when adaptive window repair is enabled.",
     )
+    ap.add_argument(
+        "--enable-financing-consistency",
+        action="store_true",
+        help="Train a shared financing-process auxiliary head over is_funded, investors_count, and funding_raised_usd.",
+    )
+    ap.add_argument(
+        "--enable-v743-factorized",
+        action="store_true",
+        help="Use a factorized financing-process head with explicit occurrence/breadth/intensity latents.",
+    )
+    ap.add_argument(
+        "--enable-v744-guarded-phase",
+        action="store_true",
+        help="Use the factorized financing phase as a guarded residual branch with target-specific backoff.",
+    )
+    ap.add_argument(
+        "--enable-v745-evidence-residual",
+        action="store_true",
+        help="Use factorized financing only as an evidence-conditioned investors residual while binary/funding stay on the legacy heads.",
+    )
+    ap.add_argument("--financing-consistency-strength", type=_nonnegative_float, default=0.10)
+    ap.add_argument("--financing-auxiliary-strength", type=_nonnegative_float, default=0.12)
+    ap.add_argument("--financing-process-blend", type=_nonnegative_float, default=0.20)
+    ap.add_argument("--financing-scaffold-strength", type=_nonnegative_float, default=0.08)
     return ap
 
 
 def v740_target_regime_kwargs_from_args(args: argparse.Namespace) -> Dict[str, Any]:
-    return {
+    kwargs = {
         "enable_v741_lite": bool(getattr(args, "enable_v741_lite", False)),
+        "enable_financing_consistency": bool(
+            getattr(args, "enable_financing_consistency", False)
+            or getattr(args, "enable_v742_unified", False)
+            or getattr(args, "enable_v743_factorized", False)
+            or getattr(args, "enable_v744_guarded_phase", False)
+            or getattr(args, "enable_v745_evidence_residual", False)
+        ),
+        "enable_financing_factorization": bool(
+            getattr(args, "enable_v743_factorized", False)
+            or getattr(args, "enable_v744_guarded_phase", False)
+            or getattr(args, "enable_v745_evidence_residual", False)
+        ),
+        "enable_financing_guarded_phase": bool(getattr(args, "enable_v744_guarded_phase", False)),
+        "enable_financing_evidence_residual": bool(getattr(args, "enable_v745_evidence_residual", False)),
         "enable_target_routing": not getattr(args, "disable_target_routing", False),
         "target_route_experts": int(getattr(args, "target_route_experts", 3)),
         "enable_count_anchor": not getattr(args, "disable_count_anchor", False),
@@ -472,7 +515,22 @@ def v740_target_regime_kwargs_from_args(args: argparse.Namespace) -> Dict[str, A
         "enable_window_repair": bool(getattr(args, "enable_window_repair", False)),
         "min_window_history": int(getattr(args, "min_window_history", 8)),
         "target_windows_per_entity": int(getattr(args, "target_windows_per_entity", 6)),
+        "financing_consistency_strength": float(getattr(args, "financing_consistency_strength", 0.10)),
+        "financing_auxiliary_strength": float(getattr(args, "financing_auxiliary_strength", 0.12)),
+        "financing_process_blend": float(getattr(args, "financing_process_blend", 0.20)),
+        "financing_scaffold_strength": float(getattr(args, "financing_scaffold_strength", 0.08)),
     }
+    if getattr(args, "enable_v742_unified", False) or getattr(args, "enable_v743_factorized", False):
+        kwargs["enable_target_routing"] = False
+        kwargs["enable_count_source_routing"] = False
+        kwargs["enable_count_source_specialists"] = False
+        kwargs["enable_count_hurdle_head"] = False
+        kwargs["enable_window_repair"] = True
+    if getattr(args, "enable_v744_guarded_phase", False):
+        kwargs["enable_window_repair"] = True
+    if getattr(args, "enable_v745_evidence_residual", False):
+        kwargs["enable_window_repair"] = True
+    return kwargs
 
 
 def _parse_args() -> argparse.Namespace:
@@ -581,6 +639,10 @@ def _summarize_result(
         "count_active_loss_strength": float(getattr(model, "count_active_loss_strength", 0.0)),
         "count_hurdle_head_enabled": bool(getattr(model, "enable_count_hurdle_head", False)),
         "count_source_specialists_enabled": bool(getattr(model, "enable_count_source_specialists", False)),
+        "financing_consistency_enabled": bool(getattr(model, "enable_financing_consistency", False)),
+        "financing_consistency_strength": float(getattr(model, "financing_consistency_strength", 0.0)),
+        "financing_auxiliary_strength": float(getattr(model, "financing_auxiliary_strength", 0.0)),
+        "financing_process_blend": float(getattr(model, "financing_process_blend", 0.0)),
         "window_repair_enabled": bool(getattr(model, "enable_window_repair", False)),
         "min_window_history": int(getattr(model, "min_window_history", 0)),
         "target_windows_per_entity": int(getattr(model, "target_windows_per_entity", 0)),

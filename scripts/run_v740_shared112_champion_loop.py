@@ -98,7 +98,7 @@ def _parse_args() -> argparse.Namespace:
     ap.add_argument(
         "--models",
         default="v740_alpha,incumbent",
-        help="Comma-separated models. Special tokens: v740_alpha, v741_lite, incumbent, v739",
+        help="Comma-separated models. Special tokens: v740_alpha, v741_lite, v742_unified, v743_factorized, v744_guarded_phase, v745_evidence_residual, incumbent, v739",
     )
     ap.add_argument(
         "--profile",
@@ -138,6 +138,14 @@ def _parse_args() -> argparse.Namespace:
 
 def _normalize_local_model_token(token: str, args: argparse.Namespace) -> str:
     token = token.strip()
+    if token == "v740_alpha" and getattr(args, "enable_v745_evidence_residual", False):
+        return "v745_evidence_residual"
+    if token == "v740_alpha" and getattr(args, "enable_v744_guarded_phase", False):
+        return "v744_guarded_phase"
+    if token == "v740_alpha" and getattr(args, "enable_v743_factorized", False):
+        return "v743_factorized"
+    if token == "v740_alpha" and getattr(args, "enable_v742_unified", False):
+        return "v742_unified"
     if token == "v740_alpha" and getattr(args, "enable_v741_lite", False):
         return "v741_lite"
     return token
@@ -242,10 +250,35 @@ def _load_shared112_surface(csv_path: Path, profile: str) -> Dict[str, Any]:
 
 
 def _instantiate_model(model_token: str, resolved_name: str, args: argparse.Namespace):
-    if model_token in {"v740_alpha", "v741_lite"}:
+    if model_token in {"v740_alpha", "v741_lite", "v742_unified", "v743_factorized", "v744_guarded_phase", "v745_evidence_residual"}:
         target_kwargs = v740_target_regime_kwargs_from_args(args)
         if model_token == "v741_lite":
             target_kwargs["enable_v741_lite"] = True
+        if model_token == "v742_unified":
+            target_kwargs["enable_financing_consistency"] = True
+            target_kwargs["enable_target_routing"] = False
+            target_kwargs["enable_count_source_routing"] = False
+            target_kwargs["enable_count_source_specialists"] = False
+            target_kwargs["enable_count_hurdle_head"] = False
+            target_kwargs["enable_window_repair"] = True
+        if model_token == "v743_factorized":
+            target_kwargs["enable_financing_consistency"] = True
+            target_kwargs["enable_financing_factorization"] = True
+            target_kwargs["enable_target_routing"] = False
+            target_kwargs["enable_count_source_routing"] = False
+            target_kwargs["enable_count_source_specialists"] = False
+            target_kwargs["enable_count_hurdle_head"] = False
+            target_kwargs["enable_window_repair"] = True
+        if model_token == "v744_guarded_phase":
+            target_kwargs["enable_financing_consistency"] = True
+            target_kwargs["enable_financing_factorization"] = True
+            target_kwargs["enable_financing_guarded_phase"] = True
+            target_kwargs["enable_window_repair"] = True
+        if model_token == "v745_evidence_residual":
+            target_kwargs["enable_financing_consistency"] = True
+            target_kwargs["enable_financing_factorization"] = True
+            target_kwargs["enable_financing_evidence_residual"] = True
+            target_kwargs["enable_window_repair"] = True
         return V740AlphaPrototypeWrapper(
             input_size=args.input_size,
             hidden_dim=args.hidden_dim,
@@ -277,7 +310,7 @@ def _resolve_model_specs(raw_models: List[str], case: Dict[str, Any], args: argp
         if token == "incumbent":
             resolved = case["incumbent_model"]
             label = f"incumbent__{resolved}"
-        elif token in {"v740_alpha", "v741_lite"}:
+        elif token in {"v740_alpha", "v741_lite", "v742_unified", "v743_factorized", "v744_guarded_phase", "v745_evidence_residual"}:
             token = _normalize_local_model_token(token, args)
             resolved = token
             label = token
@@ -310,7 +343,7 @@ def _run_local_model(
         raise RuntimeError(
             f"Insufficient rows for {case['name']} / {resolved_name}: train={len(X_train)} test={len(X_test)}"
         )
-    if model_token not in {"v740_alpha", "v741_lite", "v739"} and not check_model_available(resolved_name):
+    if model_token not in {"v740_alpha", "v741_lite", "v742_unified", "v743_factorized", "v744_guarded_phase", "v745_evidence_residual", "v739"} and not check_model_available(resolved_name):
         raise RuntimeError(f"Model {resolved_name} is not available in this environment")
 
     model = _instantiate_model(model_token, resolved_name, args)
@@ -394,7 +427,7 @@ def _pick_primary_candidate_label(results: List[Dict[str, Any]]) -> str:
             continue
         seen.add(label)
         labels.append(label)
-    for preferred in ("v741_lite", "v740_alpha", "v739"):
+    for preferred in ("v745_evidence_residual", "v744_guarded_phase", "v743_factorized", "v742_unified", "v741_lite", "v740_alpha", "v739"):
         if preferred in seen:
             return preferred
     return labels[0] if labels else "v740_alpha"
@@ -420,6 +453,14 @@ def _classify_case(case_rows: Dict[str, Dict[str, Any]], tie_tol_pct: float, can
 
 
 def _display_candidate_name(candidate_label: str) -> str:
+    if candidate_label == "v745_evidence_residual":
+        return "V745-EvidenceResidual"
+    if candidate_label == "v744_guarded_phase":
+        return "V744-GuardedPhase"
+    if candidate_label == "v743_factorized":
+        return "V743-Factorized"
+    if candidate_label == "v742_unified":
+        return "V742-Unified"
     if candidate_label == "v741_lite":
         return "V741-Lite"
     if candidate_label == "v740_alpha":

@@ -44,6 +44,9 @@ from .v740_multisource_features import (
 logger = logging.getLogger(__name__)
 
 
+_FINANCING_TARGETS = ("funding_raised_usd", "investors_count", "is_funded")
+
+
 def _build_edgar_memory(
     entity_df: pd.DataFrame,
     prediction_time: pd.Timestamp,
@@ -86,8 +89,14 @@ def _select_state_feature_cols(
 class _V740Windows:
     train_x: List[np.ndarray]
     train_y: List[np.ndarray]
+    train_funding_aux: List[np.ndarray]
+    train_investors_aux: List[np.ndarray]
+    train_binary_aux: List[np.ndarray]
     val_x: List[np.ndarray]
     val_y: List[np.ndarray]
+    val_funding_aux: List[np.ndarray]
+    val_investors_aux: List[np.ndarray]
+    val_binary_aux: List[np.ndarray]
     train_edgar_recent: List[np.ndarray]
     train_edgar_bucket: List[np.ndarray]
     train_text_recent: List[np.ndarray]
@@ -192,14 +201,21 @@ def _build_v740_windows(
     edgar_cols: List[str],
     text_cols: List[str],
     dual_clock_cfg: DualClockConfig,
+    aux_target_raw: Optional[pd.DataFrame] = None,
     enable_window_repair: bool = False,
     min_history_points: int = 8,
     target_windows_per_entity: int = 6,
 ) -> _V740Windows:
     train_x: List[np.ndarray] = []
     train_y: List[np.ndarray] = []
+    train_funding_aux: List[np.ndarray] = []
+    train_investors_aux: List[np.ndarray] = []
+    train_binary_aux: List[np.ndarray] = []
     val_x: List[np.ndarray] = []
     val_y: List[np.ndarray] = []
+    val_funding_aux: List[np.ndarray] = []
+    val_investors_aux: List[np.ndarray] = []
+    val_binary_aux: List[np.ndarray] = []
     train_edgar_recent: List[np.ndarray] = []
     train_edgar_bucket: List[np.ndarray] = []
     train_text_recent: List[np.ndarray] = []
@@ -222,7 +238,8 @@ def _build_v740_windows(
 
     if train_raw is None or "entity_id" not in train_raw.columns:
         return _V740Windows(
-            train_x, train_y, val_x, val_y,
+            train_x, train_y, train_funding_aux, train_investors_aux, train_binary_aux,
+            val_x, val_y, val_funding_aux, val_investors_aux, val_binary_aux,
             train_edgar_recent, train_edgar_bucket, train_text_recent, train_text_bucket,
             val_edgar_recent, val_edgar_bucket, val_text_recent, val_text_bucket,
             contexts, context_memory,
@@ -244,15 +261,36 @@ def _build_v740_windows(
 
     rng = np.random.RandomState(seed)
     groups = train_raw.groupby("entity_id", sort=False)
+    aux_source = aux_target_raw if aux_target_raw is not None else train_raw
+    aux_groups = None
+    if aux_source is not None and "entity_id" in aux_source.columns:
+        aux_groups = aux_source.groupby("entity_id", sort=False)
     for i, (eid, grp) in enumerate(groups):
         if i >= max_entities:
             break
         grp = grp.sort_values("crawled_date_day").reset_index(drop=True)
         if target not in grp.columns:
             continue
+        aux_grp = grp
+        if aux_groups is not None:
+            try:
+                aux_grp = aux_groups.get_group(eid).sort_values("crawled_date_day").reset_index(drop=True)
+            except KeyError:
+                aux_grp = grp
+        if len(aux_grp) != len(grp):
+            aux_grp = grp
         entities_considered += 1
 
         y_arr = pd.Series(grp[target], dtype="float64").ffill().bfill().fillna(0.0).to_numpy(dtype=np.float32)
+
+        def _aux_array(frame: pd.DataFrame, col: str) -> np.ndarray:
+            if col not in frame.columns:
+                return np.zeros((len(frame),), dtype=np.float32)
+            return pd.Series(frame[col], dtype="float64").ffill().bfill().fillna(0.0).to_numpy(dtype=np.float32)
+
+        funding_arr = _aux_array(aux_grp, "funding_raised_usd")
+        investors_arr = _aux_array(aux_grp, "investors_count")
+        binary_arr = _aux_array(aux_grp, "is_funded")
         times = pd.to_datetime(grp["crawled_date_day"], errors="coerce")
         if len(y_arr) <= horizon or times.isna().all():
             continue
@@ -289,6 +327,9 @@ def _build_v740_windows(
 
         entity_x: List[np.ndarray] = []
         entity_y: List[np.ndarray] = []
+        entity_funding_aux: List[np.ndarray] = []
+        entity_investors_aux: List[np.ndarray] = []
+        entity_binary_aux: List[np.ndarray] = []
         entity_edgar_recent: List[np.ndarray] = []
         entity_edgar_bucket: List[np.ndarray] = []
         entity_text_recent: List[np.ndarray] = []
@@ -305,11 +346,20 @@ def _build_v740_windows(
             x_slice = series[:, t : t + effective_input_size]
             x_win = _left_pad_last_dim(x_slice, int(input_size))
             y_win = y_arr[t + effective_input_size : t + effective_input_size + horizon]
+            funding_win = funding_arr[t + effective_input_size : t + effective_input_size + horizon]
+            investors_win = investors_arr[t + effective_input_size : t + effective_input_size + horizon]
+            binary_win = binary_arr[t + effective_input_size : t + effective_input_size + horizon]
             end_idx = t + effective_input_size - 1
             pred_time = times.iloc[end_idx]
             if pd.isna(pred_time):
                 continue
-            if np.any(~np.isfinite(x_win)) or np.any(~np.isfinite(y_win)):
+            if (
+                np.any(~np.isfinite(x_win))
+                or np.any(~np.isfinite(y_win))
+                or np.any(~np.isfinite(funding_win))
+                or np.any(~np.isfinite(investors_win))
+                or np.any(~np.isfinite(binary_win))
+            ):
                 continue
 
             prefix = grp.iloc[: end_idx + 1]
@@ -330,6 +380,9 @@ def _build_v740_windows(
 
             entity_x.append(x_win.astype(np.float32, copy=False))
             entity_y.append(y_win.astype(np.float32, copy=False))
+            entity_funding_aux.append(funding_win.astype(np.float32, copy=False))
+            entity_investors_aux.append(investors_win.astype(np.float32, copy=False))
+            entity_binary_aux.append(binary_win.astype(np.float32, copy=False))
             entity_edgar_recent.append(edgar_recent.astype(np.float32, copy=False))
             entity_edgar_bucket.append(edgar_bucket.astype(np.float32, copy=False))
             entity_text_recent.append(text_recent.astype(np.float32, copy=False))
@@ -355,12 +408,18 @@ def _build_v740_windows(
         split = len(entity_x) - n_val
         train_x.extend(entity_x[:split])
         train_y.extend(entity_y[:split])
+        train_funding_aux.extend(entity_funding_aux[:split])
+        train_investors_aux.extend(entity_investors_aux[:split])
+        train_binary_aux.extend(entity_binary_aux[:split])
         train_edgar_recent.extend(entity_edgar_recent[:split])
         train_edgar_bucket.extend(entity_edgar_bucket[:split])
         train_text_recent.extend(entity_text_recent[:split])
         train_text_bucket.extend(entity_text_bucket[:split])
         val_x.extend(entity_x[split:])
         val_y.extend(entity_y[split:])
+        val_funding_aux.extend(entity_funding_aux[split:])
+        val_investors_aux.extend(entity_investors_aux[split:])
+        val_binary_aux.extend(entity_binary_aux[split:])
         val_edgar_recent.extend(entity_edgar_recent[split:])
         val_edgar_bucket.extend(entity_edgar_bucket[split:])
         val_text_recent.extend(entity_text_recent[split:])
@@ -380,14 +439,32 @@ def _build_v740_windows(
         return out
 
     train_idx = _cap_indices(len(train_x), max_windows)
-    train_x, train_y, train_edgar_recent, train_edgar_bucket, train_text_recent, train_text_bucket = _apply_cap(
-        train_idx, train_x, train_y, train_edgar_recent, train_edgar_bucket, train_text_recent, train_text_bucket,
+    train_x, train_y, train_funding_aux, train_investors_aux, train_binary_aux, train_edgar_recent, train_edgar_bucket, train_text_recent, train_text_bucket = _apply_cap(
+        train_idx,
+        train_x,
+        train_y,
+        train_funding_aux,
+        train_investors_aux,
+        train_binary_aux,
+        train_edgar_recent,
+        train_edgar_bucket,
+        train_text_recent,
+        train_text_bucket,
     )
     if val_x:
         val_cap = max(2048, max_windows // 5)
         val_idx = _cap_indices(len(val_x), val_cap)
-        val_x, val_y, val_edgar_recent, val_edgar_bucket, val_text_recent, val_text_bucket = _apply_cap(
-            val_idx, val_x, val_y, val_edgar_recent, val_edgar_bucket, val_text_recent, val_text_bucket,
+        val_x, val_y, val_funding_aux, val_investors_aux, val_binary_aux, val_edgar_recent, val_edgar_bucket, val_text_recent, val_text_bucket = _apply_cap(
+            val_idx,
+            val_x,
+            val_y,
+            val_funding_aux,
+            val_investors_aux,
+            val_binary_aux,
+            val_edgar_recent,
+            val_edgar_bucket,
+            val_text_recent,
+            val_text_bucket,
         )
 
     window_stats: Dict[str, object] = {
@@ -412,8 +489,14 @@ def _build_v740_windows(
     return _V740Windows(
         train_x=train_x,
         train_y=train_y,
+        train_funding_aux=train_funding_aux,
+        train_investors_aux=train_investors_aux,
+        train_binary_aux=train_binary_aux,
         val_x=val_x,
         val_y=val_y,
+        val_funding_aux=val_funding_aux,
+        val_investors_aux=val_investors_aux,
+        val_binary_aux=val_binary_aux,
         train_edgar_recent=train_edgar_recent,
         train_edgar_bucket=train_edgar_bucket,
         train_text_recent=train_text_recent,
@@ -1557,6 +1640,277 @@ def _torch_imports():
             count_out = count_occurrence_prob * count_positive
             return count_out, occurrence_logits, count_positive, state_logits, anchor_path
 
+    class UnifiedFinancingProcessHead(nn.Module):
+        def __init__(
+            self,
+            hidden_dim: int,
+            cond_dim: int,
+            horizon: int,
+        ):
+            super().__init__()
+            self.horizon = int(horizon)
+            self.history_dim = 7
+            self.source_dim = 4
+            core_in_dim = hidden_dim + cond_dim + self.history_dim + self.source_dim + 1
+            self.shared = nn.Sequential(
+                nn.Linear(core_in_dim, hidden_dim),
+                nn.GELU(),
+                nn.Linear(hidden_dim, hidden_dim),
+                nn.GELU(),
+            )
+            self.event_head = nn.Linear(hidden_dim, horizon)
+            self.count_head = nn.Sequential(
+                nn.Linear(hidden_dim + self.history_dim + self.source_dim, hidden_dim),
+                nn.GELU(),
+                nn.Linear(hidden_dim, horizon),
+            )
+            self.amount_head = nn.Sequential(
+                nn.Linear(hidden_dim + self.history_dim + self.source_dim, hidden_dim),
+                nn.GELU(),
+                nn.Linear(hidden_dim, horizon),
+            )
+
+        def _history_summary(self, target_hist: torch.Tensor) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
+            recent_width = min(7, target_hist.shape[1])
+            recent = torch.relu(target_hist[:, -recent_width:])
+            step = recent[:, 1:] - recent[:, :-1] if recent.shape[1] > 1 else recent[:, :1] * 0.0
+            last = recent[:, -1:]
+            mean = recent.mean(dim=1, keepdim=True)
+            peak = recent.amax(dim=1, keepdim=True)
+            nonzero = (recent > 0.5).float().mean(dim=1, keepdim=True)
+            jump_last = step[:, -1:] if step.shape[1] > 0 else last * 0.0
+            jump_mean = step.mean(dim=1, keepdim=True) if step.shape[1] > 0 else last * 0.0
+            jump_peak = step.abs().amax(dim=1, keepdim=True) if step.shape[1] > 0 else last * 0.0
+            hist_summary = torch.cat(
+                [
+                    torch.log1p(last),
+                    torch.log1p(mean),
+                    torch.log1p(peak),
+                    nonzero,
+                    jump_last,
+                    jump_mean,
+                    torch.log1p(jump_peak.abs()),
+                ],
+                dim=-1,
+            )
+            active_prior = (
+                -1.35
+                + 2.10 * nonzero
+                + 0.30 * torch.log1p(last)
+                + 0.15 * torch.log1p(mean)
+                + 0.10 * torch.log1p(jump_peak.abs())
+            )
+            amount_prior = 0.35 * torch.log1p(last) + 0.35 * torch.log1p(mean) + 0.30 * torch.log1p(peak)
+            return hist_summary, active_prior, amount_prior
+
+        def forward(
+            self,
+            hidden: torch.Tensor,
+            cond: torch.Tensor,
+            target_hist: torch.Tensor,
+            horizon_value: torch.Tensor,
+            edgar_active_flag: torch.Tensor,
+            text_active_flag: torch.Tensor,
+        ) -> tuple[
+            torch.Tensor,
+            torch.Tensor,
+            torch.Tensor,
+            torch.Tensor,
+            torch.Tensor,
+            torch.Tensor,
+            Optional[torch.Tensor],
+            Optional[torch.Tensor],
+            Optional[torch.Tensor],
+            Optional[torch.Tensor],
+        ]:
+            hist_summary, active_prior, amount_prior = self._history_summary(target_hist)
+            horizon_feat = (
+                torch.log1p(horizon_value.float()).unsqueeze(-1) / math.log1p(365.0)
+            )
+            source_summary = torch.cat(
+                [
+                    edgar_active_flag,
+                    text_active_flag,
+                    edgar_active_flag * text_active_flag,
+                    text_active_flag - edgar_active_flag,
+                ],
+                dim=-1,
+            )
+            core = torch.cat([hidden, cond, hist_summary, source_summary, horizon_feat], dim=-1)
+            shared = self.shared(core)
+            shared_with_context = torch.cat([shared, hist_summary, source_summary], dim=-1)
+            event_logits = self.event_head(shared) + active_prior.expand(-1, self.horizon)
+            event_prob = torch.sigmoid(event_logits)
+            count_positive = torch.nn.functional.softplus(self.count_head(shared_with_context))
+            amount_positive_log = torch.nn.functional.softplus(
+                self.amount_head(shared_with_context) + amount_prior.expand(-1, self.horizon)
+            )
+            count_out = event_prob * count_positive
+            amount_out_log = event_prob * amount_positive_log
+            return (
+                event_logits,
+                event_prob,
+                count_positive,
+                count_out,
+                amount_positive_log,
+                amount_out_log,
+                None,
+                None,
+                None,
+                None,
+            )
+
+
+    class FactorizedFinancingProcessHead(nn.Module):
+        def __init__(
+            self,
+            hidden_dim: int,
+            cond_dim: int,
+            horizon: int,
+        ):
+            super().__init__()
+            self.horizon = int(horizon)
+            self.history_dim = 7
+            self.source_dim = 4
+            core_in_dim = hidden_dim + cond_dim + self.history_dim + self.source_dim + 1
+            self.shared = nn.Sequential(
+                nn.Linear(core_in_dim, hidden_dim),
+                nn.GELU(),
+                nn.Linear(hidden_dim, hidden_dim),
+                nn.GELU(),
+            )
+            self.event_head = nn.Linear(hidden_dim, horizon)
+            self.breadth_anchor_head = nn.Sequential(
+                nn.Linear(hidden_dim + self.history_dim + self.source_dim, hidden_dim),
+                nn.GELU(),
+                nn.Linear(hidden_dim, horizon),
+            )
+            self.breadth_delta_head = nn.Sequential(
+                nn.Linear(hidden_dim + cond_dim, hidden_dim),
+                nn.GELU(),
+                nn.Linear(hidden_dim, horizon),
+            )
+            self.intensity_head = nn.Sequential(
+                nn.Linear(hidden_dim + self.history_dim + self.source_dim, hidden_dim),
+                nn.GELU(),
+                nn.Linear(hidden_dim, horizon),
+            )
+            self.amount_coupling_head = nn.Sequential(
+                nn.Linear(hidden_dim + self.source_dim, hidden_dim),
+                nn.GELU(),
+                nn.Linear(hidden_dim, horizon),
+                nn.Sigmoid(),
+            )
+
+        def _history_summary(
+            self,
+            target_hist: torch.Tensor,
+        ) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor]:
+            recent_width = min(7, target_hist.shape[1])
+            recent = torch.relu(target_hist[:, -recent_width:])
+            step = recent[:, 1:] - recent[:, :-1] if recent.shape[1] > 1 else recent[:, :1] * 0.0
+            last = recent[:, -1:]
+            mean = recent.mean(dim=1, keepdim=True)
+            peak = recent.amax(dim=1, keepdim=True)
+            nonzero = (recent > 0.5).float().mean(dim=1, keepdim=True)
+            jump_last = step[:, -1:] if step.shape[1] > 0 else last * 0.0
+            jump_mean = step.mean(dim=1, keepdim=True) if step.shape[1] > 0 else last * 0.0
+            jump_peak = step.abs().amax(dim=1, keepdim=True) if step.shape[1] > 0 else last * 0.0
+            hist_summary = torch.cat(
+                [
+                    torch.log1p(last),
+                    torch.log1p(mean),
+                    torch.log1p(peak),
+                    nonzero,
+                    jump_last,
+                    jump_mean,
+                    torch.log1p(jump_peak.abs()),
+                ],
+                dim=-1,
+            )
+            active_prior = (
+                -1.20
+                + 2.00 * nonzero
+                + 0.30 * torch.log1p(last)
+                + 0.20 * torch.log1p(mean)
+                + 0.10 * torch.log1p(jump_peak.abs())
+            )
+            breadth_prior = 0.65 * torch.log1p(last) + 0.25 * torch.log1p(mean) + 0.10 * torch.log1p(peak)
+            amount_prior = 0.35 * torch.log1p(last) + 0.35 * torch.log1p(mean) + 0.30 * torch.log1p(peak)
+            return hist_summary, active_prior, breadth_prior, amount_prior
+
+        def forward(
+            self,
+            hidden: torch.Tensor,
+            cond: torch.Tensor,
+            target_hist: torch.Tensor,
+            horizon_value: torch.Tensor,
+            edgar_active_flag: torch.Tensor,
+            text_active_flag: torch.Tensor,
+        ) -> tuple[
+            torch.Tensor,
+            torch.Tensor,
+            torch.Tensor,
+            torch.Tensor,
+            torch.Tensor,
+            torch.Tensor,
+            torch.Tensor,
+            torch.Tensor,
+            torch.Tensor,
+            torch.Tensor,
+        ]:
+            hist_summary, active_prior, breadth_prior, amount_prior = self._history_summary(target_hist)
+            horizon_feat = (
+                torch.log1p(horizon_value.float()).unsqueeze(-1) / math.log1p(365.0)
+            )
+            source_summary = torch.cat(
+                [
+                    edgar_active_flag,
+                    text_active_flag,
+                    edgar_active_flag * text_active_flag,
+                    text_active_flag - edgar_active_flag,
+                ],
+                dim=-1,
+            )
+            core = torch.cat([hidden, cond, hist_summary, source_summary, horizon_feat], dim=-1)
+            shared = self.shared(core)
+            shared_with_context = torch.cat([shared, hist_summary, source_summary], dim=-1)
+
+            event_logits = self.event_head(shared) + active_prior.expand(-1, self.horizon)
+            event_prob = torch.sigmoid(event_logits)
+
+            breadth_anchor_log = torch.nn.functional.softplus(
+                self.breadth_anchor_head(shared_with_context) + breadth_prior.expand(-1, self.horizon)
+            )
+            breadth_delta = 0.35 * torch.tanh(self.breadth_delta_head(torch.cat([shared, cond], dim=-1)))
+            breadth_log = torch.clamp(
+                breadth_anchor_log + breadth_delta * (0.30 + 0.70 * event_prob),
+                min=0.0,
+                max=12.0,
+            )
+            breadth_positive = torch.expm1(breadth_log)
+
+            intensity_log = torch.nn.functional.softplus(
+                self.intensity_head(shared_with_context) + amount_prior.expand(-1, self.horizon)
+            )
+            amount_coupling = 0.20 + 0.60 * self.amount_coupling_head(torch.cat([shared, source_summary], dim=-1))
+            amount_positive_log = intensity_log + amount_coupling * breadth_log
+
+            count_out = event_prob * breadth_positive
+            amount_out_log = event_prob * amount_positive_log
+            return (
+                event_logits,
+                event_prob,
+                breadth_positive,
+                count_out,
+                amount_positive_log,
+                amount_out_log,
+                breadth_log,
+                breadth_anchor_log,
+                intensity_log,
+                amount_coupling,
+            )
+
     class V740AlphaNet(nn.Module):
         def __init__(
             self,
@@ -1581,6 +1935,15 @@ def _torch_imports():
             enable_count_hurdle_head: bool = False,
             enable_count_source_specialists: bool = False,
             enable_v741_lite: bool = False,
+            enable_financing_consistency: bool = False,
+            enable_financing_factorization: bool = False,
+            enable_financing_guarded_phase: bool = False,
+            enable_financing_evidence_residual: bool = False,
+            financing_process_blend: float = 0.0,
+            financing_investor_blend_scale: float = 1.0,
+            financing_binary_blend_scale: float = 0.35,
+            financing_funding_blend_scale: float = 0.20,
+            funding_log_domain_enabled: bool = False,
         ):
             super().__init__()
             self.seq_len = seq_len
@@ -1597,6 +1960,15 @@ def _torch_imports():
             self.count_hurdle_head_enabled = bool(enable_count_hurdle_head)
             self.count_source_specialists_enabled = bool(enable_count_source_specialists)
             self.v741_lite_enabled = bool(enable_v741_lite)
+            self.financing_process_enabled = bool(enable_financing_consistency)
+            self.financing_factorization_enabled = bool(enable_financing_factorization)
+            self.financing_guarded_phase_enabled = bool(enable_financing_guarded_phase)
+            self.financing_evidence_residual_enabled = bool(enable_financing_evidence_residual)
+            self.financing_process_blend = float(min(1.0, max(0.0, financing_process_blend)))
+            self.financing_investor_blend_scale = float(max(0.0, financing_investor_blend_scale))
+            self.financing_binary_blend_scale = float(max(0.0, financing_binary_blend_scale))
+            self.financing_funding_blend_scale = float(max(0.0, financing_funding_blend_scale))
+            self.funding_log_domain_enabled = bool(funding_log_domain_enabled)
             self.input_proj = nn.Conv1d(in_channels, hidden_dim, kernel_size=1)
             self.decomp = MovingAverageDecomposition(kernel_size=5)
             self.multi_res = MultiResolutionBlock(hidden_dim, hidden_dim)
@@ -1675,6 +2047,18 @@ def _torch_imports():
                 cond_dim=cond_dim,
                 horizon=horizon,
             )
+            if self.financing_factorization_enabled:
+                self.financing_process_head = FactorizedFinancingProcessHead(
+                    hidden_dim=hidden_dim,
+                    cond_dim=cond_dim,
+                    horizon=horizon,
+                )
+            else:
+                self.financing_process_head = UnifiedFinancingProcessHead(
+                    hidden_dim=hidden_dim,
+                    cond_dim=cond_dim,
+                    horizon=horizon,
+                )
             self.count_hurdle_head = HurdleCountHead(
                 hidden_dim=hidden_dim,
                 cond_dim=cond_dim,
@@ -1980,6 +2364,8 @@ def _torch_imports():
                 count_occurrence_logits = legacy_count_occurrence_logits if self.count_sparsity_gate_enabled else None
                 count_sparsity_gate = legacy_count_gate
             investor_mask = (target_idx == 1).to(pooled.dtype).unsqueeze(-1)
+            funding_mask = (target_idx == 0).to(pooled.dtype).unsqueeze(-1)
+            binary_mask = (target_idx == 2).to(pooled.dtype).unsqueeze(-1)
             if self.v741_lite_enabled:
                 (
                     lite_count_out,
@@ -2011,6 +2397,175 @@ def _torch_imports():
                 + shared_bias
                 + anchor_term
             )
+            legacy_continuous = continuous
+            legacy_count = count_out
+            legacy_binary_prob = binary_probs
+            financing_event_logits = None
+            financing_event_prob = None
+            financing_count_positive = None
+            financing_count = None
+            financing_amount_log = None
+            financing_amount_positive_log = None
+            financing_breadth_log = None
+            financing_breadth_anchor_log = None
+            financing_intensity_log = None
+            financing_amount_coupling = None
+            financing_investor_gate = None
+            financing_binary_gate = None
+            financing_funding_gate = None
+            if self.financing_process_enabled:
+                guarded_investors_target = bool((target_idx == 1).all().item())
+                financing_hidden = decoded
+                financing_cond = cond
+                if (
+                    (self.financing_guarded_phase_enabled or self.financing_evidence_residual_enabled)
+                    and not guarded_investors_target
+                ):
+                    financing_hidden = decoded.detach()
+                    financing_cond = cond.detach()
+                (
+                    financing_event_logits,
+                    financing_event_prob,
+                    financing_count_positive,
+                    financing_count,
+                    financing_amount_positive_log,
+                    financing_amount_log,
+                    financing_breadth_log,
+                    financing_breadth_anchor_log,
+                    financing_intensity_log,
+                    financing_amount_coupling,
+                ) = self.financing_process_head(
+                    financing_hidden,
+                    financing_cond,
+                    target_hist,
+                    horizon_value,
+                    edgar_active_flag=edgar_active_flag,
+                    text_active_flag=text_active_flag,
+                )
+                blend = self.financing_process_blend
+                count_blend = blend
+                funding_blend = blend
+                binary_blend = blend
+                if self.financing_factorization_enabled:
+                    count_blend *= self.financing_investor_blend_scale
+                    funding_blend *= self.financing_funding_blend_scale
+                    binary_blend *= self.financing_binary_blend_scale
+                if self.financing_evidence_residual_enabled and self.financing_factorization_enabled:
+                    no_source = (1.0 - edgar_active_flag) * (1.0 - text_active_flag)
+                    edgar_only = edgar_active_flag * (1.0 - text_active_flag)
+                    text_only = text_active_flag * (1.0 - edgar_active_flag)
+                    full_source = edgar_active_flag * text_active_flag
+
+                    zero_gate = torch.zeros_like(financing_event_prob)
+                    financing_binary_gate = zero_gate
+                    financing_funding_gate = zero_gate
+                    binary_probs = legacy_binary_prob
+                    continuous = legacy_continuous
+
+                    if guarded_investors_target:
+                        breadth_agreement = torch.ones_like(financing_event_prob)
+                        if financing_breadth_log is not None and financing_breadth_anchor_log is not None:
+                            breadth_gap = torch.abs(financing_breadth_log - financing_breadth_anchor_log)
+                            breadth_agreement = torch.exp(-breadth_gap / 0.75)
+                        event_support = torch.clamp(0.25 + 0.75 * financing_event_prob.detach(), 0.0, 1.0)
+                        investor_source_gate = torch.clamp(
+                            0.95 * edgar_only
+                            + 0.35 * full_source
+                            + 0.20 * text_only
+                            + 0.10 * no_source,
+                            0.0,
+                            1.0,
+                        )
+                        financing_investor_gate = torch.clamp(
+                            count_blend * investor_source_gate * event_support * breadth_agreement,
+                            0.0,
+                            1.0,
+                        )
+                        count_out = legacy_count + investor_mask * financing_investor_gate * (financing_count - legacy_count)
+                    else:
+                        financing_investor_gate = zero_gate
+                        count_out = legacy_count
+                elif self.financing_guarded_phase_enabled and self.financing_factorization_enabled:
+                    horizon_scale = torch.clamp(
+                        torch.log1p(horizon_value.float()).unsqueeze(-1) / math.log1p(30.0),
+                        0.0,
+                        1.0,
+                    )
+                    no_source = (1.0 - edgar_active_flag) * (1.0 - text_active_flag)
+                    edgar_only = edgar_active_flag * (1.0 - text_active_flag)
+                    text_only = text_active_flag * (1.0 - edgar_active_flag)
+                    full_source = edgar_active_flag * text_active_flag
+
+                    legacy_count_ref = legacy_count.detach().clamp_min(0.0)
+                    count_gap = torch.abs(
+                        torch.log1p(financing_count.clamp_min(0.0)) - torch.log1p(legacy_count_ref)
+                    )
+                    count_agreement = torch.exp(-count_gap / 0.60)
+                    investor_backoff = torch.clamp(
+                        0.05 * edgar_only
+                        + 0.25 * full_source
+                        + 0.35 * text_only
+                        + 0.55 * no_source
+                        + 0.20 * (1.0 - count_agreement),
+                        0.0,
+                        0.90,
+                    )
+                    financing_investor_gate = torch.clamp(
+                        count_blend * (1.0 - investor_backoff),
+                        0.0,
+                        1.0,
+                    )
+                    count_out = legacy_count + investor_mask * financing_investor_gate * (financing_count - legacy_count)
+
+                    legacy_binary_ref = legacy_binary_prob.detach().clamp(1e-4, 1.0 - 1e-4)
+                    legacy_binary_logits = torch.logit(legacy_binary_prob.clamp(1e-4, 1.0 - 1e-4))
+                    event_gap = torch.abs(financing_event_prob - legacy_binary_ref)
+                    event_agreement = torch.exp(-event_gap / 0.18)
+                    binary_source_gate = torch.clamp(
+                        0.05
+                        + 0.55 * no_source
+                        + 0.25 * text_only
+                        + 0.10 * edgar_only
+                        + 0.05 * full_source,
+                        0.0,
+                        1.0,
+                    )
+                    binary_horizon_gate = 0.20 + 0.80 * horizon_scale
+                    financing_binary_gate = torch.clamp(
+                        binary_blend * event_agreement * binary_source_gate * binary_horizon_gate,
+                        0.0,
+                        1.0,
+                    )
+                    binary_delta = torch.tanh(financing_event_logits - legacy_binary_logits.detach())
+                    binary_logits = legacy_binary_logits + binary_mask * financing_binary_gate * binary_delta
+                    binary_probs = torch.sigmoid(binary_logits)
+
+                    legacy_continuous_ref = legacy_continuous.detach()
+                    amount_gap = torch.abs(financing_amount_log - legacy_continuous_ref)
+                    amount_agreement = torch.exp(-amount_gap / 1.50)
+                    funding_source_gate = torch.clamp(
+                        0.02
+                        + 0.90 * edgar_only
+                        + 0.08 * text_only
+                        + 0.05 * no_source
+                        + 0.04 * full_source,
+                        0.0,
+                        1.0,
+                    )
+                    funding_event_gate = 0.15 + 0.85 * financing_event_prob.detach()
+                    financing_funding_gate = torch.clamp(
+                        funding_blend * amount_agreement * funding_source_gate * funding_event_gate,
+                        0.0,
+                        1.0,
+                    )
+                    if self.funding_log_domain_enabled:
+                        funding_delta = torch.tanh(financing_amount_log - legacy_continuous_ref)
+                        continuous = legacy_continuous + funding_mask * financing_funding_gate * funding_delta
+                else:
+                    count_out = count_out + investor_mask * count_blend * (financing_count - count_out)
+                    if self.funding_log_domain_enabled:
+                        continuous = continuous + funding_mask * funding_blend * (financing_amount_log - continuous)
+                    binary_probs = binary_probs + binary_mask * binary_blend * (financing_event_prob - binary_probs)
             outputs = {
                 "continuous": continuous,
                 "count": count_out,
@@ -2048,6 +2603,49 @@ def _torch_imports():
                 outputs["count_route_weights"] = count_route_weights
             if count_route_gate is not None:
                 outputs["count_route_gate"] = count_route_gate
+            if financing_event_logits is not None:
+                outputs["financing_event_logits"] = financing_event_logits
+            if financing_event_prob is not None:
+                outputs["financing_event_prob"] = financing_event_prob
+            if financing_count_positive is not None:
+                outputs["financing_count_positive"] = financing_count_positive
+            if financing_count is not None:
+                outputs["financing_count"] = financing_count
+            if financing_amount_positive_log is not None:
+                outputs["financing_amount_positive_log"] = financing_amount_positive_log
+            if financing_amount_log is not None:
+                outputs["financing_amount_log"] = financing_amount_log
+            if financing_breadth_log is not None:
+                outputs["financing_breadth_log"] = financing_breadth_log
+            if financing_breadth_anchor_log is not None:
+                outputs["financing_breadth_anchor_log"] = financing_breadth_anchor_log
+            if financing_intensity_log is not None:
+                outputs["financing_intensity_log"] = financing_intensity_log
+            if financing_amount_coupling is not None:
+                outputs["financing_amount_coupling"] = financing_amount_coupling
+            if financing_investor_gate is not None:
+                outputs["financing_investor_gate"] = financing_investor_gate
+            if financing_binary_gate is not None:
+                outputs["financing_binary_gate"] = financing_binary_gate
+            if financing_funding_gate is not None:
+                outputs["financing_funding_gate"] = financing_funding_gate
+            if self.financing_process_enabled:
+                outputs["legacy_continuous"] = legacy_continuous
+                outputs["legacy_count"] = legacy_count
+                outputs["legacy_binary_prob"] = legacy_binary_prob
+                if financing_investor_gate is not None or financing_binary_gate is not None or financing_funding_gate is not None:
+                    applied_blend = (
+                        investor_mask * (financing_investor_gate if financing_investor_gate is not None else 0.0)
+                        + funding_mask * (financing_funding_gate if financing_funding_gate is not None else 0.0)
+                        + binary_mask * (financing_binary_gate if financing_binary_gate is not None else 0.0)
+                    )
+                else:
+                    applied_blend = (
+                        investor_mask * count_blend
+                        + funding_mask * funding_blend
+                        + binary_mask * binary_blend
+                    )
+                outputs["financing_process_blend"] = applied_blend.expand(-1, self.horizon)
             return outputs
 
     return torch, nn, V740AlphaNet
@@ -2112,6 +2710,17 @@ class V740AlphaPrototypeWrapper(ModelBase):
         enable_window_repair: bool = False,
         min_window_history: int = 8,
         target_windows_per_entity: int = 6,
+        enable_financing_consistency: bool = False,
+        enable_financing_factorization: bool = False,
+        enable_financing_guarded_phase: bool = False,
+        enable_financing_evidence_residual: bool = False,
+        financing_consistency_strength: float = 0.10,
+        financing_auxiliary_strength: float = 0.12,
+        financing_process_blend: float = 0.20,
+        financing_investor_blend_scale: float = 1.0,
+        financing_binary_blend_scale: float = 0.35,
+        financing_funding_blend_scale: float = 0.20,
+        financing_scaffold_strength: float = 0.0,
         seed: int = 42,
         **kwargs,
     ):
@@ -2161,6 +2770,17 @@ class V740AlphaPrototypeWrapper(ModelBase):
         self.enable_window_repair = enable_window_repair
         self.min_window_history = max(2, int(min_window_history))
         self.target_windows_per_entity = max(1, int(target_windows_per_entity))
+        self.enable_financing_consistency = bool(enable_financing_consistency)
+        self.enable_financing_factorization = bool(enable_financing_factorization)
+        self.enable_financing_guarded_phase = bool(enable_financing_guarded_phase)
+        self.enable_financing_evidence_residual = bool(enable_financing_evidence_residual)
+        self.financing_consistency_strength = max(0.0, float(financing_consistency_strength))
+        self.financing_auxiliary_strength = max(0.0, float(financing_auxiliary_strength))
+        self.financing_process_blend = float(min(1.0, max(0.0, financing_process_blend)))
+        self.financing_investor_blend_scale = max(0.0, float(financing_investor_blend_scale))
+        self.financing_binary_blend_scale = max(0.0, float(financing_binary_blend_scale))
+        self.financing_funding_blend_scale = max(0.0, float(financing_funding_blend_scale))
+        self.financing_scaffold_strength = max(0.0, float(financing_scaffold_strength))
         self._effective_count_sparsity_gate_strength = self.count_sparsity_gate_strength
         self._effective_target_routing = bool(self.enable_target_routing)
         self._effective_count_source_routing = False
@@ -2168,6 +2788,13 @@ class V740AlphaPrototypeWrapper(ModelBase):
         self._effective_count_route_floor = 0.0
         self._effective_count_route_entropy_strength = 0.0
         self._effective_count_active_loss_strength = 0.0
+        self._effective_financing_consistency = False
+        self._effective_financing_factorization = False
+        self._effective_financing_guarded_phase = False
+        self._effective_financing_evidence_residual = False
+        self._effective_financing_process_blend = 0.0
+        self._effective_financing_scaffold_strength = 0.0
+        self._effective_financing_target_scale = 1.0
         self.seed = seed
         self._network = None
         self._device = None
@@ -2217,6 +2844,13 @@ class V740AlphaPrototypeWrapper(ModelBase):
         self._dual_clock_cfg = DualClockConfig(max_events=max_event_tokens)
 
     def _refresh_target_route_regime(self) -> None:
+        if (
+            self.enable_financing_evidence_residual
+            and self.enable_financing_factorization
+            and self._target_name == "investors_count"
+        ):
+            self._effective_target_routing = False
+            return
         self._effective_target_routing = bool(self.enable_target_routing and not self.enable_v741_lite)
 
     def _count_delta_bucket_targets(self, torch, target: torch.Tensor, hist_last: torch.Tensor) -> torch.Tensor:
@@ -2238,6 +2872,224 @@ class V740AlphaPrototypeWrapper(ModelBase):
         weight = sample_weight.to(device=values.device, dtype=values.dtype).view(-1)
         weight = weight / weight.mean().clamp_min(1e-6)
         return (values * weight).mean()
+
+    def _financing_auxiliary_loss(self, torch, outputs, financing_targets=None, sample_weight=None):
+        if not self._effective_financing_consistency or not financing_targets or not isinstance(outputs, dict):
+            ref = outputs["count"] if isinstance(outputs, dict) and "count" in outputs else None
+            if ref is None:
+                return None
+            return torch.zeros((), dtype=ref.dtype, device=ref.device)
+        event_logits = outputs.get("financing_event_logits")
+        event_prob = outputs.get("financing_event_prob")
+        count_pred = outputs.get("financing_count")
+        count_positive = outputs.get("financing_count_positive")
+        amount_log = outputs.get("financing_amount_log")
+        breadth_log = outputs.get("financing_breadth_log")
+        intensity_log = outputs.get("financing_intensity_log")
+        legacy_count = outputs.get("legacy_count")
+        if event_logits is None or event_prob is None or count_pred is None or amount_log is None:
+            ref = outputs["count"] if "count" in outputs else outputs.get("continuous")
+            return torch.zeros((), dtype=ref.dtype, device=ref.device)
+
+        binary_target = (financing_targets["is_funded"] > 0.5).to(event_logits.dtype)
+        investors_target = financing_targets["investors_count"].clamp_min(0.0).to(event_logits.dtype)
+        funding_target_log = torch.log1p(financing_targets["funding_raised_usd"].clamp_min(0.0)).to(event_logits.dtype)
+
+        event_bce = self._weighted_reduce(
+            torch,
+            torch.nn.functional.binary_cross_entropy_with_logits(
+                event_logits,
+                binary_target,
+                reduction="none",
+            ),
+            sample_weight=sample_weight,
+        )
+        count_aux = self._weighted_reduce(
+            torch,
+            torch.nn.functional.smooth_l1_loss(
+                torch.log1p(count_pred.clamp_min(0.0)),
+                torch.log1p(investors_target),
+                reduction="none",
+            ),
+            sample_weight=sample_weight,
+        )
+        breadth_aux = torch.zeros((), dtype=event_logits.dtype, device=event_logits.device)
+        if breadth_log is not None:
+            breadth_aux = self._weighted_reduce(
+                torch,
+                torch.nn.functional.smooth_l1_loss(
+                    breadth_log,
+                    torch.log1p(investors_target),
+                    reduction="none",
+                ),
+                sample_weight=sample_weight,
+            )
+        amount_aux = self._weighted_reduce(
+            torch,
+            torch.nn.functional.smooth_l1_loss(
+                amount_log,
+                funding_target_log,
+                reduction="none",
+            ),
+            sample_weight=sample_weight,
+        )
+        intensity_aux = torch.zeros((), dtype=event_logits.dtype, device=event_logits.device)
+        if intensity_log is not None:
+            intensity_target_log = torch.relu(
+                funding_target_log - 0.35 * torch.log1p(investors_target)
+            )
+            intensity_aux = self._weighted_reduce(
+                torch,
+                torch.nn.functional.smooth_l1_loss(
+                    intensity_log,
+                    intensity_target_log,
+                    reduction="none",
+                ),
+                sample_weight=sample_weight,
+            )
+
+        count_presence = 1.0 - torch.exp(-count_pred.clamp_min(0.0))
+        amount_presence = torch.sigmoid(amount_log - math.log1p(1.0))
+        count_presence_gap = self._weighted_reduce(
+            torch,
+            (event_prob - count_presence) ** 2,
+            sample_weight=sample_weight,
+        )
+        amount_presence_gap = self._weighted_reduce(
+            torch,
+            (event_prob - amount_presence) ** 2,
+            sample_weight=sample_weight,
+        )
+        count_amount_gap = self._weighted_reduce(
+            torch,
+            (count_presence - amount_presence) ** 2,
+            sample_weight=sample_weight,
+        )
+        coherence = self._weighted_reduce(
+            torch,
+            (event_prob - count_presence) ** 2
+            + (event_prob - amount_presence) ** 2
+            + 0.5 * (count_presence - amount_presence) ** 2,
+            sample_weight=sample_weight,
+        )
+        inactive_count_penalty = self._weighted_reduce(
+            torch,
+            torch.log1p(count_pred.clamp_min(0.0)) * (1.0 - binary_target),
+            sample_weight=sample_weight,
+        )
+        inactive_amount_penalty = self._weighted_reduce(
+            torch,
+            amount_log * (1.0 - binary_target),
+            sample_weight=sample_weight,
+        )
+        inactive_penalty = self._weighted_reduce(
+            torch,
+            (
+                torch.log1p(count_pred.clamp_min(0.0))
+                + amount_log
+            ) * (1.0 - binary_target),
+            sample_weight=sample_weight,
+        )
+        trajectory = torch.zeros((), dtype=event_logits.dtype, device=event_logits.device)
+        count_latent = count_positive if count_positive is not None else count_pred
+        if count_latent.shape[1] > 1:
+            count_step = torch.diff(torch.log1p(count_latent.clamp_min(0.0)), dim=1)
+            amount_step = torch.diff(amount_log, dim=1)
+            step_weight = 0.25 + binary_target[:, 1:]
+            trajectory = self._weighted_reduce(
+                torch,
+                torch.nn.functional.smooth_l1_loss(
+                    count_step,
+                    amount_step,
+                    reduction="none",
+                ) * step_weight,
+                sample_weight=sample_weight,
+            )
+
+        scaffold = torch.zeros((), dtype=event_logits.dtype, device=event_logits.device)
+        if (
+            self._effective_financing_scaffold_strength > 0.0
+            and legacy_count is not None
+            and self._target_name == "investors_count"
+        ):
+            scaffold = self._weighted_reduce(
+                torch,
+                torch.nn.functional.smooth_l1_loss(
+                    torch.log1p(count_pred.clamp_min(0.0)),
+                    torch.log1p(legacy_count.detach().clamp_min(0.0)),
+                    reduction="none",
+                ),
+                sample_weight=sample_weight,
+            )
+        target_scale = float(self._effective_financing_target_scale)
+        if self._effective_financing_guarded_phase:
+            if self._target_name == "investors_count":
+                auxiliary = target_scale * self.financing_auxiliary_strength * (
+                    0.20 * event_bce
+                    + 0.35 * count_aux
+                    + 0.25 * breadth_aux
+                    + 0.15 * amount_aux
+                    + 0.05 * intensity_aux
+                )
+                consistency = target_scale * self.financing_consistency_strength * (
+                    0.30 * count_presence_gap
+                    + 0.10 * amount_presence_gap
+                    + 0.15 * count_amount_gap
+                    + 0.15 * inactive_count_penalty
+                    + 0.30 * trajectory
+                )
+            elif self._target_name == "is_funded":
+                auxiliary = target_scale * self.financing_auxiliary_strength * (
+                    0.75 * event_bce
+                    + 0.10 * count_aux
+                    + 0.05 * amount_aux
+                    + 0.05 * breadth_aux
+                    + 0.05 * intensity_aux
+                )
+                consistency = target_scale * self.financing_consistency_strength * (
+                    0.55 * count_presence_gap
+                    + 0.25 * amount_presence_gap
+                    + 0.10 * count_amount_gap
+                    + 0.10 * inactive_penalty
+                )
+            else:
+                auxiliary = target_scale * self.financing_auxiliary_strength * (
+                    0.10 * event_bce
+                    + 0.10 * count_aux
+                    + 0.45 * amount_aux
+                    + 0.10 * breadth_aux
+                    + 0.25 * intensity_aux
+                )
+                consistency = target_scale * self.financing_consistency_strength * (
+                    0.20 * count_presence_gap
+                    + 0.35 * amount_presence_gap
+                    + 0.15 * count_amount_gap
+                    + 0.10 * inactive_amount_penalty
+                    + 0.20 * trajectory
+                )
+        else:
+            auxiliary = target_scale * self.financing_auxiliary_strength * (
+                0.35 * event_bce
+                + 0.20 * count_aux
+                + 0.20 * amount_aux
+                + 0.15 * breadth_aux
+                + 0.10 * intensity_aux
+            )
+            consistency = target_scale * self.financing_consistency_strength * (
+                0.45 * coherence + 0.35 * inactive_penalty + 0.20 * trajectory
+            )
+        return auxiliary + consistency + self._effective_financing_scaffold_strength * scaffold
+
+    def _augment_with_financing_loss(self, torch, base_loss, outputs, financing_targets=None, sample_weight=None):
+        extra = self._financing_auxiliary_loss(
+            torch,
+            outputs,
+            financing_targets=financing_targets,
+            sample_weight=sample_weight,
+        )
+        if extra is None:
+            return base_loss
+        return base_loss + extra
 
     def _build_window_sample_weights(
         self,
@@ -2444,6 +3296,16 @@ class V740AlphaPrototypeWrapper(ModelBase):
             self._effective_count_route_entropy_strength = 0.0
             self._effective_count_active_loss_strength = 0.0
             return
+        if (
+            self.enable_financing_evidence_residual
+            and self.enable_financing_factorization
+            and self._target_name == "investors_count"
+        ):
+            self._effective_count_source_routing = False
+            self._effective_count_route_floor = 0.0
+            self._effective_count_route_entropy_strength = 0.0
+            self._effective_count_active_loss_strength = 0.0
+            return
         if self._target_name != "investors_count":
             self._effective_count_source_routing = False
             self._effective_count_route_floor = 0.0
@@ -2527,12 +3389,65 @@ class V740AlphaPrototypeWrapper(ModelBase):
         )
 
     def _refresh_count_specialist_regime(self) -> None:
+        if (
+            self.enable_financing_evidence_residual
+            and self.enable_financing_factorization
+            and self._target_name == "investors_count"
+        ):
+            self._effective_count_source_specialists = False
+            return
         self._effective_count_source_specialists = bool(
             self.enable_count_source_specialists
             and self.enable_count_hurdle_head
             and self._target_name == "investors_count"
             and not self.enable_v741_lite
         )
+
+    def _refresh_financing_consistency_regime(self, train_raw: Optional[pd.DataFrame] = None) -> None:
+        has_all_targets = True
+        if train_raw is not None:
+            has_all_targets = all(col in train_raw.columns for col in _FINANCING_TARGETS)
+        self._effective_financing_consistency = bool(
+            self.enable_financing_consistency
+            and has_all_targets
+            and self._target_name in _FINANCING_TARGETS
+        )
+        self._effective_financing_factorization = bool(
+            self._effective_financing_consistency and self.enable_financing_factorization
+        )
+        self._effective_financing_guarded_phase = bool(
+            self._effective_financing_factorization and self.enable_financing_guarded_phase
+        )
+        self._effective_financing_evidence_residual = bool(
+            self._effective_financing_factorization and self.enable_financing_evidence_residual
+        )
+        self._effective_financing_process_blend = (
+            float(self.financing_process_blend) if self._effective_financing_consistency else 0.0
+        )
+        self._effective_financing_scaffold_strength = (
+            float(self.financing_scaffold_strength) if self._effective_financing_factorization else 0.0
+        )
+        if self._effective_financing_evidence_residual:
+            if self._target_name == "investors_count":
+                self._effective_financing_target_scale = 1.0
+            else:
+                self._effective_financing_target_scale = 0.0
+        elif self._effective_financing_guarded_phase:
+            if self._target_name == "investors_count":
+                self._effective_financing_target_scale = 0.90
+            elif self._target_name == "funding_raised_usd":
+                self._effective_financing_target_scale = 0.30
+            else:
+                self._effective_financing_target_scale = 0.15
+        elif self._effective_financing_factorization:
+            if self._target_name == "investors_count":
+                self._effective_financing_target_scale = 1.0
+            elif self._target_name == "funding_raised_usd":
+                self._effective_financing_target_scale = 0.45
+            else:
+                self._effective_financing_target_scale = 0.35
+        else:
+            self._effective_financing_target_scale = 1.0
 
     def get_regime_info(self) -> Dict[str, object]:
         count_source_signal = float(
@@ -2584,8 +3499,15 @@ class V740AlphaPrototypeWrapper(ModelBase):
                 "effective_enabled": bool(self._effective_target_routing),
                 "experts": int(self.target_route_experts),
                 "count_head_type": (
+                    "evidence_financing_residual" if self._effective_financing_evidence_residual
+                    else ("guarded_financing_phase_residual" if self._effective_financing_guarded_phase
+                    else (
+                    "shared_financing_process_blend" if self._effective_financing_consistency
+                    else (
                     "typed_state_delta" if self.enable_v741_lite and self._target_name == "investors_count"
                     else ("hurdle_zero_inflated" if self.enable_count_hurdle_head else "softplus_regression")
+                    )
+                    ))
                 ),
                 "count_anchor_enabled": bool(self.enable_count_anchor),
                 "count_anchor_strength": float(self.count_anchor_strength),
@@ -2621,6 +3543,24 @@ class V740AlphaPrototypeWrapper(ModelBase):
                 "effective_enabled": bool(self._effective_count_source_specialists),
                 "class_names": list(self._count_source_specialist_names),
                 "stats": self._count_specialist_stats,
+            },
+            "financing_process": {
+                "enabled": bool(self.enable_financing_consistency),
+                "effective_enabled": bool(self._effective_financing_consistency),
+                "factorized_state_enabled": bool(self._effective_financing_factorization),
+                "guarded_phase_enabled": bool(self._effective_financing_guarded_phase),
+                "evidence_residual_enabled": bool(self._effective_financing_evidence_residual),
+                "consistency_strength": float(self.financing_consistency_strength),
+                "auxiliary_strength": float(self.financing_auxiliary_strength),
+                "requested_blend": float(self.financing_process_blend),
+                "effective_blend": float(self._effective_financing_process_blend),
+                "investor_blend_scale": float(self.financing_investor_blend_scale),
+                "binary_blend_scale": float(self.financing_binary_blend_scale),
+                "funding_blend_scale": float(self.financing_funding_blend_scale),
+                "target_loss_scale": float(self._effective_financing_target_scale),
+                "scaffold_strength": float(self._effective_financing_scaffold_strength),
+                "shared_targets": list(_FINANCING_TARGETS),
+                "single_path_bias": not bool(self.enable_target_routing),
             },
             "single_model_lite": {
                 "enabled": bool(self.enable_v741_lite),
@@ -2800,7 +3740,7 @@ class V740AlphaPrototypeWrapper(ModelBase):
         self._teacher_logistic_mix = float(logistic_mix)
         self._teacher_tree_mix = float(tree_mix)
 
-    def _loss(self, torch, outputs, target, teacher_probs=None, sample_weight=None):
+    def _loss(self, torch, outputs, target, teacher_probs=None, sample_weight=None, financing_targets=None):
         if self._binary_target:
             logits = outputs["binary"]
             probs = torch.sigmoid(logits)
@@ -2865,7 +3805,7 @@ class V740AlphaPrototypeWrapper(ModelBase):
                         (event_probs - teacher_probs) ** 2,
                         sample_weight=sample_weight,
                     )
-            return (
+            primary_loss = (
                 bce
                 + 0.15 * brier
                 + 0.10 * rate_penalty
@@ -2873,6 +3813,13 @@ class V740AlphaPrototypeWrapper(ModelBase):
                 + 0.10 * separation
                 + self._binary_event_weight * event_bce
                 + self._binary_teacher_weight * teacher_align
+            )
+            return self._augment_with_financing_loss(
+                torch,
+                primary_loss,
+                outputs,
+                financing_targets=financing_targets,
+                sample_weight=sample_weight,
             )
         if self._target_name == "investors_count":
             pred = outputs["count"].clamp_min(0.0)
@@ -2981,7 +3928,7 @@ class V740AlphaPrototypeWrapper(ModelBase):
                         torch.nn.functional.smooth_l1_loss(pred_step, tgt_step, reduction="none"),
                         sample_weight=sample_weight,
                     )
-                return (
+                primary_loss = (
                     base
                     + (0.10 + 0.08 * gate_strength_ratio) * occurrence_bce
                     + 0.20 * positive_log_mae
@@ -2991,6 +3938,13 @@ class V740AlphaPrototypeWrapper(ModelBase):
                     + 0.08 * entry_jump
                     + 0.05 * distdf
                     + self._effective_count_route_entropy_strength * route_entropy_penalty
+                )
+                return self._augment_with_financing_loss(
+                    torch,
+                    primary_loss,
+                    outputs,
+                    financing_targets=financing_targets,
+                    sample_weight=sample_weight,
                 )
             base = self._weighted_reduce(
                 torch,
@@ -3083,7 +4037,7 @@ class V740AlphaPrototypeWrapper(ModelBase):
                     torch.relu(torch.full_like(entropy, entropy_floor) - entropy),
                     sample_weight=sample_weight,
                 )
-            return (
+            primary_loss = (
                 base
                 + (0.06 * gate_strength_ratio) * occurrence_bce
                 + self._effective_count_active_loss_strength * active_log_mae
@@ -3093,6 +4047,13 @@ class V740AlphaPrototypeWrapper(ModelBase):
                 + 0.05 * distdf
                 + (0.04 * gate_strength_ratio) * gate_penalty
                 + self._effective_count_route_entropy_strength * route_entropy_penalty
+            )
+            return self._augment_with_financing_loss(
+                torch,
+                primary_loss,
+                outputs,
+                financing_targets=financing_targets,
+                sample_weight=sample_weight,
             )
         pred = outputs["continuous"]
         if self._funding_log_domain:
@@ -3131,7 +4092,14 @@ class V740AlphaPrototypeWrapper(ModelBase):
                     torch.nn.functional.smooth_l1_loss(pred_step, tgt_step, reduction="none"),
                     sample_weight=sample_weight,
                 )
-            return base + 0.08 * last_align + 0.05 * floor_penalty + 0.05 * distdf
+            primary_loss = base + 0.08 * last_align + 0.05 * floor_penalty + 0.05 * distdf
+            return self._augment_with_financing_loss(
+                torch,
+                primary_loss,
+                outputs,
+                financing_targets=financing_targets,
+                sample_weight=sample_weight,
+            )
         base = self._weighted_reduce(
             torch,
             torch.nn.functional.smooth_l1_loss(pred, target, reduction="none"),
@@ -3176,7 +4144,14 @@ class V740AlphaPrototypeWrapper(ModelBase):
                 torch.nn.functional.smooth_l1_loss(pred_step, tgt_step, reduction="none"),
                 sample_weight=sample_weight,
             )
-        return base + 0.1 * align + 0.05 * distdf
+        primary_loss = base + 0.1 * align + 0.05 * distdf
+        return self._augment_with_financing_loss(
+            torch,
+            primary_loss,
+            outputs,
+            financing_targets=financing_targets,
+            sample_weight=sample_weight,
+        )
 
     def fit(self, X: pd.DataFrame, y: pd.Series, **kwargs) -> "V740AlphaPrototypeWrapper":
         torch, nn, V740AlphaNet = _torch_imports()
@@ -3210,6 +4185,7 @@ class V740AlphaPrototypeWrapper(ModelBase):
             self._fitted = True
             return self
 
+        self._refresh_financing_consistency_regime(train_raw)
         self._text_cols = infer_text_columns(train_raw) if self._has_text_path() else []
         self._edgar_cols = infer_edgar_columns(train_raw) if self._has_edgar_path() else []
         self._source_state_exclude_cols = sorted(set(self._text_cols) | set(self._edgar_cols))
@@ -3219,6 +4195,14 @@ class V740AlphaPrototypeWrapper(ModelBase):
             self.max_covariates,
             self._source_state_exclude_cols,
         )
+        if self._effective_financing_consistency:
+            for finance_col in _FINANCING_TARGETS:
+                if (
+                    finance_col != self._target_name
+                    and finance_col in train_raw.columns
+                    and finance_col not in self._feature_cols
+                ):
+                    self._feature_cols.append(finance_col)
         window_train_raw = train_raw
         if self._funding_log_domain and self._target_name in train_raw.columns:
             window_train_raw = train_raw.copy()
@@ -3239,6 +4223,7 @@ class V740AlphaPrototypeWrapper(ModelBase):
             edgar_cols=self._edgar_cols,
             text_cols=self._text_cols,
             dual_clock_cfg=self._dual_clock_cfg,
+            aux_target_raw=train_raw,
             enable_window_repair=self.enable_window_repair,
             min_history_points=self.min_window_history,
             target_windows_per_entity=self.target_windows_per_entity,
@@ -3276,6 +4261,9 @@ class V740AlphaPrototypeWrapper(ModelBase):
 
         train_x_np = np.stack(entity_windows.train_x).astype(np.float32, copy=False)
         train_y_np = np.stack(entity_windows.train_y).astype(np.float32, copy=False)
+        train_funding_aux_np = np.stack(entity_windows.train_funding_aux).astype(np.float32, copy=False)
+        train_investors_aux_np = np.stack(entity_windows.train_investors_aux).astype(np.float32, copy=False)
+        train_binary_aux_np = np.stack(entity_windows.train_binary_aux).astype(np.float32, copy=False)
         train_edgar_recent_np = (
             np.stack(entity_windows.train_edgar_recent).astype(np.float32, copy=False)
             if entity_windows.train_edgar_recent
@@ -3309,6 +4297,9 @@ class V740AlphaPrototypeWrapper(ModelBase):
             self._configure_binary_regime()
         train_x = torch.tensor(train_x_np, dtype=torch.float32)
         train_y = torch.tensor(train_y_np, dtype=torch.float32)
+        train_funding_aux = torch.tensor(train_funding_aux_np, dtype=torch.float32)
+        train_investors_aux = torch.tensor(train_investors_aux_np, dtype=torch.float32)
+        train_binary_aux = torch.tensor(train_binary_aux_np, dtype=torch.float32)
         train_sample_weight = torch.tensor(
             self._build_window_sample_weights(
                 train_x_np,
@@ -3348,6 +4339,9 @@ class V740AlphaPrototypeWrapper(ModelBase):
         )
         val_x = torch.tensor(np.stack(entity_windows.val_x), dtype=torch.float32) if entity_windows.val_x else None
         val_y = torch.tensor(np.stack(entity_windows.val_y), dtype=torch.float32) if entity_windows.val_y else None
+        val_funding_aux = torch.tensor(np.stack(entity_windows.val_funding_aux), dtype=torch.float32) if entity_windows.val_funding_aux else None
+        val_investors_aux = torch.tensor(np.stack(entity_windows.val_investors_aux), dtype=torch.float32) if entity_windows.val_investors_aux else None
+        val_binary_aux = torch.tensor(np.stack(entity_windows.val_binary_aux), dtype=torch.float32) if entity_windows.val_binary_aux else None
         val_edgar_recent = self._memory_batch(
             torch,
             entity_windows.val_edgar_recent,
@@ -3447,6 +4441,15 @@ class V740AlphaPrototypeWrapper(ModelBase):
             enable_count_hurdle_head=self.enable_count_hurdle_head and self._target_name == "investors_count",
             enable_count_source_specialists=self._effective_count_source_specialists,
             enable_v741_lite=self.enable_v741_lite,
+            enable_financing_consistency=self._effective_financing_consistency,
+            enable_financing_factorization=self._effective_financing_factorization,
+            enable_financing_guarded_phase=self._effective_financing_guarded_phase,
+            enable_financing_evidence_residual=self._effective_financing_evidence_residual,
+            financing_process_blend=self._effective_financing_process_blend,
+            financing_investor_blend_scale=self.financing_investor_blend_scale,
+            financing_binary_blend_scale=self.financing_binary_blend_scale,
+            financing_funding_blend_scale=self.financing_funding_blend_scale,
+            funding_log_domain_enabled=self._funding_log_domain,
         ).to(self._device)
         self._network.task_mod_enabled = self._effective_task_modulation
         optimizer = torch.optim.AdamW(
@@ -3463,6 +4466,9 @@ class V740AlphaPrototypeWrapper(ModelBase):
             train_text_bucket,
             train_teacher,
             train_sample_weight,
+            train_funding_aux,
+            train_investors_aux,
+            train_binary_aux,
         )
         sampler = None
         shuffle = True
@@ -3493,7 +4499,7 @@ class V740AlphaPrototypeWrapper(ModelBase):
         for epoch in range(self.max_epochs):
             self._network.train()
             losses = []
-            for xb, yb, er, eb, tr, tb, tp, sw in loader:
+            for xb, yb, er, eb, tr, tb, tp, sw, fb, ib, bb in loader:
                 xb = xb.to(self._device)
                 yb = yb.to(self._device)
                 er = er.to(self._device)
@@ -3502,6 +4508,9 @@ class V740AlphaPrototypeWrapper(ModelBase):
                 tb = tb.to(self._device)
                 tp = tp.to(self._device)
                 sw = sw.to(self._device)
+                fb = fb.to(self._device)
+                ib = ib.to(self._device)
+                bb = bb.to(self._device)
                 task_idx, target_idx, horizon_value, ablation_idx = self._token_tensor(torch, len(xb))
                 outputs = self._network(
                     xb,
@@ -3520,6 +4529,11 @@ class V740AlphaPrototypeWrapper(ModelBase):
                     yb,
                     teacher_probs=tp if self._binary_target else None,
                     sample_weight=sw,
+                    financing_targets={
+                        "funding_raised_usd": fb,
+                        "investors_count": ib,
+                        "is_funded": bb,
+                    },
                 )
                 optimizer.zero_grad()
                 loss.backward()
@@ -3544,7 +4558,19 @@ class V740AlphaPrototypeWrapper(ModelBase):
                     text_recent=val_text_recent.to(self._device) if val_text_recent is not None else None,
                     text_bucket=val_text_bucket.to(self._device) if val_text_bucket is not None else None,
                 )
-                val_loss = float(self._loss(torch, val_out, val_y.to(self._device), teacher_probs=None).cpu())
+                val_loss = float(
+                    self._loss(
+                        torch,
+                        val_out,
+                        val_y.to(self._device),
+                        teacher_probs=None,
+                        financing_targets={
+                            "funding_raised_usd": val_funding_aux.to(self._device) if val_funding_aux is not None else val_y.to(self._device) * 0.0,
+                            "investors_count": val_investors_aux.to(self._device) if val_investors_aux is not None else val_y.to(self._device) * 0.0,
+                            "is_funded": val_binary_aux.to(self._device) if val_binary_aux is not None else val_y.to(self._device) * 0.0,
+                        },
+                    ).cpu()
+                )
 
             logger.info(
                 f"  [V740-alpha] epoch={epoch + 1}/{self.max_epochs} "
@@ -3607,6 +4633,404 @@ class V740AlphaPrototypeWrapper(ModelBase):
         self._fitted = True
         return self
 
+    def _prepare_prediction_entities(
+        self,
+        X: pd.DataFrame,
+        test_raw: Optional[pd.DataFrame],
+        target: Optional[str],
+    ) -> tuple[Optional[np.ndarray], List[str]]:
+        h = len(X)
+        if test_raw is None or "entity_id" not in test_raw.columns:
+            return None, []
+        if target and target in test_raw.columns:
+            valid_mask = test_raw[target].notna()
+            test_entities = test_raw.loc[valid_mask, "entity_id"].values
+        else:
+            test_entities = test_raw["entity_id"].values
+        if len(test_entities) != h:
+            return None, []
+
+        unique_entities: List[str] = []
+        seen = set()
+        for eid in test_entities:
+            sid = str(eid)
+            if sid in self._contexts and sid not in seen:
+                seen.add(sid)
+                unique_entities.append(sid)
+        return test_entities, unique_entities
+
+    def _context_tensor_for_entities(
+        self,
+        torch,
+        unique_entities: List[str],
+        key: str,
+        default_shape: tuple[int, int],
+    ):
+        return torch.tensor(
+            np.stack(
+                [
+                    self._context_memory.get(eid, {}).get(
+                        key,
+                        np.zeros(default_shape, dtype=np.float32),
+                    )
+                    for eid in unique_entities
+                ]
+            ),
+            dtype=torch.float32,
+            device=self._device,
+        )
+
+    def _forward_entity_contexts(self, torch, unique_entities: List[str]):
+        if not unique_entities:
+            return {}
+        x_batch = torch.tensor(
+            np.stack([self._contexts[eid] for eid in unique_entities]),
+            dtype=torch.float32,
+            device=self._device,
+        )
+        edgar_recent = self._context_tensor_for_entities(
+            torch,
+            unique_entities,
+            "edgar_recent",
+            (self._dual_clock_cfg.max_events, 3 + len(self._edgar_cols)),
+        )
+        edgar_bucket = self._context_tensor_for_entities(
+            torch,
+            unique_entities,
+            "edgar_bucket",
+            (len(self._dual_clock_cfg.recency_buckets) + 1, 4 + len(self._edgar_cols)),
+        )
+        text_recent = self._context_tensor_for_entities(
+            torch,
+            unique_entities,
+            "text_recent",
+            (self._dual_clock_cfg.max_events, 5 + len(self._text_cols)),
+        )
+        text_bucket = self._context_tensor_for_entities(
+            torch,
+            unique_entities,
+            "text_bucket",
+            (len(self._dual_clock_cfg.recency_buckets) + 1, 6 + len(self._text_cols)),
+        )
+        edgar_recent, edgar_bucket, text_recent, text_bucket = self._apply_source_tensor_scales(
+            edgar_recent,
+            edgar_bucket,
+            text_recent,
+            text_bucket,
+        )
+        with torch.no_grad():
+            task_idx, target_idx, horizon_value, ablation_idx = self._token_tensor(torch, len(unique_entities))
+            outputs = self._network(
+                x_batch,
+                task_idx,
+                target_idx,
+                horizon_value,
+                ablation_idx,
+                edgar_recent=edgar_recent,
+                edgar_bucket=edgar_bucket,
+                text_recent=text_recent,
+                text_bucket=text_bucket,
+            )
+        self._update_target_route_stats(outputs)
+        self._update_count_route_stats(outputs)
+        self._update_count_specialist_stats(outputs)
+        return outputs
+
+    def _build_eval_windows(self, raw_df: pd.DataFrame) -> _V740Windows:
+        eval_raw = raw_df
+        if self._funding_log_domain and self._target_name in raw_df.columns:
+            eval_raw = raw_df.copy()
+            eval_raw[self._target_name] = self._transform_continuous_array(
+                pd.Series(raw_df[self._target_name], dtype="float64").to_numpy()
+            )
+        max_eval_entities = self.max_entities
+        if raw_df is not None and "entity_id" in raw_df.columns:
+            max_eval_entities = max(max_eval_entities, int(raw_df["entity_id"].nunique()))
+        return _build_v740_windows(
+            train_raw=eval_raw,
+            target=self._target_name,
+            feature_cols=self._feature_cols,
+            input_size=self.input_size,
+            horizon=self._horizon,
+            step=max(1, self._horizon),
+            max_entities=max_eval_entities,
+            max_windows=self.max_windows,
+            val_frac=0.0,
+            seed=self.seed,
+            edgar_cols=self._edgar_cols,
+            text_cols=self._text_cols,
+            dual_clock_cfg=self._dual_clock_cfg,
+            aux_target_raw=raw_df,
+            enable_window_repair=self.enable_window_repair,
+            min_history_points=self.min_window_history,
+            target_windows_per_entity=self.target_windows_per_entity,
+        )
+
+    def collect_window_outputs(self, raw_df: pd.DataFrame) -> Dict[str, object]:
+        if not self._fitted:
+            raise ValueError("V740AlphaPrototypeWrapper is not fitted")
+        if self._network is None:
+            return {
+                "available": False,
+                "window_count": 0,
+                "horizon": int(self._horizon),
+            }
+
+        eval_windows = self._build_eval_windows(raw_df)
+        if not eval_windows.train_x:
+            return {
+                "available": False,
+                "window_count": 0,
+                "horizon": int(self._horizon),
+                "window_stats": copy.deepcopy(eval_windows.window_stats),
+            }
+
+        import torch
+
+        n_windows = len(eval_windows.train_x)
+        x_batch = torch.tensor(
+            np.stack(eval_windows.train_x).astype(np.float32, copy=False),
+            dtype=torch.float32,
+            device=self._device,
+        )
+
+        def _window_tensor(entries: List[np.ndarray], default_shape: tuple[int, int]):
+            if entries:
+                arr = np.stack(entries).astype(np.float32, copy=False)
+            else:
+                arr = np.zeros((n_windows, *default_shape), dtype=np.float32)
+            return torch.tensor(arr, dtype=torch.float32, device=self._device)
+
+        edgar_recent = _window_tensor(
+            eval_windows.train_edgar_recent,
+            (self._dual_clock_cfg.max_events, 3 + len(self._edgar_cols)),
+        )
+        edgar_bucket = _window_tensor(
+            eval_windows.train_edgar_bucket,
+            (len(self._dual_clock_cfg.recency_buckets) + 1, 4 + len(self._edgar_cols)),
+        )
+        text_recent = _window_tensor(
+            eval_windows.train_text_recent,
+            (self._dual_clock_cfg.max_events, 5 + len(self._text_cols)),
+        )
+        text_bucket = _window_tensor(
+            eval_windows.train_text_bucket,
+            (len(self._dual_clock_cfg.recency_buckets) + 1, 6 + len(self._text_cols)),
+        )
+        edgar_recent, edgar_bucket, text_recent, text_bucket = self._apply_source_tensor_scales(
+            edgar_recent,
+            edgar_bucket,
+            text_recent,
+            text_bucket,
+        )
+
+        with torch.no_grad():
+            task_idx, target_idx, horizon_value, ablation_idx = self._token_tensor(torch, n_windows)
+            outputs = self._network(
+                x_batch,
+                task_idx,
+                target_idx,
+                horizon_value,
+                ablation_idx,
+                edgar_recent=edgar_recent,
+                edgar_bucket=edgar_bucket,
+                text_recent=text_recent,
+                text_bucket=text_bucket,
+            )
+        self._update_target_route_stats(outputs)
+        self._update_count_route_stats(outputs)
+        self._update_count_specialist_stats(outputs)
+
+        artifacts: Dict[str, object] = {
+            "available": True,
+            "window_count": int(n_windows),
+            "horizon": int(self._horizon),
+            "window_stats": copy.deepcopy(eval_windows.window_stats),
+            "target_true": np.stack(eval_windows.train_y).astype(np.float64, copy=False),
+            "funding_true": np.stack(eval_windows.train_funding_aux).astype(np.float64, copy=False),
+            "investors_true": np.stack(eval_windows.train_investors_aux).astype(np.float64, copy=False),
+            "binary_true": np.stack(eval_windows.train_binary_aux).astype(np.float64, copy=False),
+            "primary_binary_prob": (
+                outputs["legacy_binary_prob"].cpu().numpy().astype(np.float64, copy=False)
+                if outputs.get("legacy_binary_prob") is not None
+                else torch.sigmoid(outputs["binary"]).cpu().numpy().astype(np.float64, copy=False)
+            ),
+            "blended_binary_prob": torch.sigmoid(outputs["binary"]).cpu().numpy().astype(np.float64, copy=False),
+            "primary_count": (
+                outputs["legacy_count"].clamp_min(0.0).cpu().numpy().astype(np.float64, copy=False)
+                if outputs.get("legacy_count") is not None
+                else outputs["count"].clamp_min(0.0).cpu().numpy().astype(np.float64, copy=False)
+            ),
+            "blended_count": outputs["count"].clamp_min(0.0).cpu().numpy().astype(np.float64, copy=False),
+            "primary_continuous_raw": (
+                outputs["legacy_continuous"].cpu().numpy().astype(np.float64, copy=False)
+                if outputs.get("legacy_continuous") is not None
+                else outputs["continuous"].cpu().numpy().astype(np.float64, copy=False)
+            ),
+            "blended_continuous_raw": outputs["continuous"].cpu().numpy().astype(np.float64, copy=False),
+            "edgar_active_rate": float(
+                np.mean([
+                    float(np.any(entry[:, 2] > 0.0))
+                    for entry in eval_windows.train_edgar_recent
+                ]) if eval_windows.train_edgar_recent else 0.0
+            ),
+            "text_active_rate": float(
+                np.mean([
+                    float(np.any(entry[:, 2] > 0.0))
+                    for entry in eval_windows.train_text_recent
+                ]) if eval_windows.train_text_recent else 0.0
+            ),
+        }
+        if self._target_name == "funding_raised_usd":
+            artifacts["primary_continuous"] = self._inverse_continuous_array(
+                artifacts["primary_continuous_raw"]
+            ).astype(np.float64, copy=False)
+            artifacts["blended_continuous"] = self._inverse_continuous_array(
+                artifacts["blended_continuous_raw"]
+            ).astype(np.float64, copy=False)
+        else:
+            artifacts["primary_continuous"] = artifacts["primary_continuous_raw"]
+            artifacts["blended_continuous"] = artifacts["blended_continuous_raw"]
+
+        for key in (
+            "financing_event_prob",
+            "financing_count",
+            "financing_count_positive",
+            "financing_amount_log",
+            "financing_amount_positive_log",
+            "financing_breadth_log",
+            "financing_breadth_anchor_log",
+            "financing_intensity_log",
+            "financing_amount_coupling",
+            "financing_process_blend",
+            "financing_investor_gate",
+            "financing_binary_gate",
+            "financing_funding_gate",
+        ):
+            value = outputs.get(key)
+            if value is not None:
+                artifacts[key] = value.cpu().numpy().astype(np.float64, copy=False)
+        if "financing_amount_log" in artifacts:
+            artifacts["financing_amount"] = np.expm1(
+                np.clip(artifacts["financing_amount_log"], 0.0, 25.0)
+            ).astype(np.float64, copy=False)
+        return artifacts
+
+    def score_financing_diagnostics(self, raw_df: pd.DataFrame) -> Dict[str, object]:
+        artifacts = self.collect_window_outputs(raw_df)
+        summary: Dict[str, object] = {
+            "available": bool(artifacts.get("available", False)),
+            "window_count": int(artifacts.get("window_count", 0)),
+            "horizon": int(artifacts.get("horizon", self._horizon)),
+            "edgar_active_rate": float(artifacts.get("edgar_active_rate", 0.0)),
+            "text_active_rate": float(artifacts.get("text_active_rate", 0.0)),
+        }
+        if not summary["available"] or "financing_event_prob" not in artifacts:
+            summary["has_financing_head"] = False
+            return summary
+
+        event_prob = np.clip(np.asarray(artifacts["financing_event_prob"], dtype=np.float64), 1e-6, 1.0 - 1e-6)
+        count_pred = np.clip(np.asarray(artifacts["financing_count"], dtype=np.float64), 0.0, None)
+        count_positive = np.clip(
+            np.asarray(artifacts.get("financing_count_positive", artifacts["financing_count"]), dtype=np.float64),
+            0.0,
+            None,
+        )
+        amount_log = np.clip(np.asarray(artifacts["financing_amount_log"], dtype=np.float64), 0.0, 25.0)
+        binary_target = (np.asarray(artifacts["binary_true"], dtype=np.float64) > 0.5).astype(np.float64)
+        investors_target = np.clip(np.asarray(artifacts["investors_true"], dtype=np.float64), 0.0, None)
+        funding_target_log = np.log1p(np.clip(np.asarray(artifacts["funding_true"], dtype=np.float64), 0.0, None))
+
+        count_presence = 1.0 - np.exp(-count_pred)
+        amount_presence = 1.0 / (1.0 + np.exp(-(amount_log - math.log1p(1.0))))
+        inactive_mask = binary_target <= 0.5
+
+        summary.update(
+            {
+                "has_financing_head": True,
+                "point_count": int(binary_target.size),
+                "true_event_rate": float(binary_target.mean()),
+                "pred_event_rate": float(event_prob.mean()),
+                "event_bce": float(
+                    np.mean(
+                        -binary_target * np.log(event_prob)
+                        - (1.0 - binary_target) * np.log(1.0 - event_prob)
+                    )
+                ),
+                "count_log_mae": float(np.mean(np.abs(np.log1p(count_pred) - np.log1p(investors_target)))),
+                "amount_log_mae": float(np.mean(np.abs(amount_log - funding_target_log))),
+                "count_presence_gap": float(np.mean(np.abs(event_prob - count_presence))),
+                "amount_presence_gap": float(np.mean(np.abs(event_prob - amount_presence))),
+                "count_amount_presence_gap": float(np.mean(np.abs(count_presence - amount_presence))),
+                "coherence_mse": float(
+                    np.mean(
+                        (event_prob - count_presence) ** 2
+                        + (event_prob - amount_presence) ** 2
+                        + 0.5 * (count_presence - amount_presence) ** 2
+                    )
+                ),
+                "inactive_count_log_mass": float(
+                    np.mean(np.log1p(count_pred)[inactive_mask])
+                ) if np.any(inactive_mask) else 0.0,
+                "inactive_amount_log_mass": float(
+                    np.mean(amount_log[inactive_mask])
+                ) if np.any(inactive_mask) else 0.0,
+                "inactive_joint_mass": float(
+                    np.mean((np.log1p(count_pred) + amount_log)[inactive_mask])
+                ) if np.any(inactive_mask) else 0.0,
+                "blend_strength_mean": float(
+                    np.mean(np.asarray(artifacts.get("financing_process_blend", 0.0), dtype=np.float64))
+                ) if "financing_process_blend" in artifacts else 0.0,
+            }
+        )
+        if "financing_investor_gate" in artifacts:
+            summary["investor_gate_mean"] = float(
+                np.mean(np.asarray(artifacts["financing_investor_gate"], dtype=np.float64))
+            )
+        if "financing_binary_gate" in artifacts:
+            summary["binary_gate_mean"] = float(
+                np.mean(np.asarray(artifacts["financing_binary_gate"], dtype=np.float64))
+            )
+        if "financing_funding_gate" in artifacts:
+            summary["funding_gate_mean"] = float(
+                np.mean(np.asarray(artifacts["financing_funding_gate"], dtype=np.float64))
+            )
+        if count_positive.shape[1] > 1:
+            count_step = np.diff(np.log1p(count_positive), axis=1)
+            amount_step = np.diff(amount_log, axis=1)
+            step_weight = 0.25 + binary_target[:, 1:]
+            summary["trajectory_gap"] = float(np.mean(np.abs(count_step - amount_step) * step_weight))
+        else:
+            summary["trajectory_gap"] = 0.0
+        if "financing_breadth_log" in artifacts:
+            breadth_log = np.asarray(artifacts["financing_breadth_log"], dtype=np.float64)
+            summary["breadth_log_mae"] = float(np.mean(np.abs(breadth_log - np.log1p(investors_target))))
+            summary["breadth_mean"] = float(np.mean(np.expm1(np.clip(breadth_log, 0.0, 12.0))))
+        if "financing_intensity_log" in artifacts:
+            intensity_log = np.asarray(artifacts["financing_intensity_log"], dtype=np.float64)
+            intensity_target = np.clip(funding_target_log - 0.35 * np.log1p(investors_target), 0.0, None)
+            summary["intensity_log_mae"] = float(np.mean(np.abs(intensity_log - intensity_target)))
+        if "financing_amount_coupling" in artifacts:
+            summary["amount_coupling_mean"] = float(
+                np.mean(np.asarray(artifacts["financing_amount_coupling"], dtype=np.float64))
+            )
+        if self._target_name == "investors_count":
+            primary_count = np.clip(np.asarray(artifacts["primary_count"], dtype=np.float64), 0.0, None)
+            summary["primary_vs_financing_count_gap"] = float(np.mean(np.abs(primary_count - count_pred)))
+            blended_count = np.clip(
+                np.asarray(artifacts.get("blended_count", artifacts["primary_count"]), dtype=np.float64),
+                0.0,
+                None,
+            )
+            summary["blended_vs_financing_count_gap"] = float(np.mean(np.abs(blended_count - count_pred)))
+        elif self._target_name == "is_funded":
+            primary_event = np.clip(np.asarray(artifacts["primary_binary_prob"], dtype=np.float64), 1e-6, 1.0 - 1e-6)
+            summary["primary_vs_financing_event_gap"] = float(np.mean(np.abs(primary_event - event_prob)))
+        elif self._target_name == "funding_raised_usd":
+            primary_amount = np.asarray(artifacts["primary_continuous_raw"], dtype=np.float64)
+            summary["primary_vs_financing_amount_log_gap"] = float(np.mean(np.abs(primary_amount - amount_log)))
+        return summary
+
     def predict(self, X: pd.DataFrame, **kwargs) -> np.ndarray:
         if not self._fitted:
             raise ValueError("V740AlphaPrototypeWrapper is not fitted")
@@ -3617,100 +5041,15 @@ class V740AlphaPrototypeWrapper(ModelBase):
         test_raw = kwargs.get("test_raw")
         target = kwargs.get("target")
         req_horizon = int(kwargs.get("horizon", self._horizon))
-        if test_raw is None or "entity_id" not in test_raw.columns:
-            return np.full(h, self._fallback_value, dtype=np.float64)
-
-        if target and target in test_raw.columns:
-            valid_mask = test_raw[target].notna()
-            test_entities = test_raw.loc[valid_mask, "entity_id"].values
-        else:
-            test_entities = test_raw["entity_id"].values
-        if len(test_entities) != h:
+        test_entities, unique_entities = self._prepare_prediction_entities(X, test_raw, target)
+        if test_entities is None:
             return np.full(h, self._fallback_value, dtype=np.float64)
 
         import torch
 
-        unique_entities = []
-        seen = set()
-        for eid in test_entities:
-            sid = str(eid)
-            if sid in self._contexts and sid not in seen:
-                seen.add(sid)
-                unique_entities.append(sid)
-
         preds_map: Dict[str, float] = {}
         if unique_entities:
-            x_batch = torch.tensor(
-                np.stack([self._contexts[eid] for eid in unique_entities]),
-                dtype=torch.float32,
-                device=self._device,
-            )
-            edgar_recent = torch.tensor(
-                np.stack([
-                    self._context_memory.get(eid, {}).get(
-                        "edgar_recent",
-                        np.zeros((self._dual_clock_cfg.max_events, 3 + len(self._edgar_cols)), dtype=np.float32),
-                    )
-                    for eid in unique_entities
-                ]),
-                dtype=torch.float32,
-                device=self._device,
-            )
-            edgar_bucket = torch.tensor(
-                np.stack([
-                    self._context_memory.get(eid, {}).get(
-                        "edgar_bucket",
-                        np.zeros((len(self._dual_clock_cfg.recency_buckets) + 1, 4 + len(self._edgar_cols)), dtype=np.float32),
-                    )
-                    for eid in unique_entities
-                ]),
-                dtype=torch.float32,
-                device=self._device,
-            )
-            text_recent = torch.tensor(
-                np.stack([
-                    self._context_memory.get(eid, {}).get(
-                        "text_recent",
-                        np.zeros((self._dual_clock_cfg.max_events, 3 + len(self._text_cols)), dtype=np.float32),
-                    )
-                    for eid in unique_entities
-                ]),
-                dtype=torch.float32,
-                device=self._device,
-            )
-            text_bucket = torch.tensor(
-                np.stack([
-                    self._context_memory.get(eid, {}).get(
-                        "text_bucket",
-                        np.zeros((len(self._dual_clock_cfg.recency_buckets) + 1, 4 + len(self._text_cols)), dtype=np.float32),
-                    )
-                    for eid in unique_entities
-                ]),
-                dtype=torch.float32,
-                device=self._device,
-            )
-            edgar_recent, edgar_bucket, text_recent, text_bucket = self._apply_source_tensor_scales(
-                edgar_recent,
-                edgar_bucket,
-                text_recent,
-                text_bucket,
-            )
-            with torch.no_grad():
-                task_idx, target_idx, horizon_value, ablation_idx = self._token_tensor(torch, len(unique_entities))
-                outputs = self._network(
-                    x_batch,
-                    task_idx,
-                    target_idx,
-                    horizon_value,
-                    ablation_idx,
-                    edgar_recent=edgar_recent,
-                    edgar_bucket=edgar_bucket,
-                    text_recent=text_recent,
-                    text_bucket=text_bucket,
-                )
-            self._update_target_route_stats(outputs)
-            self._update_count_route_stats(outputs)
-            self._update_count_specialist_stats(outputs)
+            outputs = self._forward_entity_contexts(torch, unique_entities)
             if self._binary_target:
                 raw = torch.sigmoid(outputs["binary"] / self._binary_temperature + self._binary_logit_bias).cpu().numpy()
             elif self._target_name == "investors_count":
