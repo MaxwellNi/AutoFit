@@ -27,6 +27,13 @@ import pandas as pd
 import pyarrow as pa
 import pyarrow.parquet as pq
 import yaml
+from sklearn.calibration import calibration_curve
+from sklearn.metrics import (
+    average_precision_score,
+    brier_score_loss,
+    log_loss,
+    roc_auc_score,
+)
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(REPO_ROOT))
@@ -355,6 +362,55 @@ def _downsample_binary_preserve_time(df: pd.DataFrame, target: str, max_rows: in
     return sampled.sort_values(["entity_id", "crawled_date_day"], kind="mergesort").reset_index(drop=True)
 
 
+def _is_binary_label_vector(y_true: np.ndarray) -> bool:
+    if len(y_true) == 0:
+        return False
+    unique = np.unique(np.asarray(y_true, dtype=np.float64))
+    return bool(np.all(np.isin(unique, [0.0, 1.0])))
+
+
+def _safe_auroc(y_true: np.ndarray, y_prob: np.ndarray) -> float | None:
+    try:
+        if len(np.unique(y_true)) < 2:
+            return None
+        return float(roc_auc_score(y_true, y_prob))
+    except Exception:
+        return None
+
+
+def _safe_prauc(y_true: np.ndarray, y_prob: np.ndarray) -> float | None:
+    try:
+        if len(np.unique(y_true)) < 2:
+            return None
+        return float(average_precision_score(y_true, y_prob))
+    except Exception:
+        return None
+
+
+def _safe_brier(y_true: np.ndarray, y_prob: np.ndarray) -> float | None:
+    try:
+        return float(brier_score_loss(y_true, np.clip(y_prob, 0.0, 1.0)))
+    except Exception:
+        return None
+
+
+def _safe_logloss(y_true: np.ndarray, y_prob: np.ndarray) -> float | None:
+    try:
+        return float(log_loss(y_true, np.clip(y_prob, 1e-15, 1.0 - 1e-15)))
+    except Exception:
+        return None
+
+
+def _expected_calibration_error(y_true: np.ndarray, y_prob: np.ndarray, n_bins: int = 10) -> float | None:
+    try:
+        prob_true, prob_pred = calibration_curve(y_true, np.clip(y_prob, 0.0, 1.0), n_bins=n_bins)
+        if len(prob_true) == 0:
+            return None
+        return float(np.mean(np.abs(prob_true - prob_pred)))
+    except Exception:
+        return None
+
+
 def _compute_metrics(y_true: np.ndarray, y_pred: np.ndarray) -> Dict[str, float]:
     metrics: Dict[str, float] = {}
     mask = ~(np.isnan(y_true) | np.isnan(y_pred))
@@ -368,6 +424,24 @@ def _compute_metrics(y_true: np.ndarray, y_pred: np.ndarray) -> Dict[str, float]
     nonzero = y_true != 0
     if nonzero.sum() > 0:
         metrics["mape"] = float(metric_mape(y_true[nonzero], y_pred[nonzero]))
+    if _is_binary_label_vector(y_true):
+        y_binary = y_true.astype(int, copy=False)
+        y_prob = np.clip(y_pred, 0.0, 1.0)
+        auroc = _safe_auroc(y_binary, y_prob)
+        prauc = _safe_prauc(y_binary, y_prob)
+        logloss = _safe_logloss(y_binary, y_prob)
+        brier = _safe_brier(y_binary, y_prob)
+        ece = _expected_calibration_error(y_binary, y_prob)
+        if auroc is not None:
+            metrics["auc"] = auroc
+        if prauc is not None:
+            metrics["prauc"] = prauc
+        if logloss is not None:
+            metrics["logloss"] = logloss
+        if brier is not None:
+            metrics["brier"] = brier
+        if ece is not None:
+            metrics["ece"] = ece
     return metrics
 
 
@@ -579,10 +653,25 @@ def _summarize_result(
     model: V740AlphaPrototypeWrapper,
 ) -> Dict[str, Any]:
     preds = np.asarray(preds, dtype=np.float64)
+    y_test_values = y_test.to_numpy(dtype=np.float64, copy=False)
     finite = np.isfinite(preds)
     coverage = float(finite.mean()) if len(preds) else 0.0
     std = float(np.nanstd(preds)) if len(preds) else 0.0
     constant_prediction = bool(len(preds) > 1 and std < 1e-8)
+    residuals = preds - y_test_values
+    truth_std = float(np.nanstd(y_test_values)) if len(y_test_values) else 0.0
+    residual_std = float(np.nanstd(residuals)) if len(residuals) else 0.0
+    truth_scale = max(truth_std, 1e-9)
+    prediction_to_truth_std_ratio = float(std / truth_scale) if len(preds) else None
+    residual_to_truth_std_ratio = float(residual_std / truth_scale) if len(residuals) else None
+    binary_prob_mean = None
+    binary_prob_std = None
+    binary_predicted_positive_rate = None
+    if getattr(model, "_binary_target", False):
+        clipped = np.clip(preds, 0.0, 1.0)
+        binary_prob_mean = float(np.nanmean(clipped)) if len(clipped) else None
+        binary_prob_std = float(np.nanstd(clipped)) if len(clipped) else None
+        binary_predicted_positive_rate = float(np.mean(clipped >= 0.5)) if len(clipped) else None
     regime_info = model.get_regime_info() if hasattr(model, "get_regime_info") else None
     return {
         "task": args.task,
@@ -605,11 +694,23 @@ def _summarize_result(
         "coverage_ratio": coverage,
         "constant_prediction": constant_prediction,
         "prediction_std": std,
+        "prediction_mean": float(np.nanmean(preds)) if len(preds) else None,
+        "y_true_mean": float(np.nanmean(y_test_values)) if len(y_test_values) else None,
+        "y_true_std": truth_std,
+        "y_true_min": float(np.nanmin(y_test_values)) if len(y_test_values) else None,
+        "y_true_max": float(np.nanmax(y_test_values)) if len(y_test_values) else None,
+        "residual_mean": float(np.nanmean(residuals)) if len(residuals) else None,
+        "residual_std": residual_std,
+        "prediction_to_truth_std_ratio": prediction_to_truth_std_ratio,
+        "residual_to_truth_std_ratio": residual_to_truth_std_ratio,
         "binary_train_rate": float(getattr(model, "_binary_train_rate", 0.0)) if getattr(model, "_binary_target", False) else None,
         "binary_event_rate": float(getattr(model, "_binary_event_rate", 0.0)) if getattr(model, "_binary_target", False) else None,
         "binary_transition_rate": float(getattr(model, "_binary_transition_rate", 0.0)) if getattr(model, "_binary_target", False) else None,
         "binary_pos_weight": float(getattr(model, "_binary_pos_weight", 1.0)) if getattr(model, "_binary_target", False) else None,
         "binary_temperature": float(getattr(model, "_binary_temperature", 1.0)) if getattr(model, "_binary_target", False) else None,
+        "binary_prob_mean": binary_prob_mean,
+        "binary_prob_std": binary_prob_std,
+        "binary_predicted_positive_rate": binary_predicted_positive_rate,
         "teacher_distill_enabled": bool(getattr(model, "enable_teacher_distill", False)),
         "event_head_enabled": bool(getattr(model, "enable_event_head", False)),
         "task_mod_enabled": bool(getattr(model, "_effective_task_modulation", getattr(model, "enable_task_modulation", False))),

@@ -1,0 +1,76 @@
+metadata:
+  name: single_model_true_champion_official_source_registry
+  version: "2026-04-08"
+  owner: single_model_true_champion_research
+  frontier_doc: docs/references/single_model_true_champion/SINGLE_MODEL_TRUE_CHAMPION_OFFICIAL_SOURCE_FRONTIER_PACK_ZH_20260408.md
+
+guardrails:
+  official_source_only: true
+  conservative_wording_default: true
+  notes:
+    - Keep QDF and JAPAN conservative until the current official-page pass is completed end-to-end.
+    - Verified entries must carry at least one official URL in this registry.
+
+entries:
+  DistDF:
+    official_title: Time-series Forecasting Needs Joint-Distribution Wasserstein Alignment
+    venue: ICLR
+    year: 2026
+    status: verified
+    official_repo: https://github.com/Master-PLC/DistDF
+    official_page: ""
+    official_pdf: ""
+    verification_basis: externally re-checked repo path carried forward from current research pack
+    verification_gap: ""
+    conservative_wording: false
+    mechanism_tags:
+      - distribution_alignment
+      - joint_distribution_objective
+      - multistep_wasserstein
+
+  ElasTST:
+    official_title: ElasTST
+    venue: NeurIPS
+    year: 2024
+    status: verified_partial
+    official_repo: https://github.com/microsoft/ProbTS
+    official_page: ""
+    official_pdf: https://openreview.net/pdf/4747a9cde6909a55d4179490101ff0d5f36daf83.pdf
+    verification_basis: official ProbTS repo and official PDF are both recorded in the repo source map
+    verification_gap: canonical benchmark landing is still separate from source verification
+    conservative_wording: false
+    mechanism_tags:
+      - varied_horizon_conditioning
+      - multi_horizon_forecasting
+      - comparator_queue
+
+  JAPAN:
+    official_title: JAPAN
+    venue: ICLR
+    year: 2026
+    status: pending_recheck
+    official_repo: ""
+    official_page: ""
+    official_pdf: ""
+    verification_basis: high-value mechanism line retained from repo research notes only
+    verification_gap: missing current end-to-end official-page recheck for density-aware calibrated prediction sets
+    conservative_wording: true
+    mechanism_tags:
+      - uncertainty_calibration
+      - density_aware_prediction_sets
+
+  QDF:
+    official_title: QDF
+    venue: ICLR
+    year: 2026
+    status: pending_recheck
+    official_repo: ""
+    official_page: ""
+    official_pdf: ""
+    verification_basis: high-value mechanism line retained from repo research notes only
+    verification_gap: missing current end-to-end official-page recheck for quadratic hard-cell weighting
+    conservative_wording: true
+    mechanism_tags:
+      - hard_cell_weighting
+      - horizon_aware_objective
+      - quadratic_weighting

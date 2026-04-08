@@ -1,0 +1,215 @@
+metadata:
+  name: public_pack_dataset_families
+  version: "2026-04-08"
+  status: scaffold
+  owner: single_model_true_champion_research
+  official_source_doc: docs/references/single_model_true_champion/SINGLE_MODEL_TRUE_CHAMPION_OFFICIAL_SOURCE_FRONTIER_PACK_ZH_20260408.md
+
+guardrails:
+  official_source_only: true
+  local_results_are_research_only: true
+  canonical_truth_doc: docs/CURRENT_SOURCE_OF_TRUTH.md
+  notes:
+    - Do not upgrade repo-tracked signals into official-source facts without a fresh official-page pass.
+    - Do not treat local public-pack experiments as canonical benchmark truth.
+    - Keep exact public subset selection conservative until the official frontier pack says it is locked.
+
+packs:
+  long_horizon_core:
+    description: Repeated multivariate long-horizon family across recent official-source-verified papers.
+    families: [ett, ecl, traffic, weather, exchange, ili, solar]
+  traffic_graph_heavy:
+    description: Traffic / graph-aware forecasting family with shorter horizon protocols.
+    families: [pems]
+  broad_robustness:
+    description: Broader external robustness layer that stays scaffold-only until exact subsets are locked.
+    families: [m4, m5, monash]
+
+families:
+  ett:
+    display_name: ETT
+    status: scaffold
+    enabled: false
+    variants: [ETTh1, ETTh2, ETTm1, ETTm2]
+    task_type: multivariate_long_horizon
+    representative_protocol:
+      context_lengths: [96]
+      prediction_lengths: [96, 192, 336, 720]
+    verification_tier: official_source_verified
+    official_source_signals: [SAMformer, DistDF, UniTS]
+    dataset_roots:
+      raw: data/public/ett/raw
+      processed: data/public/ett/processed
+      cache: runs/public_pack/ett
+
+  ecl:
+    display_name: Electricity
+    aliases: [ECL]
+    status: scaffold
+    enabled: false
+    variants: [Electricity]
+    task_type: multivariate_long_horizon
+    representative_protocol:
+      context_lengths: [96]
+      prediction_lengths: [96, 192, 336, 720]
+    verification_tier: official_source_verified
+    official_source_signals: [SAMformer, DistDF, UniTS]
+    dataset_roots:
+      raw: data/public/ecl/raw
+      processed: data/public/ecl/processed
+      cache: runs/public_pack/ecl
+
+  traffic:
+    display_name: Traffic
+    status: scaffold
+    enabled: false
+    variants: [Traffic]
+    task_type: multivariate_long_horizon
+    representative_protocol:
+      context_lengths: [96]
+      prediction_lengths: [96, 192, 336, 720]
+    verification_tier: official_source_verified
+    official_source_signals: [SAMformer, UniTS]
+    dataset_roots:
+      raw: data/public/traffic/raw
+      processed: data/public/traffic/processed
+      cache: runs/public_pack/traffic
+
+  weather:
+    display_name: Weather
+    status: scaffold
+    enabled: false
+    variants: [Weather]
+    task_type: multivariate_long_horizon
+    representative_protocol:
+      context_lengths: [96]
+      prediction_lengths: [96, 192, 336, 720]
+    verification_tier: official_source_verified
+    official_source_signals: [SAMformer, DistDF, UniTS]
+    dataset_roots:
+      raw: data/public/weather/raw
+      processed: data/public/weather/processed
+      cache: runs/public_pack/weather
+
+  exchange:
+    display_name: Exchange-rate
+    aliases: [Exchange]
+    status: scaffold
+    enabled: false
+    variants: [Exchange-rate]
+    task_type: multivariate_long_horizon
+    representative_protocol:
+      context_lengths: [96]
+      prediction_lengths: [96, 192, 336, 720]
+    verification_tier: official_source_verified
+    official_source_signals: [SAMformer, UniTS]
+    dataset_roots:
+      raw: data/public/exchange/raw
+      processed: data/public/exchange/processed
+      cache: runs/public_pack/exchange
+
+  ili:
+    display_name: ILI
+    aliases: [Illness]
+    status: scaffold
+    enabled: false
+    variants: [ILI]
+    task_type: multivariate_long_horizon
+    representative_protocol:
+      context_lengths: [36]
+      prediction_lengths: [24, 36, 48, 60]
+    verification_tier: official_source_verified_family
+    official_source_signals: [UniTS]
+    notes:
+      - ILI protocol differs more across papers; keep it as a horizon band until exact subset policy is frozen.
+    dataset_roots:
+      raw: data/public/ili/raw
+      processed: data/public/ili/processed
+      cache: runs/public_pack/ili
+
+  solar:
+    display_name: Solar
+    status: scaffold
+    enabled: false
+    variants: [Solar]
+    task_type: multivariate_long_horizon
+    representative_protocol:
+      context_lengths: [96]
+      prediction_lengths: [96, 192, 336, 720]
+    verification_tier: official_source_verified_family
+    official_source_signals: [UniTS]
+    dataset_roots:
+      raw: data/public/solar/raw
+      processed: data/public/solar/processed
+      cache: runs/public_pack/solar
+
+  pems:
+    display_name: PEMS
+    status: scaffold
+    enabled: false
+    variants: [PEMS03, PEMS04, PEMS07, PEMS08]
+    task_type: traffic_graph_forecasting
+    representative_protocol:
+      context_lengths: [12]
+      prediction_lengths: [12, 24, 48, 96]
+    verification_tier: official_source_verified_family
+    official_source_signals: [LightGTS, UniTS]
+    dataset_roots:
+      raw: data/public/pems/raw
+      processed: data/public/pems/processed
+      cache: runs/public_pack/pems
+
+  m4:
+    display_name: M4
+    status: scaffold
+    enabled: false
+    variants: []
+    task_type: broad_robustness
+    representative_protocol:
+      context_lengths: []
+      prediction_lengths: []
+    verification_tier: scaffold_pending_subset_lock
+    official_source_signals: [UniTS]
+    notes:
+      - Keep family-level coverage only for now; exact subset and frequency contract remain pending.
+    dataset_roots:
+      raw: data/public/m4/raw
+      processed: data/public/m4/processed
+      cache: runs/public_pack/m4
+
+  m5:
+    display_name: M5
+    status: scaffold
+    enabled: false
+    variants: []
+    task_type: broad_robustness
+    representative_protocol:
+      context_lengths: []
+      prediction_lengths: []
+    verification_tier: scaffold_pending_subset_lock
+    official_source_signals: [UniTS]
+    notes:
+      - Keep family-level coverage only for now; exact subset and frequency contract remain pending.
+    dataset_roots:
+      raw: data/public/m5/raw
+      processed: data/public/m5/processed
+      cache: runs/public_pack/m5
+
+  monash:
+    display_name: Monash Forecasting Repository
+    aliases: [Monash]
+    status: scaffold
+    enabled: false
+    variants: []
+    task_type: broad_robustness
+    representative_protocol:
+      context_lengths: []
+      prediction_lengths: []
+    verification_tier: scaffold_pending_subset_lock
+    official_source_signals: [UniTS]
+    notes:
+      - Treat this as a repository family until exact subsets, frequencies, and fairness filters are explicitly pinned.
+    dataset_roots:
+      raw: data/public/monash/raw
+      processed: data/public/monash/processed
+      cache: runs/public_pack/monash

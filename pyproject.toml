@@ -4,10 +4,10 @@ version = "0.1.0"
 description = "Recovered minimal project metadata for reproducible audits."
 readme = "QUICK_START.md"
 requires-python = ">=3.9"
-dependencies = ["deltalake", "duckdb"]
+dependencies = ["deltalake", "duckdb", "PyYAML>=6.0"]
 
 [tool.pytest.ini_options]
-pythonpath = ["src"]
+pythonpath = ["src", "."]
 testpaths = ["test"]
 
 [tool.black]
