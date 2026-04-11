@@ -25,6 +25,11 @@ sys.path.insert(0, str(REPO_ROOT))
 
 from src.narrative.block3.models.nf_adaptive_champion import NFAdaptiveChampionV739
 from src.narrative.block3.models.v740_alpha import V740AlphaPrototypeWrapper
+from src.narrative.block3.models.v740_variant_profiles import (
+    apply_v740_variant_profile,
+    is_local_v740_variant,
+    resolve_requested_v740_variant,
+)
 from src.narrative.block3.unified_protocol import (
     TemporalSplitConfig,
     apply_temporal_split,
@@ -159,17 +164,7 @@ def _parse_args() -> argparse.Namespace:
 
 def _normalize_local_model_id(model_id: str, args: argparse.Namespace) -> str:
     model_id = model_id.strip()
-    if model_id == "v740_alpha" and getattr(args, "enable_v745_evidence_residual", False):
-        return "v745_evidence_residual"
-    if model_id == "v740_alpha" and getattr(args, "enable_v744_guarded_phase", False):
-        return "v744_guarded_phase"
-    if model_id == "v740_alpha" and getattr(args, "enable_v743_factorized", False):
-        return "v743_factorized"
-    if model_id == "v740_alpha" and getattr(args, "enable_v742_unified", False):
-        return "v742_unified"
-    if model_id == "v740_alpha" and getattr(args, "enable_v741_lite", False):
-        return "v741_lite"
-    return model_id
+    return resolve_requested_v740_variant(model_id, vars(args))
 
 
 def _make_temporal_config() -> TemporalSplitConfig:
@@ -203,35 +198,8 @@ def _build_case_frame(case: Dict[str, Any], temporal_config: TemporalSplitConfig
 
 
 def _instantiate_model(model_id: str, args: argparse.Namespace):
-    if model_id in {"v740_alpha", "v741_lite", "v742_unified", "v743_factorized", "v744_guarded_phase", "v745_evidence_residual"}:
-        target_kwargs = v740_target_regime_kwargs_from_args(args)
-        if model_id == "v741_lite":
-            target_kwargs["enable_v741_lite"] = True
-        if model_id == "v742_unified":
-            target_kwargs["enable_financing_consistency"] = True
-            target_kwargs["enable_target_routing"] = False
-            target_kwargs["enable_count_source_routing"] = False
-            target_kwargs["enable_count_source_specialists"] = False
-            target_kwargs["enable_count_hurdle_head"] = False
-            target_kwargs["enable_window_repair"] = True
-        if model_id == "v743_factorized":
-            target_kwargs["enable_financing_consistency"] = True
-            target_kwargs["enable_financing_factorization"] = True
-            target_kwargs["enable_target_routing"] = False
-            target_kwargs["enable_count_source_routing"] = False
-            target_kwargs["enable_count_source_specialists"] = False
-            target_kwargs["enable_count_hurdle_head"] = False
-            target_kwargs["enable_window_repair"] = True
-        if model_id == "v744_guarded_phase":
-            target_kwargs["enable_financing_consistency"] = True
-            target_kwargs["enable_financing_factorization"] = True
-            target_kwargs["enable_financing_guarded_phase"] = True
-            target_kwargs["enable_window_repair"] = True
-        if model_id == "v745_evidence_residual":
-            target_kwargs["enable_financing_consistency"] = True
-            target_kwargs["enable_financing_factorization"] = True
-            target_kwargs["enable_financing_evidence_residual"] = True
-            target_kwargs["enable_window_repair"] = True
+    if is_local_v740_variant(model_id):
+        target_kwargs = apply_v740_variant_profile(model_id, v740_target_regime_kwargs_from_args(args))
         return V740AlphaPrototypeWrapper(
             input_size=60,
             hidden_dim=64,

@@ -22,6 +22,7 @@ REPO_ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(REPO_ROOT))
 
 from src.narrative.block3.models.registry import get_model
+from src.narrative.block3.models.single_model_mainline import SingleModelMainlineWrapper
 from src.narrative.block3.unified_protocol import (
     TemporalSplitConfig,
     apply_temporal_split,
@@ -39,7 +40,14 @@ from scripts.run_v740_alpha_smoke_slice import (
 
 def _parse_args() -> argparse.Namespace:
     ap = argparse.ArgumentParser(description=__doc__)
-    ap.add_argument("--model", required=True, help="Registered model name")
+    ap.add_argument(
+        "--model",
+        required=True,
+        help=(
+            "Registered model name or local mainline alias. "
+            "Supported local aliases: single_model_mainline, single_model_mainline_delegate"
+        ),
+    )
     ap.add_argument("--model-kwargs", default="{}", help="JSON kwargs passed to the model factory")
     ap.add_argument("--task", required=True)
     ap.add_argument("--ablation", required=True)
@@ -67,6 +75,18 @@ def _make_temporal_config() -> TemporalSplitConfig:
     )
 
 
+def _build_model(model_name: str, model_kwargs: Dict[str, Any]):
+    kwargs = dict(model_kwargs)
+    if model_name == "single_model_mainline":
+        variant = kwargs.pop("variant", "mainline_alpha")
+        return SingleModelMainlineWrapper(variant=variant, **kwargs)
+    if model_name == "single_model_mainline_delegate":
+        variant = kwargs.pop("variant", "mainline_delegate_alpha")
+        kwargs.setdefault("use_delegate", True)
+        return SingleModelMainlineWrapper(variant=variant, **kwargs)
+    return get_model(model_name, **kwargs)
+
+
 def main() -> int:
     args = _parse_args()
     if args.output_json and args.skip_if_output_exists and args.output_json.exists():
@@ -90,7 +110,7 @@ def main() -> int:
             f"Insufficient rows for local smoke: train={len(X_train)} test={len(X_test)}"
         )
 
-    model = get_model(args.model, **model_kwargs)
+    model = _build_model(args.model, model_kwargs)
     t0 = time.time()
     model.fit(
         X_train,

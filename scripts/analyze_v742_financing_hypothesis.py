@@ -25,6 +25,7 @@ from scripts.run_v740_alpha_smoke_slice import (  # noqa: E402
     v740_funding_regime_kwargs_from_args,
 )
 from src.narrative.block3.models.v740_alpha import V740AlphaPrototypeWrapper  # noqa: E402
+from src.narrative.block3.models.v740_variant_profiles import apply_v740_variant_profile  # noqa: E402
 from src.narrative.block3.unified_protocol import (  # noqa: E402
     TemporalSplitConfig,
     apply_temporal_split,
@@ -96,59 +97,39 @@ def _instantiate_model(label: str, args: argparse.Namespace) -> V740AlphaPrototy
     if label == "v742_unified":
         kwargs.update(
             {
-                "enable_financing_consistency": True,
                 "financing_consistency_strength": float(args.v742_consistency_strength),
                 "financing_auxiliary_strength": float(args.v742_auxiliary_strength),
                 "financing_process_blend": float(args.v742_blend),
-                "enable_target_routing": False,
-                "enable_count_source_routing": False,
-                "enable_count_source_specialists": False,
-                "enable_count_hurdle_head": False,
-                "enable_window_repair": True,
             }
         )
     if label == "v743_factorized":
         kwargs.update(
             {
-                "enable_financing_consistency": True,
-                "enable_financing_factorization": True,
                 "financing_consistency_strength": float(args.v743_consistency_strength),
                 "financing_auxiliary_strength": float(args.v743_auxiliary_strength),
                 "financing_process_blend": float(args.v743_blend),
                 "financing_scaffold_strength": float(args.v743_scaffold_strength),
-                "enable_target_routing": False,
-                "enable_count_source_routing": False,
-                "enable_count_source_specialists": False,
-                "enable_count_hurdle_head": False,
-                "enable_window_repair": True,
             }
         )
     if label == "v744_guarded_phase":
         kwargs.update(
             {
-                "enable_financing_consistency": True,
-                "enable_financing_factorization": True,
-                "enable_financing_guarded_phase": True,
                 "financing_consistency_strength": float(args.v744_consistency_strength),
                 "financing_auxiliary_strength": float(args.v744_auxiliary_strength),
                 "financing_process_blend": float(args.v744_blend),
                 "financing_scaffold_strength": float(args.v744_scaffold_strength),
-                "enable_window_repair": True,
             }
         )
     if label == "v745_evidence_residual":
         kwargs.update(
             {
-                "enable_financing_consistency": True,
-                "enable_financing_factorization": True,
-                "enable_financing_evidence_residual": True,
                 "financing_consistency_strength": float(args.v745_consistency_strength),
                 "financing_auxiliary_strength": float(args.v745_auxiliary_strength),
                 "financing_process_blend": float(args.v745_blend),
                 "financing_scaffold_strength": float(args.v745_scaffold_strength),
-                "enable_window_repair": True,
             }
         )
+    kwargs = apply_v740_variant_profile(label, kwargs)
     return V740AlphaPrototypeWrapper(**kwargs)
 
 

@@ -24,6 +24,7 @@ Usage:
     ml_models = get_models_by_category("ml_tabular")
 """
 from .base import ModelBase, ModelConfig
+from .single_model_mainline import SingleModelMainlineWrapper
 from .registry import (
     get_model,
     get_models_by_category,
@@ -43,6 +44,7 @@ __all__ = [
     # Base classes
     "ModelBase",
     "ModelConfig",
+    "SingleModelMainlineWrapper",
     
     # Main registry functions
     "get_model",

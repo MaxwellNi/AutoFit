@@ -15,16 +15,15 @@ The local numbers are only comparable within the same local slice. The purpose i
 to create a fast, honest closed loop for V740 engineering, not to overwrite the
 canonical benchmark line.
 """
-from __future__ import annotations
-
 import argparse
 import json
 import re
+import subprocess
 import sys
 import time
 from collections import Counter, defaultdict
 from pathlib import Path
-from typing import Any, Dict, Iterable, List, Optional
+from typing import Any, Dict, Iterable, List, Optional, Set, Tuple
 
 import numpy as np
 import pandas as pd
@@ -44,7 +43,13 @@ from scripts.run_v740_alpha_smoke_slice import (
 )
 from src.narrative.block3.models.nf_adaptive_champion import NFAdaptiveChampionV739
 from src.narrative.block3.models.registry import check_model_available, get_model
+from src.narrative.block3.models.single_model_mainline import SingleModelMainlineWrapper
 from src.narrative.block3.models.v740_alpha import V740AlphaPrototypeWrapper
+from src.narrative.block3.models.v740_variant_profiles import (
+    apply_v740_variant_profile,
+    is_local_v740_variant,
+    resolve_requested_v740_variant,
+)
 
 
 NONSEED_ABLATIONS = ["core_only", "core_edgar", "core_text", "full"]
@@ -52,6 +57,10 @@ CELL_COLS = ["task", "ablation", "target", "horizon"]
 TASK_ORDER = {"task1_outcome": 0, "task2_forecast": 1, "task3_risk_adjust": 2}
 ABLATION_ORDER = {"core_only": 0, "core_edgar": 1, "core_text": 2, "full": 3}
 TARGET_ORDER = {"is_funded": 0, "funding_raised_usd": 1, "investors_count": 2}
+LOCAL_MAINLINE_ALIASES = {
+    "single_model_mainline": {"variant": "mainline_alpha", "use_delegate": False},
+    "single_model_mainline_delegate": {"variant": "mainline_delegate_alpha", "use_delegate": True},
+}
 
 
 def _positive_int(value: str) -> int:
@@ -98,7 +107,7 @@ def _parse_args() -> argparse.Namespace:
     ap.add_argument(
         "--models",
         default="v740_alpha,incumbent",
-        help="Comma-separated models. Special tokens: v740_alpha, v741_lite, v742_unified, v743_factorized, v744_guarded_phase, v745_evidence_residual, incumbent, v739",
+        help="Comma-separated models. Special tokens: v740_alpha, v741_lite, v742_unified, v743_factorized, v744_guarded_phase, v745_evidence_residual, single_model_mainline, single_model_mainline_delegate, incumbent, v739",
     )
     ap.add_argument(
         "--profile",
@@ -119,6 +128,33 @@ def _parse_args() -> argparse.Namespace:
         help="Only materialize the shared-112 surface manifest; do not run any models.",
     )
     ap.add_argument("--tie-tolerance-pct", type=float, default=0.5)
+    ap.add_argument(
+        "--skip-scorecard",
+        action="store_true",
+        help="Do not generate the serious-branch scorecard draft after the loop finishes.",
+    )
+    ap.add_argument(
+        "--scorecard-md",
+        type=Path,
+        default=None,
+        help="Optional path for the auto-generated serious-branch scorecard markdown.",
+    )
+    ap.add_argument(
+        "--scorecard-json",
+        type=Path,
+        default=None,
+        help="Optional path for the auto-generated serious-branch scorecard JSON summary.",
+    )
+    ap.add_argument(
+        "--scorecard-branch-name",
+        default="",
+        help="Optional branch name label passed through to the scorecard generator.",
+    )
+    ap.add_argument(
+        "--scorecard-branch-type",
+        default="cross_task",
+        help="Branch type label passed through to the scorecard generator.",
+    )
 
     ap.add_argument("--input-size", type=_positive_int, default=60)
     ap.add_argument("--hidden-dim", type=_positive_int, default=64)
@@ -136,22 +172,19 @@ def _parse_args() -> argparse.Namespace:
     return ap.parse_args()
 
 
+def _default_scorecard_md(summary_md: Path) -> Path:
+    if "CHAMPION_LOOP" in summary_md.name:
+        return summary_md.with_name(summary_md.name.replace("CHAMPION_LOOP", "SCORECARD"))
+    if "champion_loop" in summary_md.name:
+        return summary_md.with_name(summary_md.name.replace("champion_loop", "scorecard"))
+    return summary_md.with_name(summary_md.stem + "_scorecard" + summary_md.suffix)
+
+
 def _normalize_local_model_token(token: str, args: argparse.Namespace) -> str:
-    token = token.strip()
-    if token == "v740_alpha" and getattr(args, "enable_v745_evidence_residual", False):
-        return "v745_evidence_residual"
-    if token == "v740_alpha" and getattr(args, "enable_v744_guarded_phase", False):
-        return "v744_guarded_phase"
-    if token == "v740_alpha" and getattr(args, "enable_v743_factorized", False):
-        return "v743_factorized"
-    if token == "v740_alpha" and getattr(args, "enable_v742_unified", False):
-        return "v742_unified"
-    if token == "v740_alpha" and getattr(args, "enable_v741_lite", False):
-        return "v741_lite"
-    return token
+    return resolve_requested_v740_variant(token.strip(), vars(args))
 
 
-def _task_budget(task: str, target: str, horizon: int, profile: str) -> tuple[int, int]:
+def _task_budget(task: str, target: str, horizon: int, profile: str) -> Tuple[int, int]:
     if profile == "quick":
         max_entities = 8 if target == "is_funded" else 12
         max_rows = 800 if target == "is_funded" else 1200
@@ -176,7 +209,7 @@ def _cell_name(row: Dict[str, Any]) -> str:
     return f"{row['task']}__{row['ablation']}__{row['target']}__h{int(row['horizon'])}"
 
 
-def _sort_key(row: Dict[str, Any]) -> tuple[Any, ...]:
+def _sort_key(row: Dict[str, Any]) -> Tuple[Any, ...]:
     return (
         TASK_ORDER.get(str(row["task"]), 99),
         TARGET_ORDER.get(str(row["target"]), 99),
@@ -250,35 +283,8 @@ def _load_shared112_surface(csv_path: Path, profile: str) -> Dict[str, Any]:
 
 
 def _instantiate_model(model_token: str, resolved_name: str, args: argparse.Namespace):
-    if model_token in {"v740_alpha", "v741_lite", "v742_unified", "v743_factorized", "v744_guarded_phase", "v745_evidence_residual"}:
-        target_kwargs = v740_target_regime_kwargs_from_args(args)
-        if model_token == "v741_lite":
-            target_kwargs["enable_v741_lite"] = True
-        if model_token == "v742_unified":
-            target_kwargs["enable_financing_consistency"] = True
-            target_kwargs["enable_target_routing"] = False
-            target_kwargs["enable_count_source_routing"] = False
-            target_kwargs["enable_count_source_specialists"] = False
-            target_kwargs["enable_count_hurdle_head"] = False
-            target_kwargs["enable_window_repair"] = True
-        if model_token == "v743_factorized":
-            target_kwargs["enable_financing_consistency"] = True
-            target_kwargs["enable_financing_factorization"] = True
-            target_kwargs["enable_target_routing"] = False
-            target_kwargs["enable_count_source_routing"] = False
-            target_kwargs["enable_count_source_specialists"] = False
-            target_kwargs["enable_count_hurdle_head"] = False
-            target_kwargs["enable_window_repair"] = True
-        if model_token == "v744_guarded_phase":
-            target_kwargs["enable_financing_consistency"] = True
-            target_kwargs["enable_financing_factorization"] = True
-            target_kwargs["enable_financing_guarded_phase"] = True
-            target_kwargs["enable_window_repair"] = True
-        if model_token == "v745_evidence_residual":
-            target_kwargs["enable_financing_consistency"] = True
-            target_kwargs["enable_financing_factorization"] = True
-            target_kwargs["enable_financing_evidence_residual"] = True
-            target_kwargs["enable_window_repair"] = True
+    if is_local_v740_variant(model_token):
+        target_kwargs = apply_v740_variant_profile(model_token, v740_target_regime_kwargs_from_args(args))
         return V740AlphaPrototypeWrapper(
             input_size=args.input_size,
             hidden_dim=args.hidden_dim,
@@ -295,6 +301,26 @@ def _instantiate_model(model_token: str, resolved_name: str, args: argparse.Name
             **target_kwargs,
             seed=args.seed,
         )
+    if model_token in LOCAL_MAINLINE_ALIASES:
+        alias_cfg = LOCAL_MAINLINE_ALIASES[model_token]
+        return SingleModelMainlineWrapper(
+            variant=alias_cfg["variant"],
+            use_delegate=alias_cfg["use_delegate"],
+            input_size=args.input_size,
+            hidden_dim=args.hidden_dim,
+            max_epochs=args.max_epochs,
+            batch_size=args.batch_size,
+            max_covariates=args.max_covariates,
+            max_entities=3000,
+            max_windows=args.max_windows,
+            patience=args.patience,
+            enable_teacher_distill=not args.disable_teacher_distill,
+            enable_event_head=not args.disable_event_head,
+            enable_task_modulation=not args.disable_task_modulation,
+            **v740_funding_regime_kwargs_from_args(args),
+            **v740_target_regime_kwargs_from_args(args),
+            seed=args.seed,
+        )
     if model_token == "v739":
         return NFAdaptiveChampionV739(model_timeout=90)
     return get_model(resolved_name)
@@ -302,7 +328,7 @@ def _instantiate_model(model_token: str, resolved_name: str, args: argparse.Name
 
 def _resolve_model_specs(raw_models: List[str], case: Dict[str, Any], args: argparse.Namespace) -> List[Dict[str, str]]:
     specs: List[Dict[str, str]] = []
-    seen: set[tuple[str, str]] = set()
+    seen: Set[Tuple[str, str]] = set()
     for token in raw_models:
         token = token.strip()
         if not token:
@@ -310,7 +336,7 @@ def _resolve_model_specs(raw_models: List[str], case: Dict[str, Any], args: argp
         if token == "incumbent":
             resolved = case["incumbent_model"]
             label = f"incumbent__{resolved}"
-        elif token in {"v740_alpha", "v741_lite", "v742_unified", "v743_factorized", "v744_guarded_phase", "v745_evidence_residual"}:
+        elif is_local_v740_variant(token):
             token = _normalize_local_model_token(token, args)
             resolved = token
             label = token
@@ -343,7 +369,12 @@ def _run_local_model(
         raise RuntimeError(
             f"Insufficient rows for {case['name']} / {resolved_name}: train={len(X_train)} test={len(X_test)}"
         )
-    if model_token not in {"v740_alpha", "v741_lite", "v742_unified", "v743_factorized", "v744_guarded_phase", "v745_evidence_residual", "v739"} and not check_model_available(resolved_name):
+    if (
+        model_token != "v739"
+        and not is_local_v740_variant(model_token)
+        and model_token not in LOCAL_MAINLINE_ALIASES
+        and not check_model_available(resolved_name)
+    ):
         raise RuntimeError(f"Model {resolved_name} is not available in this environment")
 
     model = _instantiate_model(model_token, resolved_name, args)
@@ -427,7 +458,17 @@ def _pick_primary_candidate_label(results: List[Dict[str, Any]]) -> str:
             continue
         seen.add(label)
         labels.append(label)
-    for preferred in ("v745_evidence_residual", "v744_guarded_phase", "v743_factorized", "v742_unified", "v741_lite", "v740_alpha", "v739"):
+    for preferred in (
+        "single_model_mainline",
+        "single_model_mainline_delegate",
+        "v745_evidence_residual",
+        "v744_guarded_phase",
+        "v743_factorized",
+        "v742_unified",
+        "v741_lite",
+        "v740_alpha",
+        "v739",
+    ):
         if preferred in seen:
             return preferred
     return labels[0] if labels else "v740_alpha"
@@ -453,6 +494,10 @@ def _classify_case(case_rows: Dict[str, Dict[str, Any]], tie_tol_pct: float, can
 
 
 def _display_candidate_name(candidate_label: str) -> str:
+    if candidate_label == "single_model_mainline":
+        return "SingleModelMainline"
+    if candidate_label == "single_model_mainline_delegate":
+        return "SingleModelMainline-Delegate"
     if candidate_label == "v745_evidence_residual":
         return "V745-EvidenceResidual"
     if candidate_label == "v744_guarded_phase":
@@ -621,6 +666,43 @@ def _write_summary(path: Path, manifest: Dict[str, Any], results: List[Dict[str,
     path.write_text("\n".join(lines).rstrip() + "\n", encoding="utf-8")
 
 
+def _run_scorecard_builder(
+    args: argparse.Namespace,
+    results_dir: Path,
+    surface_json: Path,
+    candidate_label: str,
+) -> Path:
+    scorecard_md = args.scorecard_md or _default_scorecard_md(args.summary_md)
+    scorecard_json = args.scorecard_json or scorecard_md.with_suffix(".json")
+    scorecard_md.parent.mkdir(parents=True, exist_ok=True)
+    scorecard_json.parent.mkdir(parents=True, exist_ok=True)
+
+    cmd = [
+        sys.executable,
+        str(REPO_ROOT / "scripts" / "build_shared112_scorecard.py"),
+        "--results-dir",
+        str(results_dir),
+        "--surface-json",
+        str(surface_json),
+        "--output-md",
+        str(scorecard_md),
+        "--output-json",
+        str(scorecard_json),
+        "--candidate-label",
+        candidate_label,
+        "--branch-type",
+        args.scorecard_branch_type,
+        "--tie-tolerance-pct",
+        str(args.tie_tolerance_pct),
+    ]
+    branch_name = args.scorecard_branch_name.strip() or args.output_dir.name
+    if branch_name:
+        cmd.extend(["--branch-name", branch_name])
+
+    subprocess.run(cmd, check=True)
+    return scorecard_md
+
+
 def main() -> int:
     args = _parse_args()
     raw_models = [m.strip() for m in args.models.split(",") if m.strip()]
@@ -629,7 +711,11 @@ def main() -> int:
     args.surface_json.parent.mkdir(parents=True, exist_ok=True)
 
     manifest = _load_shared112_surface(args.all_results_csv, args.profile)
-    args.surface_json.write_text(json.dumps(manifest, indent=2, sort_keys=True), encoding="utf-8")
+    surface_payload = json.dumps(manifest, indent=2, sort_keys=True)
+    args.surface_json.write_text(surface_payload, encoding="utf-8")
+    local_surface_json = args.output_dir / "surface.json"
+    if local_surface_json != args.surface_json:
+        local_surface_json.write_text(surface_payload, encoding="utf-8")
     print(
         f"[v740-shared112] surface ready: {manifest['n_models']} models / {manifest['n_cells']} cells",
         flush=True,
@@ -713,6 +799,10 @@ def main() -> int:
 
     _write_summary(args.summary_md, manifest, results, args.tie_tolerance_pct)
     print(f"[v740-shared112] wrote summary to {args.summary_md}", flush=True)
+    if not args.skip_scorecard:
+        candidate_label = _pick_primary_candidate_label(results)
+        scorecard_md = _run_scorecard_builder(args, args.output_dir, local_surface_json, candidate_label)
+        print(f"[v740-shared112] wrote scorecard to {scorecard_md}", flush=True)
     return 0
 
 

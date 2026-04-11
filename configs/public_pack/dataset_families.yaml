@@ -1,9 +1,10 @@
 metadata:
   name: public_pack_dataset_families
-  version: "2026-04-08"
-  status: scaffold
+  version: "2026-04-09"
+  status: policy_locked_research_only
   owner: single_model_true_champion_research
   official_source_doc: docs/references/single_model_true_champion/SINGLE_MODEL_TRUE_CHAMPION_OFFICIAL_SOURCE_FRONTIER_PACK_ZH_20260408.md
+  subset_lock_doc: docs/references/single_model_true_champion/SINGLE_MODEL_TRUE_CHAMPION_PUBLIC_PACK_SUBSET_LOCK_ZH_20260409.md
 
 guardrails:
   official_source_only: true
@@ -12,7 +13,7 @@ guardrails:
   notes:
     - Do not upgrade repo-tracked signals into official-source facts without a fresh official-page pass.
     - Do not treat local public-pack experiments as canonical benchmark truth.
-    - Keep exact public subset selection conservative until the official frontier pack says it is locked.
+    - Treat the locked M4/M5/Monash subset policy as research-only execution guidance, not as canonical truth.
 
 packs:
   long_horizon_core:
@@ -22,7 +23,7 @@ packs:
     description: Traffic / graph-aware forecasting family with shorter horizon protocols.
     families: [pems]
   broad_robustness:
-    description: Broader external robustness layer that stays scaffold-only until exact subsets are locked.
+    description: Broader external robustness layer with a conservative research-only subset lock.
     families: [m4, m5, monash]
 
 families:
@@ -161,17 +162,46 @@ families:
 
   m4:
     display_name: M4
-    status: scaffold
+    status: policy_locked_research_only
     enabled: false
-    variants: []
-    task_type: broad_robustness
+    variants: [M4_Daily, M4_Weekly, M4_Monthly]
+    task_type: broad_robustness_competition
     representative_protocol:
       context_lengths: []
       prediction_lengths: []
-    verification_tier: scaffold_pending_subset_lock
-    official_source_signals: [UniTS]
+    verification_tier: research_policy_locked
+    official_source_signals: [M4-methods, MonashRepository]
+    subset_lock:
+      status: locked_research_only
+      source_anchor: M4-methods README plus official Info/evaluation files
+      locked_subsets:
+        - subset_id: M4_Daily
+          frequency: D
+          protocol:
+            context_policy: use available pre-history
+            prediction_length_source: official_info_horizon
+            evaluation: [sMAPE, MASE, OWA]
+          fairness_filters:
+            - first-pass pack excludes yearly and quarterly competition tracks
+            - do not mix hourly short-term track into the same first-pass robustness layer
+        - subset_id: M4_Weekly
+          frequency: W
+          protocol:
+            context_policy: use available pre-history
+            prediction_length_source: official_info_horizon
+            evaluation: [sMAPE, MASE, OWA]
+          fairness_filters:
+            - keep the official weekly track separate from daily and monthly score aggregation
+        - subset_id: M4_Monthly
+          frequency: M
+          protocol:
+            context_policy: use available pre-history
+            prediction_length_source: official_info_horizon
+            evaluation: [sMAPE, MASE, OWA]
+          fairness_filters:
+            - do not merge low-frequency monthly behavior with yearly and quarterly tracks in first-pass comparisons
     notes:
-      - Keep family-level coverage only for now; exact subset and frequency contract remain pending.
+      - Locked to three regular-grid competition tracks only; this remains a research-only execution policy.
     dataset_roots:
       raw: data/public/m4/raw
       processed: data/public/m4/processed
@@ -179,17 +209,31 @@ families:
 
   m5:
     display_name: M5
-    status: scaffold
+    status: policy_locked_research_only
     enabled: false
-    variants: []
-    task_type: broad_robustness
+    variants: [M5_Accuracy_Daily]
+    task_type: retail_panel_accuracy
     representative_protocol:
       context_lengths: []
       prediction_lengths: []
-    verification_tier: scaffold_pending_subset_lock
-    official_source_signals: [UniTS]
+    verification_tier: research_policy_locked
+    official_source_signals: [M5-methods]
+    subset_lock:
+      status: locked_research_only
+      source_anchor: M5-methods README plus official competition guide
+      locked_subsets:
+        - subset_id: M5_Accuracy_Daily
+          frequency: D
+          protocol:
+            track: accuracy
+            split_policy: official_validation_and_evaluation
+            evaluation: official_weighted_accuracy_score
+            allowed_covariates: [unit_sales, calendar, promotions, prices]
+          fairness_filters:
+            - exclude the uncertainty competition in first-pass public-pack runs
+            - exclude leaderboard-specific tuning or any non-official private features
     notes:
-      - Keep family-level coverage only for now; exact subset and frequency contract remain pending.
+      - Locked to the official daily Accuracy track only; remains research-only until results land.
     dataset_roots:
       raw: data/public/m5/raw
       processed: data/public/m5/processed
@@ -198,17 +242,40 @@ families:
   monash:
     display_name: Monash Forecasting Repository
     aliases: [Monash]
-    status: scaffold
+    status: policy_locked_research_only
     enabled: false
-    variants: []
-    task_type: broad_robustness
+    variants: [monash_electricity_hourly, monash_traffic_hourly]
+    task_type: hourly_multivariate_robustness
     representative_protocol:
-      context_lengths: []
-      prediction_lengths: []
-    verification_tier: scaffold_pending_subset_lock
-    official_source_signals: [UniTS]
+      context_lengths: [96]
+      prediction_lengths: [96]
+    verification_tier: research_policy_locked
+    official_source_signals: [MonashRepository, ProbTS]
+    subset_lock:
+      status: locked_research_only
+      source_anchor: forecastingdata.org plus ProbTS README Monash loader example
+      locked_subsets:
+        - subset_id: monash_electricity_hourly
+          frequency: H
+          protocol:
+            context_length: 96
+            prediction_length: 96
+            multivariate: true
+            loader: probts_monash_tsf
+          fairness_filters:
+            - exclude weekly mirror and missing-value mirror variants from the same source family
+        - subset_id: monash_traffic_hourly
+          frequency: H
+          protocol:
+            context_length: 96
+            prediction_length: 96
+            multivariate: true
+            loader: probts_monash_tsf
+          fairness_filters:
+            - exclude weekly mirror and missing-value mirror variants from the same source family
+            - exclude ultra-high-frequency Monash subsets such as 10-minute and 4-second tracks from this first-pass lock
     notes:
-      - Treat this as a repository family until exact subsets, frequencies, and fairness filters are explicitly pinned.
+      - Locked to two hourly subsets with a ProbTS-compatible loader path; do not treat this as full Monash coverage.
     dataset_roots:
       raw: data/public/monash/raw
       processed: data/public/monash/processed
