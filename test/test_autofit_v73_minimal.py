@@ -5,7 +5,7 @@ Tests verify:
 1. V73 class construction and inheritance chain.
 2. Count two-part head helpers (`_fit_count_two_part_head`, `_apply_count_two_part_head`).
 3. Binary calibration joint-gate selector (`_select_binary_calibration_with_gate`).
-4. V73 registration in AUTOFIT_MODELS and model registry.
+4. V73 is retained in source but blocked from the current active registry.
 """
 from __future__ import annotations
 
@@ -14,6 +14,7 @@ import sys
 from pathlib import Path
 
 import numpy as np
+import pytest
 
 
 def _load_module():
@@ -170,15 +171,15 @@ def test_v73_in_autofit_models():
     assert v73.config.name == "AutoFitV73"
 
 
-def test_v73_in_registry():
+def test_v73_blocked_from_current_registry():
     repo_root = Path(__file__).resolve().parent.parent
     src_root = repo_root / "src"
     if str(src_root) not in sys.path:
         sys.path.insert(0, str(src_root))
     registry = importlib.import_module("narrative.block3.models.registry")
-    assert "AutoFitV73" in registry.MODEL_CATEGORIES.get("autofit", [])
-    model = registry.get_model("AutoFitV73")
-    assert model.config.name == "AutoFitV73"
+    assert "AutoFitV73" not in registry.MODEL_CATEGORIES.get("autofit", [])
+    with pytest.raises(ValueError, match="Retired AutoFit model blocked from current registry"):
+        registry.get_model("AutoFitV73")
 
 
 if __name__ == "__main__":

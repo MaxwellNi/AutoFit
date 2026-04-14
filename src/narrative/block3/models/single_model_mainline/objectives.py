@@ -21,6 +21,7 @@ def _ordered_unique(items: Tuple[str, ...]) -> Tuple[str, ...]:
 class MainlineObjectiveRuntime:
     lane_name: str
     horizon: int
+    lane_subregime: str
     runtime_stage: str
     lane_terms: Tuple[str, ...]
     implemented_terms: Tuple[str, ...]
@@ -36,6 +37,7 @@ class MainlineObjectiveRuntime:
         return {
             "lane_name": self.lane_name,
             "horizon": self.horizon,
+            "lane_subregime": self.lane_subregime,
             "runtime_stage": self.runtime_stage,
             "lane_terms": self.lane_terms,
             "implemented_terms": self.implemented_terms,
@@ -122,6 +124,7 @@ class MainlineObjectiveSpec:
         runtime = MainlineObjectiveRuntime(
             lane_name=lane_name,
             horizon=int(horizon),
+            lane_subregime=self._lane_subregime(lane_name, horizon=int(horizon)),
             runtime_stage=self.native_runtime_stage,
             lane_terms=lane_terms,
             implemented_terms=implemented_terms,
@@ -168,6 +171,7 @@ class MainlineObjectiveSpec:
         if lane_name == "funding":
             return shared_runtime + (
                 "anchor_residual_regression",
+                "calibrated_anchor_backoff",
                 "nonnegative_clip",
             )
         if lane_name == "investors":
@@ -177,9 +181,25 @@ class MainlineObjectiveSpec:
                 "anchor_blend",
             )
             if int(horizon) == 1:
-                investors_runtime += ("short_horizon_exemplar_blend",)
+                investors_runtime += (
+                    "short_horizon_exemplar_blend",
+                    "h1_transition_block_by_contract",
+                )
+            else:
+                investors_runtime += ("geometry_gated_transition_correction",)
             return shared_runtime + investors_runtime
         raise ValueError(f"Unsupported lane for objective runtime plan: {lane_name}")
+
+    def _lane_subregime(self, lane_name: str, horizon: int) -> str:
+        if lane_name == "binary":
+            return "binary_event_calibration"
+        if lane_name == "funding":
+            return "funding_anchor_residual"
+        if lane_name == "investors":
+            if int(horizon) == 1:
+                return "h1_occurrence_exemplar"
+            return "hplus_hurdle_transition"
+        raise ValueError(f"Unsupported lane for objective subregime lookup: {lane_name}")
 
     def _switch_requested_terms(self, lane_name: str, switches: Mapping[str, bool]) -> Tuple[str, ...]:
         requested: list[str] = []
@@ -194,7 +214,11 @@ class MainlineObjectiveSpec:
             if switches.get("task_modulation", False):
                 requested.append("tail_guard")
         elif lane_name == "investors":
-            if switches.get("count_source_specialists", False) or switches.get("count_source_routing", False):
+            if (
+                switches.get("count_source_specialists", False)
+                or switches.get("count_source_routing", False)
+                or switches.get("investors_transition_correction", False)
+            ):
                 requested.append("transition")
 
         if switches.get("financing_consistency", False):

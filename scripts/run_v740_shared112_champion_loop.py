@@ -58,8 +58,56 @@ TASK_ORDER = {"task1_outcome": 0, "task2_forecast": 1, "task3_risk_adjust": 2}
 ABLATION_ORDER = {"core_only": 0, "core_edgar": 1, "core_text": 2, "full": 3}
 TARGET_ORDER = {"is_funded": 0, "funding_raised_usd": 1, "investors_count": 2}
 LOCAL_MAINLINE_ALIASES = {
-    "single_model_mainline": {"variant": "mainline_alpha", "use_delegate": False},
-    "single_model_mainline_delegate": {"variant": "mainline_delegate_alpha", "use_delegate": True},
+    "single_model_mainline": {
+        "variant": "mainline_alpha",
+        "use_delegate": False,
+        "wrapper_overrides": {},
+    },
+    "single_model_mainline_delegate": {
+        "variant": "mainline_delegate_alpha",
+        "use_delegate": True,
+        "wrapper_overrides": {},
+    },
+    "single_model_mainline_track_legacy_baseline": {
+        "variant": "mainline_alpha",
+        "use_delegate": False,
+        "wrapper_overrides": {
+            "enable_investors_horizon_contract": False,
+            "enable_count_hurdle_head": False,
+            "enable_count_jump": False,
+            "enable_count_sparsity_gate": False,
+        },
+    },
+    "single_model_mainline_track_guarded_jump": {
+        "variant": "mainline_alpha",
+        "use_delegate": False,
+        "wrapper_overrides": {
+            "enable_count_hurdle_head": True,
+            "enable_count_jump": True,
+            "count_jump_strength": 0.30,
+            "enable_count_sparsity_gate": False,
+        },
+    },
+    "single_model_mainline_track_guarded_jump_plus_sparsity": {
+        "variant": "mainline_alpha",
+        "use_delegate": False,
+        "wrapper_overrides": {
+            "enable_count_hurdle_head": True,
+            "enable_count_jump": True,
+            "count_jump_strength": 0.30,
+            "enable_count_sparsity_gate": True,
+            "count_sparsity_gate_strength": 0.75,
+        },
+    },
+    "single_model_mainline_track_source_policy_transition_guard": {
+        "variant": "mainline_alpha",
+        "use_delegate": False,
+        "wrapper_overrides": {
+            "enable_investors_source_read_policy": True,
+            "enable_investors_source_guard": True,
+            "enable_investors_transition_correction": True,
+        },
+    },
 }
 
 
@@ -107,7 +155,14 @@ def _parse_args() -> argparse.Namespace:
     ap.add_argument(
         "--models",
         default="v740_alpha,incumbent",
-        help="Comma-separated models. Special tokens: v740_alpha, v741_lite, v742_unified, v743_factorized, v744_guarded_phase, v745_evidence_residual, single_model_mainline, single_model_mainline_delegate, incumbent, v739",
+        help=(
+            "Comma-separated models. Special tokens: v740_alpha, v741_lite, v742_unified, "
+            "v743_factorized, v744_guarded_phase, v745_evidence_residual, single_model_mainline, "
+            "single_model_mainline_delegate, single_model_mainline_track_legacy_baseline, "
+            "single_model_mainline_track_guarded_jump, "
+            "single_model_mainline_track_guarded_jump_plus_sparsity, "
+            "single_model_mainline_track_source_policy_transition_guard, incumbent, v739"
+        ),
     )
     ap.add_argument(
         "--profile",
@@ -303,23 +358,25 @@ def _instantiate_model(model_token: str, resolved_name: str, args: argparse.Name
         )
     if model_token in LOCAL_MAINLINE_ALIASES:
         alias_cfg = LOCAL_MAINLINE_ALIASES[model_token]
+        wrapper_kwargs = {
+            "variant": alias_cfg["variant"],
+            "use_delegate": alias_cfg["use_delegate"],
+            "input_size": args.input_size,
+            "hidden_dim": args.hidden_dim,
+            "max_epochs": args.max_epochs,
+            "batch_size": args.batch_size,
+            "max_covariates": args.max_covariates,
+            "max_entities": 3000,
+            "max_windows": args.max_windows,
+            "patience": args.patience,
+            "enable_teacher_distill": not args.disable_teacher_distill,
+            "enable_event_head": not args.disable_event_head,
+            "enable_task_modulation": not args.disable_task_modulation,
+            "seed": args.seed,
+        }
+        wrapper_kwargs.update(dict(alias_cfg.get("wrapper_overrides", {})))
         return SingleModelMainlineWrapper(
-            variant=alias_cfg["variant"],
-            use_delegate=alias_cfg["use_delegate"],
-            input_size=args.input_size,
-            hidden_dim=args.hidden_dim,
-            max_epochs=args.max_epochs,
-            batch_size=args.batch_size,
-            max_covariates=args.max_covariates,
-            max_entities=3000,
-            max_windows=args.max_windows,
-            patience=args.patience,
-            enable_teacher_distill=not args.disable_teacher_distill,
-            enable_event_head=not args.disable_event_head,
-            enable_task_modulation=not args.disable_task_modulation,
-            **v740_funding_regime_kwargs_from_args(args),
-            **v740_target_regime_kwargs_from_args(args),
-            seed=args.seed,
+            **wrapper_kwargs,
         )
     if model_token == "v739":
         return NFAdaptiveChampionV739(model_timeout=90)

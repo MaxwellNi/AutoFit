@@ -26,9 +26,15 @@ MAINLINE_VARIANTS: Dict[str, MainlineVariantProfile] = {
             "First target-isolated mainline runtime. The shared trunk, sparse source "
             "memory, hard barrier, and lane estimators execute inside the mainline "
             "package while the audited V740-alpha prototype remains available as a "
-            "fallback reference."
+            "fallback reference. The current default investors path promotes the "
+            "guarded_jump process on h>1 without changing the h1 contract."
         ),
-        prototype_overrides={},
+        prototype_overrides={
+            "enable_count_hurdle_head": True,
+            "enable_count_jump": True,
+            "count_jump_strength": 0.30,
+            "enable_count_sparsity_gate": False,
+        },
     ),
     "mainline_delegate_alpha": MainlineVariantProfile(
         name="mainline_delegate_alpha",

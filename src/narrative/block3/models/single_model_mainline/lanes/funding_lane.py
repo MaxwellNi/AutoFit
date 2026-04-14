@@ -96,7 +96,11 @@ class FundingLaneRuntime:
         self._guarded_calibration_mae = anchor_mae
         self._calibration_rows = int(target.size)
 
-        if target.size < 12 or self._positive_jump_rows < 8 or np.nanstd(jump_target) < 1e-8:
+        if (
+            target.size < 12
+            or self._positive_jump_rows < _minimum_positive_jump_rows(target.size)
+            or np.nanstd(jump_target) < 1e-8
+        ):
             self._fitted = True
             return self
 
@@ -213,6 +217,12 @@ def _split_funding_calibration(
     train_rows = n_rows - calibration_rows
     if train_rows < 8:
         return None
+    positive_mask = np.asarray(jump_target, dtype=np.float64) > float(jump_floor)
+    total_positive = int(positive_mask.sum())
+    required_train_positive = min(2, max(total_positive - 1, 0))
+    while calibration_rows > 4 and int(positive_mask[:train_rows].sum()) < required_train_positive:
+        calibration_rows -= 1
+        train_rows = n_rows - calibration_rows
     return {
         "train_design": design[:train_rows],
         "train_jump": jump_target[:train_rows],
@@ -226,6 +236,10 @@ def _split_funding_calibration(
 
 def _positive_jump_target(target: np.ndarray, anchor_vec: np.ndarray) -> np.ndarray:
     return np.clip(np.asarray(target, dtype=np.float64) - np.asarray(anchor_vec, dtype=np.float64), 0.0, None)
+
+
+def _minimum_positive_jump_rows(n_rows: int) -> int:
+    return 4 if int(n_rows) < 128 else 6
 
 
 def _jump_event_floor(jump_target: np.ndarray) -> float:
@@ -323,7 +337,9 @@ def _calibrate_anchor_residual_guard(
     pred_arr = pred_arr[mask]
     target_residual = target_residual[mask]
     anchor_mae = float(np.mean(np.abs(target_arr - anchor_arr)))
-    residual_scale = float(np.quantile(np.abs(target_residual), 0.75)) if target_residual.size else 0.0
+    positive_mask = target_residual > 1e-8
+    positive_residual = np.abs(target_residual[positive_mask])
+    residual_scale = float(np.quantile(positive_residual, 0.75)) if positive_residual.size else 0.0
     if residual_scale < 1e-8:
         return 0.0, 0.0, anchor_mae, anchor_mae
 
@@ -337,6 +353,9 @@ def _calibrate_anchor_residual_guard(
     best_blend = 0.0
     best_cap = 0.0
     best_mae = anchor_mae
+    best_jump_mae = (
+        float(np.mean(np.abs(anchor_arr[positive_mask] - target_arr[positive_mask]))) if positive_mask.any() else anchor_mae
+    )
     for blend in blend_grid:
         for cap_multiplier in cap_grid:
             cap = np.inf if not np.isfinite(cap_multiplier) else float(cap_multiplier * residual_scale)
@@ -346,14 +365,25 @@ def _calibrate_anchor_residual_guard(
                 residual_blend=float(blend),
                 residual_cap=cap,
             )
-            candidate_mae = float(np.mean(np.abs(candidate - target_arr)))
+            candidate_error = np.abs(candidate - target_arr)
+            candidate_mae = float(np.mean(candidate_error))
+            candidate_jump_mae = float(np.mean(candidate_error[positive_mask])) if positive_mask.any() else candidate_mae
             if candidate_mae + 1e-9 < best_mae:
                 best_mae = candidate_mae
                 best_blend = float(blend)
                 best_cap = float(cap)
+                best_jump_mae = candidate_jump_mae
             elif abs(candidate_mae - best_mae) <= 1e-9:
-                if float(blend) < best_blend or (
-                    abs(float(blend) - best_blend) <= 1e-9 and float(cap) < best_cap
+                if positive_mask.any() and candidate_jump_mae + 1e-9 < best_jump_mae:
+                    best_blend = float(blend)
+                    best_cap = float(cap)
+                    best_jump_mae = candidate_jump_mae
+                elif (
+                    abs(candidate_jump_mae - best_jump_mae) <= 1e-9
+                    and (
+                        float(blend) < best_blend
+                        or (abs(float(blend) - best_blend) <= 1e-9 and float(cap) < best_cap)
+                    )
                 ):
                     best_blend = float(blend)
                     best_cap = float(cap)

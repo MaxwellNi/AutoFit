@@ -184,6 +184,35 @@ def expand_public_pack_cells(
     return cells
 
 
+def filter_public_pack_cells(
+    cells: Sequence[PublicPackCell],
+    requested_variants: Optional[Sequence[str]] = None,
+    *,
+    context_length: Optional[int] = None,
+    prediction_length: Optional[int] = None,
+) -> List[PublicPackCell]:
+    filtered = list(cells)
+    if requested_variants:
+        variant_set = {str(variant) for variant in requested_variants}
+        filtered = [cell for cell in filtered if cell.variant in variant_set]
+
+    deduped: List[PublicPackCell] = []
+    seen = set()
+    for cell in filtered:
+        effective_key = (
+            cell.pack,
+            cell.family,
+            cell.variant,
+            context_length if context_length is not None else cell.context_length,
+            prediction_length if prediction_length is not None else cell.prediction_length,
+        )
+        if effective_key in seen:
+            continue
+        seen.add(effective_key)
+        deduped.append(cell)
+    return deduped
+
+
 def validate_public_pack_roots(
     registry: Dict[str, Any],
     pack: str = "",

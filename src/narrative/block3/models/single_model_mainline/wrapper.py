@@ -56,16 +56,19 @@ class SingleModelMainlineWrapper(ModelBase):
     def __init__(self, variant: str = "mainline_alpha", **prototype_kwargs):
         self.variant = variant
         self.profile = get_mainline_variant_profile(variant)
-        self.use_delegate = bool(prototype_kwargs.pop("use_delegate", self.profile.runtime_mode == "delegate"))
-        seed = int(prototype_kwargs.get("seed", 42))
+        resolved_kwargs = dict(self.profile.prototype_overrides)
+        resolved_kwargs.update(prototype_kwargs)
+        self.use_delegate = bool(resolved_kwargs.pop("use_delegate", self.profile.runtime_mode == "delegate"))
+        seed = int(resolved_kwargs.get("seed", 42))
         config = ModelConfig(
             name="SingleModelMainlineWrapper",
             model_type="forecasting",
-            params={"variant": variant, **prototype_kwargs},
+            params={"variant": variant, **resolved_kwargs},
             optional_dependency="torch",
         )
         super().__init__(config)
-        self.prototype_kwargs = dict(prototype_kwargs)
+        self.prototype_kwargs = dict(resolved_kwargs)
+        prototype_kwargs = self.prototype_kwargs
         self.contract = MainlineModuleContract(
             backbone=SharedTemporalBackboneSpec(),
             conditioning=ConditioningSchema(),
