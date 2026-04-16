@@ -108,6 +108,11 @@ LOCAL_MAINLINE_ALIASES = {
             "enable_investors_transition_correction": True,
         },
     },
+    "single_model_mainline_track_selective_event_state_guard": {
+        "variant": "mainline_selective_event_state_guard",
+        "use_delegate": False,
+        "wrapper_overrides": {},
+    },
 }
 
 

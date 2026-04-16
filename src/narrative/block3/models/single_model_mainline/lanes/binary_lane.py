@@ -48,6 +48,8 @@ class BinaryLaneRuntime:
         self._uses_hazard_adapter = False
         self._identity_metrics: Dict[str, float] = {"brier": 0.25, "logloss": 0.6931471805599453, "ece": 0.0}
         self._selected_metrics: Dict[str, float] = dict(self._identity_metrics)
+        self._calibration_shrinkage_target = "none"
+        self._calibration_shrinkage_strength = 0.0
         self._fitted = False
 
     def fit(
@@ -55,6 +57,8 @@ class BinaryLaneRuntime:
         lane_state: np.ndarray,
         y: np.ndarray,
         aux_features: np.ndarray | None = None,
+        enable_calibration_shrinkage: bool = False,
+        calibration_shrinkage_target: str = "auto",
     ) -> "BinaryLaneRuntime":
         target = (np.asarray(y, dtype=np.float32) > 0.5).astype(np.int32, copy=False)
         self._model = None
@@ -64,6 +68,8 @@ class BinaryLaneRuntime:
         self._temperature = 1.0
         self._hazard_blend = 0.0
         self._uses_hazard_adapter = False
+        self._calibration_shrinkage_target = "none"
+        self._calibration_shrinkage_strength = 0.0
         self._train_positive_rate = float(target.mean()) if target.size else 0.0
         self._event_rate = self._train_positive_rate
         lag1_active = _lag1_active(aux_features, len(target))
@@ -124,6 +130,29 @@ class BinaryLaneRuntime:
                 self._identity_metrics,
                 self._selected_metrics,
             ) = _select_binary_calibrator(blended_prob, calibration_target, random_state=self.random_state)
+            if enable_calibration_shrinkage:
+                calibration_calibrator = _fit_named_binary_calibrator(
+                    blended_prob,
+                    calibration_target,
+                    self._calibrator_name,
+                    random_state=self.random_state,
+                )
+                calibrated_prob = _apply_binary_calibrator(
+                    self._calibrator_name,
+                    calibration_calibrator,
+                    blended_prob,
+                )
+                (
+                    self._calibration_shrinkage_target,
+                    self._calibration_shrinkage_strength,
+                    self._selected_metrics,
+                ) = _select_probability_shrinkage(
+                    calibrated_prob,
+                    calibration_target,
+                    hazard_prior=hazard_prior,
+                    base_rate=float(train_target.mean()),
+                    requested_target=calibration_shrinkage_target,
+                )
 
         self._model = _build_binary_model(self.random_state)
         self._model.fit(design, target)
@@ -183,6 +212,15 @@ class BinaryLaneRuntime:
         )
         blended_prob = _blend_binary_probability(base_prob, hazard_prior, self._hazard_blend)
         calibrated = _apply_binary_calibrator(self._calibrator_name, self._calibrator, blended_prob)
+        calibrated = _apply_probability_shrinkage(
+            calibrated,
+            _resolve_probability_shrinkage_target(
+                self._calibration_shrinkage_target,
+                hazard_prior,
+                self._train_positive_rate,
+            ),
+            self._calibration_shrinkage_strength,
+        )
         return np.clip(calibrated, 0.0, 1.0).astype(np.float64, copy=False)
 
 
@@ -319,6 +357,76 @@ def _select_calibration_name(candidates: Dict[str, Dict[str, float]], ece_thresh
         if ece <= identity_ece + float(ece_threshold):
             return name
     return "identity"
+
+
+def _select_probability_shrinkage(
+    probs: np.ndarray,
+    labels: np.ndarray,
+    *,
+    hazard_prior: np.ndarray,
+    base_rate: float,
+    requested_target: str = "auto",
+) -> tuple[str, float, Dict[str, float]]:
+    baseline_metrics = _binary_metrics(probs, labels)
+    best_target = "none"
+    best_strength = 0.0
+    best_metrics = dict(baseline_metrics)
+    best_score = _calibration_guard_score(best_metrics)
+
+    requested = str(requested_target).strip().lower() or "auto"
+    target_candidates: Dict[str, np.ndarray] = {}
+    if requested in {"auto", "hazard_prior", "hazard"}:
+        target_candidates["hazard_prior"] = np.asarray(hazard_prior, dtype=np.float64)
+    if requested in {"auto", "base_rate", "base"}:
+        target_candidates["base_rate"] = np.full(len(probs), float(np.clip(base_rate, 0.0, 1.0)), dtype=np.float64)
+
+    for target_name, target_probs in target_candidates.items():
+        for strength in (0.10, 0.20, 0.35, 0.50, 0.65, 0.80):
+            candidate = _apply_probability_shrinkage(probs, target_probs, float(strength))
+            metrics = _binary_metrics(candidate, labels)
+            score = _calibration_guard_score(metrics)
+            if score + 1e-12 < best_score:
+                best_target = str(target_name)
+                best_strength = float(strength)
+                best_metrics = dict(metrics)
+                best_score = float(score)
+            elif abs(score - best_score) <= 1e-12 and float(strength) < best_strength:
+                best_target = str(target_name)
+                best_strength = float(strength)
+                best_metrics = dict(metrics)
+    return best_target, best_strength, best_metrics
+
+
+def _calibration_guard_score(metrics: Dict[str, float]) -> float:
+    return (
+        0.45 * float(metrics.get("brier", float("inf")))
+        + 0.20 * float(metrics.get("logloss", float("inf")))
+        + 0.35 * float(metrics.get("ece", float("inf")))
+    )
+
+
+def _resolve_probability_shrinkage_target(
+    target_name: str,
+    hazard_prior: np.ndarray,
+    base_rate: float,
+) -> np.ndarray:
+    target = str(target_name).strip().lower()
+    if target == "hazard_prior":
+        return np.asarray(hazard_prior, dtype=np.float64)
+    if target == "base_rate":
+        return np.full(len(hazard_prior), float(np.clip(base_rate, 0.0, 1.0)), dtype=np.float64)
+    return np.asarray(hazard_prior, dtype=np.float64)
+
+
+def _apply_probability_shrinkage(probs: np.ndarray, target_probs: np.ndarray, strength: float) -> np.ndarray:
+    mix = float(np.clip(strength, 0.0, 1.0))
+    if mix <= 0.0:
+        return np.clip(np.asarray(probs, dtype=np.float64), 0.0, 1.0)
+    base = np.asarray(probs, dtype=np.float64)
+    target = np.asarray(target_probs, dtype=np.float64)
+    if base.shape != target.shape:
+        raise ValueError("Probability shrinkage target must match probability shape")
+    return np.clip((1.0 - mix) * base + mix * target, 0.0, 1.0)
 
 
 def _fit_named_binary_calibrator(

@@ -9,6 +9,7 @@ compatibility checks.
 from .backbone import SharedTemporalBackbone, SharedTemporalBackboneSpec
 from .barrier import HardTargetBarrierSpec, TargetIsolatedBarrier
 from .conditioning import ConditionKey, ConditioningSchema, MainlineConditionEncoder
+from .investor_mark_encoder import InvestorMarkEncoder, InvestorMarkEncoderSpec, canonicalize_investor_reference
 from .lanes import BinaryLaneRuntime, BinaryLaneSpec, FundingLaneRuntime, FundingLaneSpec, InvestorsLaneRuntime, InvestorsLaneSpec
 from .objectives import MainlineObjectiveSpec
 from .source_memory import SourceColumnLayout, SourceMemoryAssembler, SourceMemoryBatch, SourceMemoryContract
@@ -23,6 +24,8 @@ __all__ = [
     "FundingLaneRuntime",
     "FundingLaneSpec",
     "HardTargetBarrierSpec",
+    "InvestorMarkEncoder",
+    "InvestorMarkEncoderSpec",
     "InvestorsLaneRuntime",
     "InvestorsLaneSpec",
     "MAINLINE_VARIANTS",
@@ -39,5 +42,6 @@ __all__ = [
     "SourceMemoryContract",
     "TargetIsolatedBarrier",
     "build_delegate_kwargs",
+    "canonicalize_investor_reference",
     "get_mainline_variant_profile",
 ]

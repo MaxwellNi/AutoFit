@@ -23,6 +23,19 @@ class SharedTemporalBackboneSpec:
     compact_state_dim: int = 64
     target_agnostic: bool = True
     source_native_memory_external: bool = True
+    event_state_schema_version: str = "event_state_v2"
+    event_state_atoms: Tuple[str, ...] = (
+        "financing_phase",
+        "event_boundary",
+        "funded_flip",
+        "funding_jump_severity",
+        "investor_jump_process",
+        "goal_crossing",
+        "financing_persistence",
+        "source_topology",
+        "source_arrival_decay",
+        "shared_state_energy",
+    )
 
     def as_dict(self) -> Dict[str, object]:
         return {
@@ -32,6 +45,8 @@ class SharedTemporalBackboneSpec:
             "compact_state_dim": self.compact_state_dim,
             "target_agnostic": self.target_agnostic,
             "source_native_memory_external": self.source_native_memory_external,
+            "event_state_schema_version": self.event_state_schema_version,
+            "event_state_atoms": self.event_state_atoms,
         }
 
 

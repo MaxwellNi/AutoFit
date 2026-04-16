@@ -499,6 +499,16 @@ def _fit_shared_encoder(case: RealSurfaceCase, surfaces: Dict[str, Dict[str, Any
         source_state_test = payload["source_test"].reindex(columns=source_state_cols, fill_value=0.0).to_numpy(dtype=np.float32, copy=False)
         payload["lane_train"] = barrier.split(shared_train, condition_train, source_state_train)["investors"]
         payload["lane_test"] = barrier.split(shared_test, condition_test, source_state_test)["investors"]
+        payload["event_state_train"] = helper._refresh_event_state_card(
+            payload["runtime_train"],
+            shared_state=shared_train,
+            source_frame=payload["source_train"],
+        )
+        payload["event_state_test"] = helper._refresh_event_state_card(
+            payload["runtime_test"],
+            shared_state=shared_test,
+            source_frame=payload["source_test"],
+        )
 
     return encoded, investors_source_cols or []
 
@@ -506,6 +516,7 @@ def _fit_shared_encoder(case: RealSurfaceCase, surfaces: Dict[str, Dict[str, Any
 def _concat_surface(encoded: Dict[str, Dict[str, Any]], split: str) -> Dict[str, Any]:
     lane = []
     aux = []
+    event_state = []
     anchor = []
     source = []
     y = []
@@ -513,6 +524,7 @@ def _concat_surface(encoded: Dict[str, Dict[str, Any]], split: str) -> Dict[str,
     for name, payload in encoded.items():
         lane.append(payload[f"lane_{split}"])
         aux.append(payload[f"history_{split}"].fillna(0.0).to_numpy(dtype=np.float32, copy=False))
+        event_state.append(payload[f"event_state_{split}"].to_numpy(dtype=np.float32, copy=False))
         anchor.append(payload[f"anchor_{split}"])
         source.append(payload[f"investors_source_{split}"].to_numpy(dtype=np.float32, copy=False))
         y.append(payload[f"y_{split}"].to_numpy(dtype=np.float64, copy=False))
@@ -520,11 +532,24 @@ def _concat_surface(encoded: Dict[str, Dict[str, Any]], split: str) -> Dict[str,
     return {
         "lane": np.concatenate(lane, axis=0),
         "aux": np.concatenate(aux, axis=0),
+        "event_state": np.concatenate(event_state, axis=0),
         "anchor": np.concatenate(anchor, axis=0),
         "source": np.concatenate(source, axis=0),
         "y": np.concatenate(y, axis=0),
         "ablation": np.asarray(ablation, dtype=object),
     }
+
+
+def _surface_aux_features(surface: Dict[str, Any], *, enable_event_state_features: bool) -> np.ndarray:
+    history_aux = np.asarray(surface["aux"], dtype=np.float32)
+    if not enable_event_state_features:
+        return history_aux
+    event_state_aux = np.asarray(surface.get("event_state"), dtype=np.float32)
+    if event_state_aux.size == 0:
+        return history_aux
+    if history_aux.size == 0:
+        return event_state_aux
+    return np.concatenate([history_aux, event_state_aux], axis=1).astype(np.float32, copy=False)
 
 
 def _profile_breakdown(y_true: np.ndarray, preds: np.ndarray, profile_ids: np.ndarray, ablations: np.ndarray) -> Dict[str, Any]:
@@ -553,24 +578,31 @@ def _run_variant(
     train_surface: Dict[str, Any],
     test_surface: Dict[str, Any],
 ) -> Dict[str, Any]:
+    fit_kwargs = dict(variant["fit"])
+    predict_kwargs = dict(variant["predict"])
+    fit_event_state = bool(fit_kwargs.pop("enable_investors_event_state_features", False))
+    predict_event_state = bool(predict_kwargs.pop("enable_investors_event_state_features", fit_event_state))
+    train_aux = _surface_aux_features(train_surface, enable_event_state_features=fit_event_state)
+    test_aux = _surface_aux_features(test_surface, enable_event_state_features=predict_event_state)
+
     runtime = InvestorsLaneRuntime(random_state=7)
     runtime.fit(
         train_surface["lane"],
         train_surface["y"],
-        aux_features=train_surface["aux"],
+        aux_features=train_aux,
         anchor=train_surface["anchor"],
         source_features=train_surface["source"],
         horizon=case.horizon,
         anchor_blend=0.70,
         task_name=case.task,
-        **variant["fit"],
+        **fit_kwargs,
     )
     preds = runtime.predict(
         test_surface["lane"],
-        aux_features=test_surface["aux"],
+        aux_features=test_aux,
         anchor=test_surface["anchor"],
         source_features=test_surface["source"],
-        **variant["predict"],
+        **predict_kwargs,
     )
     profile_ids = _source_profile_ids(test_surface["source"])
     return {
@@ -605,7 +637,9 @@ def _run_variant(
             "use_hurdle_head": bool(runtime._use_hurdle_head),
             "use_count_jump": bool(runtime._use_count_jump),
             "use_sparsity_gate": bool(runtime._use_sparsity_gate),
+            "use_event_state_features": bool(fit_event_state or predict_event_state),
         },
+        "event_state_aux_dim": int(test_surface["event_state"].shape[1]) if "event_state" in test_surface else 0,
     }
 
 

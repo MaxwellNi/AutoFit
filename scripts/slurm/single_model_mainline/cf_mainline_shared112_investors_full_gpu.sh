@@ -26,8 +26,9 @@ trap _requeue_handler USR1
 
 REPO_ROOT=/work/projects/eint/repo_root
 INSIDER_PY=/mnt/aiongpfs/projects/eint/envs/.micromamba/envs/insider/bin/python3
-RUN_ROOT=runs/benchmarks/single_model_mainline_localclear_20260412
-LABEL=mainline_shared112_investors_full_cf_20260412
+RUN_ROOT=${RUN_ROOT:-runs/benchmarks/single_model_mainline_localclear_20260412}
+LABEL=${LABEL:-mainline_shared112_investors_full_cf_20260412}
+MODEL_ALIAS=${MODEL_ALIAS:-single_model_mainline}
 
 export LD_LIBRARY_PATH="/mnt/aiongpfs/projects/eint/envs/.micromamba/envs/insider/lib:${LD_LIBRARY_PATH:-}"
 export BLOCK3_CANONICAL_REPO_ROOT="$REPO_ROOT"
@@ -42,7 +43,7 @@ cd "$REPO_ROOT"
 mkdir -p "$RUN_ROOT/$LABEL"
 
 "$INSIDER_PY" scripts/run_v740_shared112_champion_loop.py \
-  --models single_model_mainline,incumbent \
+  --models "$MODEL_ALIAS",incumbent \
   --profile quick \
   --target investors_count \
   --skip-existing \

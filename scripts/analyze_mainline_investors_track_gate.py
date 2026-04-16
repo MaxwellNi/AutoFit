@@ -105,8 +105,49 @@ TRACK_CANDIDATES: Dict[str, Dict[str, Any]] = {
             "predict": {},
         },
     },
+    "event_state_boundary_guard": {
+        "role": "prior_global_event_state_candidate",
+        "official_kwargs": {
+            "variant": "mainline_event_state_boundary_guard",
+            "seed": 7,
+            "use_delegate": False,
+        },
+        "dynamic_variant": {
+            "fit": {
+                "enable_hurdle_head": True,
+                "enable_count_jump": True,
+                "count_jump_strength": 0.30,
+                "enable_count_sparsity_gate": True,
+                "count_sparsity_gate_strength": 0.75,
+                "enable_investors_event_state_features": True,
+            },
+            "predict": {
+                "enable_investors_event_state_features": True,
+            },
+        },
+    },
+    "selective_event_state_guard": {
+        "role": "active_trunk_candidate",
+        "official_kwargs": {
+            "variant": "mainline_selective_event_state_guard",
+            "seed": 7,
+            "use_delegate": False,
+        },
+        "dynamic_variant": {
+            "fit": {
+                "enable_hurdle_head": True,
+                "enable_count_jump": True,
+                "count_jump_strength": 0.30,
+                "enable_count_sparsity_gate": False,
+                "enable_investors_event_state_features": True,
+            },
+            "predict": {
+                "enable_investors_event_state_features": True,
+            },
+        },
+    },
     "source_policy_transition_guard": {
-        "role": "source_candidate",
+        "role": "demoted_source_candidate",
         "official_kwargs": {
             "seed": 7,
             "use_delegate": False,
@@ -191,6 +232,8 @@ def _track_contract() -> Dict[str, Any]:
         "official_panel_definition": "benchmark-consistent local official slices loaded via _load_smoke_frame plus canonical temporal split from block3 task config",
         "dynamic_panel_definition": "real-data dynamic_test multisource challenge surfaces; research-only and never merged into official claims",
         "source_results_interpreted_only_with_geometry": True,
+        "demoted_families": ["event_state_boundary_guard", "source_policy_transition_guard"],
+        "active_generation_focus": "selective_event_state_guard",
         "promotion_rules": {
             "official_mean_mae_delta_pct_min": OFFICIAL_MEAN_DELTA_MIN_PCT,
             "official_worst_mae_delta_pct_min": OFFICIAL_WORST_DELTA_MIN_PCT,

@@ -1,11 +1,11 @@
 #!/bin/bash
-#SBATCH --job-name=smm_cf_binpfxbm
+#SBATCH --job-name=smm_cf_evttrk
 #SBATCH --account=christian.fisch
 #SBATCH --partition=bigmem
 #SBATCH --qos=normal
 #SBATCH --cpus-per-task=8
 #SBATCH --mem=189G
-#SBATCH --time=0-12:00:00
+#SBATCH --time=1-00:00:00
 #SBATCH --output=/work/projects/eint/logs/%x_%j.out
 #SBATCH --error=/work/projects/eint/logs/%x_%j.err
 #SBATCH --signal=USR1@120
@@ -26,11 +26,10 @@ trap _requeue_handler USR1
 REPO_ROOT=${REPO_ROOT:-/work/projects/eint/repo_root}
 INSIDER_PY=/mnt/aiongpfs/projects/eint/envs/.micromamba/envs/insider/bin/python3
 RUN_ROOT=${RUN_ROOT:-runs/benchmarks/single_model_mainline_localclear_20260415}
-LABEL=${LABEL:-mainline_binary_postfix_panel_cf_bigmem_20260415}
-PANEL=${PANEL:-hardest_family}
-PROFILE=${PROFILE:-audit}
-SKIP_INCUMBENT=${SKIP_INCUMBENT:-1}
-VARIANT=${VARIANT:-mainline_alpha}
+LABEL=${LABEL:-mainline_investors_event_state_track_cf_bigmem_20260415}
+DYNAMIC_HORIZONS=${DYNAMIC_HORIZONS:-14}
+DYNAMIC_ENTITY_LIMIT=${DYNAMIC_ENTITY_LIMIT:-4}
+DYNAMIC_MAX_ROWS_PER_ABLATION=${DYNAMIC_MAX_ROWS_PER_ABLATION:-1000}
 EXTRA_ARGS=${EXTRA_ARGS:-}
 
 export LD_LIBRARY_PATH="/mnt/aiongpfs/projects/eint/envs/.micromamba/envs/insider/lib:${LD_LIBRARY_PATH:-}"
@@ -47,16 +46,13 @@ mkdir -p "$RUN_ROOT/$LABEL"
 
 CMD=(
   "$INSIDER_PY"
-  scripts/analyze_mainline_binary_postfix_panel.py
-  --panel "$PANEL"
-  --profile "$PROFILE"
-  --variant "$VARIANT"
+  scripts/analyze_mainline_investors_track_gate.py
+  --mode full
+  --dynamic-horizons "$DYNAMIC_HORIZONS"
+  --dynamic-entity-limit "$DYNAMIC_ENTITY_LIMIT"
+  --dynamic-max-rows-per-ablation "$DYNAMIC_MAX_ROWS_PER_ABLATION"
   --output-json "$RUN_ROOT/$LABEL/report.json"
 )
-
-if [[ "$SKIP_INCUMBENT" == "1" ]]; then
-  CMD+=(--skip-incumbent)
-fi
 
 if [[ -n "$EXTRA_ARGS" ]]; then
   # shellcheck disable=SC2206

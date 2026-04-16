@@ -13,6 +13,7 @@ from ..v740_alpha import V740AlphaPrototypeWrapper
 from .backbone import SharedTemporalBackbone, SharedTemporalBackboneSpec
 from .barrier import HardTargetBarrierSpec, TargetIsolatedBarrier
 from .conditioning import ConditionKey, ConditioningSchema, MainlineConditionEncoder
+from .investor_mark_encoder import InvestorMarkEncoder, InvestorMarkEncoderSpec
 from .lanes.binary_lane import BinaryLaneRuntime, BinaryLaneSpec
 from .lanes.funding_lane import FundingLaneRuntime, FundingLaneSpec
 from .lanes.investors_lane import InvestorsLaneRuntime, InvestorsLaneSpec, _transition_signal
@@ -26,6 +27,7 @@ class MainlineModuleContract:
     backbone: SharedTemporalBackboneSpec
     conditioning: ConditioningSchema
     source_memory: SourceMemoryContract
+    investor_mark_encoder: InvestorMarkEncoderSpec
     barrier: HardTargetBarrierSpec
     binary_lane: BinaryLaneSpec
     funding_lane: FundingLaneSpec
@@ -37,6 +39,7 @@ class MainlineModuleContract:
             "backbone": self.backbone.as_dict(),
             "conditioning": self.conditioning.as_dict(),
             "source_memory": self.source_memory.as_dict(),
+            "investor_mark_encoder": self.investor_mark_encoder.as_dict(),
             "barrier": self.barrier.as_dict(),
             "binary_lane": self.binary_lane.as_dict(),
             "funding_lane": self.funding_lane.as_dict(),
@@ -73,6 +76,7 @@ class SingleModelMainlineWrapper(ModelBase):
             backbone=SharedTemporalBackboneSpec(),
             conditioning=ConditioningSchema(),
             source_memory=SourceMemoryContract(),
+            investor_mark_encoder=InvestorMarkEncoderSpec(),
             barrier=HardTargetBarrierSpec(),
             binary_lane=BinaryLaneSpec(),
             funding_lane=FundingLaneSpec(),
@@ -100,6 +104,15 @@ class SingleModelMainlineWrapper(ModelBase):
         self.funding_anchor_strength = float(prototype_kwargs.get("funding_anchor_strength", 0.85))
         self.enable_funding_log_domain = bool(prototype_kwargs.get("enable_funding_log_domain", False))
         self.enable_funding_source_scaling = bool(prototype_kwargs.get("enable_funding_source_scaling", False))
+        self.enable_funding_tail_focus = bool(prototype_kwargs.get("enable_funding_tail_focus", False))
+        self.funding_tail_weight = float(prototype_kwargs.get("funding_tail_weight", 2.0))
+        self.funding_tail_quantile = float(prototype_kwargs.get("funding_tail_quantile", 0.85))
+        self.enable_binary_calibration_shrinkage = bool(
+            prototype_kwargs.get("enable_binary_calibration_shrinkage", False)
+        )
+        self.binary_calibration_shrinkage_target = str(
+            prototype_kwargs.get("binary_calibration_shrinkage_target", "auto")
+        )
         self.enable_v741_lite = bool(prototype_kwargs.get("enable_v741_lite", False))
         self.enable_count_hurdle_head = bool(prototype_kwargs.get("enable_count_hurdle_head", False))
         self.enable_count_source_specialists = bool(prototype_kwargs.get("enable_count_source_specialists", False))
@@ -112,8 +125,23 @@ class SingleModelMainlineWrapper(ModelBase):
         self.enable_investors_source_read_policy = bool(
             prototype_kwargs.get("enable_investors_source_read_policy", False)
         )
+        self.enable_investors_mark_features = bool(
+            prototype_kwargs.get("enable_investors_mark_features", False)
+        )
         self.enable_investors_transition_correction = bool(
             prototype_kwargs.get("enable_investors_transition_correction", False)
+        )
+        self.enable_investors_event_state_features = bool(
+            prototype_kwargs.get("enable_investors_event_state_features", False)
+        )
+        self.enable_investors_selective_event_state_activation = bool(
+            prototype_kwargs.get("enable_investors_selective_event_state_activation", False)
+        )
+        self.investors_event_state_allow_h1 = bool(
+            prototype_kwargs.get("investors_event_state_allow_h1", False)
+        )
+        self.investors_event_state_max_source_presence_share = float(
+            prototype_kwargs.get("investors_event_state_max_source_presence_share", 1.0)
         )
         self.enable_investors_selective_source_activation = bool(
             prototype_kwargs.get("enable_investors_selective_source_activation", True)
@@ -150,6 +178,7 @@ class SingleModelMainlineWrapper(ModelBase):
         self.condition_encoder = MainlineConditionEncoder(self.contract.conditioning)
         self.backbone = SharedTemporalBackbone(self.contract.backbone, random_state=seed)
         self.source_memory = SourceMemoryAssembler(contract=self.contract.source_memory)
+        self.investor_mark_encoder = InvestorMarkEncoder(self.contract.investor_mark_encoder)
         self.barrier = TargetIsolatedBarrier(self.contract.barrier)
         self.binary_lane_runtime = BinaryLaneRuntime(self.contract.binary_lane, random_state=seed)
         self.funding_lane_runtime = FundingLaneRuntime(self.contract.funding_lane, random_state=seed)
@@ -162,6 +191,8 @@ class SingleModelMainlineWrapper(ModelBase):
         self._core_feature_cols: list[str] = []
         self._source_feature_cols: list[str] = []
         self._investors_source_feature_cols: list[str] = []
+        self._investors_mark_feature_cols: list[str] = []
+        self._investors_event_state_feature_cols: list[str] = []
         self._history_feature_cols: list[str] = []
         self._shared_state_dim = 0
         self._lane_state_dim = 0
@@ -192,6 +223,8 @@ class SingleModelMainlineWrapper(ModelBase):
         self._funding_source_scaling = False
         self._funding_anchor_enabled = False
         self._effective_funding_anchor_strength = 0.0
+        self._funding_source_scale_mean = 0.0
+        self._funding_source_scale_max = 0.0
         self._effective_task_modulation = self.enable_task_modulation
         self._investors_source_profile_counts: Dict[str, int] = {}
         self._investors_source_eligible_profiles: tuple[str, ...] = ()
@@ -203,8 +236,15 @@ class SingleModelMainlineWrapper(ModelBase):
         self._effective_investors_source_guard = False
         self._effective_investors_source_read_policy = False
         self._effective_investors_transition_correction = False
+        self._effective_investors_event_state_features = False
+        self._effective_investors_mark_features = False
+        self._investors_event_state_activation_reason = "event_state_not_requested"
         self._investors_source_activation_reason = "source_switches_disabled"
         self._investors_transition_activation_reason = "transition_not_requested"
+        self._investors_mark_activation_reason = "mark_features_not_requested"
+        self._investors_mark_nonzero_share = 0.0
+        self._investors_mark_coverage_share = 0.0
+        self._investors_mark_summary: Dict[str, float] = {}
         self._investors_source_profile_entropy = 0.0
         self._investors_dynamic_entities = 0
         self._investors_dynamic_entity_share = 0.0
@@ -223,6 +263,7 @@ class SingleModelMainlineWrapper(ModelBase):
         self._effective_count_hurdle_head = False
         self._effective_count_jump = False
         self._effective_count_sparsity_gate = False
+        self._event_state_card: Dict[str, object] = {}
 
     def describe_contract(self) -> Dict[str, object]:
         return {
@@ -293,6 +334,9 @@ class SingleModelMainlineWrapper(ModelBase):
         source_state = source_frame.to_numpy(dtype=np.float32, copy=False)
         self._edgar_source_density = float(source_frame["edgar_active"].mean()) if "edgar_active" in source_frame else 0.0
         self._text_source_density = float(source_frame["text_active"].mean()) if "text_active" in source_frame else 0.0
+        event_state_frame = self._refresh_event_state_card(runtime_frame, shared_state=shared_state, source_frame=source_frame)
+        self._investors_event_state_feature_cols = list(event_state_frame.columns)
+        self._effective_investors_event_state_features = False
 
         self.barrier.fit(
             shared_dim=shared_state.shape[1],
@@ -311,6 +355,13 @@ class SingleModelMainlineWrapper(ModelBase):
         investors_source_frame = self._build_investors_source_features(source_frame)
         self._investors_source_feature_cols = list(investors_source_frame.columns)
         investors_source_matrix = investors_source_frame.to_numpy(dtype=np.float32, copy=False)
+        investors_mark_frame = self._build_investors_mark_features(runtime_frame)
+        self._investors_mark_feature_cols = list(investors_mark_frame.columns)
+        self._refresh_investors_mark_regime(investors_mark_frame)
+        investors_mark_matrix = investors_mark_frame.to_numpy(dtype=np.float32, copy=False)
+        funding_source_scale = self._build_funding_source_scale(source_frame)
+        self._funding_source_scale_mean = float(np.mean(funding_source_scale)) if len(funding_source_scale) else 0.0
+        self._funding_source_scale_max = float(np.max(funding_source_scale)) if len(funding_source_scale) else 0.0
         self._refresh_investors_source_activation_regime(
             investors_source_frame,
             runtime_frame=runtime_frame,
@@ -318,9 +369,16 @@ class SingleModelMainlineWrapper(ModelBase):
             anchor=anchor,
             y=y_arr,
         )
+        investors_aux_matrix = self._compose_investors_aux_matrix(history_matrix, event_state_frame)
 
         if self._binary_target:
-            self.binary_lane_runtime.fit(lane_states["binary"], y_arr, aux_features=history_matrix)
+            self.binary_lane_runtime.fit(
+                lane_states["binary"],
+                y_arr,
+                aux_features=history_matrix,
+                enable_calibration_shrinkage=self.enable_binary_calibration_shrinkage,
+                calibration_shrinkage_target=self.binary_calibration_shrinkage_target,
+            )
             self._binary_event_rate = float(self.binary_lane_runtime._event_rate)
             self._binary_transition_rate = float(self.binary_lane_runtime._transition_rate)
             self._binary_temperature = float(self.binary_lane_runtime._temperature)
@@ -331,20 +389,27 @@ class SingleModelMainlineWrapper(ModelBase):
                 y_arr,
                 aux_features=history_matrix,
                 anchor=anchor,
+                source_scale=funding_source_scale,
+                use_log_domain=self._funding_log_domain,
+                enable_source_scaling=self._funding_source_scaling,
+                tail_weight=self.funding_tail_weight if self.enable_funding_tail_focus else 0.0,
+                tail_quantile=self.funding_tail_quantile,
             )
             self._active_lane_model = self.funding_lane_runtime
         else:
             self.investors_lane_runtime.fit(
                 lane_states["investors"],
                 y_arr,
-                aux_features=history_matrix,
+                aux_features=investors_aux_matrix,
                 anchor=anchor,
                 source_features=investors_source_matrix,
+                mark_features=investors_mark_matrix,
                 enable_source_features=self._effective_investors_source_features,
                 enable_source_specialists=self._effective_investors_source_specialists,
                 enable_source_guard=self._effective_investors_source_guard,
                 enable_source_read_policy=self._effective_investors_source_read_policy,
                 enable_source_transition_correction=self._effective_investors_transition_correction,
+                enable_mark_features=self._effective_investors_mark_features,
                 enable_hurdle_head=self._effective_count_hurdle_head,
                 enable_count_jump=self._effective_count_jump,
                 count_jump_strength=self.count_jump_strength,
@@ -379,11 +444,14 @@ class SingleModelMainlineWrapper(ModelBase):
                 "teacher_distill": self.enable_teacher_distill,
                 "event_head": self.enable_event_head,
                 "task_modulation": self._effective_task_modulation,
+                "binary_calibration_shrinkage": self.enable_binary_calibration_shrinkage,
                 "funding_anchor": self._funding_anchor_enabled,
+                "funding_tail_focus": self.enable_funding_tail_focus,
                 "funding_source_scaling_guard": self._funding_source_scaling,
                 "count_source_routing": self.enable_count_source_routing,
                 "count_source_specialists": self._effective_investors_source_specialists,
                 "investors_transition_correction": self._effective_investors_transition_correction,
+                "investors_event_state_features": self._effective_investors_event_state_features,
                 "financing_consistency": self.enable_financing_consistency,
                 "reliability_abstention": False,
                 "counterfactual_source_ablation": False,
@@ -415,7 +483,9 @@ class SingleModelMainlineWrapper(ModelBase):
                 "feature_cols": len(self._core_feature_cols),
                 "source_feature_cols": len(self._source_feature_cols),
                 "shared_state_dim": self._shared_state_dim,
+                "event_state_schema_version": self.contract.backbone.event_state_schema_version,
             },
+            "event_state_trunk": dict(self._event_state_card),
             "barrier": {
                 "active_lane": self._active_lane_name,
                 "lane_state_dim": self._lane_state_dim,
@@ -453,6 +523,9 @@ class SingleModelMainlineWrapper(ModelBase):
                 "identity_brier": float(self.binary_lane_runtime._identity_metrics.get("brier", 0.0)),
                 "identity_logloss": float(self.binary_lane_runtime._identity_metrics.get("logloss", 0.0)),
                 "identity_ece": float(self.binary_lane_runtime._identity_metrics.get("ece", 0.0)),
+                "calibration_shrinkage_enabled": bool(self.enable_binary_calibration_shrinkage),
+                "calibration_shrinkage_target": str(self.binary_lane_runtime._calibration_shrinkage_target),
+                "calibration_shrinkage_strength": float(self.binary_lane_runtime._calibration_shrinkage_strength),
                 "teacher_weight": float(self._binary_teacher_weight),
                 "event_weight": float(self._binary_event_weight),
                 "teacher_logistic_mix": float(self._teacher_logistic_mix),
@@ -469,11 +542,17 @@ class SingleModelMainlineWrapper(ModelBase):
                 "requested_source_guard": self.enable_investors_source_guard,
                 "requested_source_read_policy": self.enable_investors_source_read_policy,
                 "requested_transition_correction": self.enable_investors_transition_correction,
+                "requested_event_state_features": self.enable_investors_event_state_features,
+                "selective_event_state_contract_enabled": self.enable_investors_selective_event_state_activation,
+                "event_state_allow_h1": self.investors_event_state_allow_h1,
+                "event_state_max_source_presence_share": self.investors_event_state_max_source_presence_share,
                 "effective_source_features": self._effective_investors_source_features,
                 "effective_source_specialists": self._effective_investors_source_specialists,
                 "effective_source_guard": self._effective_investors_source_guard,
                 "effective_source_read_policy": self._effective_investors_source_read_policy,
                 "effective_transition_correction": self._effective_investors_transition_correction,
+                "effective_event_state_features": self._effective_investors_event_state_features,
+                "event_state_activation_reason": self._investors_event_state_activation_reason,
                 "activation_reason": self._investors_source_activation_reason,
                 "transition_activation_reason": self._investors_transition_activation_reason,
                 "train_profile_counts": dict(self._investors_source_profile_counts),
@@ -518,6 +597,15 @@ class SingleModelMainlineWrapper(ModelBase):
                 "transition_activation_min_entities": self.investors_transition_activation_min_entities,
                 "transition_effective_min_rows": self._investors_transition_effective_min_rows,
             },
+            "investor_mark_activation": {
+                "requested_mark_features": bool(self.enable_investors_mark_features),
+                "effective_mark_features": bool(self._effective_investors_mark_features),
+                "activation_reason": self._investors_mark_activation_reason,
+                "mark_feature_count": int(len(self._investors_mark_feature_cols)),
+                "mark_nonzero_share": float(self._investors_mark_nonzero_share),
+                "mark_coverage_share": float(self._investors_mark_coverage_share),
+                "mark_summary": dict(self._investors_mark_summary),
+            },
             "investors_process_contract": {
                 "horizon_subregime": self._investors_horizon_subregime,
                 "effective_count_hurdle_head": self._effective_count_hurdle_head,
@@ -526,6 +614,14 @@ class SingleModelMainlineWrapper(ModelBase):
                 "requested_count_hurdle_head": self.enable_count_hurdle_head,
                 "requested_count_jump": self.enable_count_jump,
                 "requested_count_sparsity_gate": self.enable_count_sparsity_gate,
+                "requested_event_state_features": self.enable_investors_event_state_features,
+                "effective_event_state_features": self._effective_investors_event_state_features,
+                "requested_mark_features": self.enable_investors_mark_features,
+                "effective_mark_features": self._effective_investors_mark_features,
+                "event_state_activation_reason": self._investors_event_state_activation_reason,
+                "mark_activation_reason": self._investors_mark_activation_reason,
+                "event_state_feature_count": int(len(self._investors_event_state_feature_cols)),
+                "mark_feature_count": int(len(self._investors_mark_feature_cols)),
                 "count_jump_strength": self.count_jump_strength,
                 "count_sparsity_gate_strength": self.count_sparsity_gate_strength,
                 "lane_horizon_anchor_mix": float(self.investors_lane_runtime._horizon_anchor_mix),
@@ -542,6 +638,11 @@ class SingleModelMainlineWrapper(ModelBase):
                 "anchor_enabled": self._funding_anchor_enabled,
                 "funding_log_domain": self._funding_log_domain,
                 "funding_source_scaling": self._funding_source_scaling,
+                "funding_tail_focus": bool(self.enable_funding_tail_focus),
+                "funding_tail_weight": float(self.funding_tail_weight),
+                "funding_tail_quantile": float(self.funding_tail_quantile),
+                "train_source_scale_mean": float(self._funding_source_scale_mean),
+                "train_source_scale_max": float(self._funding_source_scale_max),
                 "lane_uses_jump_hurdle_head": bool(self.funding_lane_runtime._uses_jump_hurdle_head),
                 "lane_jump_event_rate": float(self.funding_lane_runtime._jump_event_rate),
                 "lane_positive_jump_rows": int(self.funding_lane_runtime._positive_jump_rows),
@@ -549,6 +650,8 @@ class SingleModelMainlineWrapper(ModelBase):
                 "lane_jump_floor": float(self.funding_lane_runtime._jump_floor),
                 "lane_residual_blend": float(self.funding_lane_runtime._residual_blend),
                 "lane_process_blend": float(self.funding_lane_runtime._residual_blend),
+                "lane_source_scale_strength": float(self.funding_lane_runtime._source_scale_strength),
+                "lane_source_scale_reliability": float(self.funding_lane_runtime._source_scale_reliability),
                 "lane_residual_cap": None
                 if not np.isfinite(self.funding_lane_runtime._residual_cap)
                 else float(self.funding_lane_runtime._residual_cap),
@@ -590,8 +693,14 @@ class SingleModelMainlineWrapper(ModelBase):
         history_matrix = history_frame.reindex(columns=self._history_feature_cols, fill_value=0.0).fillna(0.0).to_numpy(dtype=np.float32, copy=False)
         anchor = self._resolve_anchor(history_frame)
         investors_source_frame = self._build_investors_source_features(source_frame)
+        event_state_frame = self._refresh_event_state_card(runtime_frame, shared_state=shared_state, source_frame=source_frame)
+        investors_aux_matrix = self._compose_investors_aux_matrix(history_matrix, event_state_frame)
         investors_source_matrix = investors_source_frame.reindex(
             columns=self._investors_source_feature_cols,
+            fill_value=0.0,
+        ).to_numpy(dtype=np.float32, copy=False)
+        investors_mark_matrix = self._build_investors_mark_features(runtime_frame).reindex(
+            columns=self._investors_mark_feature_cols,
             fill_value=0.0,
         ).to_numpy(dtype=np.float32, copy=False)
 
@@ -599,18 +708,26 @@ class SingleModelMainlineWrapper(ModelBase):
             preds = self.binary_lane_runtime.predict(lane_states["binary"], aux_features=history_matrix)
             return np.clip(preds, 0.0, 1.0).astype(np.float64, copy=False)
         if self._active_lane_name == "funding":
-            preds = self.funding_lane_runtime.predict(lane_states["funding"], aux_features=history_matrix, anchor=anchor)
+            funding_source_scale = self._build_funding_source_scale(source_frame)
+            preds = self.funding_lane_runtime.predict(
+                lane_states["funding"],
+                aux_features=history_matrix,
+                anchor=anchor,
+                source_scale=funding_source_scale,
+            )
             return np.clip(preds, 0.0, None).astype(np.float64, copy=False)
         preds = self.investors_lane_runtime.predict(
             lane_states["investors"],
-            aux_features=history_matrix,
+            aux_features=investors_aux_matrix,
             anchor=anchor,
             source_features=investors_source_matrix,
+            mark_features=investors_mark_matrix,
             enable_source_features=self._effective_investors_source_features,
             enable_source_specialists=self._effective_investors_source_specialists,
             enable_source_guard=self._effective_investors_source_guard,
             enable_source_read_policy=self._effective_investors_source_read_policy,
             enable_source_transition_correction=self._effective_investors_transition_correction,
+            enable_mark_features=self._effective_investors_mark_features,
         )
         return np.clip(preds, 0.0, None).astype(np.float64, copy=False)
 
@@ -723,6 +840,500 @@ class SingleModelMainlineWrapper(ModelBase):
         ]
         return source_frame.reindex(columns=cols, fill_value=0.0).astype(np.float32)
 
+    def _build_investors_mark_features(self, runtime_frame: pd.DataFrame) -> pd.DataFrame:
+        return self.investor_mark_encoder.build_mark_frame(runtime_frame).astype(np.float32)
+
+    def _build_funding_source_scale(self, source_frame: pd.DataFrame) -> np.ndarray:
+        if source_frame.empty:
+            return np.zeros(0, dtype=np.float64)
+
+        def _source_col(name: str) -> np.ndarray:
+            return pd.to_numeric(
+                source_frame.get(name, pd.Series(0.0, index=source_frame.index, dtype=np.float32)),
+                errors="coerce",
+            ).fillna(0.0).to_numpy(dtype=np.float64, copy=False)
+
+        edgar_active = np.clip(_source_col("edgar_active"), 0.0, 1.0)
+        text_active = np.clip(_source_col("text_active"), 0.0, 1.0)
+        edgar_nonzero = np.clip(_source_col("edgar_nonzero_share"), 0.0, 1.0)
+        text_nonzero = np.clip(_source_col("text_nonzero_share"), 0.0, 1.0)
+        scale = 0.35 * edgar_active + 0.35 * text_active + 0.15 * edgar_nonzero + 0.15 * text_nonzero
+        return np.clip(scale, 0.0, 1.0).astype(np.float64, copy=False)
+
+    def _refresh_event_state_card(
+        self,
+        runtime_frame: pd.DataFrame,
+        *,
+        shared_state: np.ndarray,
+        source_frame: pd.DataFrame,
+    ) -> pd.DataFrame:
+        panel = self._build_event_state_panel(runtime_frame)
+        event_state_frame = self._build_event_state_feature_frame(panel, source_frame)
+        self._event_state_card = {
+            "schema_version": self.contract.backbone.event_state_schema_version,
+            "atoms": list(self.contract.backbone.event_state_atoms),
+            "coverage": self._summarize_event_state_coverage(panel),
+            "phase_atoms": self._summarize_event_state_phase(panel),
+            "boundary_atoms": self._summarize_event_state_boundaries(event_state_frame),
+            "transition_atoms": self._summarize_event_state_transitions(panel),
+            "persistence_atoms": self._summarize_event_state_persistence(panel),
+            "goal_atoms": self._summarize_event_state_goal_progress(event_state_frame),
+            "source_atoms": self._summarize_event_state_source_topology(source_frame),
+            "source_flow_atoms": self._summarize_event_state_source_flow(event_state_frame),
+            "shared_state_atoms": self._summarize_shared_state_geometry(shared_state),
+        }
+        return event_state_frame.reindex(runtime_frame.index, fill_value=0.0).astype(np.float32)
+
+    def _build_event_state_panel(self, runtime_frame: pd.DataFrame) -> pd.DataFrame:
+        panel = pd.DataFrame(index=runtime_frame.index)
+        if "entity_id" in runtime_frame.columns:
+            panel["entity_id"] = runtime_frame["entity_id"].astype(str)
+        else:
+            panel["entity_id"] = pd.Series(
+                [f"row_{idx}" for idx in range(len(runtime_frame))],
+                index=runtime_frame.index,
+                dtype="object",
+            )
+        panel["crawled_date_day"] = pd.to_datetime(runtime_frame.get("crawled_date_day"), errors="coerce")
+        panel["_row_order"] = np.arange(len(panel), dtype=np.int64)
+        panel["funding_raised_usd"] = pd.to_numeric(
+            runtime_frame.get("funding_raised_usd", pd.Series(0.0, index=runtime_frame.index)),
+            errors="coerce",
+        ).fillna(0.0)
+        panel["investors_count"] = pd.to_numeric(
+            runtime_frame.get("investors_count", pd.Series(0.0, index=runtime_frame.index)),
+            errors="coerce",
+        ).fillna(0.0)
+        panel["is_funded"] = pd.to_numeric(
+            runtime_frame.get("is_funded", pd.Series(0.0, index=runtime_frame.index)),
+            errors="coerce",
+        ).fillna(0.0)
+        panel["funding_goal_usd"] = pd.to_numeric(
+            runtime_frame.get("funding_goal_usd", pd.Series(np.nan, index=runtime_frame.index)),
+            errors="coerce",
+        )
+        panel.sort_values(["entity_id", "crawled_date_day", "_row_order"], inplace=True, kind="mergesort")
+        return panel
+
+    def _build_event_state_feature_frame(self, panel: pd.DataFrame, source_frame: pd.DataFrame) -> pd.DataFrame:
+        if panel.empty:
+            return pd.DataFrame(index=panel.index)
+
+        source_aligned = source_frame.reindex(panel.index, fill_value=0.0).copy()
+        work = panel.copy()
+        work["funding_active"] = (work["funding_raised_usd"] > 0.0).astype(np.float32)
+        work["investors_active"] = (work["investors_count"] > 0.0).astype(np.float32)
+        work["funded_active"] = (work["is_funded"] > 0.5).astype(np.float32)
+        work["goal_known"] = (work["funding_goal_usd"].fillna(0.0) > 0.0).astype(np.float32)
+        goal_ratio = (work["funding_raised_usd"] / work["funding_goal_usd"]).replace([np.inf, -np.inf], np.nan)
+        work["goal_ratio"] = goal_ratio.fillna(0.0).clip(lower=0.0, upper=4.0).astype(np.float32)
+        goal_gap = (work["funding_goal_usd"].fillna(0.0) - work["funding_raised_usd"].fillna(0.0)).clip(lower=0.0)
+        work["goal_gap_log"] = np.log1p(goal_gap).astype(np.float32)
+        work["goal_crossed"] = ((goal_ratio >= 1.0) & (work["goal_known"] > 0.5)).astype(np.float32)
+
+        work["funding_diff"] = work.groupby("entity_id", sort=False)["funding_raised_usd"].diff().fillna(0.0)
+        work["investors_diff"] = work.groupby("entity_id", sort=False)["investors_count"].diff().fillna(0.0)
+        work["funding_active_prev"] = work.groupby("entity_id", sort=False)["funding_active"].shift(1).fillna(work["funding_active"])
+        work["investors_active_prev"] = work.groupby("entity_id", sort=False)["investors_active"].shift(1).fillna(work["investors_active"])
+        work["funded_prev"] = work.groupby("entity_id", sort=False)["funded_active"].shift(1).fillna(work["funded_active"])
+        work["goal_crossed_prev"] = work.groupby("entity_id", sort=False)["goal_crossed"].shift(1).fillna(work["goal_crossed"])
+
+        work["funding_boundary_up"] = ((work["funding_active_prev"] <= 0.5) & (work["funding_active"] > 0.5)).astype(np.float32)
+        work["funding_boundary_down"] = ((work["funding_active_prev"] > 0.5) & (work["funding_active"] <= 0.5)).astype(np.float32)
+        work["investors_boundary_up"] = ((work["investors_active_prev"] <= 0.5) & (work["investors_active"] > 0.5)).astype(np.float32)
+        work["investors_boundary_down"] = ((work["investors_active_prev"] > 0.5) & (work["investors_active"] <= 0.5)).astype(np.float32)
+        work["funded_flip_up"] = ((work["funded_prev"] <= 0.5) & (work["funded_active"] > 0.5)).astype(np.float32)
+        work["funded_flip_down"] = ((work["funded_prev"] > 0.5) & (work["funded_active"] <= 0.5)).astype(np.float32)
+        work["goal_cross_up"] = ((work["goal_crossed_prev"] <= 0.5) & (work["goal_crossed"] > 0.5)).astype(np.float32)
+        work["goal_cross_down"] = ((work["goal_crossed_prev"] > 0.5) & (work["goal_crossed"] <= 0.5)).astype(np.float32)
+
+        funding_jump = work["funding_diff"].clip(lower=0.0)
+        investor_jump = work["investors_diff"].clip(lower=0.0)
+        work["funding_jump_log"] = np.log1p(funding_jump).astype(np.float32)
+        work["investor_jump_log"] = np.log1p(investor_jump).astype(np.float32)
+        work["investor_jump_flag"] = (investor_jump > 1e-6).astype(np.float32)
+
+        edgar_active = pd.to_numeric(
+            source_aligned.get("edgar_active", pd.Series(0.0, index=work.index)),
+            errors="coerce",
+        ).fillna(0.0).clip(lower=0.0, upper=1.0)
+        text_active = pd.to_numeric(
+            source_aligned.get("text_active", pd.Series(0.0, index=work.index)),
+            errors="coerce",
+        ).fillna(0.0).clip(lower=0.0, upper=1.0)
+        work["edgar_active"] = edgar_active.astype(np.float32)
+        work["text_active"] = text_active.astype(np.float32)
+        work["edgar_active_prev"] = work.groupby("entity_id", sort=False)["edgar_active"].shift(1).fillna(work["edgar_active"])
+        work["text_active_prev"] = work.groupby("entity_id", sort=False)["text_active"].shift(1).fillna(work["text_active"])
+        work["edgar_arrival"] = ((work["edgar_active_prev"] <= 0.5) & (work["edgar_active"] > 0.5)).astype(np.float32)
+        work["edgar_decay"] = ((work["edgar_active_prev"] > 0.5) & (work["edgar_active"] <= 0.5)).astype(np.float32)
+        work["text_arrival"] = ((work["text_active_prev"] <= 0.5) & (work["text_active"] > 0.5)).astype(np.float32)
+        work["text_decay"] = ((work["text_active_prev"] > 0.5) & (work["text_active"] <= 0.5)).astype(np.float32)
+        work["source_active_count"] = (work["edgar_active"] + work["text_active"]).astype(np.float32)
+        work["source_boundary_flag"] = (
+            (work["edgar_arrival"] > 0.5)
+            | (work["edgar_decay"] > 0.5)
+            | (work["text_arrival"] > 0.5)
+            | (work["text_decay"] > 0.5)
+        ).astype(np.float32)
+
+        edgar_recency = pd.to_numeric(
+            source_aligned.get("edgar_recency_days", pd.Series(0.0, index=work.index)),
+            errors="coerce",
+        ).fillna(0.0).clip(lower=0.0)
+        text_recency = pd.to_numeric(
+            source_aligned.get("text_recency_days", pd.Series(0.0, index=work.index)),
+            errors="coerce",
+        ).fillna(0.0).clip(lower=0.0)
+        work["source_freshness"] = (
+            0.5 / (1.0 + edgar_recency.to_numpy(dtype=np.float64))
+            + 0.5 / (1.0 + text_recency.to_numpy(dtype=np.float64))
+        ).astype(np.float32)
+
+        work["phase_transition_flag"] = (
+            (work["funding_boundary_up"] > 0.5)
+            | (work["funding_boundary_down"] > 0.5)
+            | (work["investors_boundary_up"] > 0.5)
+            | (work["investors_boundary_down"] > 0.5)
+            | (work["funded_flip_up"] > 0.5)
+            | (work["funded_flip_down"] > 0.5)
+            | (work["goal_cross_up"] > 0.5)
+            | (work["goal_cross_down"] > 0.5)
+            | (work["source_boundary_flag"] > 0.5)
+        ).astype(np.float32)
+
+        cols = [
+            "funding_active",
+            "investors_active",
+            "funded_active",
+            "goal_known",
+            "goal_ratio",
+            "goal_gap_log",
+            "goal_crossed",
+            "funding_boundary_up",
+            "funding_boundary_down",
+            "investors_boundary_up",
+            "investors_boundary_down",
+            "funded_flip_up",
+            "funded_flip_down",
+            "goal_cross_up",
+            "goal_cross_down",
+            "funding_jump_log",
+            "investor_jump_log",
+            "investor_jump_flag",
+            "edgar_arrival",
+            "edgar_decay",
+            "text_arrival",
+            "text_decay",
+            "source_active_count",
+            "source_boundary_flag",
+            "source_freshness",
+            "phase_transition_flag",
+        ]
+        return work[cols].astype(np.float32)
+
+    def _compose_investors_aux_matrix(
+        self,
+        history_matrix: np.ndarray,
+        event_state_frame: pd.DataFrame,
+    ) -> np.ndarray:
+        if not self._effective_investors_event_state_features:
+            return history_matrix
+        event_state_matrix = event_state_frame.reindex(
+            columns=self._investors_event_state_feature_cols,
+            fill_value=0.0,
+        ).to_numpy(dtype=np.float32, copy=False)
+        if history_matrix.size == 0:
+            return event_state_matrix
+        return np.concatenate([history_matrix, event_state_matrix], axis=1).astype(np.float32, copy=False)
+
+    def _summarize_event_state_coverage(self, panel: pd.DataFrame) -> Dict[str, object]:
+        if panel.empty:
+            return {"rows": 0, "entities": 0, "mean_rows_per_entity": 0.0, "median_rows_per_entity": 0.0}
+        entity_sizes = panel.groupby("entity_id", sort=False).size().astype(np.float64)
+        return {
+            "rows": int(len(panel)),
+            "entities": int(entity_sizes.shape[0]),
+            "mean_rows_per_entity": float(entity_sizes.mean()) if len(entity_sizes) else 0.0,
+            "median_rows_per_entity": float(entity_sizes.median()) if len(entity_sizes) else 0.0,
+        }
+
+    def _summarize_event_state_phase(self, panel: pd.DataFrame) -> Dict[str, object]:
+        if panel.empty:
+            return {
+                "funding_active_share": 0.0,
+                "investors_active_share": 0.0,
+                "funded_share": 0.0,
+                "joint_financing_active_share": 0.0,
+                "joint_funding_investor_share": 0.0,
+                "binary_without_amount_share": 0.0,
+                "goal_known_share": 0.0,
+                "goal_reached_share": 0.0,
+            }
+        funding_active = panel["funding_raised_usd"] > 0.0
+        investors_active = panel["investors_count"] > 0.0
+        funded_active = panel["is_funded"] > 0.5
+        goal_known = panel["funding_goal_usd"].fillna(0.0) > 0.0
+        goal_ratio = (panel["funding_raised_usd"] / panel["funding_goal_usd"]).replace([np.inf, -np.inf], np.nan)
+        return {
+            "funding_active_share": self._mean_or_zero(funding_active),
+            "investors_active_share": self._mean_or_zero(investors_active),
+            "funded_share": self._mean_or_zero(funded_active),
+            "joint_financing_active_share": self._mean_or_zero(funding_active | investors_active | funded_active),
+            "joint_funding_investor_share": self._mean_or_zero(funding_active & investors_active),
+            "binary_without_amount_share": self._mean_or_zero(funded_active & ~funding_active),
+            "goal_known_share": self._mean_or_zero(goal_known),
+            "goal_reached_share": self._mean_or_zero(goal_ratio.loc[goal_known] >= 1.0),
+        }
+
+    def _summarize_event_state_boundaries(self, event_state_frame: pd.DataFrame) -> Dict[str, object]:
+        if event_state_frame.empty:
+            return {
+                "funding_boundary_up_share": 0.0,
+                "funding_boundary_down_share": 0.0,
+                "investors_boundary_up_share": 0.0,
+                "investors_boundary_down_share": 0.0,
+                "funded_flip_up_share": 0.0,
+                "funded_flip_down_share": 0.0,
+                "phase_transition_share": 0.0,
+            }
+        return {
+            "funding_boundary_up_share": self._mean_or_zero(event_state_frame["funding_boundary_up"]),
+            "funding_boundary_down_share": self._mean_or_zero(event_state_frame["funding_boundary_down"]),
+            "investors_boundary_up_share": self._mean_or_zero(event_state_frame["investors_boundary_up"]),
+            "investors_boundary_down_share": self._mean_or_zero(event_state_frame["investors_boundary_down"]),
+            "funded_flip_up_share": self._mean_or_zero(event_state_frame["funded_flip_up"]),
+            "funded_flip_down_share": self._mean_or_zero(event_state_frame["funded_flip_down"]),
+            "phase_transition_share": self._mean_or_zero(event_state_frame["phase_transition_flag"]),
+        }
+
+    def _summarize_event_state_transitions(self, panel: pd.DataFrame) -> Dict[str, object]:
+        if panel.empty:
+            return {
+                "valid_lag_rows": 0,
+                "funding_jump_share": 0.0,
+                "investor_jump_share": 0.0,
+                "joint_jump_share": 0.0,
+                "funded_up_share": 0.0,
+                "funded_down_share": 0.0,
+                "state_flip_share": 0.0,
+                "funding_jump_mean": 0.0,
+                "investor_jump_mean": 0.0,
+            }
+        work = panel.copy()
+        work["funding_diff"] = work.groupby("entity_id", sort=False)["funding_raised_usd"].diff()
+        work["investors_diff"] = work.groupby("entity_id", sort=False)["investors_count"].diff()
+        work["funded_prev"] = work.groupby("entity_id", sort=False)["is_funded"].shift(1)
+        valid = work.dropna(subset=["funding_diff", "investors_diff", "funded_prev"]).copy()
+        if valid.empty:
+            return {
+                "valid_lag_rows": 0,
+                "funding_jump_share": 0.0,
+                "investor_jump_share": 0.0,
+                "joint_jump_share": 0.0,
+                "funded_up_share": 0.0,
+                "funded_down_share": 0.0,
+                "state_flip_share": 0.0,
+                "funding_jump_mean": 0.0,
+                "investor_jump_mean": 0.0,
+            }
+        funding_jump = valid["funding_diff"] > 1e-6
+        investor_jump = valid["investors_diff"] > 1e-6
+        funded_up = (valid["funded_prev"] <= 0.5) & (valid["is_funded"] > 0.5)
+        funded_down = (valid["funded_prev"] > 0.5) & (valid["is_funded"] <= 0.5)
+        return {
+            "valid_lag_rows": int(len(valid)),
+            "funding_jump_share": self._mean_or_zero(funding_jump),
+            "investor_jump_share": self._mean_or_zero(investor_jump),
+            "joint_jump_share": self._mean_or_zero(funding_jump & investor_jump),
+            "funded_up_share": self._mean_or_zero(funded_up),
+            "funded_down_share": self._mean_or_zero(funded_down),
+            "state_flip_share": self._mean_or_zero(funding_jump | investor_jump | funded_up | funded_down),
+            "funding_jump_mean": self._mean_or_zero(valid.loc[funding_jump, "funding_diff"]),
+            "investor_jump_mean": self._mean_or_zero(valid.loc[investor_jump, "investors_diff"]),
+        }
+
+    def _summarize_event_state_persistence(self, panel: pd.DataFrame) -> Dict[str, object]:
+        if panel.empty:
+            return {
+                "entity_count": 0,
+                "dynamic_entity_share": 0.0,
+                "funding_monotone_entity_share": 0.0,
+                "investor_monotone_entity_share": 0.0,
+                "funded_absorbing_entity_share": 0.0,
+                "financing_active_entity_share": 0.0,
+            }
+        work = panel.copy()
+        work["funding_active"] = work["funding_raised_usd"] > 0.0
+        work["investors_active"] = work["investors_count"] > 0.0
+        work["funding_diff"] = work.groupby("entity_id", sort=False)["funding_raised_usd"].diff()
+        work["investors_diff"] = work.groupby("entity_id", sort=False)["investors_count"].diff()
+        work["funded_prev"] = work.groupby("entity_id", sort=False)["is_funded"].shift(1)
+        work["funding_active_prev"] = work.groupby("entity_id", sort=False)["funding_active"].shift(1)
+        work["investors_active_prev"] = work.groupby("entity_id", sort=False)["investors_active"].shift(1)
+        work["funded_down"] = ((work["funded_prev"] > 0.5) & (work["is_funded"] <= 0.5)).fillna(False)
+        funded_change = (work["funded_prev"].fillna(work["is_funded"]) - work["is_funded"]).abs() > 1e-6
+        funding_phase_change = work["funding_active_prev"].fillna(work["funding_active"]) != work["funding_active"]
+        investors_phase_change = (
+            work["investors_active_prev"].fillna(work["investors_active"]) != work["investors_active"]
+        )
+        work["any_change"] = (
+            (work["investors_diff"].fillna(0.0).abs() > 1e-6)
+            | funded_change
+            | funding_phase_change
+            | investors_phase_change
+        )
+        per_entity = pd.DataFrame(
+            {
+                "funding_monotone": ~work.groupby("entity_id", sort=False)["funding_diff"].apply(
+                    lambda series: bool((series.dropna() < -1e-6).any())
+                ),
+                "investor_monotone": ~work.groupby("entity_id", sort=False)["investors_diff"].apply(
+                    lambda series: bool((series.dropna() < -1e-6).any())
+                ),
+                "funded_absorbing": work.groupby("entity_id", sort=False)["funded_down"].sum() == 0,
+                "dynamic": work.groupby("entity_id", sort=False)["any_change"].any(),
+                "financing_active": work.groupby("entity_id", sort=False).apply(
+                    lambda entity: bool(
+                        ((entity["funding_raised_usd"] > 0.0)
+                        | (entity["investors_count"] > 0.0)
+                        | (entity["is_funded"] > 0.5)).any()
+                    )
+                ),
+            }
+        )
+        return {
+            "entity_count": int(len(per_entity)),
+            "dynamic_entity_share": self._mean_or_zero(per_entity["dynamic"]),
+            "funding_monotone_entity_share": self._mean_or_zero(per_entity["funding_monotone"]),
+            "investor_monotone_entity_share": self._mean_or_zero(per_entity["investor_monotone"]),
+            "funded_absorbing_entity_share": self._mean_or_zero(per_entity["funded_absorbing"]),
+            "financing_active_entity_share": self._mean_or_zero(per_entity["financing_active"]),
+        }
+
+    def _summarize_event_state_goal_progress(self, event_state_frame: pd.DataFrame) -> Dict[str, object]:
+        if event_state_frame.empty:
+            return {
+                "goal_cross_up_share": 0.0,
+                "goal_cross_down_share": 0.0,
+                "goal_crossed_share": 0.0,
+                "goal_ratio_mean": 0.0,
+                "goal_gap_log_mean": 0.0,
+            }
+        return {
+            "goal_cross_up_share": self._mean_or_zero(event_state_frame["goal_cross_up"]),
+            "goal_cross_down_share": self._mean_or_zero(event_state_frame["goal_cross_down"]),
+            "goal_crossed_share": self._mean_or_zero(event_state_frame["goal_crossed"]),
+            "goal_ratio_mean": self._mean_or_zero(event_state_frame["goal_ratio"]),
+            "goal_gap_log_mean": self._mean_or_zero(event_state_frame["goal_gap_log"]),
+        }
+
+    def _summarize_event_state_source_topology(self, source_frame: pd.DataFrame) -> Dict[str, object]:
+        if source_frame.empty:
+            return {
+                "source_presence_share": 0.0,
+                "edgar_active_share": 0.0,
+                "text_active_share": 0.0,
+                "mixed_source_share": 0.0,
+                "edgar_only_share": 0.0,
+                "text_only_share": 0.0,
+                "source_surface": "homogeneous",
+                "source_profile_entropy": 0.0,
+                "edgar_recency_mean_active": 0.0,
+                "text_recency_mean_active": 0.0,
+                "text_novelty_mean": 0.0,
+            }
+        edgar_active = source_frame.get(
+            "edgar_active",
+            pd.Series(0.0, index=source_frame.index, dtype=np.float32),
+        ).to_numpy(dtype=np.float32, copy=False) >= 0.5
+        text_active = source_frame.get(
+            "text_active",
+            pd.Series(0.0, index=source_frame.index, dtype=np.float32),
+        ).to_numpy(dtype=np.float32, copy=False) >= 0.5
+        counts = {
+            "none": int(np.sum(np.logical_and(~edgar_active, ~text_active))),
+            "edgar_only": int(np.sum(np.logical_and(edgar_active, ~text_active))),
+            "text_only": int(np.sum(np.logical_and(~edgar_active, text_active))),
+            "mixed": int(np.sum(np.logical_and(edgar_active, text_active))),
+        }
+        active_counts = {name: count for name, count in counts.items() if count > 0}
+        edgar_recency = pd.to_numeric(
+            source_frame.get("edgar_recency_days", pd.Series(0.0, index=source_frame.index)),
+            errors="coerce",
+        )
+        text_recency = pd.to_numeric(
+            source_frame.get("text_recency_days", pd.Series(0.0, index=source_frame.index)),
+            errors="coerce",
+        )
+        text_novelty = pd.to_numeric(
+            source_frame.get("text_novelty", pd.Series(0.0, index=source_frame.index)),
+            errors="coerce",
+        )
+        active_profile_count = sum(1 for count in active_counts.values() if count > 0)
+        return {
+            "source_presence_share": self._mean_or_zero(edgar_active | text_active),
+            "edgar_active_share": self._mean_or_zero(edgar_active),
+            "text_active_share": self._mean_or_zero(text_active),
+            "mixed_source_share": self._mean_or_zero(edgar_active & text_active),
+            "edgar_only_share": self._mean_or_zero(edgar_active & ~text_active),
+            "text_only_share": self._mean_or_zero(~edgar_active & text_active),
+            "source_surface": "heterogeneous" if active_profile_count >= 2 else "homogeneous",
+            "source_profile_entropy": self._profile_entropy(active_counts),
+            "edgar_recency_mean_active": self._mean_or_zero(edgar_recency.loc[edgar_active]),
+            "text_recency_mean_active": self._mean_or_zero(text_recency.loc[text_active]),
+            "text_novelty_mean": self._mean_or_zero(text_novelty),
+        }
+
+    def _summarize_event_state_source_flow(self, event_state_frame: pd.DataFrame) -> Dict[str, object]:
+        if event_state_frame.empty:
+            return {
+                "edgar_arrival_share": 0.0,
+                "edgar_decay_share": 0.0,
+                "text_arrival_share": 0.0,
+                "text_decay_share": 0.0,
+                "source_boundary_share": 0.0,
+                "source_freshness_mean": 0.0,
+                "source_active_count_mean": 0.0,
+            }
+        return {
+            "edgar_arrival_share": self._mean_or_zero(event_state_frame["edgar_arrival"]),
+            "edgar_decay_share": self._mean_or_zero(event_state_frame["edgar_decay"]),
+            "text_arrival_share": self._mean_or_zero(event_state_frame["text_arrival"]),
+            "text_decay_share": self._mean_or_zero(event_state_frame["text_decay"]),
+            "source_boundary_share": self._mean_or_zero(event_state_frame["source_boundary_flag"]),
+            "source_freshness_mean": self._mean_or_zero(event_state_frame["source_freshness"]),
+            "source_active_count_mean": self._mean_or_zero(event_state_frame["source_active_count"]),
+        }
+
+    def _summarize_shared_state_geometry(self, shared_state: np.ndarray) -> Dict[str, object]:
+        state = np.asarray(shared_state, dtype=np.float64)
+        if state.ndim != 2 or state.size == 0:
+            return {
+                "shared_state_dim": 0,
+                "shared_state_abs_mean": 0.0,
+                "shared_state_l2_mean": 0.0,
+                "shared_state_l2_p90": 0.0,
+                "shared_state_row_std_mean": 0.0,
+                "shared_state_nonzero_share": 0.0,
+            }
+        row_l2 = np.sqrt(np.sum(np.square(state), axis=1))
+        row_std = np.std(state, axis=1)
+        return {
+            "shared_state_dim": int(state.shape[1]),
+            "shared_state_abs_mean": float(np.mean(np.abs(state))),
+            "shared_state_l2_mean": float(np.mean(row_l2)),
+            "shared_state_l2_p90": float(np.quantile(row_l2, 0.90)),
+            "shared_state_row_std_mean": float(np.mean(row_std)),
+            "shared_state_nonzero_share": float(np.mean(np.abs(state) > 1e-6)),
+        }
+
+    def _mean_or_zero(self, values: pd.Series | np.ndarray) -> float:
+        series = pd.Series(values).dropna()
+        if len(series) <= 0:
+            return 0.0
+        return float(series.astype(np.float64).mean())
+
     def _refresh_investors_source_activation_regime(
         self,
         investors_source_frame: pd.DataFrame,
@@ -798,6 +1409,53 @@ class SingleModelMainlineWrapper(ModelBase):
             transition_reason = "multi_profile_dynamic_train_surface"
         self._investors_transition_activation_reason = transition_reason
         self._effective_investors_transition_correction = bool(transition_allowed)
+        (
+            self._effective_investors_event_state_features,
+            self._investors_event_state_activation_reason,
+        ) = self._resolve_investors_event_state_activation()
+
+    def _refresh_investors_mark_regime(self, investors_mark_frame: pd.DataFrame) -> None:
+        if not self.enable_investors_mark_features:
+            self._effective_investors_mark_features = False
+            self._investors_mark_activation_reason = "mark_features_not_requested"
+        elif investors_mark_frame.empty or len(investors_mark_frame.columns) <= 0:
+            self._effective_investors_mark_features = False
+            self._investors_mark_activation_reason = "mark_features_unavailable"
+        else:
+            matrix = investors_mark_frame.to_numpy(dtype=np.float32, copy=False)
+            coverage = float(np.mean(np.any(np.abs(matrix) > 1e-6, axis=1))) if len(matrix) else 0.0
+            self._effective_investors_mark_features = coverage > 0.0
+            self._investors_mark_activation_reason = (
+                "mark_features_enabled" if self._effective_investors_mark_features else "mark_features_empty"
+            )
+
+        matrix = (
+            investors_mark_frame.to_numpy(dtype=np.float32, copy=False)
+            if not investors_mark_frame.empty
+            else np.zeros((0, 0), dtype=np.float32)
+        )
+        self._investors_mark_nonzero_share = float(np.mean(np.abs(matrix) > 1e-6)) if matrix.size else 0.0
+        self._investors_mark_coverage_share = float(np.mean(np.any(np.abs(matrix) > 1e-6, axis=1))) if len(matrix) else 0.0
+        self._investors_mark_summary = {
+            column: float(pd.to_numeric(investors_mark_frame[column], errors="coerce").fillna(0.0).mean())
+            for column in investors_mark_frame.columns
+        }
+
+    def _resolve_investors_event_state_activation(self) -> tuple[bool, str]:
+        if not self.enable_investors_event_state_features:
+            return False, "event_state_not_requested"
+        if len(self._investors_event_state_feature_cols) <= 0:
+            return False, "event_state_features_unavailable"
+        if not self.enable_investors_selective_event_state_activation:
+            return True, "event_state_requested"
+        if self._horizon == 1 and not self.investors_event_state_allow_h1:
+            return False, "event_state_h1_blocked"
+        source_presence_share = float(
+            dict(self._event_state_card.get("source_atoms", {})).get("source_presence_share", 0.0)
+        )
+        if source_presence_share > float(self.investors_event_state_max_source_presence_share):
+            return False, "event_state_source_rich_surface_blocked"
+        return True, "event_state_selective_gate_open"
 
     def _effective_investors_source_min_rows(self, row_count: int) -> int:
         if row_count <= 0:

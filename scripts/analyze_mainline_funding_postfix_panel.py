@@ -83,6 +83,7 @@ def _parse_args() -> argparse.Namespace:
     ap.add_argument("--max-windows", type=_positive_int, default=50000)
     ap.add_argument("--patience", type=_positive_int, default=3)
     ap.add_argument("--seed", type=int, default=42)
+    ap.add_argument("--variant", default="mainline_alpha")
     ap.add_argument("--disable-teacher-distill", action="store_true")
     ap.add_argument("--disable-event-head", action="store_true")
     ap.add_argument("--disable-task-modulation", action="store_true")
@@ -138,7 +139,7 @@ def _classify_against_baseline(candidate_mae: float | None, baseline_mae: float 
 
 def _instantiate_mainline(args: argparse.Namespace) -> SingleModelMainlineWrapper:
     return SingleModelMainlineWrapper(
-        variant="mainline_alpha",
+        variant=args.variant,
         use_delegate=False,
         input_size=args.input_size,
         hidden_dim=args.hidden_dim,
@@ -495,6 +496,7 @@ def main() -> int:
             "name": args.panel,
             "description": PANEL_SPECS[args.panel]["description"],
             "profile": args.profile,
+            "variant": args.variant,
             "cases": len(case_reports),
             "skip_incumbent": bool(args.skip_incumbent),
             "runtime_owner": "single_model_mainline",

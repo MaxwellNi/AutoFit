@@ -51,6 +51,12 @@ class FundingLaneRuntime:
         self._positive_jump_median = 0.0
         self._jump_floor = 1e-6
         self._uses_jump_hurdle_head = False
+        self._log_domain_enabled = False
+        self._source_scaling_enabled = False
+        self._tail_weight = 0.0
+        self._tail_quantile = 0.90
+        self._source_scale_strength = 0.0
+        self._source_scale_reliability = 0.0
         self._fitted = False
 
     def fit(
@@ -59,6 +65,11 @@ class FundingLaneRuntime:
         y: np.ndarray,
         aux_features: np.ndarray | None = None,
         anchor: np.ndarray | None = None,
+        source_scale: np.ndarray | None = None,
+        use_log_domain: bool = False,
+        enable_source_scaling: bool = False,
+        tail_weight: float = 0.0,
+        tail_quantile: float = 0.90,
     ) -> "FundingLaneRuntime":
         target = np.asarray(y, dtype=np.float64)
         finite = target[np.isfinite(target)]
@@ -76,14 +87,29 @@ class FundingLaneRuntime:
         self._positive_jump_median = 0.0
         self._jump_floor = 1e-6
         self._uses_jump_hurdle_head = False
+        self._log_domain_enabled = bool(use_log_domain)
+        self._tail_weight = float(max(tail_weight, 0.0))
+        self._tail_quantile = float(np.clip(tail_quantile, 0.50, 0.99))
+        self._source_scale_strength = 0.0
+        self._source_scale_reliability = 0.0
         if target.size == 0:
             self._fitted = True
             return self
 
         anchor_vec = _resolve_anchor(anchor, fallback=self._fallback_value, length=target.size)
+        source_scale_vec = _resolve_source_scale(source_scale, length=target.size)
+        self._source_scaling_enabled = bool(enable_source_scaling and np.any(source_scale_vec > 1e-8))
         design = _merge_features(lane_state, aux_features, anchor_vec)
-        jump_target = _positive_jump_target(target=target, anchor_vec=anchor_vec)
-        self._anchor_dominance = _anchor_dominance(anchor_vec=anchor_vec, residual=jump_target)
+        jump_target = _positive_jump_target(
+            target=target,
+            anchor_vec=anchor_vec,
+            use_log_domain=self._log_domain_enabled,
+        )
+        self._anchor_dominance = _anchor_dominance(
+            anchor_vec=anchor_vec,
+            residual=jump_target,
+            use_log_domain=self._log_domain_enabled,
+        )
         self._jump_floor = _jump_event_floor(jump_target)
         positive_jump_mask = jump_target > self._jump_floor
         self._jump_event_rate = float(np.mean(positive_jump_mask)) if target.size else 0.0
@@ -110,6 +136,7 @@ class FundingLaneRuntime:
             anchor=anchor_vec,
             jump_target=jump_target,
             jump_floor=self._jump_floor,
+            source_scale=source_scale_vec if self._source_scaling_enabled else None,
         )
         if calibration is not None:
             calibration_models = _fit_jump_process_models(
@@ -117,6 +144,7 @@ class FundingLaneRuntime:
                 jump_target=calibration["train_jump"],
                 jump_floor=float(calibration["jump_floor"]),
                 random_state=self.random_state,
+                use_log_domain=self._log_domain_enabled,
             )
             calibration_jump_pred = _predict_jump_process(
                 design=calibration["calibration_design"],
@@ -124,6 +152,7 @@ class FundingLaneRuntime:
                 severity_model=calibration_models["severity_model"],
                 event_rate=float(calibration_models["event_rate"]),
                 positive_jump_median=float(calibration_models["positive_jump_median"]),
+                use_log_domain=self._log_domain_enabled,
             )
             (
                 self._residual_blend,
@@ -136,7 +165,29 @@ class FundingLaneRuntime:
                 residual_pred=calibration_jump_pred,
                 residual_target=calibration["calibration_jump"],
                 anchor_dominance=self._anchor_dominance,
+                use_log_domain=self._log_domain_enabled,
+                tail_weight=self._tail_weight,
+                tail_quantile=self._tail_quantile,
             )
+            if self._source_scaling_enabled and calibration.get("calibration_source_scale") is not None:
+                (
+                    self._source_scale_strength,
+                    self._guarded_calibration_mae,
+                ) = _calibrate_source_scaling_guard(
+                    anchor_vec=calibration["calibration_anchor"],
+                    target_vec=calibration["calibration_target"],
+                    residual_pred=calibration_jump_pred,
+                    residual_blend=self._residual_blend,
+                    residual_cap=self._residual_cap,
+                    source_scale=calibration["calibration_source_scale"],
+                    use_log_domain=self._log_domain_enabled,
+                    tail_weight=self._tail_weight,
+                    tail_quantile=self._tail_quantile,
+                )
+                self._source_scale_reliability = _guard_improvement_ratio(
+                    baseline_mae=self._anchor_calibration_mae,
+                    guarded_mae=self._guarded_calibration_mae,
+                )
             self._calibration_rows = int(calibration["calibration_target"].size)
 
         full_models = _fit_jump_process_models(
@@ -144,6 +195,7 @@ class FundingLaneRuntime:
             jump_target=jump_target,
             jump_floor=self._jump_floor,
             random_state=self.random_state,
+            use_log_domain=self._log_domain_enabled,
         )
         self._event_model = full_models["event_model"]
         self._model = full_models["severity_model"]
@@ -161,11 +213,13 @@ class FundingLaneRuntime:
         lane_state: np.ndarray,
         aux_features: np.ndarray | None = None,
         anchor: np.ndarray | None = None,
+        source_scale: np.ndarray | None = None,
     ) -> np.ndarray:
         if not self._fitted:
             raise ValueError("FundingLaneRuntime is not fitted")
 
         anchor_vec = _resolve_anchor(anchor, fallback=self._fallback_value, length=len(lane_state))
+        source_scale_vec = _resolve_source_scale(source_scale, length=len(lane_state))
         if not self._uses_jump_hurdle_head:
             return np.clip(anchor_vec, 0.0, None).astype(np.float64, copy=False)
 
@@ -176,12 +230,16 @@ class FundingLaneRuntime:
             severity_model=self._model,
             event_rate=self._jump_event_rate,
             positive_jump_median=self._positive_jump_median,
+            use_log_domain=self._log_domain_enabled,
         )
         return _guarded_funding_prediction(
             anchor_vec=anchor_vec,
             residual_pred=jump_pred,
             residual_blend=self._residual_blend,
             residual_cap=self._residual_cap,
+            use_log_domain=self._log_domain_enabled,
+            source_scale=source_scale_vec if self._source_scaling_enabled else None,
+            source_scale_strength=self._source_scale_strength,
         )
 
 
@@ -209,6 +267,7 @@ def _split_funding_calibration(
     anchor: np.ndarray,
     jump_target: np.ndarray,
     jump_floor: float,
+    source_scale: np.ndarray | None = None,
 ) -> dict[str, np.ndarray | float] | None:
     n_rows = int(design.shape[0])
     if n_rows < 12:
@@ -230,12 +289,19 @@ def _split_funding_calibration(
         "calibration_jump": jump_target[train_rows:],
         "calibration_target": target[train_rows:],
         "calibration_anchor": anchor[train_rows:].astype(np.float64, copy=False),
+        "calibration_source_scale": None
+        if source_scale is None
+        else np.asarray(source_scale[train_rows:], dtype=np.float64),
         "jump_floor": float(jump_floor),
     }
 
 
-def _positive_jump_target(target: np.ndarray, anchor_vec: np.ndarray) -> np.ndarray:
-    return np.clip(np.asarray(target, dtype=np.float64) - np.asarray(anchor_vec, dtype=np.float64), 0.0, None)
+def _positive_jump_target(target: np.ndarray, anchor_vec: np.ndarray, use_log_domain: bool = False) -> np.ndarray:
+    target_arr = np.clip(np.asarray(target, dtype=np.float64), 0.0, None)
+    anchor_arr = np.clip(np.asarray(anchor_vec, dtype=np.float64), 0.0, None)
+    if use_log_domain:
+        return np.clip(np.log1p(target_arr) - np.log1p(anchor_arr), 0.0, None)
+    return np.clip(target_arr - anchor_arr, 0.0, None)
 
 
 def _minimum_positive_jump_rows(n_rows: int) -> int:
@@ -252,6 +318,7 @@ def _fit_jump_process_models(
     jump_target: np.ndarray,
     jump_floor: float,
     random_state: int,
+    use_log_domain: bool = False,
 ) -> dict[str, object]:
     event_target = (np.asarray(jump_target, dtype=np.float64) > float(jump_floor)).astype(np.int32, copy=False)
     event_rate = float(event_target.mean()) if event_target.size else 0.0
@@ -263,10 +330,10 @@ def _fit_jump_process_models(
         event_model = _build_event_model(random_state=random_state)
         event_model.fit(design, event_target)
     if positive_jump.size >= 8:
-        log_jump = np.log1p(positive_jump)
-        if np.nanstd(log_jump) >= 1e-8:
+        severity_target = positive_jump if use_log_domain else np.log1p(positive_jump)
+        if np.nanstd(severity_target) >= 1e-8:
             severity_model = _build_residual_model(random_state=random_state)
-            severity_model.fit(design[event_target > 0], log_jump)
+            severity_model.fit(design[event_target > 0], severity_target)
     return {
         "event_model": event_model,
         "severity_model": severity_model,
@@ -282,6 +349,7 @@ def _predict_jump_process(
     severity_model: HistGradientBoostingRegressor | None,
     event_rate: float,
     positive_jump_median: float,
+    use_log_domain: bool = False,
 ) -> np.ndarray:
     n_rows = int(design.shape[0])
     if event_model is None:
@@ -291,7 +359,8 @@ def _predict_jump_process(
     if severity_model is None:
         jump_size = np.full(n_rows, float(max(positive_jump_median, 0.0)), dtype=np.float64)
     else:
-        jump_size = np.expm1(severity_model.predict(design)).astype(np.float64, copy=False)
+        severity_pred = severity_model.predict(design).astype(np.float64, copy=False)
+        jump_size = severity_pred if use_log_domain else np.expm1(severity_pred)
     return np.clip(event_prob, 0.0, 1.0) * np.clip(jump_size, 0.0, None)
 
 
@@ -300,17 +369,33 @@ def _guarded_funding_prediction(
     residual_pred: np.ndarray,
     residual_blend: float,
     residual_cap: float,
+    use_log_domain: bool = False,
+    source_scale: np.ndarray | None = None,
+    source_scale_strength: float = 0.0,
 ) -> np.ndarray:
     anchor_arr = np.asarray(anchor_vec, dtype=np.float64)
     guarded_residual = np.asarray(residual_pred, dtype=np.float64)
     if np.isfinite(residual_cap):
         guarded_residual = np.clip(guarded_residual, -residual_cap, residual_cap)
-    pred = anchor_arr + float(residual_blend) * guarded_residual
+    if source_scale is not None and float(source_scale_strength) > 0.0:
+        scale_arr = _resolve_source_scale(source_scale, length=len(anchor_arr))
+        guarded_residual = guarded_residual * np.clip(
+            1.0 - float(source_scale_strength) * scale_arr,
+            0.0,
+            1.0,
+        )
+    if use_log_domain:
+        pred = np.expm1(np.log1p(np.clip(anchor_arr, 0.0, None)) + float(residual_blend) * guarded_residual)
+    else:
+        pred = anchor_arr + float(residual_blend) * guarded_residual
     return np.clip(pred, 0.0, None).astype(np.float64, copy=False)
 
 
-def _anchor_dominance(anchor_vec: np.ndarray, residual: np.ndarray) -> float:
-    finite_anchor = np.abs(np.asarray(anchor_vec, dtype=np.float64))
+def _anchor_dominance(anchor_vec: np.ndarray, residual: np.ndarray, use_log_domain: bool = False) -> float:
+    finite_anchor = np.asarray(anchor_vec, dtype=np.float64)
+    if use_log_domain:
+        finite_anchor = np.log1p(np.clip(finite_anchor, 0.0, None))
+    finite_anchor = np.abs(finite_anchor)
     finite_residual = np.abs(np.asarray(residual, dtype=np.float64))
     anchor_scale = float(np.nanmedian(finite_anchor)) if finite_anchor.size else 0.0
     residual_scale = float(np.nanmedian(finite_residual)) if finite_residual.size else 0.0
@@ -323,6 +408,9 @@ def _calibrate_anchor_residual_guard(
     residual_pred: np.ndarray,
     residual_target: np.ndarray,
     anchor_dominance: float,
+    use_log_domain: bool = False,
+    tail_weight: float = 0.0,
+    tail_quantile: float = 0.90,
 ) -> tuple[float, float, float, float]:
     anchor_arr = np.asarray(anchor_vec, dtype=np.float64)
     target_arr = np.asarray(target_vec, dtype=np.float64)
@@ -336,7 +424,8 @@ def _calibrate_anchor_residual_guard(
     target_arr = target_arr[mask]
     pred_arr = pred_arr[mask]
     target_residual = target_residual[mask]
-    anchor_mae = float(np.mean(np.abs(target_arr - anchor_arr)))
+    weights = _funding_error_weights(target_arr, tail_weight=tail_weight, tail_quantile=tail_quantile)
+    anchor_mae = _weighted_mae(target_arr, anchor_arr, weights)
     positive_mask = target_residual > 1e-8
     positive_residual = np.abs(target_residual[positive_mask])
     residual_scale = float(np.quantile(positive_residual, 0.75)) if positive_residual.size else 0.0
@@ -364,10 +453,14 @@ def _calibrate_anchor_residual_guard(
                 residual_pred=pred_arr,
                 residual_blend=float(blend),
                 residual_cap=cap,
+                use_log_domain=use_log_domain,
             )
-            candidate_error = np.abs(candidate - target_arr)
-            candidate_mae = float(np.mean(candidate_error))
-            candidate_jump_mae = float(np.mean(candidate_error[positive_mask])) if positive_mask.any() else candidate_mae
+            candidate_mae = _weighted_mae(target_arr, candidate, weights)
+            candidate_jump_mae = (
+                _weighted_mae(target_arr[positive_mask], candidate[positive_mask], weights[positive_mask])
+                if positive_mask.any()
+                else candidate_mae
+            )
             if candidate_mae + 1e-9 < best_mae:
                 best_mae = candidate_mae
                 best_blend = float(blend)
@@ -388,6 +481,95 @@ def _calibrate_anchor_residual_guard(
                     best_blend = float(blend)
                     best_cap = float(cap)
     return best_blend, best_cap, anchor_mae, best_mae
+
+
+def _calibrate_source_scaling_guard(
+    anchor_vec: np.ndarray,
+    target_vec: np.ndarray,
+    residual_pred: np.ndarray,
+    residual_blend: float,
+    residual_cap: float,
+    source_scale: np.ndarray,
+    *,
+    use_log_domain: bool = False,
+    tail_weight: float = 0.0,
+    tail_quantile: float = 0.90,
+) -> tuple[float, float]:
+    anchor_arr = np.asarray(anchor_vec, dtype=np.float64)
+    target_arr = np.asarray(target_vec, dtype=np.float64)
+    pred_arr = np.asarray(residual_pred, dtype=np.float64)
+    scale_arr = np.asarray(source_scale, dtype=np.float64)
+    mask = np.isfinite(anchor_arr) & np.isfinite(target_arr) & np.isfinite(pred_arr) & np.isfinite(scale_arr)
+    if not mask.any():
+        return 0.0, 0.0
+
+    anchor_arr = anchor_arr[mask]
+    target_arr = target_arr[mask]
+    pred_arr = pred_arr[mask]
+    scale_arr = np.clip(scale_arr[mask], 0.0, 1.0)
+    weights = _funding_error_weights(target_arr, tail_weight=tail_weight, tail_quantile=tail_quantile)
+    best_strength = 0.0
+    best_mae = _weighted_mae(
+        target_arr,
+        _guarded_funding_prediction(
+            anchor_vec=anchor_arr,
+            residual_pred=pred_arr,
+            residual_blend=residual_blend,
+            residual_cap=residual_cap,
+            use_log_domain=use_log_domain,
+        ),
+        weights,
+    )
+    if not np.any(scale_arr > 1e-8):
+        return best_strength, best_mae
+
+    for strength in (0.0, 0.15, 0.30, 0.45, 0.60, 0.75, 1.0):
+        candidate = _guarded_funding_prediction(
+            anchor_vec=anchor_arr,
+            residual_pred=pred_arr,
+            residual_blend=residual_blend,
+            residual_cap=residual_cap,
+            use_log_domain=use_log_domain,
+            source_scale=scale_arr,
+            source_scale_strength=float(strength),
+        )
+        candidate_mae = _weighted_mae(target_arr, candidate, weights)
+        if candidate_mae + 1e-9 < best_mae:
+            best_strength = float(strength)
+            best_mae = candidate_mae
+        elif abs(candidate_mae - best_mae) <= 1e-9 and float(strength) < best_strength:
+            best_strength = float(strength)
+    return best_strength, best_mae
+
+
+def _funding_error_weights(target: np.ndarray, *, tail_weight: float, tail_quantile: float) -> np.ndarray:
+    weights = np.ones(len(target), dtype=np.float64)
+    if float(tail_weight) <= 0.0 or len(target) == 0:
+        return weights
+    threshold = float(np.quantile(np.asarray(target, dtype=np.float64), float(np.clip(tail_quantile, 0.50, 0.99))))
+    weights[np.asarray(target, dtype=np.float64) >= threshold] += float(tail_weight)
+    return weights
+
+
+def _weighted_mae(target: np.ndarray, pred: np.ndarray, weights: np.ndarray) -> float:
+    target_arr = np.asarray(target, dtype=np.float64)
+    pred_arr = np.asarray(pred, dtype=np.float64)
+    weight_arr = np.asarray(weights, dtype=np.float64)
+    return float(np.average(np.abs(target_arr - pred_arr), weights=weight_arr))
+
+
+def _resolve_source_scale(source_scale: np.ndarray | None, length: int) -> np.ndarray:
+    if source_scale is None:
+        return np.zeros(length, dtype=np.float64)
+    scale_arr = np.asarray(source_scale, dtype=np.float64).reshape(-1)
+    if scale_arr.size != length:
+        raise ValueError("Funding source scale length does not match lane_state rows")
+    return np.clip(np.nan_to_num(scale_arr, nan=0.0, posinf=1.0, neginf=0.0), 0.0, 1.0)
+
+
+def _guard_improvement_ratio(baseline_mae: float, guarded_mae: float) -> float:
+    baseline = float(max(abs(baseline_mae), 1e-9))
+    return float(np.clip((float(baseline_mae) - float(guarded_mae)) / baseline, 0.0, 1.0))
 
 
 def _merge_features(lane_state: np.ndarray, aux_features: np.ndarray | None, anchor: np.ndarray) -> np.ndarray:

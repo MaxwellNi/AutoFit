@@ -23,13 +23,15 @@ _requeue_handler() {
 }
 trap _requeue_handler USR1
 
-REPO_ROOT=/work/projects/eint/repo_root
+REPO_ROOT=${REPO_ROOT:-/work/projects/eint/repo_root}
 INSIDER_PY=/mnt/aiongpfs/projects/eint/envs/.micromamba/envs/insider/bin/python3
 RUN_ROOT=${RUN_ROOT:-runs/benchmarks/single_model_mainline_localclear_20260415}
 LABEL=${LABEL:-mainline_funding_postfix_panel_cf_bigmem_20260415}
 PANEL=${PANEL:-hardest_family}
 PROFILE=${PROFILE:-audit}
 SKIP_INCUMBENT=${SKIP_INCUMBENT:-1}
+VARIANT=${VARIANT:-mainline_alpha}
+EXTRA_ARGS=${EXTRA_ARGS:-}
 
 export LD_LIBRARY_PATH="/mnt/aiongpfs/projects/eint/envs/.micromamba/envs/insider/lib:${LD_LIBRARY_PATH:-}"
 export BLOCK3_CANONICAL_REPO_ROOT="$REPO_ROOT"
@@ -48,11 +50,18 @@ CMD=(
   scripts/analyze_mainline_funding_postfix_panel.py
   --panel "$PANEL"
   --profile "$PROFILE"
+  --variant "$VARIANT"
   --output-json "$RUN_ROOT/$LABEL/report.json"
 )
 
 if [[ "$SKIP_INCUMBENT" == "1" ]]; then
   CMD+=(--skip-incumbent)
+fi
+
+if [[ -n "$EXTRA_ARGS" ]]; then
+  # shellcheck disable=SC2206
+  EXTRA_ARGS_ARR=($EXTRA_ARGS)
+  CMD+=("${EXTRA_ARGS_ARR[@]}")
 fi
 
 CMD+=("$@")

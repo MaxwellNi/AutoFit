@@ -17,6 +17,7 @@ class InvestorsLaneSpec:
     supports_short_horizon_exemplar_branch: bool = True
     supports_hurdle_decomposition: bool = True
     supports_transition_dynamics: bool = True
+    supports_marked_event_features: bool = True
     supports_source_pollution_guard: bool = True
     guardrails: Tuple[str, ...] = ("shared_count_repair", "h1_only_sharpness", "source_rich_miscalibration")
 
@@ -27,6 +28,7 @@ class InvestorsLaneSpec:
             "supports_short_horizon_exemplar_branch": self.supports_short_horizon_exemplar_branch,
             "supports_hurdle_decomposition": self.supports_hurdle_decomposition,
             "supports_transition_dynamics": self.supports_transition_dynamics,
+            "supports_marked_event_features": self.supports_marked_event_features,
             "supports_source_pollution_guard": self.supports_source_pollution_guard,
             "guardrails": self.guardrails,
         }
@@ -69,11 +71,13 @@ class InvestorsLaneRuntime:
         aux_features: np.ndarray | None = None,
         anchor: np.ndarray | None = None,
         source_features: np.ndarray | None = None,
+        mark_features: np.ndarray | None = None,
         enable_source_features: bool = False,
         enable_source_specialists: bool = False,
         enable_source_guard: bool = False,
         enable_source_read_policy: bool = False,
         enable_source_transition_correction: bool = False,
+        enable_mark_features: bool = False,
         enable_hurdle_head: bool = False,
         enable_count_jump: bool = False,
         count_jump_strength: float = 0.0,
@@ -105,11 +109,14 @@ class InvestorsLaneRuntime:
 
         has_source_features = source_features is not None
         use_source_features = bool(enable_source_features and has_source_features)
+        has_mark_features = mark_features is not None
+        use_mark_features = bool(enable_mark_features and has_mark_features)
         use_source_specialists = bool(enable_source_specialists and has_source_features)
         use_source_guard = bool(enable_source_guard and has_source_features)
         use_source_read_policy = bool(enable_source_read_policy and has_source_features)
         use_source_transition_correction = bool(enable_source_transition_correction and has_source_features)
         normalized_source = _normalize_source_features(source_features) if has_source_features else None
+        normalized_mark = _normalize_mark_features(mark_features) if has_mark_features else None
         anchor_vec = _resolve_anchor(anchor, fallback=self._fallback_value, length=target.size)
         smoothed_anchor = _horizon_model_anchor(anchor_vec, aux_features, self._horizon, self._use_hurdle_head)
         (
@@ -127,6 +134,7 @@ class InvestorsLaneRuntime:
             aux_features,
             model_anchor if self._use_hurdle_head else anchor_vec,
             normalized_source if use_source_features else None,
+            normalized_mark if use_mark_features else None,
         )
         active = (target > 0.0).astype(np.int32)
         self._active_rate = float(active.mean())
@@ -322,11 +330,13 @@ class InvestorsLaneRuntime:
                         aux_features=aux_features,
                         anchor=anchor,
                         source_features=source_features,
+                        mark_features=mark_features,
                         enable_source_features=enable_source_features,
                         enable_source_specialists=enable_source_specialists,
                         enable_source_guard=enable_source_guard,
                         enable_source_read_policy=enable_source_read_policy,
                         enable_source_transition_correction=False,
+                        enable_mark_features=enable_mark_features,
                     )
                 finally:
                     self._fitted = prev_fitted
@@ -390,22 +400,27 @@ class InvestorsLaneRuntime:
         aux_features: np.ndarray | None = None,
         anchor: np.ndarray | None = None,
         source_features: np.ndarray | None = None,
+        mark_features: np.ndarray | None = None,
         enable_source_features: bool = False,
         enable_source_specialists: bool = False,
         enable_source_guard: bool = False,
         enable_source_read_policy: bool = False,
         enable_source_transition_correction: bool = False,
+        enable_mark_features: bool = False,
     ) -> np.ndarray:
         if not self._fitted:
             raise ValueError("InvestorsLaneRuntime is not fitted")
 
         has_source_features = source_features is not None
         use_source_features = bool(enable_source_features and has_source_features)
+        has_mark_features = mark_features is not None
+        use_mark_features = bool(enable_mark_features and has_mark_features)
         use_source_specialists = bool(enable_source_specialists and has_source_features)
         use_source_guard = bool(enable_source_guard and has_source_features)
         use_source_read_policy = bool(enable_source_read_policy and has_source_features)
         use_source_transition_correction = bool(enable_source_transition_correction and has_source_features)
         normalized_source = _normalize_source_features(source_features) if has_source_features else None
+        normalized_mark = _normalize_mark_features(mark_features) if has_mark_features else None
         anchor_vec = _resolve_anchor(anchor, fallback=self._fallback_value, length=len(lane_state))
         smoothed_anchor = _horizon_model_anchor(anchor_vec, aux_features, self._horizon, self._use_hurdle_head)
         model_anchor = _blend_horizon_anchor(anchor_vec, smoothed_anchor, self._horizon_anchor_mix)
@@ -414,6 +429,7 @@ class InvestorsLaneRuntime:
             aux_features,
             model_anchor if self._use_hurdle_head else anchor_vec,
             normalized_source if use_source_features else None,
+            normalized_mark if use_mark_features else None,
         )
         active_prob = _compute_active_probability(
             design=design,
@@ -512,6 +528,7 @@ def _merge_features(
     aux_features: np.ndarray | None,
     anchor: np.ndarray | None,
     source_features: np.ndarray | None = None,
+    mark_features: np.ndarray | None = None,
 ) -> np.ndarray:
     lane = np.asarray(lane_state, dtype=np.float32)
     parts = [lane]
@@ -527,6 +544,9 @@ def _merge_features(
     if source_features is not None:
         source = _normalize_source_features(source_features)
         parts.append(source)
+    if mark_features is not None:
+        marks = _normalize_mark_features(mark_features)
+        parts.append(marks)
     return np.concatenate(parts, axis=1).astype(np.float32, copy=False)
 
 
@@ -535,6 +555,13 @@ def _normalize_source_features(source_features: np.ndarray) -> np.ndarray:
     if source.ndim == 1:
         source = source[:, None]
     return source
+
+
+def _normalize_mark_features(mark_features: np.ndarray) -> np.ndarray:
+    marks = np.asarray(mark_features, dtype=np.float32)
+    if marks.ndim == 1:
+        marks = marks[:, None]
+    return marks
 
 
 def _resolve_anchor(anchor: np.ndarray | None, fallback: float, length: int) -> np.ndarray:
