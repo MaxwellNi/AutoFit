@@ -38,6 +38,8 @@ class SharedTemporalBackboneSpec:
     )
     enable_multiscale_temporal_state: bool = False
     temporal_state_windows: Tuple[int, ...] = (3, 7, 30)
+    enable_temporal_state_features: bool = True
+    enable_spectral_state_features: bool = True
 
     def as_dict(self) -> Dict[str, object]:
         return {
@@ -51,6 +53,8 @@ class SharedTemporalBackboneSpec:
             "event_state_atoms": self.event_state_atoms,
             "enable_multiscale_temporal_state": self.enable_multiscale_temporal_state,
             "temporal_state_windows": self.temporal_state_windows,
+            "enable_temporal_state_features": self.enable_temporal_state_features,
+            "enable_spectral_state_features": self.enable_spectral_state_features,
         }
 
 
@@ -121,6 +125,12 @@ class SharedTemporalBackbone:
         state = np.concatenate([compact, summaries, temporal_state, spectral_state], axis=1).astype(np.float32, copy=False)
         self._state_layout = {
             "uses_multiscale_temporal_state": bool(self.spec.enable_multiscale_temporal_state),
+            "uses_temporal_state_features": bool(
+                self.spec.enable_multiscale_temporal_state and self.spec.enable_temporal_state_features
+            ),
+            "uses_spectral_state_features": bool(
+                self.spec.enable_multiscale_temporal_state and self.spec.enable_spectral_state_features
+            ),
             "compact_state_dim": int(compact.shape[1]),
             "summary_state_dim": int(summaries.shape[1]),
             "temporal_state_dim": int(temporal_state.shape[1]),
@@ -146,6 +156,8 @@ class SharedTemporalBackbone:
 
     def required_seed_rows(self) -> int:
         if not self.spec.enable_multiscale_temporal_state:
+            return 0
+        if not self.spec.enable_temporal_state_features and not self.spec.enable_spectral_state_features:
             return 0
         return max(self._normalized_multiscale_windows())
 
@@ -221,6 +233,9 @@ class SharedTemporalBackbone:
         if not self.spec.enable_multiscale_temporal_state or standardized.shape[0] == 0:
             empty = np.zeros((standardized.shape[0], 0), dtype=np.float32)
             return empty, empty, {"temporal": (), "spectral": ()}
+        if not self.spec.enable_temporal_state_features and not self.spec.enable_spectral_state_features:
+            empty = np.zeros((standardized.shape[0], 0), dtype=np.float32)
+            return empty, empty, {"temporal": (), "spectral": ()}
 
         current = self._build_context_state_frame(
             standardized,
@@ -275,8 +290,16 @@ class SharedTemporalBackbone:
 
         runtime = work[work["_is_runtime_row"]].copy()
         runtime.sort_values("_row_order", inplace=True, kind="mergesort")
-        temporal_state = runtime.loc[:, list(temporal_names)].to_numpy(dtype=np.float32, copy=False)
-        spectral_state = runtime.loc[:, list(spectral_names)].to_numpy(dtype=np.float32, copy=False)
+        if self.spec.enable_temporal_state_features:
+            temporal_state = runtime.loc[:, list(temporal_names)].to_numpy(dtype=np.float32, copy=False)
+        else:
+            temporal_state = np.zeros((len(runtime), 0), dtype=np.float32)
+            temporal_names = ()
+        if self.spec.enable_spectral_state_features:
+            spectral_state = runtime.loc[:, list(spectral_names)].to_numpy(dtype=np.float32, copy=False)
+        else:
+            spectral_state = np.zeros((len(runtime), 0), dtype=np.float32)
+            spectral_names = ()
         return temporal_state, spectral_state, {
             "temporal": temporal_names,
             "spectral": spectral_names,
@@ -325,6 +348,12 @@ class SharedTemporalBackbone:
     def _empty_state_layout(self, compact_dim: int = 0, summary_dim: int = 0) -> Dict[str, Any]:
         return {
             "uses_multiscale_temporal_state": bool(self.spec.enable_multiscale_temporal_state),
+            "uses_temporal_state_features": bool(
+                self.spec.enable_multiscale_temporal_state and self.spec.enable_temporal_state_features
+            ),
+            "uses_spectral_state_features": bool(
+                self.spec.enable_multiscale_temporal_state and self.spec.enable_spectral_state_features
+            ),
             "compact_state_dim": int(compact_dim),
             "summary_state_dim": int(summary_dim),
             "temporal_state_dim": 0,

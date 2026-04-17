@@ -281,6 +281,12 @@ class SingleModelMainlineWrapper(ModelBase):
                 prototype_kwargs.get("enable_multiscale_temporal_state", False)
             ),
             temporal_state_windows=normalized_windows,
+            enable_temporal_state_features=bool(
+                prototype_kwargs.get("enable_temporal_state_features", True)
+            ),
+            enable_spectral_state_features=bool(
+                prototype_kwargs.get("enable_spectral_state_features", True)
+            ),
         )
 
     def describe_contract(self) -> Dict[str, object]:
@@ -1350,6 +1356,8 @@ class SingleModelMainlineWrapper(ModelBase):
             "temporal_state_dim": int(layout.get("temporal_state_dim", 0)),
             "spectral_state_dim": int(layout.get("spectral_state_dim", 0)),
             "multiscale_temporal_state_enabled": bool(layout.get("uses_multiscale_temporal_state", False)),
+            "temporal_state_features_enabled": bool(layout.get("uses_temporal_state_features", False)),
+            "spectral_state_features_enabled": bool(layout.get("uses_spectral_state_features", False)),
         }
         if state.ndim != 2 or state.size == 0:
             return {

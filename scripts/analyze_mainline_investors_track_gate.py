@@ -45,6 +45,8 @@ OFFICIAL_CASES = (
 OFFICIAL_MEAN_DELTA_MIN_PCT = 0.0
 OFFICIAL_WORST_DELTA_MIN_PCT = -1.0
 DYNAMIC_MEAN_DELTA_MIN_PCT = 0.0
+DYNAMIC_GEOMETRY_SHIFT_AMPLIFICATION_MAX = 128.0
+DYNAMIC_GEOMETRY_TEST_SHIFT_SHARE_MAX = 0.05
 
 
 TRACK_CANDIDATES: Dict[str, Dict[str, Any]] = {
@@ -168,6 +170,58 @@ TRACK_CANDIDATES: Dict[str, Dict[str, Any]] = {
             },
         },
     },
+    "temporal_state_guard": {
+        "role": "active_trunk_candidate",
+        "official_kwargs": {
+            "variant": "mainline_temporal_state_guard",
+            "seed": 7,
+            "use_delegate": False,
+        },
+        "dynamic_variant": {
+            "fit": {
+                "enable_hurdle_head": True,
+                "enable_count_jump": True,
+                "count_jump_strength": 0.30,
+                "enable_count_sparsity_gate": False,
+                "enable_investors_event_state_features": True,
+            },
+            "predict": {
+                "enable_investors_event_state_features": True,
+            },
+        },
+        "dynamic_backbone": {
+            "enable_multiscale_temporal_state": True,
+            "temporal_state_windows": (3, 7, 30),
+            "enable_temporal_state_features": True,
+            "enable_spectral_state_features": False,
+        },
+    },
+    "spectral_state_guard": {
+        "role": "active_trunk_candidate",
+        "official_kwargs": {
+            "variant": "mainline_spectral_state_guard",
+            "seed": 7,
+            "use_delegate": False,
+        },
+        "dynamic_variant": {
+            "fit": {
+                "enable_hurdle_head": True,
+                "enable_count_jump": True,
+                "count_jump_strength": 0.30,
+                "enable_count_sparsity_gate": False,
+                "enable_investors_event_state_features": True,
+            },
+            "predict": {
+                "enable_investors_event_state_features": True,
+            },
+        },
+        "dynamic_backbone": {
+            "enable_multiscale_temporal_state": True,
+            "temporal_state_windows": (3, 7, 30),
+            "enable_temporal_state_features": False,
+            "enable_spectral_state_features": True,
+        },
+    },
     "multiscale_state_guard": {
         "role": "active_trunk_candidate",
         "official_kwargs": {
@@ -190,6 +244,8 @@ TRACK_CANDIDATES: Dict[str, Dict[str, Any]] = {
         "dynamic_backbone": {
             "enable_multiscale_temporal_state": True,
             "temporal_state_windows": (3, 7, 30),
+            "enable_temporal_state_features": True,
+            "enable_spectral_state_features": True,
         },
     },
     "source_policy_transition_guard": {
@@ -284,6 +340,8 @@ def _track_contract() -> Dict[str, Any]:
             "official_mean_mae_delta_pct_min": OFFICIAL_MEAN_DELTA_MIN_PCT,
             "official_worst_mae_delta_pct_min": OFFICIAL_WORST_DELTA_MIN_PCT,
             "dynamic_mean_mae_delta_pct_min": DYNAMIC_MEAN_DELTA_MIN_PCT,
+            "dynamic_geometry_shift_amplification_max": DYNAMIC_GEOMETRY_SHIFT_AMPLIFICATION_MAX,
+            "dynamic_geometry_test_shift_share_max": DYNAMIC_GEOMETRY_TEST_SHIFT_SHARE_MAX,
         },
     }
 
@@ -302,6 +360,126 @@ def _dynamic_backbone_key(backbone_kwargs: Dict[str, Any] | None) -> str:
         else:
             normalized[key] = value
     return json.dumps(normalized, sort_keys=True)
+
+
+def _safe_ratio(numerator: float, denominator: float) -> float:
+    if abs(float(denominator)) <= 1e-9:
+        return 0.0 if abs(float(numerator)) <= 1e-9 else float("inf")
+    return float(float(numerator) / float(denominator))
+
+
+def _lane_geometry_stats(lane: np.ndarray) -> Dict[str, float]:
+    state = np.asarray(lane, dtype=np.float64)
+    if state.ndim != 2 or state.size == 0:
+        return {
+            "rows": 0,
+            "lane_dim": 0,
+            "abs_mean": 0.0,
+            "p95_abs": 0.0,
+            "row_l2_mean": 0.0,
+            "row_l2_p90": 0.0,
+        }
+    abs_state = np.abs(state)
+    row_l2 = np.sqrt(np.sum(np.square(state), axis=1))
+    return {
+        "rows": int(state.shape[0]),
+        "lane_dim": int(state.shape[1]),
+        "abs_mean": float(np.mean(abs_state)),
+        "p95_abs": float(np.quantile(abs_state, 0.95)),
+        "row_l2_mean": float(np.mean(row_l2)),
+        "row_l2_p90": float(np.quantile(row_l2, 0.90)),
+    }
+
+
+def _dynamic_geometry_report(
+    train_surface: Dict[str, Any],
+    test_surface: Dict[str, Any],
+    *,
+    baseline_train_surface: Dict[str, Any] | None = None,
+    baseline_test_surface: Dict[str, Any] | None = None,
+) -> Dict[str, Any]:
+    train_lane = np.asarray(train_surface["lane"], dtype=np.float64)
+    test_lane = np.asarray(test_surface["lane"], dtype=np.float64)
+    train_stats = _lane_geometry_stats(train_lane)
+    test_stats = _lane_geometry_stats(test_lane)
+
+    baseline_relative = {
+        "shape_aligned": True,
+        "train_shift_abs_mean": 0.0,
+        "test_shift_abs_mean": 0.0,
+        "train_shift_p95_abs": 0.0,
+        "test_shift_p95_abs": 0.0,
+        "train_shift_abs_mean_share": 0.0,
+        "test_shift_abs_mean_share": 0.0,
+        "train_shift_p95_share": 0.0,
+        "test_shift_p95_share": 0.0,
+        "shift_abs_mean_amplification": 0.0,
+        "shift_p95_amplification": 0.0,
+    }
+    if baseline_train_surface is not None and baseline_test_surface is not None:
+        baseline_train_lane = np.asarray(baseline_train_surface["lane"], dtype=np.float64)
+        baseline_test_lane = np.asarray(baseline_test_surface["lane"], dtype=np.float64)
+        if baseline_train_lane.shape != train_lane.shape or baseline_test_lane.shape != test_lane.shape:
+            baseline_relative.update(
+                {
+                    "shape_aligned": False,
+                    "train_shift_abs_mean": float("inf"),
+                    "test_shift_abs_mean": float("inf"),
+                    "train_shift_p95_abs": float("inf"),
+                    "test_shift_p95_abs": float("inf"),
+                    "train_shift_abs_mean_share": float("inf"),
+                    "test_shift_abs_mean_share": float("inf"),
+                    "train_shift_p95_share": float("inf"),
+                    "test_shift_p95_share": float("inf"),
+                    "shift_abs_mean_amplification": float("inf"),
+                    "shift_p95_amplification": float("inf"),
+                }
+            )
+        else:
+            train_shift = np.abs(train_lane - baseline_train_lane)
+            test_shift = np.abs(test_lane - baseline_test_lane)
+            train_shift_abs_mean = float(np.mean(train_shift))
+            test_shift_abs_mean = float(np.mean(test_shift))
+            train_shift_p95_abs = float(np.quantile(train_shift, 0.95))
+            test_shift_p95_abs = float(np.quantile(test_shift, 0.95))
+            train_shift_abs_mean_share = _safe_ratio(train_shift_abs_mean, train_stats["abs_mean"])
+            test_shift_abs_mean_share = _safe_ratio(test_shift_abs_mean, test_stats["abs_mean"])
+            train_shift_p95_share = _safe_ratio(train_shift_p95_abs, train_stats["p95_abs"])
+            test_shift_p95_share = _safe_ratio(test_shift_p95_abs, test_stats["p95_abs"])
+            baseline_relative.update(
+                {
+                    "train_shift_abs_mean": train_shift_abs_mean,
+                    "test_shift_abs_mean": test_shift_abs_mean,
+                    "train_shift_p95_abs": train_shift_p95_abs,
+                    "test_shift_p95_abs": test_shift_p95_abs,
+                    "train_shift_abs_mean_share": train_shift_abs_mean_share,
+                    "test_shift_abs_mean_share": test_shift_abs_mean_share,
+                    "train_shift_p95_share": train_shift_p95_share,
+                    "test_shift_p95_share": test_shift_p95_share,
+                    "shift_abs_mean_amplification": _safe_ratio(
+                        test_shift_abs_mean_share,
+                        train_shift_abs_mean_share,
+                    ),
+                    "shift_p95_amplification": _safe_ratio(
+                        test_shift_p95_share,
+                        train_shift_p95_share,
+                    ),
+                }
+            )
+
+    geometry_pass = bool(
+        baseline_relative["shape_aligned"]
+        and baseline_relative["shift_abs_mean_amplification"] <= DYNAMIC_GEOMETRY_SHIFT_AMPLIFICATION_MAX
+        and baseline_relative["test_shift_abs_mean_share"] <= DYNAMIC_GEOMETRY_TEST_SHIFT_SHARE_MAX
+    )
+    return {
+        "train_lane": train_stats,
+        "test_lane": test_stats,
+        "train_test_abs_mean_ratio": _safe_ratio(test_stats["abs_mean"], train_stats["abs_mean"]),
+        "train_test_p95_abs_ratio": _safe_ratio(test_stats["p95_abs"], train_stats["p95_abs"]),
+        "baseline_relative": baseline_relative,
+        "geometry_pass": geometry_pass,
+    }
 
 
 def _run_official_variant(case: SliceCase, candidate_name: str, kwargs: Dict[str, Any], frames) -> Dict[str, Any]:
@@ -358,19 +536,33 @@ def _build_dynamic_cases(horizons: tuple[int, ...], entity_limit: int, max_rows_
 def _run_dynamic_case(case: RealSurfaceCase) -> Dict[str, Any]:
     raw_frames, selection_report = _load_real_case_frames(case)
     surfaces = {ablation: _split_and_prepare(case, ablation, frame) for ablation, frame in raw_frames.items()}
-    encoded_by_backbone: Dict[str, tuple[Dict[str, Any], Dict[str, Any]]] = {}
+    encoded_by_backbone: Dict[str, Dict[str, Any]] = {}
     for candidate in TRACK_CANDIDATES.values():
         backbone_kwargs = candidate.get("dynamic_backbone")
         key = _dynamic_backbone_key(backbone_kwargs)
         if key in encoded_by_backbone:
             continue
         encoded, _ = _fit_shared_encoder(case, surfaces, backbone_kwargs=backbone_kwargs)
-        encoded_by_backbone[key] = (_concat_surface(encoded, "train"), _concat_surface(encoded, "test"))
+        encoded_by_backbone[key] = {
+            "train_surface": _concat_surface(encoded, "train"),
+            "test_surface": _concat_surface(encoded, "test"),
+        }
+
+    baseline_backbone = encoded_by_backbone[_dynamic_backbone_key(None)]
+    for payload in encoded_by_backbone.values():
+        payload["dynamic_geometry"] = _dynamic_geometry_report(
+            payload["train_surface"],
+            payload["test_surface"],
+            baseline_train_surface=baseline_backbone["train_surface"],
+            baseline_test_surface=baseline_backbone["test_surface"],
+        )
 
     variants: Dict[str, Any] = {}
     for candidate_name, candidate in TRACK_CANDIDATES.items():
         backbone_key = _dynamic_backbone_key(candidate.get("dynamic_backbone"))
-        train_surface, test_surface = encoded_by_backbone[backbone_key]
+        backbone_payload = encoded_by_backbone[backbone_key]
+        train_surface = backbone_payload["train_surface"]
+        test_surface = backbone_payload["test_surface"]
         result = _run_dynamic_variant(case, candidate_name, candidate["dynamic_variant"], train_surface, test_surface)
         variants[candidate_name] = {
             "mae": float(result["overall_metrics"]["mae"]),
@@ -380,6 +572,7 @@ def _run_dynamic_case(case: RealSurfaceCase) -> Dict[str, Any]:
             "lane_jump_strength": float(result["lane_jump_strength"]),
             "lane_flags": result["lane_flags"],
             "dynamic_backbone": candidate.get("dynamic_backbone", {}),
+            "dynamic_geometry": backbone_payload["dynamic_geometry"],
         }
 
     return {
@@ -421,9 +614,11 @@ def _run_dynamic_panel(dynamic_horizons: tuple[int, ...], entity_limit: int, max
         dynamic_cases_report[f"{case.task}__dynamic_test__h{case.horizon}"] = _run_dynamic_case(case)
 
     dynamic_summary = _aggregate_candidate_deltas(dynamic_cases_report, baseline_key="legacy_baseline")
+    dynamic_geometry_summary = _aggregate_dynamic_geometry(dynamic_cases_report)
     return {
         "dynamic_cases": dynamic_cases_report,
         "dynamic_summary": dynamic_summary,
+        "dynamic_geometry_summary": dynamic_geometry_summary,
     }
 
 
@@ -439,6 +634,10 @@ def _merge_panel_reports(official_report: Dict[str, Any], dynamic_report: Dict[s
     if missing_dynamic:
         raise ValueError(f"Dynamic report is missing keys: {', '.join(missing_dynamic)}")
 
+    dynamic_geometry_summary = dynamic_report.get("dynamic_geometry_summary")
+    if dynamic_geometry_summary is None:
+        dynamic_geometry_summary = _aggregate_dynamic_geometry(dynamic_report["dynamic_cases"])
+
     return {
         "track_contract": _track_contract(),
         "candidates": _candidate_manifest(),
@@ -447,10 +646,12 @@ def _merge_panel_reports(official_report: Dict[str, Any], dynamic_report: Dict[s
         "official_alignment": official_report["official_alignment"],
         "dynamic_cases": dynamic_report["dynamic_cases"],
         "dynamic_summary": dynamic_report["dynamic_summary"],
+        "dynamic_geometry_summary": dynamic_geometry_summary,
         "gate_verdict": _gate_verdict(
             official_report["official_summary"],
             dynamic_report["dynamic_summary"],
             official_report["official_alignment"],
+            dynamic_geometry_summary,
         ),
     }
 
@@ -475,6 +676,48 @@ def _aggregate_candidate_deltas(cases: Dict[str, Dict[str, Any]], baseline_key: 
             "best_mae_delta_pct": float(np.max(array)) if array.size else 0.0,
             "positive_case_count": int(np.sum(array > 1e-9)),
             "negative_case_count": int(np.sum(array < -1e-9)),
+        }
+    return summary
+
+
+def _aggregate_dynamic_geometry(cases: Dict[str, Dict[str, Any]]) -> Dict[str, Dict[str, Any]]:
+    summary: Dict[str, Dict[str, Any]] = {}
+    for candidate_name in TRACK_CANDIDATES:
+        reports = [
+            payload["variants"][candidate_name].get("dynamic_geometry", {})
+            for payload in cases.values()
+        ]
+        case_count = len(reports)
+        geometry_pass_flags = [bool(report.get("geometry_pass", False)) for report in reports]
+        abs_mean_ratios = [float(report.get("train_test_abs_mean_ratio", 0.0)) for report in reports]
+        p95_ratios = [float(report.get("train_test_p95_abs_ratio", 0.0)) for report in reports]
+        shift_amplifications = [
+            float(report.get("baseline_relative", {}).get("shift_abs_mean_amplification", 0.0))
+            for report in reports
+        ]
+        shift_p95_amplifications = [
+            float(report.get("baseline_relative", {}).get("shift_p95_amplification", 0.0))
+            for report in reports
+        ]
+        test_shift_shares = [
+            float(report.get("baseline_relative", {}).get("test_shift_abs_mean_share", 0.0))
+            for report in reports
+        ]
+        test_shift_p95_shares = [
+            float(report.get("baseline_relative", {}).get("test_shift_p95_share", 0.0))
+            for report in reports
+        ]
+        summary[candidate_name] = {
+            "case_count": int(case_count),
+            "geometry_pass_case_count": int(sum(geometry_pass_flags)),
+            "geometry_fail_case_count": int(case_count - sum(geometry_pass_flags)),
+            "geometry_all_cases_pass": bool(all(geometry_pass_flags)) if case_count else False,
+            "worst_train_test_abs_mean_ratio": float(max(abs_mean_ratios)) if abs_mean_ratios else 0.0,
+            "worst_train_test_p95_abs_ratio": float(max(p95_ratios)) if p95_ratios else 0.0,
+            "worst_shift_abs_mean_amplification": float(max(shift_amplifications)) if shift_amplifications else 0.0,
+            "worst_shift_p95_amplification": float(max(shift_p95_amplifications)) if shift_p95_amplifications else 0.0,
+            "worst_test_shift_abs_mean_share": float(max(test_shift_shares)) if test_shift_shares else 0.0,
+            "worst_test_shift_p95_share": float(max(test_shift_p95_shares)) if test_shift_p95_shares else 0.0,
         }
     return summary
 
@@ -511,23 +754,36 @@ def _official_alignment(cases: Dict[str, Dict[str, Any]]) -> Dict[str, Dict[str,
     return out
 
 
-def _gate_verdict(official_summary: Dict[str, Dict[str, Any]], dynamic_summary: Dict[str, Dict[str, Any]], official_alignment: Dict[str, Dict[str, Any]]) -> Dict[str, Dict[str, Any]]:
+def _gate_verdict(
+    official_summary: Dict[str, Dict[str, Any]],
+    dynamic_summary: Dict[str, Dict[str, Any]],
+    official_alignment: Dict[str, Dict[str, Any]],
+    dynamic_geometry_summary: Dict[str, Dict[str, Any]],
+) -> Dict[str, Dict[str, Any]]:
     verdict: Dict[str, Dict[str, Any]] = {}
+    demoted_families = set(_track_contract().get("demoted_families", ()))
     for candidate_name, candidate in TRACK_CANDIDATES.items():
         official = official_summary[candidate_name]
         dynamic = dynamic_summary[candidate_name]
         alignment = official_alignment[candidate_name]
+        geometry = dynamic_geometry_summary[candidate_name]
         official_pass = (
             alignment["native_runtime_all_cases"]
             and official["mean_mae_delta_pct"] >= OFFICIAL_MEAN_DELTA_MIN_PCT
             and official["worst_mae_delta_pct"] >= OFFICIAL_WORST_DELTA_MIN_PCT
         )
-        dynamic_pass = dynamic["mean_mae_delta_pct"] > DYNAMIC_MEAN_DELTA_MIN_PCT
+        dynamic_metric_pass = dynamic["mean_mae_delta_pct"] > DYNAMIC_MEAN_DELTA_MIN_PCT
+        dynamic_geometry_pass = geometry["geometry_all_cases_pass"]
+        dynamic_pass = dynamic_metric_pass and dynamic_geometry_pass
+        demotion_blocked = candidate_name in demoted_families
         verdict[candidate_name] = {
             "role": str(candidate["role"]),
             "official_track_pass": bool(official_pass),
+            "dynamic_metric_pass": bool(dynamic_metric_pass),
+            "dynamic_geometry_pass": bool(dynamic_geometry_pass),
             "dynamic_track_pass": bool(dynamic_pass),
-            "promotable_on_current_track": bool(official_pass and dynamic_pass),
+            "demotion_blocked": bool(demotion_blocked),
+            "promotable_on_current_track": bool(official_pass and dynamic_pass and not demotion_blocked),
         }
     return verdict
 
@@ -557,6 +813,7 @@ def main() -> int:
                 report["official_summary"],
                 report["dynamic_summary"],
                 report["official_alignment"],
+                report["dynamic_geometry_summary"],
             )
 
     payload = json.dumps(report, indent=2, ensure_ascii=False)

@@ -163,6 +163,52 @@ MAINLINE_VARIANTS: Dict[str, MainlineVariantProfile] = {
             "investors_event_state_max_source_presence_share": 0.0,
             "enable_multiscale_temporal_state": True,
             "temporal_state_windows": (3, 7, 30),
+            "enable_temporal_state_features": True,
+            "enable_spectral_state_features": True,
+        },
+    ),
+    "mainline_temporal_state_guard": MainlineVariantProfile(
+        name="mainline_temporal_state_guard",
+        runtime_mode="native",
+        delegate_variant="v740_alpha",
+        description=(
+            "Generation-5a investors profile that preserves the selective event-state "
+            "guard while upgrading the shared trunk with temporal-only multiscale state "
+            "features. This isolates pathwise financing dynamics from spectral bands so "
+            "the gate can test whether temporal process updates alone transfer cleanly."
+        ),
+        prototype_overrides={
+            **_MAINLINE_ALPHA_OVERRIDES,
+            "enable_investors_event_state_features": True,
+            "enable_investors_selective_event_state_activation": True,
+            "investors_event_state_allow_h1": False,
+            "investors_event_state_max_source_presence_share": 0.0,
+            "enable_multiscale_temporal_state": True,
+            "temporal_state_windows": (3, 7, 30),
+            "enable_temporal_state_features": True,
+            "enable_spectral_state_features": False,
+        },
+    ),
+    "mainline_spectral_state_guard": MainlineVariantProfile(
+        name="mainline_spectral_state_guard",
+        runtime_mode="native",
+        delegate_variant="v740_alpha",
+        description=(
+            "Generation-5b investors profile that preserves the selective event-state "
+            "guard while upgrading the shared trunk with spectral-only multiscale state "
+            "bands. This isolates frequency-style regime information from temporal delta "
+            "features so the gate can test whether spectral structure transfers cleanly."
+        ),
+        prototype_overrides={
+            **_MAINLINE_ALPHA_OVERRIDES,
+            "enable_investors_event_state_features": True,
+            "enable_investors_selective_event_state_activation": True,
+            "investors_event_state_allow_h1": False,
+            "investors_event_state_max_source_presence_share": 0.0,
+            "enable_multiscale_temporal_state": True,
+            "temporal_state_windows": (3, 7, 30),
+            "enable_temporal_state_features": False,
+            "enable_spectral_state_features": True,
         },
     ),
 }
