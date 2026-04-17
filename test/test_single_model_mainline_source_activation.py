@@ -441,3 +441,168 @@ def test_long_horizon_static_surface_uses_transition_sparse_reason():
     assert source_regime["transition_activation_reason"] == "transition_sparse_train_surface"
     assert geometry["profile_surface"] == "heterogeneous"
     assert geometry["transition_surface"] == "static_like"
+
+
+def test_event_state_trunk_reports_dynamic_shared_geometry():
+    frame = _make_investors_surface(["edgar_only", "text_only", "mixed"], rows_per_profile=12)
+
+    wrapper = _fit_wrapper(
+        frame,
+        enable_investors_source_read_policy=True,
+        enable_investors_source_guard=True,
+        investors_source_activation_min_rows=8,
+    )
+
+    trunk = wrapper.get_regime_info()["event_state_trunk"]
+
+    assert trunk["schema_version"] == "event_state_v2"
+    assert trunk["source_atoms"]["source_surface"] == "heterogeneous"
+    assert "boundary_atoms" in trunk
+    assert "goal_atoms" in trunk
+    assert "source_flow_atoms" in trunk
+    assert np.isclose(trunk["phase_atoms"]["joint_financing_active_share"], 1.0)
+    assert trunk["persistence_atoms"]["dynamic_entity_share"] > 0.0
+    assert trunk["shared_state_atoms"]["shared_state_dim"] == wrapper._shared_state_dim
+
+
+def test_event_state_trunk_static_surface_reports_zero_dynamic_share():
+    frame = _make_investors_surface(
+        ["edgar_only", "text_only", "mixed"],
+        rows_per_profile=12,
+        dynamic_within_entity=False,
+    )
+
+    wrapper = _fit_wrapper(frame)
+
+    trunk = wrapper.get_regime_info()["event_state_trunk"]
+
+    assert trunk["transition_atoms"]["investor_jump_share"] == 0.0
+    assert trunk["transition_atoms"]["joint_jump_share"] == 0.0
+    assert trunk["persistence_atoms"]["dynamic_entity_share"] == 0.0
+
+
+def test_event_state_boundary_guard_exposes_investors_event_state_features():
+    frame = _make_investors_surface(["edgar_only", "text_only", "mixed"], rows_per_profile=12)
+
+    wrapper = _fit_wrapper(
+        frame,
+        variant="mainline_event_state_boundary_guard",
+    )
+
+    regime = wrapper.get_regime_info()
+    process = regime["investors_process_contract"]
+
+    assert process["requested_event_state_features"] is True
+    assert process["effective_event_state_features"] is True
+    assert process["event_state_feature_count"] > 0
+
+
+def test_selective_event_state_guard_blocks_h1_even_on_source_free_surface():
+    frame = _make_investors_surface(["none", "none", "none"], rows_per_profile=12)
+
+    wrapper = _fit_wrapper(
+        frame,
+        variant="mainline_selective_event_state_guard",
+        horizon=1,
+    )
+
+    regime = wrapper.get_regime_info()
+    source_regime = regime["investors_source_activation"]
+
+    assert source_regime["requested_event_state_features"] is True
+    assert source_regime["effective_event_state_features"] is False
+    assert source_regime["event_state_activation_reason"] == "event_state_h1_blocked"
+
+
+def test_selective_event_state_guard_blocks_source_rich_surface():
+    frame = _make_investors_surface(["edgar_only", "text_only", "mixed"], rows_per_profile=12)
+
+    wrapper = _fit_wrapper(
+        frame,
+        variant="mainline_selective_event_state_guard",
+        horizon=14,
+    )
+
+    regime = wrapper.get_regime_info()
+    source_regime = regime["investors_source_activation"]
+
+    assert source_regime["requested_event_state_features"] is True
+    assert source_regime["effective_event_state_features"] is False
+    assert source_regime["event_state_activation_reason"] == "event_state_source_rich_surface_blocked"
+
+
+def test_selective_event_state_guard_enables_hplus_source_free_surface():
+    frame = _make_investors_surface(["none", "none", "none"], rows_per_profile=12)
+
+    wrapper = _fit_wrapper(
+        frame,
+        variant="mainline_selective_event_state_guard",
+        horizon=14,
+    )
+
+    regime = wrapper.get_regime_info()
+    source_regime = regime["investors_source_activation"]
+    process = regime["investors_process_contract"]
+
+    assert source_regime["requested_event_state_features"] is True
+    assert source_regime["effective_event_state_features"] is True
+    assert source_regime["event_state_activation_reason"] == "event_state_selective_gate_open"
+    assert process["effective_event_state_features"] is True
+    assert process["event_state_feature_count"] > 0
+
+
+def test_selective_event_state_guard_can_fit_and_predict_without_feature_mismatch():
+    frame = _make_investors_surface(["none", "none", "none"], rows_per_profile=12)
+
+    wrapper = _fit_wrapper(
+        frame,
+        variant="mainline_selective_event_state_guard",
+        horizon=14,
+    )
+
+    X = frame[["core_signal"]].copy()
+    preds = wrapper.predict(
+        X,
+        test_raw=frame,
+        target="investors_count",
+        task="task2_forecast",
+        ablation="full",
+        horizon=14,
+    )
+
+    assert preds.shape == (len(frame),)
+    assert np.all(np.isfinite(preds))
+
+
+def test_multiscale_state_guard_exposes_backbone_layout_and_seeded_predict_path():
+    frame = _make_investors_surface(["none", "none", "none"], rows_per_profile=12)
+
+    wrapper = _fit_wrapper(
+        frame,
+        variant="mainline_multiscale_state_guard",
+        horizon=14,
+    )
+
+    regime = wrapper.get_regime_info()
+    layout = regime["state_stream"]["backbone_layout"]
+    shared_atoms = regime["event_state_trunk"]["shared_state_atoms"]
+    X = frame[["core_signal"]].copy()
+    preds = wrapper.predict(
+        X,
+        test_raw=frame,
+        target="investors_count",
+        task="task2_forecast",
+        ablation="full",
+        horizon=14,
+    )
+
+    assert layout["uses_multiscale_temporal_state"] is True
+    assert layout["temporal_state_dim"] > 0
+    assert layout["spectral_state_dim"] > 0
+    assert shared_atoms["temporal_state_dim"] == layout["temporal_state_dim"]
+    assert shared_atoms["spectral_state_dim"] == layout["spectral_state_dim"]
+    assert shared_atoms["temporal_velocity_abs_mean"] >= 0.0
+    assert shared_atoms["spectral_high_band_abs_mean"] >= 0.0
+    assert regime["runtime"]["backbone_seed_rows"] > 0
+    assert preds.shape == (len(frame),)
+    assert np.all(np.isfinite(preds))

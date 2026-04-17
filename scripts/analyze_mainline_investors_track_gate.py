@@ -146,6 +146,52 @@ TRACK_CANDIDATES: Dict[str, Dict[str, Any]] = {
             },
         },
     },
+    "marked_investor_guard": {
+        "role": "active_mark_candidate",
+        "official_kwargs": {
+            "variant": "mainline_marked_investor_guard",
+            "seed": 7,
+            "use_delegate": False,
+        },
+        "dynamic_variant": {
+            "fit": {
+                "enable_hurdle_head": True,
+                "enable_count_jump": True,
+                "count_jump_strength": 0.30,
+                "enable_count_sparsity_gate": False,
+                "enable_investors_event_state_features": True,
+                "enable_investors_mark_features": True,
+            },
+            "predict": {
+                "enable_investors_event_state_features": True,
+                "enable_investors_mark_features": True,
+            },
+        },
+    },
+    "multiscale_state_guard": {
+        "role": "active_trunk_candidate",
+        "official_kwargs": {
+            "variant": "mainline_multiscale_state_guard",
+            "seed": 7,
+            "use_delegate": False,
+        },
+        "dynamic_variant": {
+            "fit": {
+                "enable_hurdle_head": True,
+                "enable_count_jump": True,
+                "count_jump_strength": 0.30,
+                "enable_count_sparsity_gate": False,
+                "enable_investors_event_state_features": True,
+            },
+            "predict": {
+                "enable_investors_event_state_features": True,
+            },
+        },
+        "dynamic_backbone": {
+            "enable_multiscale_temporal_state": True,
+            "temporal_state_windows": (3, 7, 30),
+        },
+    },
     "source_policy_transition_guard": {
         "role": "demoted_source_candidate",
         "official_kwargs": {
@@ -233,7 +279,7 @@ def _track_contract() -> Dict[str, Any]:
         "dynamic_panel_definition": "real-data dynamic_test multisource challenge surfaces; research-only and never merged into official claims",
         "source_results_interpreted_only_with_geometry": True,
         "demoted_families": ["event_state_boundary_guard", "source_policy_transition_guard"],
-        "active_generation_focus": "selective_event_state_guard",
+        "active_generation_focus": "multiscale_state_guard",
         "promotion_rules": {
             "official_mean_mae_delta_pct_min": OFFICIAL_MEAN_DELTA_MIN_PCT,
             "official_worst_mae_delta_pct_min": OFFICIAL_WORST_DELTA_MIN_PCT,
@@ -244,6 +290,18 @@ def _track_contract() -> Dict[str, Any]:
 
 def _candidate_manifest() -> Dict[str, Dict[str, Any]]:
     return {name: {"role": payload["role"]} for name, payload in TRACK_CANDIDATES.items()}
+
+
+def _dynamic_backbone_key(backbone_kwargs: Dict[str, Any] | None) -> str:
+    if not backbone_kwargs:
+        return "{}"
+    normalized: Dict[str, Any] = {}
+    for key, value in backbone_kwargs.items():
+        if isinstance(value, tuple):
+            normalized[key] = list(value)
+        else:
+            normalized[key] = value
+    return json.dumps(normalized, sort_keys=True)
 
 
 def _run_official_variant(case: SliceCase, candidate_name: str, kwargs: Dict[str, Any], frames) -> Dict[str, Any]:
@@ -279,6 +337,7 @@ def _run_official_variant(case: SliceCase, candidate_name: str, kwargs: Dict[str
         "mae": float(_compute_metrics(y_test.to_numpy(dtype=np.float64), preds)["mae"]),
         "runtime_mode": regime.get("runtime", {}).get("runtime_mode", "unknown"),
         "investors_source_activation": regime.get("investors_source_activation", {}),
+        "investor_mark_activation": regime.get("investor_mark_activation", {}),
         "investors_process_contract": regime.get("investors_process_contract", {}),
     }
 
@@ -299,12 +358,19 @@ def _build_dynamic_cases(horizons: tuple[int, ...], entity_limit: int, max_rows_
 def _run_dynamic_case(case: RealSurfaceCase) -> Dict[str, Any]:
     raw_frames, selection_report = _load_real_case_frames(case)
     surfaces = {ablation: _split_and_prepare(case, ablation, frame) for ablation, frame in raw_frames.items()}
-    encoded, _ = _fit_shared_encoder(case, surfaces)
-    train_surface = _concat_surface(encoded, "train")
-    test_surface = _concat_surface(encoded, "test")
+    encoded_by_backbone: Dict[str, tuple[Dict[str, Any], Dict[str, Any]]] = {}
+    for candidate in TRACK_CANDIDATES.values():
+        backbone_kwargs = candidate.get("dynamic_backbone")
+        key = _dynamic_backbone_key(backbone_kwargs)
+        if key in encoded_by_backbone:
+            continue
+        encoded, _ = _fit_shared_encoder(case, surfaces, backbone_kwargs=backbone_kwargs)
+        encoded_by_backbone[key] = (_concat_surface(encoded, "train"), _concat_surface(encoded, "test"))
 
     variants: Dict[str, Any] = {}
     for candidate_name, candidate in TRACK_CANDIDATES.items():
+        backbone_key = _dynamic_backbone_key(candidate.get("dynamic_backbone"))
+        train_surface, test_surface = encoded_by_backbone[backbone_key]
         result = _run_dynamic_variant(case, candidate_name, candidate["dynamic_variant"], train_surface, test_surface)
         variants[candidate_name] = {
             "mae": float(result["overall_metrics"]["mae"]),
@@ -313,6 +379,7 @@ def _run_dynamic_case(case: RealSurfaceCase) -> Dict[str, Any]:
             "lane_anchor_blend": float(result["lane_anchor_blend"]),
             "lane_jump_strength": float(result["lane_jump_strength"]),
             "lane_flags": result["lane_flags"],
+            "dynamic_backbone": candidate.get("dynamic_backbone", {}),
         }
 
     return {
@@ -417,7 +484,9 @@ def _official_alignment(cases: Dict[str, Dict[str, Any]]) -> Dict[str, Dict[str,
     for candidate_name in TRACK_CANDIDATES:
         runtime_modes = []
         transition_reasons: Dict[str, int] = {}
+        mark_reasons: Dict[str, int] = {}
         effective_transition_count = 0
+        effective_mark_count = 0
         for payload in cases.values():
             variant = payload["variants"][candidate_name]
             runtime_modes.append(str(variant.get("runtime_mode", "unknown")))
@@ -426,11 +495,18 @@ def _official_alignment(cases: Dict[str, Dict[str, Any]]) -> Dict[str, Dict[str,
             transition_reasons[reason] = transition_reasons.get(reason, 0) + 1
             if bool(source_activation.get("effective_transition_correction", False)):
                 effective_transition_count += 1
+            mark_activation = variant.get("investor_mark_activation", {})
+            mark_reason = str(mark_activation.get("activation_reason", "not_applicable"))
+            mark_reasons[mark_reason] = mark_reasons.get(mark_reason, 0) + 1
+            if bool(mark_activation.get("effective_mark_features", False)):
+                effective_mark_count += 1
         out[candidate_name] = {
             "native_runtime_all_cases": all(mode == "native" for mode in runtime_modes),
             "runtime_modes": runtime_modes,
             "effective_transition_case_count": int(effective_transition_count),
             "transition_reason_counts": transition_reasons,
+            "effective_mark_case_count": int(effective_mark_count),
+            "mark_reason_counts": mark_reasons,
         }
     return out
 

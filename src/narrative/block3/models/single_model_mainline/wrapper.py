@@ -73,7 +73,7 @@ class SingleModelMainlineWrapper(ModelBase):
         self.prototype_kwargs = dict(resolved_kwargs)
         prototype_kwargs = self.prototype_kwargs
         self.contract = MainlineModuleContract(
-            backbone=SharedTemporalBackboneSpec(),
+            backbone=self._build_backbone_spec(prototype_kwargs),
             conditioning=ConditioningSchema(),
             source_memory=SourceMemoryContract(),
             investor_mark_encoder=InvestorMarkEncoderSpec(),
@@ -198,6 +198,7 @@ class SingleModelMainlineWrapper(ModelBase):
         self._lane_state_dim = 0
         self._condition_key: Optional[ConditionKey] = None
         self._history_seed: Optional[pd.DataFrame] = None
+        self._backbone_seed: Optional[pd.DataFrame] = None
         self._target_name = "funding_raised_usd"
         self._task_name = "task1_outcome"
         self._ablation_name = "core_only"
@@ -242,8 +243,12 @@ class SingleModelMainlineWrapper(ModelBase):
         self._investors_source_activation_reason = "source_switches_disabled"
         self._investors_transition_activation_reason = "transition_not_requested"
         self._investors_mark_activation_reason = "mark_features_not_requested"
+        self._investors_mark_mode = "inactive"
         self._investors_mark_nonzero_share = 0.0
         self._investors_mark_coverage_share = 0.0
+        self._investors_mark_raw_reference_share = 0.0
+        self._investors_mark_proxy_share = 0.0
+        self._investors_mark_proxy_only_share = 0.0
         self._investors_mark_summary: Dict[str, float] = {}
         self._investors_source_profile_entropy = 0.0
         self._investors_dynamic_entities = 0
@@ -264,6 +269,19 @@ class SingleModelMainlineWrapper(ModelBase):
         self._effective_count_jump = False
         self._effective_count_sparsity_gate = False
         self._event_state_card: Dict[str, object] = {}
+
+    def _build_backbone_spec(self, prototype_kwargs: Dict[str, object]) -> SharedTemporalBackboneSpec:
+        temporal_windows = prototype_kwargs.get("temporal_state_windows", (3, 7, 30))
+        if isinstance(temporal_windows, (int, np.integer)):
+            normalized_windows = (max(1, int(temporal_windows)),)
+        else:
+            normalized_windows = tuple(max(1, int(window)) for window in temporal_windows) or (3, 7, 30)
+        return SharedTemporalBackboneSpec(
+            enable_multiscale_temporal_state=bool(
+                prototype_kwargs.get("enable_multiscale_temporal_state", False)
+            ),
+            temporal_state_windows=normalized_windows,
+        )
 
     def describe_contract(self) -> Dict[str, object]:
         return {
@@ -302,6 +320,8 @@ class SingleModelMainlineWrapper(ModelBase):
             horizon=self._horizon,
             ablation=self._ablation_name,
         )
+        self._history_seed = None
+        self._backbone_seed = None
 
         if self.use_delegate:
             delegate_kwargs = build_delegate_kwargs(self.variant, self.prototype_kwargs)
@@ -324,10 +344,13 @@ class SingleModelMainlineWrapper(ModelBase):
         if not self._core_feature_cols:
             self._core_feature_cols = list(self._train_feature_cols)
 
+        core_frame = X.reindex(columns=self._core_feature_cols, fill_value=0.0)
         shared_state = self.backbone.fit_transform(
-            X.reindex(columns=self._core_feature_cols, fill_value=0.0),
+            core_frame,
             feature_cols=self._core_feature_cols,
+            context_frame=runtime_frame,
         )
+        self._backbone_seed = self.backbone.build_context_seed(runtime_frame, core_frame)
         condition_state = self.condition_encoder.broadcast(self._condition_key, len(X))
         source_frame = self.source_memory.build_runtime_features(runtime_frame, layout=source_layout)
         self._source_feature_cols = list(source_frame.columns)
@@ -484,6 +507,7 @@ class SingleModelMainlineWrapper(ModelBase):
                 "source_feature_cols": len(self._source_feature_cols),
                 "shared_state_dim": self._shared_state_dim,
                 "event_state_schema_version": self.contract.backbone.event_state_schema_version,
+                "backbone_layout": self.backbone.describe_state_layout(),
             },
             "event_state_trunk": dict(self._event_state_card),
             "barrier": {
@@ -502,6 +526,7 @@ class SingleModelMainlineWrapper(ModelBase):
                 "runtime_mode": "delegate" if self.use_delegate else "native",
                 "predict_time_current_target_masked": True,
                 "runtime_no_leak_contract": "predict_time_current_target_masked_before_history_and_anchor",
+                "backbone_seed_rows": 0 if self._backbone_seed is None else int(len(self._backbone_seed)),
             },
             "binary_process_contract": {
                 "process_family": "hazard_prior_plus_calibration",
@@ -601,9 +626,13 @@ class SingleModelMainlineWrapper(ModelBase):
                 "requested_mark_features": bool(self.enable_investors_mark_features),
                 "effective_mark_features": bool(self._effective_investors_mark_features),
                 "activation_reason": self._investors_mark_activation_reason,
+                "mark_mode": self._investors_mark_mode,
                 "mark_feature_count": int(len(self._investors_mark_feature_cols)),
                 "mark_nonzero_share": float(self._investors_mark_nonzero_share),
                 "mark_coverage_share": float(self._investors_mark_coverage_share),
+                "raw_reference_mark_share": float(self._investors_mark_raw_reference_share),
+                "proxy_mark_share": float(self._investors_mark_proxy_share),
+                "proxy_only_mark_share": float(self._investors_mark_proxy_only_share),
                 "mark_summary": dict(self._investors_mark_summary),
             },
             "investors_process_contract": {
@@ -677,7 +706,12 @@ class SingleModelMainlineWrapper(ModelBase):
         runtime_frame = self._prepare_runtime_frame(X, raw_frame=kwargs.get("test_raw"))
         runtime_frame = self._mask_runtime_target_for_prediction(runtime_frame)
         feature_frame = X.reindex(columns=self._train_feature_cols, fill_value=0.0)
-        shared_state = self.backbone.transform(feature_frame.reindex(columns=self._core_feature_cols, fill_value=0.0))
+        core_frame = feature_frame.reindex(columns=self._core_feature_cols, fill_value=0.0)
+        shared_state = self.backbone.transform(
+            core_frame,
+            context_frame=runtime_frame,
+            seed_frame=self._backbone_seed,
+        )
         condition_key = ConditionKey(
             task=kwargs.get("task", self._task_name),
             target=kwargs.get("target", self._target_name),
@@ -1308,24 +1342,64 @@ class SingleModelMainlineWrapper(ModelBase):
 
     def _summarize_shared_state_geometry(self, shared_state: np.ndarray) -> Dict[str, object]:
         state = np.asarray(shared_state, dtype=np.float64)
+        layout = self.backbone.describe_state_layout()
+        base = {
+            "shared_state_dim": int(state.shape[1]) if state.ndim == 2 else int(layout.get("shared_state_dim", 0)),
+            "compact_state_dim": int(layout.get("compact_state_dim", 0)),
+            "summary_state_dim": int(layout.get("summary_state_dim", 0)),
+            "temporal_state_dim": int(layout.get("temporal_state_dim", 0)),
+            "spectral_state_dim": int(layout.get("spectral_state_dim", 0)),
+            "multiscale_temporal_state_enabled": bool(layout.get("uses_multiscale_temporal_state", False)),
+        }
         if state.ndim != 2 or state.size == 0:
             return {
-                "shared_state_dim": 0,
+                **base,
                 "shared_state_abs_mean": 0.0,
                 "shared_state_l2_mean": 0.0,
                 "shared_state_l2_p90": 0.0,
                 "shared_state_row_std_mean": 0.0,
                 "shared_state_nonzero_share": 0.0,
+                "temporal_velocity_abs_mean": 0.0,
+                "temporal_acceleration_abs_mean": 0.0,
+                "temporal_shock_pressure_mean": 0.0,
+                "spectral_low_band_abs_mean": 0.0,
+                "spectral_mid_band_abs_mean": 0.0,
+                "spectral_high_band_abs_mean": 0.0,
             }
         row_l2 = np.sqrt(np.sum(np.square(state), axis=1))
         row_std = np.std(state, axis=1)
+        compact_dim = int(layout.get("compact_state_dim", 0))
+        summary_dim = int(layout.get("summary_state_dim", 0))
+        temporal_dim = int(layout.get("temporal_state_dim", 0))
+        spectral_dim = int(layout.get("spectral_state_dim", 0))
+        temporal_offset = compact_dim + summary_dim
+        spectral_offset = temporal_offset + temporal_dim
+        temporal_feature_names = tuple(layout.get("temporal_feature_names", ()))
+        spectral_feature_names = tuple(layout.get("spectral_feature_names", ()))
+        temporal_lookup = {name: idx for idx, name in enumerate(temporal_feature_names)}
+        spectral_lookup = {name: idx for idx, name in enumerate(spectral_feature_names)}
+        temporal_block = state[:, temporal_offset:spectral_offset] if temporal_dim > 0 else np.zeros((len(state), 0), dtype=np.float64)
+        spectral_block = state[:, spectral_offset:spectral_offset + spectral_dim] if spectral_dim > 0 else np.zeros((len(state), 0), dtype=np.float64)
+
+        def _block_stat(block: np.ndarray, lookup: Dict[str, int], name: str) -> float:
+            idx = lookup.get(name)
+            if idx is None or block.shape[1] <= idx:
+                return 0.0
+            return float(np.mean(np.abs(block[:, idx])))
+
         return {
-            "shared_state_dim": int(state.shape[1]),
+            **base,
             "shared_state_abs_mean": float(np.mean(np.abs(state))),
             "shared_state_l2_mean": float(np.mean(row_l2)),
             "shared_state_l2_p90": float(np.quantile(row_l2, 0.90)),
             "shared_state_row_std_mean": float(np.mean(row_std)),
             "shared_state_nonzero_share": float(np.mean(np.abs(state) > 1e-6)),
+            "temporal_velocity_abs_mean": _block_stat(temporal_block, temporal_lookup, "state_velocity"),
+            "temporal_acceleration_abs_mean": _block_stat(temporal_block, temporal_lookup, "state_acceleration"),
+            "temporal_shock_pressure_mean": _block_stat(temporal_block, temporal_lookup, "state_shock_pressure"),
+            "spectral_low_band_abs_mean": _block_stat(spectral_block, spectral_lookup, "low_band_level"),
+            "spectral_mid_band_abs_mean": _block_stat(spectral_block, spectral_lookup, "mid_band_level"),
+            "spectral_high_band_abs_mean": _block_stat(spectral_block, spectral_lookup, "high_band_level"),
         }
 
     def _mean_or_zero(self, values: pd.Series | np.ndarray) -> float:
@@ -1418,16 +1492,75 @@ class SingleModelMainlineWrapper(ModelBase):
         if not self.enable_investors_mark_features:
             self._effective_investors_mark_features = False
             self._investors_mark_activation_reason = "mark_features_not_requested"
+            self._investors_mark_mode = "inactive"
         elif investors_mark_frame.empty or len(investors_mark_frame.columns) <= 0:
             self._effective_investors_mark_features = False
             self._investors_mark_activation_reason = "mark_features_unavailable"
+            self._investors_mark_mode = "unavailable"
         else:
             matrix = investors_mark_frame.to_numpy(dtype=np.float32, copy=False)
             coverage = float(np.mean(np.any(np.abs(matrix) > 1e-6, axis=1))) if len(matrix) else 0.0
             self._effective_investors_mark_features = coverage > 0.0
-            self._investors_mark_activation_reason = (
-                "mark_features_enabled" if self._effective_investors_mark_features else "mark_features_empty"
+            raw_reference_columns = [
+                column
+                for column in (
+                    "mark_list_present",
+                    "mark_website_present",
+                    "mark_hash_present",
+                    "mark_repeat_list_flag",
+                    "mark_list_changed_flag",
+                )
+                if column in investors_mark_frame.columns
+            ]
+            proxy_columns = [column for column in investors_mark_frame.columns if column not in raw_reference_columns]
+            raw_reference_matrix = (
+                investors_mark_frame[raw_reference_columns].to_numpy(dtype=np.float32, copy=False)
+                if raw_reference_columns
+                else np.zeros((len(investors_mark_frame), 0), dtype=np.float32)
             )
+            proxy_matrix = (
+                investors_mark_frame[proxy_columns].to_numpy(dtype=np.float32, copy=False)
+                if proxy_columns
+                else np.zeros((len(investors_mark_frame), 0), dtype=np.float32)
+            )
+            raw_reference_share = (
+                float(np.mean(np.any(np.abs(raw_reference_matrix) > 1e-6, axis=1)))
+                if raw_reference_matrix.size
+                else 0.0
+            )
+            proxy_share = (
+                float(np.mean(np.any(np.abs(proxy_matrix) > 1e-6, axis=1)))
+                if proxy_matrix.size
+                else 0.0
+            )
+            proxy_only_share = (
+                float(
+                    np.mean(
+                        np.any(np.abs(proxy_matrix) > 1e-6, axis=1)
+                        & ~np.any(np.abs(raw_reference_matrix) > 1e-6, axis=1)
+                    )
+                )
+                if proxy_matrix.size
+                else 0.0
+            )
+            self._investors_mark_raw_reference_share = raw_reference_share
+            self._investors_mark_proxy_share = proxy_share
+            self._investors_mark_proxy_only_share = proxy_only_share
+            if not self._effective_investors_mark_features:
+                self._investors_mark_mode = "empty"
+                self._investors_mark_activation_reason = "mark_features_empty"
+            elif raw_reference_share > 0.0 and proxy_share > 0.0:
+                self._investors_mark_mode = "hybrid"
+                self._investors_mark_activation_reason = "mark_features_hybrid"
+            elif raw_reference_share > 0.0:
+                self._investors_mark_mode = "raw_reference_rich"
+                self._investors_mark_activation_reason = "mark_features_raw_reference_rich"
+            elif proxy_share > 0.0:
+                self._investors_mark_mode = "proxy_only"
+                self._investors_mark_activation_reason = "mark_features_proxy_only"
+            else:
+                self._investors_mark_mode = "empty"
+                self._investors_mark_activation_reason = "mark_features_empty"
 
         matrix = (
             investors_mark_frame.to_numpy(dtype=np.float32, copy=False)
@@ -1436,6 +1569,10 @@ class SingleModelMainlineWrapper(ModelBase):
         )
         self._investors_mark_nonzero_share = float(np.mean(np.abs(matrix) > 1e-6)) if matrix.size else 0.0
         self._investors_mark_coverage_share = float(np.mean(np.any(np.abs(matrix) > 1e-6, axis=1))) if len(matrix) else 0.0
+        if investors_mark_frame.empty:
+            self._investors_mark_raw_reference_share = 0.0
+            self._investors_mark_proxy_share = 0.0
+            self._investors_mark_proxy_only_share = 0.0
         self._investors_mark_summary = {
             column: float(pd.to_numeric(investors_mark_frame[column], errors="coerce").fillna(0.0).mean())
             for column in investors_mark_frame.columns

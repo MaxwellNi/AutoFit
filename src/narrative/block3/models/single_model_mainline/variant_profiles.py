@@ -144,6 +144,27 @@ MAINLINE_VARIANTS: Dict[str, MainlineVariantProfile] = {
             "enable_investors_mark_features": True,
         },
     ),
+    "mainline_multiscale_state_guard": MainlineVariantProfile(
+        name="mainline_multiscale_state_guard",
+        runtime_mode="native",
+        delegate_variant="v740_alpha",
+        description=(
+            "Generation-5 investors profile that preserves the selective event-state "
+            "guard while upgrading the shared trunk into a multiscale temporal-state "
+            "updater. The added temporal and spectral bands stay target-agnostic, so "
+            "the investors lane can read a richer financing-process state without "
+            "collapsing lane-private semantics back into the trunk."
+        ),
+        prototype_overrides={
+            **_MAINLINE_ALPHA_OVERRIDES,
+            "enable_investors_event_state_features": True,
+            "enable_investors_selective_event_state_activation": True,
+            "investors_event_state_allow_h1": False,
+            "investors_event_state_max_source_presence_share": 0.0,
+            "enable_multiscale_temporal_state": True,
+            "temporal_state_windows": (3, 7, 30),
+        },
+    ),
 }
 
 

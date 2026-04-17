@@ -31,7 +31,7 @@ from scripts.run_v740_alpha_smoke_slice import (
     _resolve_repo_relative,
 )
 from src.narrative.block3.models.single_model_mainline import SingleModelMainlineWrapper
-from src.narrative.block3.models.single_model_mainline.backbone import SharedTemporalBackbone
+from src.narrative.block3.models.single_model_mainline.backbone import SharedTemporalBackbone, SharedTemporalBackboneSpec
 from src.narrative.block3.models.single_model_mainline.barrier import TargetIsolatedBarrier
 from src.narrative.block3.models.single_model_mainline.conditioning import ConditionKey, MainlineConditionEncoder
 from src.narrative.block3.models.single_model_mainline.lanes.investors_lane import (
@@ -410,7 +410,11 @@ def _split_and_prepare(case: RealSurfaceCase, ablation: str, frame: pd.DataFrame
     }
 
 
-def _fit_shared_encoder(case: RealSurfaceCase, surfaces: Dict[str, Dict[str, Any]]):
+def _fit_shared_encoder(
+    case: RealSurfaceCase,
+    surfaces: Dict[str, Dict[str, Any]],
+    backbone_kwargs: Dict[str, Any] | None = None,
+):
     source_memory = SourceMemoryAssembler()
     condition_encoder = MainlineConditionEncoder()
     barrier = TargetIsolatedBarrier()
@@ -453,6 +457,8 @@ def _fit_shared_encoder(case: RealSurfaceCase, surfaces: Dict[str, Dict[str, Any
 
         investors_source_train = helper._build_investors_source_features(source_train)
         investors_source_test = helper._build_investors_source_features(source_test)
+        investors_mark_train = helper._build_investors_mark_features(runtime_train)
+        investors_mark_test = helper._build_investors_mark_features(runtime_test)
         source_state_cols = list(source_train.columns)
         investors_source_cols = list(investors_source_train.columns)
 
@@ -467,6 +473,8 @@ def _fit_shared_encoder(case: RealSurfaceCase, surfaces: Dict[str, Dict[str, Any
             "anchor_test": helper._resolve_anchor(history_test),
             "investors_source_train": investors_source_train,
             "investors_source_test": investors_source_test,
+            "investors_mark_train": investors_mark_train,
+            "investors_mark_test": investors_mark_test,
             "core_train": surface["X_train"].reindex(columns=core_cols, fill_value=0.0),
             "core_test": surface["X_test"].reindex(columns=core_cols, fill_value=0.0),
             "y_train": surface["y_train"],
@@ -474,8 +482,17 @@ def _fit_shared_encoder(case: RealSurfaceCase, surfaces: Dict[str, Dict[str, Any
         }
         train_core_frames.append(surface["X_train"].reindex(columns=core_cols, fill_value=0.0))
 
-    backbone = SharedTemporalBackbone(random_state=7)
-    backbone.fit(pd.concat([frame.reindex(columns=core_cols_union, fill_value=0.0) for frame in train_core_frames], axis=0), feature_cols=core_cols_union)
+    backbone_spec = SharedTemporalBackboneSpec(**(backbone_kwargs or {}))
+    backbone = SharedTemporalBackbone(spec=backbone_spec, random_state=7)
+    backbone.fit(
+        pd.concat([frame.reindex(columns=core_cols_union, fill_value=0.0) for frame in train_core_frames], axis=0),
+        feature_cols=core_cols_union,
+    )
+    for payload in encoded.values():
+        payload["backbone_seed"] = backbone.build_context_seed(
+            payload["runtime_train"],
+            payload["core_train"].reindex(columns=core_cols_union, fill_value=0.0),
+        )
 
     sample_ablation = next(iter(encoded))
     sample_condition = condition_encoder.broadcast(
@@ -483,16 +500,27 @@ def _fit_shared_encoder(case: RealSurfaceCase, surfaces: Dict[str, Dict[str, Any
         n_rows=1,
     )
     sample_source = encoded[sample_ablation]["source_train"].reindex(columns=source_state_cols, fill_value=0.0).to_numpy(dtype=np.float32, copy=False)
+    sample_shared = backbone.transform(
+        encoded[sample_ablation]["core_train"].reindex(columns=core_cols_union, fill_value=0.0),
+        context_frame=encoded[sample_ablation]["runtime_train"],
+    )
     barrier.fit(
-        shared_dim=backbone.transform(encoded[sample_ablation]["core_train"].reindex(columns=core_cols_union, fill_value=0.0)).shape[1],
+        shared_dim=sample_shared.shape[1],
         condition_dim=sample_condition.shape[1],
         source_dim=sample_source.shape[1],
     )
 
     for ablation, payload in encoded.items():
         key = ConditionKey(task=case.task, target=case.target, horizon=case.horizon, ablation=ablation)
-        shared_train = backbone.transform(payload["core_train"].reindex(columns=core_cols_union, fill_value=0.0))
-        shared_test = backbone.transform(payload["core_test"].reindex(columns=core_cols_union, fill_value=0.0))
+        shared_train = backbone.transform(
+            payload["core_train"].reindex(columns=core_cols_union, fill_value=0.0),
+            context_frame=payload["runtime_train"],
+        )
+        shared_test = backbone.transform(
+            payload["core_test"].reindex(columns=core_cols_union, fill_value=0.0),
+            context_frame=payload["runtime_test"],
+            seed_frame=payload["backbone_seed"],
+        )
         condition_train = condition_encoder.broadcast(key, len(payload["core_train"]))
         condition_test = condition_encoder.broadcast(key, len(payload["core_test"]))
         source_state_train = payload["source_train"].reindex(columns=source_state_cols, fill_value=0.0).to_numpy(dtype=np.float32, copy=False)
@@ -519,6 +547,7 @@ def _concat_surface(encoded: Dict[str, Dict[str, Any]], split: str) -> Dict[str,
     event_state = []
     anchor = []
     source = []
+    mark = []
     y = []
     ablation = []
     for name, payload in encoded.items():
@@ -527,6 +556,7 @@ def _concat_surface(encoded: Dict[str, Dict[str, Any]], split: str) -> Dict[str,
         event_state.append(payload[f"event_state_{split}"].to_numpy(dtype=np.float32, copy=False))
         anchor.append(payload[f"anchor_{split}"])
         source.append(payload[f"investors_source_{split}"].to_numpy(dtype=np.float32, copy=False))
+        mark.append(payload[f"investors_mark_{split}"].to_numpy(dtype=np.float32, copy=False))
         y.append(payload[f"y_{split}"].to_numpy(dtype=np.float64, copy=False))
         ablation.extend([name] * len(payload[f"y_{split}"]))
     return {
@@ -535,6 +565,7 @@ def _concat_surface(encoded: Dict[str, Dict[str, Any]], split: str) -> Dict[str,
         "event_state": np.concatenate(event_state, axis=0),
         "anchor": np.concatenate(anchor, axis=0),
         "source": np.concatenate(source, axis=0),
+        "mark": np.concatenate(mark, axis=0),
         "y": np.concatenate(y, axis=0),
         "ablation": np.asarray(ablation, dtype=object),
     }
@@ -582,8 +613,12 @@ def _run_variant(
     predict_kwargs = dict(variant["predict"])
     fit_event_state = bool(fit_kwargs.pop("enable_investors_event_state_features", False))
     predict_event_state = bool(predict_kwargs.pop("enable_investors_event_state_features", fit_event_state))
+    fit_mark = bool(fit_kwargs.pop("enable_investors_mark_features", False))
+    predict_mark = bool(predict_kwargs.pop("enable_investors_mark_features", fit_mark))
     train_aux = _surface_aux_features(train_surface, enable_event_state_features=fit_event_state)
     test_aux = _surface_aux_features(test_surface, enable_event_state_features=predict_event_state)
+    train_mark = np.asarray(train_surface.get("mark"), dtype=np.float32) if "mark" in train_surface else None
+    test_mark = np.asarray(test_surface.get("mark"), dtype=np.float32) if "mark" in test_surface else None
 
     runtime = InvestorsLaneRuntime(random_state=7)
     runtime.fit(
@@ -592,9 +627,11 @@ def _run_variant(
         aux_features=train_aux,
         anchor=train_surface["anchor"],
         source_features=train_surface["source"],
+        mark_features=train_mark,
         horizon=case.horizon,
         anchor_blend=0.70,
         task_name=case.task,
+        enable_mark_features=fit_mark,
         **fit_kwargs,
     )
     preds = runtime.predict(
@@ -602,6 +639,8 @@ def _run_variant(
         aux_features=test_aux,
         anchor=test_surface["anchor"],
         source_features=test_surface["source"],
+        mark_features=test_mark,
+        enable_mark_features=predict_mark,
         **predict_kwargs,
     )
     profile_ids = _source_profile_ids(test_surface["source"])
@@ -638,8 +677,10 @@ def _run_variant(
             "use_count_jump": bool(runtime._use_count_jump),
             "use_sparsity_gate": bool(runtime._use_sparsity_gate),
             "use_event_state_features": bool(fit_event_state or predict_event_state),
+            "use_mark_features": bool(fit_mark or predict_mark),
         },
         "event_state_aux_dim": int(test_surface["event_state"].shape[1]) if "event_state" in test_surface else 0,
+        "mark_feature_dim": int(test_surface["mark"].shape[1]) if "mark" in test_surface else 0,
     }
 
 
