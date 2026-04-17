@@ -186,7 +186,7 @@ def test_aggregate_candidate_deltas_and_merge_report_gate_candidates() -> None:
     merged = _merge_panel_reports(official_report, dynamic_report)
 
     assert merged["track_contract"]["delegate_forbidden"] is True
-    assert merged["track_contract"]["active_generation_focus"] == "multiscale_state_guard"
+    assert merged["track_contract"]["active_generation_focus"] == "selective_event_state_guard"
     assert merged["gate_verdict"]["guarded_jump"]["official_track_pass"] is True
     assert merged["gate_verdict"]["guarded_jump"]["dynamic_track_pass"] is True
     assert merged["gate_verdict"]["guarded_jump"]["promotable_on_current_track"] is True

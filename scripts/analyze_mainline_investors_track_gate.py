@@ -279,7 +279,7 @@ def _track_contract() -> Dict[str, Any]:
         "dynamic_panel_definition": "real-data dynamic_test multisource challenge surfaces; research-only and never merged into official claims",
         "source_results_interpreted_only_with_geometry": True,
         "demoted_families": ["event_state_boundary_guard", "source_policy_transition_guard"],
-        "active_generation_focus": "multiscale_state_guard",
+        "active_generation_focus": "selective_event_state_guard",
         "promotion_rules": {
             "official_mean_mae_delta_pct_min": OFFICIAL_MEAN_DELTA_MIN_PCT,
             "official_worst_mae_delta_pct_min": OFFICIAL_WORST_DELTA_MIN_PCT,
