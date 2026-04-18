@@ -108,6 +108,11 @@ LOCAL_MAINLINE_ALIASES = {
             "enable_investors_transition_correction": True,
         },
     },
+    "single_model_mainline_track_active_generation_focus": {
+        "variant": "mainline_selective_event_state_guard",
+        "use_delegate": False,
+        "wrapper_overrides": {},
+    },
     "single_model_mainline_track_selective_event_state_guard": {
         "variant": "mainline_selective_event_state_guard",
         "use_delegate": False,
@@ -159,11 +164,12 @@ def _parse_args() -> argparse.Namespace:
     )
     ap.add_argument(
         "--models",
-        default="v740_alpha,incumbent",
+        default="single_model_mainline_track_active_generation_focus,incumbent",
         help=(
             "Comma-separated models. Special tokens: v740_alpha, v741_lite, v742_unified, "
             "v743_factorized, v744_guarded_phase, v745_evidence_residual, single_model_mainline, "
-            "single_model_mainline_delegate, single_model_mainline_track_legacy_baseline, "
+            "single_model_mainline_delegate, single_model_mainline_track_active_generation_focus, "
+            "single_model_mainline_track_legacy_baseline, "
             "single_model_mainline_track_guarded_jump, "
             "single_model_mainline_track_guarded_jump_plus_sparsity, "
             "single_model_mainline_track_source_policy_transition_guard, incumbent, v739"
@@ -521,6 +527,8 @@ def _pick_primary_candidate_label(results: List[Dict[str, Any]]) -> str:
         seen.add(label)
         labels.append(label)
     for preferred in (
+        "single_model_mainline_track_active_generation_focus",
+        "single_model_mainline_track_selective_event_state_guard",
         "single_model_mainline",
         "single_model_mainline_delegate",
         "v745_evidence_residual",
@@ -556,6 +564,10 @@ def _classify_case(case_rows: Dict[str, Dict[str, Any]], tie_tol_pct: float, can
 
 
 def _display_candidate_name(candidate_label: str) -> str:
+    if candidate_label == "single_model_mainline_track_active_generation_focus":
+        return "SingleModelMainline-ActiveGenerationFocus"
+    if candidate_label == "single_model_mainline_track_selective_event_state_guard":
+        return "SingleModelMainline-SelectiveEventStateGuard"
     if candidate_label == "single_model_mainline":
         return "SingleModelMainline"
     if candidate_label == "single_model_mainline_delegate":

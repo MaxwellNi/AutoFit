@@ -7,7 +7,7 @@ import json
 import sys
 from dataclasses import asdict
 from pathlib import Path
-from typing import Any, Dict
+from typing import Any, Callable, Dict
 
 import numpy as np
 
@@ -47,6 +47,8 @@ OFFICIAL_WORST_DELTA_MIN_PCT = -1.0
 DYNAMIC_MEAN_DELTA_MIN_PCT = 0.0
 DYNAMIC_GEOMETRY_SHIFT_AMPLIFICATION_MAX = 128.0
 DYNAMIC_GEOMETRY_TEST_SHIFT_SHARE_MAX = 0.05
+ACTIVE_GENERATION_FOCUS = "selective_event_state_guard"
+ACTIVE_GENERATION_RUNTIME_ALIAS = "single_model_mainline_track_active_generation_focus"
 
 
 TRACK_CANDIDATES: Dict[str, Dict[str, Any]] = {
@@ -170,6 +172,33 @@ TRACK_CANDIDATES: Dict[str, Dict[str, Any]] = {
             },
         },
     },
+    "process_state_feedback_guard": {
+        "role": "active_trunk_candidate",
+        "official_kwargs": {
+            "variant": "mainline_process_state_feedback_guard",
+            "seed": 7,
+            "use_delegate": False,
+        },
+        "dynamic_variant": {
+            "fit": {
+                "enable_hurdle_head": True,
+                "enable_count_jump": True,
+                "count_jump_strength": 0.30,
+                "enable_count_sparsity_gate": False,
+                "enable_investors_event_state_features": True,
+            },
+            "predict": {
+                "enable_investors_event_state_features": True,
+            },
+        },
+        "dynamic_backbone": {
+            "enable_process_state_feedback": True,
+            "process_state_feedback_strength": 0.02,
+            "process_state_feedback_source_decay": 0.65,
+            "process_state_feedback_min_horizon": 7,
+            "process_state_feedback_state_weights": (0.30, 0.20, 0.0, 0.0, 0.50),
+        },
+    },
     "temporal_state_guard": {
         "role": "active_trunk_candidate",
         "official_kwargs": {
@@ -272,6 +301,20 @@ TRACK_CANDIDATES: Dict[str, Dict[str, Any]] = {
     },
 }
 
+PROCESS_STATE_FAMILIES = (
+    "attention_diffusion",
+    "credibility_confirmation",
+    "screening_selectivity",
+    "book_depth_absorption",
+    "closure_conversion",
+)
+PROCESS_STATE_COUPLINGS = {
+    "temporal_velocity": "temporal_velocity_coupling",
+    "temporal_shock": "temporal_shock_coupling",
+    "spectral_low_band": "spectral_low_band_coupling",
+    "spectral_high_band": "spectral_high_band_coupling",
+}
+
 
 def _parse_args() -> argparse.Namespace:
     ap = argparse.ArgumentParser(description=__doc__)
@@ -335,7 +378,11 @@ def _track_contract() -> Dict[str, Any]:
         "dynamic_panel_definition": "real-data dynamic_test multisource challenge surfaces; research-only and never merged into official claims",
         "source_results_interpreted_only_with_geometry": True,
         "demoted_families": ["event_state_boundary_guard", "source_policy_transition_guard"],
-        "active_generation_focus": "selective_event_state_guard",
+        "active_generation_focus": ACTIVE_GENERATION_FOCUS,
+        "active_generation_variant": str(
+            TRACK_CANDIDATES[ACTIVE_GENERATION_FOCUS]["official_kwargs"].get("variant", "mainline_alpha")
+        ),
+        "active_generation_runtime_alias": ACTIVE_GENERATION_RUNTIME_ALIAS,
         "promotion_rules": {
             "official_mean_mae_delta_pct_min": OFFICIAL_MEAN_DELTA_MIN_PCT,
             "official_worst_mae_delta_pct_min": OFFICIAL_WORST_DELTA_MIN_PCT,
@@ -348,6 +395,309 @@ def _track_contract() -> Dict[str, Any]:
 
 def _candidate_manifest() -> Dict[str, Dict[str, Any]]:
     return {name: {"role": payload["role"]} for name, payload in TRACK_CANDIDATES.items()}
+
+
+def _candidate_variant_name(candidate_name: str) -> str | None:
+    payload = TRACK_CANDIDATES.get(candidate_name, {})
+    official_kwargs = payload.get("official_kwargs", {})
+    variant = official_kwargs.get("variant")
+    if variant is None:
+        if candidate_name == "legacy_baseline":
+            return "mainline_alpha"
+        return None
+    return str(variant)
+
+
+def _empty_process_state_summary() -> Dict[str, Any]:
+    return {
+        "case_count": 0,
+        "mean_scores": {family: 0.0 for family in PROCESS_STATE_FAMILIES},
+        "mean_support_shares": {family: 0.0 for family in PROCESS_STATE_FAMILIES},
+        "mean_couplings": {name: 0.0 for name in PROCESS_STATE_COUPLINGS},
+        "mean_score_deltas_vs_baseline": {family: 0.0 for family in PROCESS_STATE_FAMILIES},
+        "mean_score_shift_l1": 0.0,
+        "top_positive_state": "none",
+        "top_negative_state": "none",
+        "multiscale_coupling_case_count": 0,
+    }
+
+
+def _normalize_process_state_summary(summary: Dict[str, Dict[str, Any]] | None) -> Dict[str, Dict[str, Any]]:
+    normalized: Dict[str, Dict[str, Any]] = {}
+    for candidate_name in TRACK_CANDIDATES:
+        payload = summary.get(candidate_name, {}) if isinstance(summary, dict) else {}
+        empty = _empty_process_state_summary()
+        normalized[candidate_name] = {
+            **empty,
+            **payload,
+            "mean_scores": {
+                **empty["mean_scores"],
+                **dict(payload.get("mean_scores", {})),
+            },
+            "mean_support_shares": {
+                **empty["mean_support_shares"],
+                **dict(payload.get("mean_support_shares", {})),
+            },
+            "mean_couplings": {
+                **empty["mean_couplings"],
+                **dict(payload.get("mean_couplings", {})),
+            },
+            "mean_score_deltas_vs_baseline": {
+                **empty["mean_score_deltas_vs_baseline"],
+                **dict(payload.get("mean_score_deltas_vs_baseline", {})),
+            },
+        }
+    return normalized
+
+
+def _extract_process_state_atoms(card: Dict[str, Any] | None) -> Dict[str, Any] | None:
+    if not isinstance(card, dict):
+        return None
+    atoms = card.get("process_state_atoms")
+    if not isinstance(atoms, dict):
+        return None
+    return atoms
+
+
+def _snapshot_from_process_state_atoms(atoms: Dict[str, Any] | None) -> Dict[str, Any] | None:
+    if not isinstance(atoms, dict):
+        return None
+    return {
+        "scores": {
+            family: float(atoms.get(f"{family}_score", 0.0))
+            for family in PROCESS_STATE_FAMILIES
+        },
+        "support_shares": {
+            family: float(atoms.get(f"{family}_support_share", 0.0))
+            for family in PROCESS_STATE_FAMILIES
+        },
+        "couplings": {
+            name: float(atoms.get(key, 0.0))
+            for name, key in PROCESS_STATE_COUPLINGS.items()
+        },
+        "multiscale_coupling_enabled": bool(atoms.get("multiscale_coupling_enabled", False)),
+    }
+
+
+def _snapshot_from_process_state_summary(summary: Dict[str, Any] | None) -> Dict[str, Any] | None:
+    if not isinstance(summary, dict):
+        return None
+    score_map = summary.get("mean_scores")
+    support_map = summary.get("mean_support_shares")
+    coupling_map = summary.get("mean_couplings")
+    if not isinstance(score_map, dict) or not isinstance(support_map, dict) or not isinstance(coupling_map, dict):
+        return None
+    return {
+        "scores": {
+            family: float(score_map.get(family, 0.0))
+            for family in PROCESS_STATE_FAMILIES
+        },
+        "support_shares": {
+            family: float(support_map.get(family, 0.0))
+            for family in PROCESS_STATE_FAMILIES
+        },
+        "couplings": {
+            name: float(coupling_map.get(name, 0.0))
+            for name in PROCESS_STATE_COUPLINGS
+        },
+        "multiscale_coupling_enabled": bool(summary.get("multiscale_coupling_enabled", False)),
+    }
+
+
+def _dominant_process_state(score_deltas: Dict[str, float], *, prefer_positive: bool) -> str:
+    if not score_deltas:
+        return "none"
+    items = score_deltas.items()
+    family, delta = max(items, key=lambda item: item[1]) if prefer_positive else min(items, key=lambda item: item[1])
+    return family if abs(float(delta)) > 1e-9 else "none"
+
+
+def _aggregate_process_state_summaries(
+    cases: Dict[str, Dict[str, Any]],
+    *,
+    baseline_key: str,
+    snapshot_getter: Callable[[Dict[str, Any]], Dict[str, Any] | None],
+) -> Dict[str, Dict[str, Any]]:
+    buffers: Dict[str, Dict[str, Any]] = {
+        candidate_name: {
+            "case_count": 0,
+            "scores": {family: [] for family in PROCESS_STATE_FAMILIES},
+            "support_shares": {family: [] for family in PROCESS_STATE_FAMILIES},
+            "couplings": {name: [] for name in PROCESS_STATE_COUPLINGS},
+            "score_deltas": {family: [] for family in PROCESS_STATE_FAMILIES},
+            "score_shift_l1": [],
+            "multiscale_coupling_case_count": 0,
+        }
+        for candidate_name in TRACK_CANDIDATES
+    }
+
+    for payload in cases.values():
+        variants = payload.get("variants", {})
+        baseline_variant = variants.get(baseline_key)
+        if not isinstance(baseline_variant, dict):
+            continue
+        baseline_snapshot = snapshot_getter(baseline_variant)
+        if baseline_snapshot is None:
+            continue
+        for candidate_name in TRACK_CANDIDATES:
+            variant_payload = variants.get(candidate_name)
+            if not isinstance(variant_payload, dict):
+                continue
+            snapshot = snapshot_getter(variant_payload)
+            if snapshot is None:
+                continue
+            buffer = buffers[candidate_name]
+            buffer["case_count"] += 1
+            buffer["multiscale_coupling_case_count"] += int(snapshot["multiscale_coupling_enabled"])
+            shift_l1 = 0.0
+            for family in PROCESS_STATE_FAMILIES:
+                score = float(snapshot["scores"][family])
+                support = float(snapshot["support_shares"][family])
+                delta = score - float(baseline_snapshot["scores"][family])
+                buffer["scores"][family].append(score)
+                buffer["support_shares"][family].append(support)
+                buffer["score_deltas"][family].append(delta)
+                shift_l1 += abs(delta)
+            for name in PROCESS_STATE_COUPLINGS:
+                buffer["couplings"][name].append(float(snapshot["couplings"][name]))
+            buffer["score_shift_l1"].append(shift_l1)
+
+    summary: Dict[str, Dict[str, Any]] = {}
+    for candidate_name, buffer in buffers.items():
+        case_count = int(buffer["case_count"])
+        if case_count <= 0:
+            summary[candidate_name] = _empty_process_state_summary()
+            continue
+        mean_scores = {
+            family: float(np.mean(buffer["scores"][family]))
+            for family in PROCESS_STATE_FAMILIES
+        }
+        mean_support_shares = {
+            family: float(np.mean(buffer["support_shares"][family]))
+            for family in PROCESS_STATE_FAMILIES
+        }
+        mean_couplings = {
+            name: float(np.mean(buffer["couplings"][name]))
+            for name in PROCESS_STATE_COUPLINGS
+        }
+        mean_score_deltas = {
+            family: float(np.mean(buffer["score_deltas"][family]))
+            for family in PROCESS_STATE_FAMILIES
+        }
+        summary[candidate_name] = {
+            "case_count": case_count,
+            "mean_scores": mean_scores,
+            "mean_support_shares": mean_support_shares,
+            "mean_couplings": mean_couplings,
+            "mean_score_deltas_vs_baseline": mean_score_deltas,
+            "mean_score_shift_l1": float(np.mean(buffer["score_shift_l1"])),
+            "top_positive_state": _dominant_process_state(mean_score_deltas, prefer_positive=True),
+            "top_negative_state": _dominant_process_state(mean_score_deltas, prefer_positive=False),
+            "multiscale_coupling_case_count": int(buffer["multiscale_coupling_case_count"]),
+        }
+    return summary
+
+
+def _official_process_state_snapshot(variant_payload: Dict[str, Any]) -> Dict[str, Any] | None:
+    return _snapshot_from_process_state_atoms(_extract_process_state_atoms(variant_payload.get("event_state_trunk")))
+
+
+def _dynamic_process_state_snapshot(variant_payload: Dict[str, Any]) -> Dict[str, Any] | None:
+    process_state = variant_payload.get("dynamic_process_state")
+    if not isinstance(process_state, dict):
+        return None
+    return _snapshot_from_process_state_summary(process_state.get("test"))
+
+
+def _aggregate_official_process_state(cases: Dict[str, Dict[str, Any]], baseline_key: str) -> Dict[str, Dict[str, Any]]:
+    return _aggregate_process_state_summaries(
+        cases,
+        baseline_key=baseline_key,
+        snapshot_getter=_official_process_state_snapshot,
+    )
+
+
+def _aggregate_dynamic_process_state(cases: Dict[str, Dict[str, Any]], baseline_key: str) -> Dict[str, Dict[str, Any]]:
+    return _aggregate_process_state_summaries(
+        cases,
+        baseline_key=baseline_key,
+        snapshot_getter=_dynamic_process_state_snapshot,
+    )
+
+
+def _surface_process_state_report(encoded: Dict[str, Dict[str, Any]], split: str) -> Dict[str, Any]:
+    total_rows = 0
+    score_totals = {family: 0.0 for family in PROCESS_STATE_FAMILIES}
+    support_totals = {family: 0.0 for family in PROCESS_STATE_FAMILIES}
+    coupling_totals = {name: 0.0 for name in PROCESS_STATE_COUPLINGS}
+    multiscale_coupling_enabled = False
+
+    for payload in encoded.values():
+        atoms = _extract_process_state_atoms(payload.get(f"event_state_trunk_{split}"))
+        snapshot = _snapshot_from_process_state_atoms(atoms)
+        row_count = int(len(payload.get(f"y_{split}", ())))
+        if snapshot is None or row_count <= 0:
+            continue
+        total_rows += row_count
+        multiscale_coupling_enabled = multiscale_coupling_enabled or snapshot["multiscale_coupling_enabled"]
+        for family in PROCESS_STATE_FAMILIES:
+            score_totals[family] += row_count * float(snapshot["scores"][family])
+            support_totals[family] += row_count * float(snapshot["support_shares"][family])
+        for name in PROCESS_STATE_COUPLINGS:
+            coupling_totals[name] += row_count * float(snapshot["couplings"][name])
+
+    if total_rows <= 0:
+        return {
+            "rows": 0,
+            "mean_scores": {family: 0.0 for family in PROCESS_STATE_FAMILIES},
+            "mean_support_shares": {family: 0.0 for family in PROCESS_STATE_FAMILIES},
+            "mean_couplings": {name: 0.0 for name in PROCESS_STATE_COUPLINGS},
+            "multiscale_coupling_enabled": False,
+        }
+    return {
+        "rows": int(total_rows),
+        "mean_scores": {
+            family: float(score_totals[family] / total_rows)
+            for family in PROCESS_STATE_FAMILIES
+        },
+        "mean_support_shares": {
+            family: float(support_totals[family] / total_rows)
+            for family in PROCESS_STATE_FAMILIES
+        },
+        "mean_couplings": {
+            name: float(coupling_totals[name] / total_rows)
+            for name in PROCESS_STATE_COUPLINGS
+        },
+        "multiscale_coupling_enabled": bool(multiscale_coupling_enabled),
+    }
+
+
+def _maybe_official_process_state_summary(official_report: Dict[str, Any]) -> Dict[str, Dict[str, Any]]:
+    provided = official_report.get("official_process_state_summary")
+    normalized = _normalize_process_state_summary(provided)
+    if any(payload["case_count"] > 0 for payload in normalized.values()):
+        return normalized
+    cases = official_report.get("official_cases", {})
+    if isinstance(cases, dict) and cases:
+        computed = _aggregate_official_process_state(cases, baseline_key="legacy_baseline")
+        normalized = _normalize_process_state_summary(computed)
+        if any(payload["case_count"] > 0 for payload in normalized.values()):
+            return normalized
+    return _normalize_process_state_summary(None)
+
+
+def _maybe_dynamic_process_state_summary(dynamic_report: Dict[str, Any]) -> Dict[str, Dict[str, Any]]:
+    provided = dynamic_report.get("dynamic_process_state_summary")
+    normalized = _normalize_process_state_summary(provided)
+    if any(payload["case_count"] > 0 for payload in normalized.values()):
+        return normalized
+    cases = dynamic_report.get("dynamic_cases", {})
+    if isinstance(cases, dict) and cases:
+        computed = _aggregate_dynamic_process_state(cases, baseline_key="legacy_baseline")
+        normalized = _normalize_process_state_summary(computed)
+        if any(payload["case_count"] > 0 for payload in normalized.values()):
+            return normalized
+    return _normalize_process_state_summary(None)
 
 
 def _dynamic_backbone_key(backbone_kwargs: Dict[str, Any] | None) -> str:
@@ -517,6 +867,7 @@ def _run_official_variant(case: SliceCase, candidate_name: str, kwargs: Dict[str
         "investors_source_activation": regime.get("investors_source_activation", {}),
         "investor_mark_activation": regime.get("investor_mark_activation", {}),
         "investors_process_contract": regime.get("investors_process_contract", {}),
+        "event_state_trunk": regime.get("event_state_trunk", {}),
     }
 
 
@@ -546,6 +897,10 @@ def _run_dynamic_case(case: RealSurfaceCase) -> Dict[str, Any]:
         encoded_by_backbone[key] = {
             "train_surface": _concat_surface(encoded, "train"),
             "test_surface": _concat_surface(encoded, "test"),
+            "dynamic_process_state": {
+                "train": _surface_process_state_report(encoded, "train"),
+                "test": _surface_process_state_report(encoded, "test"),
+            },
         }
 
     baseline_backbone = encoded_by_backbone[_dynamic_backbone_key(None)]
@@ -573,6 +928,7 @@ def _run_dynamic_case(case: RealSurfaceCase) -> Dict[str, Any]:
             "lane_flags": result["lane_flags"],
             "dynamic_backbone": candidate.get("dynamic_backbone", {}),
             "dynamic_geometry": backbone_payload["dynamic_geometry"],
+            "dynamic_process_state": backbone_payload["dynamic_process_state"],
         }
 
     return {
@@ -601,10 +957,15 @@ def _run_official_panel(temporal_config) -> Dict[str, Any]:
 
     official_summary = _aggregate_candidate_deltas(official_cases_report, baseline_key="legacy_baseline")
     official_alignment = _official_alignment(official_cases_report)
+    official_process_state_summary = _aggregate_official_process_state(
+        official_cases_report,
+        baseline_key="legacy_baseline",
+    )
     return {
         "official_cases": official_cases_report,
         "official_summary": official_summary,
         "official_alignment": official_alignment,
+        "official_process_state_summary": official_process_state_summary,
     }
 
 
@@ -615,10 +976,15 @@ def _run_dynamic_panel(dynamic_horizons: tuple[int, ...], entity_limit: int, max
 
     dynamic_summary = _aggregate_candidate_deltas(dynamic_cases_report, baseline_key="legacy_baseline")
     dynamic_geometry_summary = _aggregate_dynamic_geometry(dynamic_cases_report)
+    dynamic_process_state_summary = _aggregate_dynamic_process_state(
+        dynamic_cases_report,
+        baseline_key="legacy_baseline",
+    )
     return {
         "dynamic_cases": dynamic_cases_report,
         "dynamic_summary": dynamic_summary,
         "dynamic_geometry_summary": dynamic_geometry_summary,
+        "dynamic_process_state_summary": dynamic_process_state_summary,
     }
 
 
@@ -637,6 +1003,17 @@ def _merge_panel_reports(official_report: Dict[str, Any], dynamic_report: Dict[s
     dynamic_geometry_summary = dynamic_report.get("dynamic_geometry_summary")
     if dynamic_geometry_summary is None:
         dynamic_geometry_summary = _aggregate_dynamic_geometry(dynamic_report["dynamic_cases"])
+    official_process_state_summary = _maybe_official_process_state_summary(official_report)
+    dynamic_process_state_summary = _maybe_dynamic_process_state_summary(dynamic_report)
+
+    gate_verdict = _gate_verdict(
+        official_report["official_summary"],
+        dynamic_report["dynamic_summary"],
+        official_report["official_alignment"],
+        dynamic_geometry_summary,
+        official_process_state_summary,
+        dynamic_process_state_summary,
+    )
 
     return {
         "track_contract": _track_contract(),
@@ -644,13 +1021,16 @@ def _merge_panel_reports(official_report: Dict[str, Any], dynamic_report: Dict[s
         "official_cases": official_report["official_cases"],
         "official_summary": official_report["official_summary"],
         "official_alignment": official_report["official_alignment"],
+        "official_process_state_summary": official_process_state_summary,
         "dynamic_cases": dynamic_report["dynamic_cases"],
         "dynamic_summary": dynamic_report["dynamic_summary"],
         "dynamic_geometry_summary": dynamic_geometry_summary,
-        "gate_verdict": _gate_verdict(
+        "dynamic_process_state_summary": dynamic_process_state_summary,
+        "gate_verdict": gate_verdict,
+        "promotion_recommendation": _build_promotion_recommendation(
+            gate_verdict,
             official_report["official_summary"],
             dynamic_report["dynamic_summary"],
-            official_report["official_alignment"],
             dynamic_geometry_summary,
         ),
     }
@@ -759,6 +1139,8 @@ def _gate_verdict(
     dynamic_summary: Dict[str, Dict[str, Any]],
     official_alignment: Dict[str, Dict[str, Any]],
     dynamic_geometry_summary: Dict[str, Dict[str, Any]],
+    official_process_state_summary: Dict[str, Dict[str, Any]],
+    dynamic_process_state_summary: Dict[str, Dict[str, Any]],
 ) -> Dict[str, Dict[str, Any]]:
     verdict: Dict[str, Dict[str, Any]] = {}
     demoted_families = set(_track_contract().get("demoted_families", ()))
@@ -767,6 +1149,8 @@ def _gate_verdict(
         dynamic = dynamic_summary[candidate_name]
         alignment = official_alignment[candidate_name]
         geometry = dynamic_geometry_summary[candidate_name]
+        official_process_state = official_process_state_summary.get(candidate_name, _empty_process_state_summary())
+        dynamic_process_state = dynamic_process_state_summary.get(candidate_name, _empty_process_state_summary())
         official_pass = (
             alignment["native_runtime_all_cases"]
             and official["mean_mae_delta_pct"] >= OFFICIAL_MEAN_DELTA_MIN_PCT
@@ -784,8 +1168,140 @@ def _gate_verdict(
             "dynamic_track_pass": bool(dynamic_pass),
             "demotion_blocked": bool(demotion_blocked),
             "promotable_on_current_track": bool(official_pass and dynamic_pass and not demotion_blocked),
+            "official_primary_process_state": str(official_process_state["top_positive_state"]),
+            "dynamic_primary_process_state": str(dynamic_process_state["top_positive_state"]),
+            "official_process_state_shift_l1": float(official_process_state["mean_score_shift_l1"]),
+            "dynamic_process_state_shift_l1": float(dynamic_process_state["mean_score_shift_l1"]),
         }
     return verdict
+
+
+def _primary_gate_blocker(verdict_entry: Dict[str, Any]) -> str:
+    if bool(verdict_entry.get("promotable_on_current_track", False)):
+        return "none"
+    if bool(verdict_entry.get("demotion_blocked", False)):
+        return "demotion_blocked"
+    if not bool(verdict_entry.get("official_track_pass", False)):
+        return "official_track_fail"
+    if not bool(verdict_entry.get("dynamic_metric_pass", False)):
+        return "dynamic_metric_fail"
+    if not bool(verdict_entry.get("dynamic_geometry_pass", False)):
+        return "dynamic_geometry_fail"
+    return "unknown_gate_fail"
+
+
+def _candidate_recommendation_snapshot(
+    candidate_name: str,
+    gate_verdict: Dict[str, Dict[str, Any]],
+    official_summary: Dict[str, Dict[str, Any]],
+    dynamic_summary: Dict[str, Dict[str, Any]],
+    dynamic_geometry_summary: Dict[str, Dict[str, Any]],
+) -> Dict[str, Any]:
+    verdict_entry = gate_verdict[candidate_name]
+    official = official_summary[candidate_name]
+    dynamic = dynamic_summary[candidate_name]
+    geometry = dynamic_geometry_summary[candidate_name]
+    return {
+        "candidate": candidate_name,
+        "variant": _candidate_variant_name(candidate_name),
+        "role": str(verdict_entry.get("role", TRACK_CANDIDATES[candidate_name]["role"])),
+        "promotable_on_current_track": bool(verdict_entry.get("promotable_on_current_track", False)),
+        "official_mean_mae_delta_pct": float(official.get("mean_mae_delta_pct", 0.0)),
+        "dynamic_mean_mae_delta_pct": float(dynamic.get("mean_mae_delta_pct", 0.0)),
+        "dynamic_geometry_all_cases_pass": bool(geometry.get("geometry_all_cases_pass", False)),
+        "primary_blocker": _primary_gate_blocker(verdict_entry),
+    }
+
+
+def _promotion_sort_key(
+    candidate_name: str,
+    gate_verdict: Dict[str, Dict[str, Any]],
+    official_summary: Dict[str, Dict[str, Any]],
+    dynamic_summary: Dict[str, Dict[str, Any]],
+    dynamic_geometry_summary: Dict[str, Dict[str, Any]],
+) -> tuple[float, ...]:
+    verdict_entry = gate_verdict[candidate_name]
+    official = official_summary[candidate_name]
+    dynamic = dynamic_summary[candidate_name]
+    geometry = dynamic_geometry_summary[candidate_name]
+    promotable = bool(verdict_entry.get("promotable_on_current_track", False))
+    active_focus_bonus = bool(promotable and candidate_name == ACTIVE_GENERATION_FOCUS)
+    return (
+        float(promotable),
+        float(active_focus_bonus),
+        float(dynamic.get("mean_mae_delta_pct", 0.0)),
+        float(official.get("mean_mae_delta_pct", 0.0)),
+        -float(geometry.get("worst_shift_abs_mean_amplification", 0.0)),
+        -float(geometry.get("worst_test_shift_abs_mean_share", 0.0)),
+    )
+
+
+def _build_promotion_recommendation(
+    gate_verdict: Dict[str, Dict[str, Any]],
+    official_summary: Dict[str, Dict[str, Any]],
+    dynamic_summary: Dict[str, Dict[str, Any]],
+    dynamic_geometry_summary: Dict[str, Dict[str, Any]],
+) -> Dict[str, Any]:
+    ranked_candidates = sorted(
+        TRACK_CANDIDATES,
+        key=lambda candidate_name: _promotion_sort_key(
+            candidate_name,
+            gate_verdict,
+            official_summary,
+            dynamic_summary,
+            dynamic_geometry_summary,
+        ),
+        reverse=True,
+    )
+    promotable_candidates = [
+        candidate_name
+        for candidate_name in ranked_candidates
+        if bool(gate_verdict[candidate_name].get("promotable_on_current_track", False))
+    ]
+    recommended_candidate = promotable_candidates[0] if promotable_candidates else None
+    runner_up_candidate = promotable_candidates[1] if len(promotable_candidates) > 1 else None
+    if recommended_candidate == ACTIVE_GENERATION_FOCUS:
+        selection_basis = "preferred_active_generation_focus"
+    elif recommended_candidate is not None:
+        selection_basis = "best_promotable_metrics"
+    else:
+        selection_basis = "no_promotable_candidate"
+
+    return {
+        "active_generation_focus": ACTIVE_GENERATION_FOCUS,
+        "active_generation_variant": _candidate_variant_name(ACTIVE_GENERATION_FOCUS),
+        "active_generation_runtime_alias": ACTIVE_GENERATION_RUNTIME_ALIAS,
+        "recommended_candidate": recommended_candidate,
+        "recommended_variant": _candidate_variant_name(recommended_candidate) if recommended_candidate else None,
+        "recommended_runtime_alias": (
+            ACTIVE_GENERATION_RUNTIME_ALIAS if recommended_candidate == ACTIVE_GENERATION_FOCUS else None
+        ),
+        "selection_basis": selection_basis,
+        "promotable_candidate_count": int(len(promotable_candidates)),
+        "promotable_candidates": [
+            _candidate_recommendation_snapshot(
+                candidate_name,
+                gate_verdict,
+                official_summary,
+                dynamic_summary,
+                dynamic_geometry_summary,
+            )
+            for candidate_name in promotable_candidates
+        ],
+        "runner_up_candidate": runner_up_candidate,
+        "runner_up_variant": _candidate_variant_name(runner_up_candidate) if runner_up_candidate else None,
+        "blocked_candidates": [
+            _candidate_recommendation_snapshot(
+                candidate_name,
+                gate_verdict,
+                official_summary,
+                dynamic_summary,
+                dynamic_geometry_summary,
+            )
+            for candidate_name in ranked_candidates
+            if not bool(gate_verdict[candidate_name].get("promotable_on_current_track", False))
+        ],
+    }
 
 
 def main() -> int:
@@ -813,6 +1329,14 @@ def main() -> int:
                 report["official_summary"],
                 report["dynamic_summary"],
                 report["official_alignment"],
+                report["dynamic_geometry_summary"],
+                report["official_process_state_summary"],
+                report["dynamic_process_state_summary"],
+            )
+            report["promotion_recommendation"] = _build_promotion_recommendation(
+                report["gate_verdict"],
+                report["official_summary"],
+                report["dynamic_summary"],
                 report["dynamic_geometry_summary"],
             )
 
