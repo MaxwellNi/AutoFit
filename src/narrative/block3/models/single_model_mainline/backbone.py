@@ -57,6 +57,12 @@ class SharedTemporalBackboneSpec:
     enable_hawkes_financing_state: bool = False
     hawkes_financing_decay_halflives: Tuple[float, ...] = (7.0, 30.0, 90.0)
     hawkes_positive_shock_threshold: float = 0.5
+    # Jump ODE state: continuous Euler drift between events + discrete
+    # jumps at event boundaries.  Approximates the Jump Neural ODE of
+    # Jia & Benson (ICML 2020) with a sklearn-compatible backbone that
+    # does not require torchdiffeq or GPU training.
+    enable_jump_ode_state: bool = False
+    jump_ode_dims: int = 8
 
     def as_dict(self) -> Dict[str, object]:
         return {
@@ -82,6 +88,8 @@ class SharedTemporalBackboneSpec:
             "enable_hawkes_financing_state": self.enable_hawkes_financing_state,
             "hawkes_financing_decay_halflives": self.hawkes_financing_decay_halflives,
             "hawkes_positive_shock_threshold": self.hawkes_positive_shock_threshold,
+            "enable_jump_ode_state": self.enable_jump_ode_state,
+            "jump_ode_dims": self.jump_ode_dims,
         }
 
 
@@ -107,6 +115,10 @@ class SharedTemporalBackbone:
         # Gen-8 Hawkes normalisation state (set on first transform after fit)
         self._hawkes_mean: np.ndarray | None = None
         self._hawkes_scale: np.ndarray | None = None
+        # P4 Jump ODE state (set during fit if enabled)
+        self._jump_ode_result: dict | None = None
+        self._jump_ode_mean: np.ndarray | None = None
+        self._jump_ode_scale: np.ndarray | None = None
 
     def fit(self, frame: pd.DataFrame, feature_cols: Sequence[str] | None = None) -> "SharedTemporalBackbone":
         self.feature_cols = list(feature_cols) if feature_cols is not None else list(frame.columns)
@@ -115,6 +127,9 @@ class SharedTemporalBackbone:
         # Reset Hawkes normalisation so next transform recomputes from fit data
         self._hawkes_mean = None
         self._hawkes_scale = None
+        # Reset Jump ODE normalisation
+        self._jump_ode_mean = None
+        self._jump_ode_scale = None
 
         numeric = self._numeric_matrix(frame)
         self._feature_mean = numeric.mean(axis=0).astype(np.float32, copy=False)
@@ -158,7 +173,10 @@ class SharedTemporalBackbone:
         hawkes_state, hawkes_names = self._build_event_driven_intensity_state(
             standardized, context_frame=context_frame
         )
-        state = np.concatenate([compact, summaries, temporal_state, spectral_state, hawkes_state], axis=1).astype(np.float32, copy=False)
+        jump_ode_state, jump_ode_names = self._build_jump_ode_state(
+            compact, context_frame=context_frame
+        )
+        state = np.concatenate([compact, summaries, temporal_state, spectral_state, hawkes_state, jump_ode_state], axis=1).astype(np.float32, copy=False)
         self._state_layout = {
             "uses_multiscale_temporal_state": bool(self.spec.enable_multiscale_temporal_state),
             "uses_temporal_state_features": bool(
@@ -168,15 +186,18 @@ class SharedTemporalBackbone:
                 self.spec.enable_multiscale_temporal_state and self.spec.enable_spectral_state_features
             ),
             "uses_hawkes_financing_state": bool(self.spec.enable_hawkes_financing_state),
+            "uses_jump_ode_state": bool(self.spec.enable_jump_ode_state),
             "compact_state_dim": int(compact.shape[1]),
             "summary_state_dim": int(summaries.shape[1]),
             "temporal_state_dim": int(temporal_state.shape[1]),
             "spectral_state_dim": int(spectral_state.shape[1]),
             "hawkes_state_dim": int(hawkes_state.shape[1]),
+            "jump_ode_state_dim": int(jump_ode_state.shape[1]),
             "shared_state_dim": int(state.shape[1]),
             "temporal_feature_names": tuple(state_names["temporal"]),
             "spectral_feature_names": tuple(state_names["spectral"]),
             "hawkes_feature_names": tuple(hawkes_names),
+            "jump_ode_feature_names": tuple(jump_ode_names),
             "seed_rows_required": int(self.required_seed_rows()),
         }
         return state
@@ -495,6 +516,99 @@ class SharedTemporalBackbone:
 
         return result, feature_names
 
+    def _build_jump_ode_state(
+        self,
+        compact: np.ndarray,
+        context_frame: pd.DataFrame | None,
+    ) -> Tuple[np.ndarray, Tuple[str, ...]]:
+        """Jump ODE state: continuous Euler drift + discrete event jumps.
+
+        Approximates the Jump Neural ODE (Jia & Benson, ICML 2020) using
+        per-entity Euler integration with event-boundary jump corrections.
+        The ODE state captures the continuous trajectory between financing
+        events and the discrete impact of each event on the process state.
+
+        Features:
+          - jump_ode_dim_<i>: ODE-evolved state dimensions
+          - jump_ode_drift_norm: instantaneous drift magnitude
+          - jump_ode_jump_count: cumulative jump count
+          - jump_ode_cum_energy: cumulative jump energy
+          - jump_ode_smoothness: local trajectory smoothness
+        """
+        from .jump_ode_utils import build_jump_ode_state, fit_jump_ode
+
+        n_rows = compact.shape[0]
+        n_ode = self.spec.jump_ode_dims
+        n_out = n_ode + 4
+
+        feature_names: Tuple[str, ...] = tuple(
+            f"jump_ode_dim_{i}" for i in range(n_ode)
+        ) + ("jump_ode_drift_norm", "jump_ode_jump_count",
+             "jump_ode_cum_energy", "jump_ode_smoothness")
+
+        if not self.spec.enable_jump_ode_state or n_rows == 0:
+            return np.zeros((n_rows, 0), dtype=np.float32), ()
+
+        # Extract entity IDs from context
+        if context_frame is not None and "entity_id" in context_frame.columns:
+            entity_ids = context_frame["entity_id"].astype(str).to_numpy(copy=False)
+        else:
+            entity_ids = np.repeat("__global__", n_rows)
+
+        # Build event atoms from state_level proxies (use compact state variance)
+        # as jump indicators — any dimension with |change| > 1 std is a jump
+        event_atoms = np.zeros((n_rows, 3), dtype=np.float32)
+        for eid in np.unique(entity_ids):
+            mask = entity_ids == eid
+            idx = np.where(mask)[0]
+            if len(idx) < 2:
+                continue
+            ent_compact = compact[idx]
+            velocity = np.zeros_like(ent_compact)
+            velocity[1:] = ent_compact[1:] - ent_compact[:-1]
+            v_norm = np.linalg.norm(velocity, axis=1)
+            threshold = max(float(np.std(v_norm)), 0.1)
+            event_atoms[idx, 0] = (v_norm > threshold).astype(np.float32)
+            event_atoms[idx, 1] = np.clip(v_norm / threshold, 0, 5).astype(np.float32)
+            event_atoms[idx, 2] = np.clip(
+                np.where(v_norm > threshold, v_norm, 0), 0, 10
+            ).astype(np.float32)
+
+        # Fit Jump ODE models (only during fit — stores normalisation)
+        drift_model = None
+        jump_model = None
+        if self._jump_ode_result is None:
+            result = fit_jump_ode(
+                compact, event_atoms, entity_ids,
+                n_ode_dims=n_ode,
+                random_state=self.random_state,
+            )
+            self._jump_ode_result = result
+            drift_model = result.get("drift_model")
+            jump_model = result.get("jump_model")
+        else:
+            drift_model = self._jump_ode_result.get("drift_model")
+            jump_model = self._jump_ode_result.get("jump_model")
+
+        # Build ODE state
+        ode_state = build_jump_ode_state(
+            compact, event_atoms, entity_ids,
+            drift_model=drift_model,
+            jump_model=jump_model,
+            n_ode_dims=n_ode,
+        )
+
+        # Z-score normalisation: store at fit time, reuse at transform time
+        if self._jump_ode_mean is None:
+            self._jump_ode_mean = ode_state.mean(axis=0).astype(np.float32)
+            ode_std = ode_state.std(axis=0).astype(np.float32)
+            ode_std[ode_std < 1e-6] = 1.0
+            self._jump_ode_scale = ode_std
+        ode_state = (ode_state - self._jump_ode_mean) / self._jump_ode_scale
+        np.clip(ode_state, -5.0, 5.0, out=ode_state)
+
+        return ode_state.astype(np.float32, copy=False), feature_names
+
     def _empty_state_layout(self, compact_dim: int = 0, summary_dim: int = 0) -> Dict[str, Any]:
         return {
             "uses_multiscale_temporal_state": bool(self.spec.enable_multiscale_temporal_state),
@@ -505,14 +619,17 @@ class SharedTemporalBackbone:
                 self.spec.enable_multiscale_temporal_state and self.spec.enable_spectral_state_features
             ),
             "uses_hawkes_financing_state": bool(self.spec.enable_hawkes_financing_state),
+            "uses_jump_ode_state": bool(self.spec.enable_jump_ode_state),
             "compact_state_dim": int(compact_dim),
             "summary_state_dim": int(summary_dim),
             "temporal_state_dim": 0,
             "spectral_state_dim": 0,
             "hawkes_state_dim": 0,
+            "jump_ode_state_dim": 0,
             "shared_state_dim": int(compact_dim + summary_dim),
             "temporal_feature_names": (),
             "spectral_feature_names": (),
             "hawkes_feature_names": (),
+            "jump_ode_feature_names": (),
             "seed_rows_required": int(self.required_seed_rows()),
         }

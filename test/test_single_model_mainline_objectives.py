@@ -33,7 +33,7 @@ def test_investors_objective_runtime_state_tracks_lane_ownership_and_backlog():
     )
 
     assert state["lane_subregime"] == "h1_occurrence_exemplar"
-    assert state["implemented_terms"] == ("occurrence", "hurdle", "intensity_baseline")
+    assert state["implemented_terms"] == ("occurrence", "hurdle", "intensity_baseline", "jump_ode_state")
     assert "transition" in state["deferred_terms"]
     assert "transition" in state["enabled_but_deferred_terms"]
     assert "binary_funding_alignment" in state["enabled_but_deferred_terms"]

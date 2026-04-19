@@ -368,6 +368,12 @@ class SingleModelMainlineWrapper(ModelBase):
             hawkes_positive_shock_threshold=float(
                 prototype_kwargs.get("hawkes_positive_shock_threshold", 0.5)
             ),
+            enable_jump_ode_state=bool(
+                prototype_kwargs.get("enable_jump_ode_state", False)
+            ),
+            jump_ode_dims=int(
+                prototype_kwargs.get("jump_ode_dims", 8)
+            ),
         )
 
     def _normalize_process_state_feedback_weights(self, raw: object) -> tuple[float, ...]:

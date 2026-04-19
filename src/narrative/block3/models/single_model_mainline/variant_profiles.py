@@ -274,6 +274,38 @@ MAINLINE_VARIANTS: Dict[str, MainlineVariantProfile] = {
             "hawkes_positive_shock_threshold": 0.5,
         },
     ),
+    "mainline_jump_ode_state_guard": MainlineVariantProfile(
+        name="mainline_jump_ode_state_guard",
+        runtime_mode="native",
+        delegate_variant="v740_alpha",
+        description=(
+            "Generation-9 investors profile that upgrades the shared trunk with a "
+            "Jump ODE state evolution module (Jia & Benson, ICML 2020). "
+            "Between financing events the compact state evolves via a learned linear "
+            "drift (Euler discretisation); at event boundaries a mark-dependent jump "
+            "correction resets the state trajectory. The resulting ODE state adds "
+            "continuous-time dynamics and jump energy diagnostics to the trunk "
+            "representation. This preserves the selective event-state guard, the "
+            "P2 GPD tail correction, the P2.1 CQR interval, and the P3 intensity "
+            "baseline while giving the investors lane access to a richer process "
+            "state without requiring torchdiffeq or GPU training."
+        ),
+        prototype_overrides={
+            **_MAINLINE_ALPHA_OVERRIDES,
+            "enable_investors_event_state_features": True,
+            "enable_investors_selective_event_state_activation": True,
+            "investors_event_state_allow_h1": False,
+            "investors_event_state_max_source_presence_share": 0.0,
+            "enable_funding_gpd_tail": True,
+            "enable_funding_tail_focus": True,
+            "enable_funding_cqr_interval": True,
+            "funding_cqr_alpha": 0.10,
+            "enable_investors_intensity_baseline": True,
+            "investors_intensity_blend": 0.5,
+            "enable_jump_ode_state": True,
+            "jump_ode_dims": 8,
+        },
+    ),
 }
 
 
