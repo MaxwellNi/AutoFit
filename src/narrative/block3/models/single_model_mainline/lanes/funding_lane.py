@@ -8,6 +8,8 @@ from typing import Dict, Tuple
 import numpy as np
 from sklearn.ensemble import HistGradientBoostingClassifier, HistGradientBoostingRegressor
 
+from ..tail_utils import apply_gpd_tail_correction, compute_tail_diagnostics, fit_gpd_pot
+
 
 @dataclass(frozen=True)
 class FundingLaneSpec:
@@ -57,6 +59,9 @@ class FundingLaneRuntime:
         self._tail_quantile = 0.90
         self._source_scale_strength = 0.0
         self._source_scale_reliability = 0.0
+        self._gpd_params: dict[str, float] = {"xi": 0.0, "sigma": 0.0, "n_exceedances": 0, "converged": False}
+        self._gpd_threshold = 0.0
+        self._gpd_enabled = False
         self._fitted = False
 
     def fit(
@@ -70,6 +75,7 @@ class FundingLaneRuntime:
         enable_source_scaling: bool = False,
         tail_weight: float = 0.0,
         tail_quantile: float = 0.90,
+        enable_gpd_tail: bool = False,
     ) -> "FundingLaneRuntime":
         target = np.asarray(y, dtype=np.float64)
         finite = target[np.isfinite(target)]
@@ -92,6 +98,9 @@ class FundingLaneRuntime:
         self._tail_quantile = float(np.clip(tail_quantile, 0.50, 0.99))
         self._source_scale_strength = 0.0
         self._source_scale_reliability = 0.0
+        self._gpd_params = {"xi": 0.0, "sigma": 0.0, "n_exceedances": 0, "converged": False}
+        self._gpd_threshold = 0.0
+        self._gpd_enabled = bool(enable_gpd_tail)
         if target.size == 0:
             self._fitted = True
             return self
@@ -205,6 +214,14 @@ class FundingLaneRuntime:
         self._uses_jump_hurdle_head = bool(
             self._event_model is not None or self._model is not None or self._positive_jump_median > 0.0
         )
+
+        # P2: Fit GPD to tail exceedances for distribution-aware tail correction
+        if self._gpd_enabled and self._uses_jump_hurdle_head:
+            self._gpd_threshold, self._gpd_params = _fit_gpd_for_funding(
+                jump_target=jump_target,
+                tail_quantile=self._tail_quantile,
+            )
+
         self._fitted = True
         return self
 
@@ -240,7 +257,22 @@ class FundingLaneRuntime:
             use_log_domain=self._log_domain_enabled,
             source_scale=source_scale_vec if self._source_scaling_enabled else None,
             source_scale_strength=self._source_scale_strength,
+            gpd_params=self._gpd_params if self._gpd_enabled else None,
+            gpd_threshold=self._gpd_threshold,
         )
+
+    def describe_tail(self) -> dict[str, object]:
+        """Return GPD tail diagnostics for funding lane monitoring."""
+        return {
+            "gpd_enabled": self._gpd_enabled,
+            "gpd_threshold": self._gpd_threshold,
+            "gpd_xi": self._gpd_params.get("xi", 0.0),
+            "gpd_sigma": self._gpd_params.get("sigma", 0.0),
+            "gpd_n_exceedances": self._gpd_params.get("n_exceedances", 0),
+            "gpd_converged": self._gpd_params.get("converged", False),
+            "tail_weight": self._tail_weight,
+            "tail_quantile": self._tail_quantile,
+        }
 
 
 def _build_residual_model(random_state: int) -> HistGradientBoostingRegressor:
@@ -372,6 +404,8 @@ def _guarded_funding_prediction(
     use_log_domain: bool = False,
     source_scale: np.ndarray | None = None,
     source_scale_strength: float = 0.0,
+    gpd_params: dict[str, float] | None = None,
+    gpd_threshold: float = 0.0,
 ) -> np.ndarray:
     anchor_arr = np.asarray(anchor_vec, dtype=np.float64)
     guarded_residual = np.asarray(residual_pred, dtype=np.float64)
@@ -388,7 +422,19 @@ def _guarded_funding_prediction(
         pred = np.expm1(np.log1p(np.clip(anchor_arr, 0.0, None)) + float(residual_blend) * guarded_residual)
     else:
         pred = anchor_arr + float(residual_blend) * guarded_residual
-    return np.clip(pred, 0.0, None).astype(np.float64, copy=False)
+    pred = np.clip(pred, 0.0, None).astype(np.float64, copy=False)
+
+    # P2: Apply GPD tail correction if available
+    if gpd_params is not None and gpd_params.get("converged", False) and gpd_threshold > 0:
+        pred = apply_gpd_tail_correction(
+            predictions=pred,
+            anchor=anchor_arr,
+            threshold=gpd_threshold,
+            gpd_params=gpd_params,
+            confidence=0.99,
+        )
+
+    return pred
 
 
 def _anchor_dominance(anchor_vec: np.ndarray, residual: np.ndarray, use_log_domain: bool = False) -> float:
@@ -597,3 +643,26 @@ def _resolve_anchor(anchor: np.ndarray | None, fallback: float, length: int) -> 
         anchor_vec = anchor_vec.copy()
         anchor_vec[missing] = fallback
     return anchor_vec
+
+
+def _fit_gpd_for_funding(
+    jump_target: np.ndarray,
+    tail_quantile: float,
+    min_exceedances: int = 15,
+) -> tuple[float, dict[str, float]]:
+    """Fit GPD to funding jump exceedances above the tail_quantile threshold.
+
+    Returns (threshold, gpd_params).
+    """
+    arr = np.asarray(jump_target, dtype=np.float64)
+    positive = arr[arr > 1e-6]
+    if positive.size < min_exceedances * 2:
+        return 0.0, {"xi": 0.0, "sigma": 0.0, "n_exceedances": 0, "converged": False}
+
+    threshold = float(np.quantile(positive, float(np.clip(tail_quantile, 0.50, 0.99))))
+    if threshold < 1e-8:
+        return 0.0, {"xi": 0.0, "sigma": 0.0, "n_exceedances": 0, "converged": False}
+
+    exceedances = positive[positive > threshold] - threshold
+    gpd_params = fit_gpd_pot(exceedances, min_exceedances=min_exceedances)
+    return threshold, gpd_params

@@ -3,6 +3,7 @@ import numpy as np
 from narrative.block3.models.single_model_mainline.lanes.funding_lane import (
     FundingLaneRuntime,
     _calibrate_anchor_residual_guard,
+    _calibrate_source_scaling_guard,
     _guarded_funding_prediction,
 )
 
@@ -19,6 +20,21 @@ def test_guarded_funding_prediction_can_fall_back_to_anchor():
     )
 
     assert np.allclose(preds, anchor)
+
+
+def test_guarded_funding_prediction_supports_log_domain_compounding():
+    anchor = np.array([100.0], dtype=np.float64)
+    residual = np.array([np.log1p(200.0) - np.log1p(100.0)], dtype=np.float64)
+
+    preds = _guarded_funding_prediction(
+        anchor_vec=anchor,
+        residual_pred=residual,
+        residual_blend=1.0,
+        residual_cap=np.inf,
+        use_log_domain=True,
+    )
+
+    assert np.isclose(preds[0], 200.0)
 
 
 def test_anchor_residual_guard_rejects_harmful_residual_path():
@@ -77,6 +93,25 @@ def test_anchor_residual_guard_handles_sparse_jump_targets_without_zero_scale_co
     assert blend > 0.0
     assert cap > 0.0
     assert guarded_mae <= anchor_mae
+
+
+def test_source_scaling_guard_can_shrink_source_rich_residuals():
+    anchor = np.array([100.0, 100.0, 100.0, 100.0], dtype=np.float64)
+    target = np.array([100.0, 100.0, 110.0, 110.0], dtype=np.float64)
+    residual_pred = np.array([50.0, 50.0, 10.0, 10.0], dtype=np.float64)
+    source_scale = np.array([1.0, 1.0, 0.0, 0.0], dtype=np.float64)
+
+    strength, guarded_mae = _calibrate_source_scaling_guard(
+        anchor_vec=anchor,
+        target_vec=target,
+        residual_pred=residual_pred,
+        residual_blend=1.0,
+        residual_cap=np.inf,
+        source_scale=source_scale,
+    )
+
+    assert strength > 0.0
+    assert guarded_mae < 30.0
 
 
 def test_funding_lane_runtime_tracks_guard_parameters():
@@ -168,3 +203,49 @@ def test_funding_lane_runtime_keeps_sparse_jump_cases_active():
     assert runtime._positive_jump_rows == 6
     assert runtime._residual_blend > 0.0
     assert preds[event > 0.5].mean() > preds[event < 0.5].mean()
+
+
+def test_funding_lane_runtime_tracks_source_scaling_and_tail_focus():
+    runtime = FundingLaneRuntime(random_state=9)
+
+    n_rows = 48
+    event = np.concatenate([np.zeros(24, dtype=np.float32), np.ones(24, dtype=np.float32)])
+    lane_state = np.column_stack(
+        [
+            event,
+            np.linspace(-1.0, 1.0, n_rows, dtype=np.float32),
+            np.linspace(0.0, 2.0, n_rows, dtype=np.float32),
+            np.ones(n_rows, dtype=np.float32),
+        ]
+    )
+    aux = np.column_stack(
+        [
+            np.linspace(0.0, 1.0, n_rows, dtype=np.float32),
+            event,
+            np.zeros(n_rows, dtype=np.float32),
+            np.ones(n_rows, dtype=np.float32),
+            np.linspace(1.0, 2.0, n_rows, dtype=np.float32),
+        ]
+    )
+    anchor = np.full(n_rows, 100.0, dtype=np.float64)
+    target = anchor + event.astype(np.float64) * np.linspace(25.0, 350.0, n_rows, dtype=np.float64)
+    source_scale = np.concatenate([np.ones(24, dtype=np.float64), np.zeros(24, dtype=np.float64)])
+
+    runtime.fit(
+        lane_state,
+        target,
+        aux_features=aux,
+        anchor=anchor,
+        source_scale=source_scale,
+        use_log_domain=True,
+        enable_source_scaling=True,
+        tail_weight=2.0,
+        tail_quantile=0.85,
+    )
+
+    assert runtime._log_domain_enabled is True
+    assert runtime._source_scaling_enabled is True
+    assert runtime._tail_weight == 2.0
+    assert np.isclose(runtime._tail_quantile, 0.85)
+    assert runtime._source_scale_strength >= 0.0
+    assert runtime._source_scale_reliability >= 0.0

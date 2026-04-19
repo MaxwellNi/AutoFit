@@ -149,9 +149,9 @@ class MainlineObjectiveSpec:
 
     def _implemented_terms(self, lane_name: str) -> Tuple[str, ...]:
         if lane_name == "binary":
-            return ("calibration",)
+            return ("calibration", "hazard", "event_consistency")
         if lane_name == "funding":
-            return ("anchor_residual",)
+            return ("anchor_residual", "tail_guard")
         if lane_name == "investors":
             return ("occurrence", "hurdle")
         raise ValueError(f"Unsupported lane for objective runtime plan: {lane_name}")
@@ -166,12 +166,15 @@ class MainlineObjectiveSpec:
         if lane_name == "binary":
             return shared_runtime + (
                 "balanced_logistic_binary_head",
+                "hazard_space_calibration",
+                "survival_nll_calibrator_scoring",
                 "probability_output",
             )
         if lane_name == "funding":
             return shared_runtime + (
                 "anchor_residual_regression",
                 "calibrated_anchor_backoff",
+                "gpd_tail_correction",
                 "nonnegative_clip",
             )
         if lane_name == "investors":

@@ -22,6 +22,15 @@ from .source_memory import SourceMemoryAssembler, SourceMemoryContract
 from .variant_profiles import build_delegate_kwargs, get_mainline_variant_profile
 
 
+PROCESS_STATE_FAMILY_ORDER = (
+    "attention_diffusion",
+    "credibility_confirmation",
+    "screening_selectivity",
+    "book_depth_absorption",
+    "closure_conversion",
+)
+
+
 @dataclass(frozen=True)
 class MainlineModuleContract:
     backbone: SharedTemporalBackboneSpec
@@ -107,6 +116,7 @@ class SingleModelMainlineWrapper(ModelBase):
         self.enable_funding_tail_focus = bool(prototype_kwargs.get("enable_funding_tail_focus", False))
         self.funding_tail_weight = float(prototype_kwargs.get("funding_tail_weight", 2.0))
         self.funding_tail_quantile = float(prototype_kwargs.get("funding_tail_quantile", 0.85))
+        self.enable_funding_gpd_tail = bool(prototype_kwargs.get("enable_funding_gpd_tail", False))
         self.enable_binary_calibration_shrinkage = bool(
             prototype_kwargs.get("enable_binary_calibration_shrinkage", False)
         )
@@ -136,6 +146,19 @@ class SingleModelMainlineWrapper(ModelBase):
         )
         self.enable_investors_selective_event_state_activation = bool(
             prototype_kwargs.get("enable_investors_selective_event_state_activation", False)
+        )
+        self.enable_process_state_feedback = bool(self.contract.backbone.enable_process_state_feedback)
+        self.process_state_feedback_strength = float(self.contract.backbone.process_state_feedback_strength)
+        self.process_state_feedback_source_decay = float(self.contract.backbone.process_state_feedback_source_decay)
+        self.process_state_feedback_min_horizon = int(self.contract.backbone.process_state_feedback_min_horizon)
+        self.process_state_feedback_state_weights = tuple(
+            float(value) for value in self.contract.backbone.process_state_feedback_state_weights
+        )
+        self.process_state_feedback_max_norm_share = float(
+            self.contract.backbone.process_state_feedback_max_norm_share
+        )
+        self.process_state_feedback_predict_scale_cap = float(
+            self.contract.backbone.process_state_feedback_predict_scale_cap
         )
         self.investors_event_state_allow_h1 = bool(
             prototype_kwargs.get("investors_event_state_allow_h1", False)
@@ -239,6 +262,20 @@ class SingleModelMainlineWrapper(ModelBase):
         self._effective_investors_transition_correction = False
         self._effective_investors_event_state_features = False
         self._effective_investors_mark_features = False
+        self._process_state_feedback_feature_cols: list[str] = []
+        self._effective_process_state_feedback = False
+        self._process_state_feedback_activation_reason = "process_state_feedback_not_requested"
+        self._process_state_feedback_gate = 0.0
+        self._process_state_feedback_source_scale = 0.0
+        self._process_state_feedback_dim = 0
+        self._process_state_feedback_norm_cap_mean = 1.0
+        self._process_state_feedback_predict_cap_scale = 1.0
+        self._process_state_feedback_reference_abs_mean = 0.0
+        self._process_state_feedback_reference_row_l2_mean = 0.0
+        self._process_state_feedback_reference_feature_abs_mean: np.ndarray | None = None
+        self._process_state_feedback_current_feature_abs_mean: np.ndarray | None = None
+        self._process_state_feedback_projection: np.ndarray | None = None
+        self._process_state_feedback_projection_shared_dim = 0
         self._investors_event_state_activation_reason = "event_state_not_requested"
         self._investors_source_activation_reason = "source_switches_disabled"
         self._investors_transition_activation_reason = "transition_not_requested"
@@ -276,6 +313,11 @@ class SingleModelMainlineWrapper(ModelBase):
             normalized_windows = (max(1, int(temporal_windows)),)
         else:
             normalized_windows = tuple(max(1, int(window)) for window in temporal_windows) or (3, 7, 30)
+        raw_feedback_weights = prototype_kwargs.get(
+            "process_state_feedback_state_weights",
+            (0.25, 0.25, 0.0, 0.0, 0.5),
+        )
+        normalized_feedback_weights = self._normalize_process_state_feedback_weights(raw_feedback_weights)
         return SharedTemporalBackboneSpec(
             enable_multiscale_temporal_state=bool(
                 prototype_kwargs.get("enable_multiscale_temporal_state", False)
@@ -287,7 +329,75 @@ class SingleModelMainlineWrapper(ModelBase):
             enable_spectral_state_features=bool(
                 prototype_kwargs.get("enable_spectral_state_features", True)
             ),
+            enable_process_state_feedback=bool(
+                prototype_kwargs.get("enable_process_state_feedback", False)
+            ),
+            process_state_feedback_strength=float(
+                np.clip(prototype_kwargs.get("process_state_feedback_strength", 0.0), 0.0, 1.0)
+            ),
+            process_state_feedback_source_decay=float(
+                np.clip(prototype_kwargs.get("process_state_feedback_source_decay", 0.65), 0.0, 1.0)
+            ),
+            process_state_feedback_min_horizon=max(
+                1,
+                int(prototype_kwargs.get("process_state_feedback_min_horizon", 7)),
+            ),
+            process_state_feedback_state_weights=normalized_feedback_weights,
+            process_state_feedback_max_norm_share=float(
+                np.clip(prototype_kwargs.get("process_state_feedback_max_norm_share", 0.02), 0.0, 1.0)
+            ),
+            process_state_feedback_predict_scale_cap=float(
+                max(0.0, float(prototype_kwargs.get("process_state_feedback_predict_scale_cap", 4.0)))
+            ),
+            enable_hawkes_financing_state=bool(
+                prototype_kwargs.get("enable_hawkes_financing_state", False)
+            ),
+            hawkes_financing_decay_halflives=tuple(
+                float(h) for h in prototype_kwargs.get(
+                    "hawkes_financing_decay_halflives", (7.0, 30.0, 90.0)
+                )
+            ),
+            hawkes_positive_shock_threshold=float(
+                prototype_kwargs.get("hawkes_positive_shock_threshold", 0.5)
+            ),
         )
+
+    def _normalize_process_state_feedback_weights(self, raw: object) -> tuple[float, ...]:
+        if isinstance(raw, dict):
+            return tuple(float(raw.get(name, 0.0)) for name in PROCESS_STATE_FAMILY_ORDER)
+        if isinstance(raw, (int, float, np.number)):
+            weight = float(raw)
+            return tuple(weight for _ in PROCESS_STATE_FAMILY_ORDER)
+        if isinstance(raw, (list, tuple)):
+            seq = [float(value) for value in raw[: len(PROCESS_STATE_FAMILY_ORDER)]]
+            if len(seq) < len(PROCESS_STATE_FAMILY_ORDER):
+                seq.extend([0.0] * (len(PROCESS_STATE_FAMILY_ORDER) - len(seq)))
+            return tuple(seq)
+        return (0.25, 0.25, 0.0, 0.0, 0.5)
+
+    def _augmented_backbone_layout(self) -> Dict[str, object]:
+        layout = self.backbone.describe_state_layout()
+        base_shared_dim = int(layout.get("shared_state_dim", 0))
+        layout.update(
+            {
+                "uses_process_state_feedback": bool(self.enable_process_state_feedback),
+                "effective_process_state_feedback": bool(self._effective_process_state_feedback),
+                "process_state_feedback_dim": int(self._process_state_feedback_dim),
+                "process_state_feedback_feature_names": tuple(self._process_state_feedback_feature_cols),
+                "process_state_feedback_activation_reason": str(self._process_state_feedback_activation_reason),
+                "process_state_feedback_gate": float(self._process_state_feedback_gate),
+                "process_state_feedback_source_scale": float(self._process_state_feedback_source_scale),
+                "process_state_feedback_norm_cap_mean": float(self._process_state_feedback_norm_cap_mean),
+                "process_state_feedback_predict_cap_scale": float(self._process_state_feedback_predict_cap_scale),
+                "process_state_feedback_reference_abs_mean": float(self._process_state_feedback_reference_abs_mean),
+                "shared_state_dim": int(
+                    self._shared_state_dim
+                    if self._shared_state_dim > 0
+                    else base_shared_dim + int(self._process_state_feedback_dim)
+                ),
+            }
+        )
+        return layout
 
     def describe_contract(self) -> Dict[str, object]:
         return {
@@ -328,6 +438,10 @@ class SingleModelMainlineWrapper(ModelBase):
         )
         self._history_seed = None
         self._backbone_seed = None
+        self._process_state_feedback_reference_abs_mean = 0.0
+        self._process_state_feedback_reference_row_l2_mean = 0.0
+        self._process_state_feedback_reference_feature_abs_mean = None
+        self._process_state_feedback_current_feature_abs_mean = None
 
         if self.use_delegate:
             delegate_kwargs = build_delegate_kwargs(self.variant, self.prototype_kwargs)
@@ -363,7 +477,12 @@ class SingleModelMainlineWrapper(ModelBase):
         source_state = source_frame.to_numpy(dtype=np.float32, copy=False)
         self._edgar_source_density = float(source_frame["edgar_active"].mean()) if "edgar_active" in source_frame else 0.0
         self._text_source_density = float(source_frame["text_active"].mean()) if "text_active" in source_frame else 0.0
-        event_state_frame = self._refresh_event_state_card(runtime_frame, shared_state=shared_state, source_frame=source_frame)
+        event_state_frame, shared_state = self._refresh_event_state_card_with_shared_state(
+            runtime_frame,
+            shared_state=shared_state,
+            source_frame=source_frame,
+            phase="train",
+        )
         self._investors_event_state_feature_cols = list(event_state_frame.columns)
         self._effective_investors_event_state_features = False
 
@@ -407,6 +526,7 @@ class SingleModelMainlineWrapper(ModelBase):
                 aux_features=history_matrix,
                 enable_calibration_shrinkage=self.enable_binary_calibration_shrinkage,
                 calibration_shrinkage_target=self.binary_calibration_shrinkage_target,
+                horizon=self._horizon,
             )
             self._binary_event_rate = float(self.binary_lane_runtime._event_rate)
             self._binary_transition_rate = float(self.binary_lane_runtime._transition_rate)
@@ -423,6 +543,7 @@ class SingleModelMainlineWrapper(ModelBase):
                 enable_source_scaling=self._funding_source_scaling,
                 tail_weight=self.funding_tail_weight if self.enable_funding_tail_focus else 0.0,
                 tail_quantile=self.funding_tail_quantile,
+                enable_gpd_tail=self.enable_funding_gpd_tail,
             )
             self._active_lane_model = self.funding_lane_runtime
         else:
@@ -481,6 +602,7 @@ class SingleModelMainlineWrapper(ModelBase):
                 "count_source_specialists": self._effective_investors_source_specialists,
                 "investors_transition_correction": self._effective_investors_transition_correction,
                 "investors_event_state_features": self._effective_investors_event_state_features,
+                "shared_process_state_feedback": self._effective_process_state_feedback,
                 "financing_consistency": self.enable_financing_consistency,
                 "reliability_abstention": False,
                 "counterfactual_source_ablation": False,
@@ -513,7 +635,7 @@ class SingleModelMainlineWrapper(ModelBase):
                 "source_feature_cols": len(self._source_feature_cols),
                 "shared_state_dim": self._shared_state_dim,
                 "event_state_schema_version": self.contract.backbone.event_state_schema_version,
-                "backbone_layout": self.backbone.describe_state_layout(),
+                "backbone_layout": self._augmented_backbone_layout(),
             },
             "event_state_trunk": dict(self._event_state_card),
             "barrier": {
@@ -538,6 +660,8 @@ class SingleModelMainlineWrapper(ModelBase):
                 "process_family": "hazard_prior_plus_calibration",
                 "uses_logistic_head": bool(self.binary_lane_runtime._model is not None),
                 "uses_hazard_adapter": bool(self.binary_lane_runtime._uses_hazard_adapter),
+                "uses_hazard_space_calibration": bool(self.binary_lane_runtime._uses_hazard_space_calibration),
+                "hazard_calibration_horizon": int(self.binary_lane_runtime._hazard_calibration_horizon),
                 "constant_probability": float(self.binary_lane_runtime._constant_probability),
                 "train_positive_rate": float(self._binary_train_rate),
                 "event_rate": float(self._binary_event_rate),
@@ -554,6 +678,8 @@ class SingleModelMainlineWrapper(ModelBase):
                 "identity_brier": float(self.binary_lane_runtime._identity_metrics.get("brier", 0.0)),
                 "identity_logloss": float(self.binary_lane_runtime._identity_metrics.get("logloss", 0.0)),
                 "identity_ece": float(self.binary_lane_runtime._identity_metrics.get("ece", 0.0)),
+                "selected_survival_nll": float(self.binary_lane_runtime._selected_metrics.get("survival_nll", 0.0)),
+                "identity_survival_nll": float(self.binary_lane_runtime._identity_metrics.get("survival_nll", 0.0)),
                 "calibration_shrinkage_enabled": bool(self.enable_binary_calibration_shrinkage),
                 "calibration_shrinkage_target": str(self.binary_lane_runtime._calibration_shrinkage_target),
                 "calibration_shrinkage_strength": float(self.binary_lane_runtime._calibration_shrinkage_strength),
@@ -697,6 +823,8 @@ class SingleModelMainlineWrapper(ModelBase):
                 "lane_guarded_calibration_mae": float(self.funding_lane_runtime._guarded_calibration_mae),
                 "lane_anchor_dominance": float(self.funding_lane_runtime._anchor_dominance),
                 "lane_calibration_rows": int(self.funding_lane_runtime._calibration_rows),
+                "gpd_enabled": bool(self.enable_funding_gpd_tail),
+                **self.funding_lane_runtime.describe_tail(),
             },
         }
 
@@ -727,13 +855,18 @@ class SingleModelMainlineWrapper(ModelBase):
         condition_state = self.condition_encoder.broadcast(condition_key, len(feature_frame))
         source_layout = self.source_memory.infer_layout(runtime_frame)
         source_frame = self.source_memory.build_runtime_features(runtime_frame, layout=source_layout)
+        event_state_frame, shared_state = self._refresh_event_state_card_with_shared_state(
+            runtime_frame,
+            shared_state=shared_state,
+            source_frame=source_frame,
+            phase="test",
+        )
         source_state = source_frame.reindex(columns=self._source_feature_cols, fill_value=0.0).to_numpy(dtype=np.float32, copy=False)
         lane_states = self.barrier.split(shared_state, condition_state, source_state)
         history_frame = self._build_target_history_features(runtime_frame, include_seed=True)
         history_matrix = history_frame.reindex(columns=self._history_feature_cols, fill_value=0.0).fillna(0.0).to_numpy(dtype=np.float32, copy=False)
         anchor = self._resolve_anchor(history_frame)
         investors_source_frame = self._build_investors_source_features(source_frame)
-        event_state_frame = self._refresh_event_state_card(runtime_frame, shared_state=shared_state, source_frame=source_frame)
         investors_aux_matrix = self._compose_investors_aux_matrix(history_matrix, event_state_frame)
         investors_source_matrix = investors_source_frame.reindex(
             columns=self._investors_source_feature_cols,
@@ -900,29 +1033,96 @@ class SingleModelMainlineWrapper(ModelBase):
         scale = 0.35 * edgar_active + 0.35 * text_active + 0.15 * edgar_nonzero + 0.15 * text_nonzero
         return np.clip(scale, 0.0, 1.0).astype(np.float64, copy=False)
 
+    def _refresh_event_state_card_with_shared_state(
+        self,
+        runtime_frame: pd.DataFrame,
+        *,
+        shared_state: np.ndarray,
+        source_frame: pd.DataFrame,
+        phase: str = "train",
+    ) -> tuple[pd.DataFrame, np.ndarray]:
+        panel = self._build_event_state_panel(runtime_frame)
+        event_state_frame = self._build_event_state_feature_frame(panel, source_frame)
+        aligned_event_state_frame = event_state_frame.reindex(runtime_frame.index, fill_value=0.0).astype(np.float32)
+        adjusted_shared_state = np.asarray(shared_state, dtype=np.float32)
+        self._process_state_feedback_feature_cols = (
+            [f"process_feedback_{state}" for state in PROCESS_STATE_FAMILY_ORDER]
+            if self.enable_process_state_feedback
+            else []
+        )
+        self._process_state_feedback_dim = len(self._process_state_feedback_feature_cols)
+        self._effective_process_state_feedback = False
+        self._process_state_feedback_activation_reason = (
+            "process_state_feedback_not_requested"
+            if not self.enable_process_state_feedback
+            else "process_state_feedback_uninitialized"
+        )
+        self._process_state_feedback_gate = 0.0
+        self._process_state_feedback_source_scale = 0.0
+        self._process_state_feedback_norm_cap_mean = 1.0
+        self._process_state_feedback_predict_cap_scale = 1.0
+        self._process_state_feedback_current_feature_abs_mean = None
+
+        source_atoms = self._summarize_event_state_source_topology(source_frame)
+        shared_state_atoms = self._summarize_shared_state_geometry(adjusted_shared_state)
+        process_bundle = self._build_process_state_feature_bundle(
+            runtime_frame,
+            event_state_frame=aligned_event_state_frame,
+            shared_state_atoms=shared_state_atoms,
+        )
+        if self.enable_process_state_feedback:
+            feedback_block = self._build_process_state_feedback_block(
+                process_bundle,
+                source_presence_share=float(source_atoms.get("source_presence_share", 0.0)),
+                base_shared_state=adjusted_shared_state,
+                phase=phase,
+            )
+            if feedback_block.shape[1] > 0:
+                self._process_state_feedback_current_feature_abs_mean = np.mean(
+                    np.abs(feedback_block),
+                    axis=0,
+                ).astype(np.float32, copy=False)
+                adjusted_shared_state = self._inject_process_state_feedback(
+                    adjusted_shared_state,
+                    feedback_block=feedback_block,
+                )
+            shared_state_atoms = self._summarize_shared_state_geometry(adjusted_shared_state)
+            process_bundle = self._build_process_state_feature_bundle(
+                runtime_frame,
+                event_state_frame=aligned_event_state_frame,
+                shared_state_atoms=shared_state_atoms,
+            )
+        self._event_state_card = {
+            "schema_version": self.contract.backbone.event_state_schema_version,
+            "atoms": list(self.contract.backbone.event_state_atoms),
+            "coverage": self._summarize_event_state_coverage(panel),
+            "phase_atoms": self._summarize_event_state_phase(panel),
+            "boundary_atoms": self._summarize_event_state_boundaries(aligned_event_state_frame),
+            "transition_atoms": self._summarize_event_state_transitions(panel),
+            "persistence_atoms": self._summarize_event_state_persistence(panel),
+            "goal_atoms": self._summarize_event_state_goal_progress(aligned_event_state_frame),
+            "source_atoms": source_atoms,
+            "source_flow_atoms": self._summarize_event_state_source_flow(aligned_event_state_frame),
+            "shared_state_atoms": shared_state_atoms,
+            "process_state_atoms": self._summarize_process_state_bundle(process_bundle),
+        }
+        return aligned_event_state_frame, adjusted_shared_state
+
     def _refresh_event_state_card(
         self,
         runtime_frame: pd.DataFrame,
         *,
         shared_state: np.ndarray,
         source_frame: pd.DataFrame,
+        phase: str = "train",
     ) -> pd.DataFrame:
-        panel = self._build_event_state_panel(runtime_frame)
-        event_state_frame = self._build_event_state_feature_frame(panel, source_frame)
-        self._event_state_card = {
-            "schema_version": self.contract.backbone.event_state_schema_version,
-            "atoms": list(self.contract.backbone.event_state_atoms),
-            "coverage": self._summarize_event_state_coverage(panel),
-            "phase_atoms": self._summarize_event_state_phase(panel),
-            "boundary_atoms": self._summarize_event_state_boundaries(event_state_frame),
-            "transition_atoms": self._summarize_event_state_transitions(panel),
-            "persistence_atoms": self._summarize_event_state_persistence(panel),
-            "goal_atoms": self._summarize_event_state_goal_progress(event_state_frame),
-            "source_atoms": self._summarize_event_state_source_topology(source_frame),
-            "source_flow_atoms": self._summarize_event_state_source_flow(event_state_frame),
-            "shared_state_atoms": self._summarize_shared_state_geometry(shared_state),
-        }
-        return event_state_frame.reindex(runtime_frame.index, fill_value=0.0).astype(np.float32)
+        event_state_frame, _ = self._refresh_event_state_card_with_shared_state(
+            runtime_frame,
+            shared_state=shared_state,
+            source_frame=source_frame,
+            phase=phase,
+        )
+        return event_state_frame
 
     def _build_event_state_panel(self, runtime_frame: pd.DataFrame) -> pd.DataFrame:
         panel = pd.DataFrame(index=runtime_frame.index)
@@ -1348,7 +1548,7 @@ class SingleModelMainlineWrapper(ModelBase):
 
     def _summarize_shared_state_geometry(self, shared_state: np.ndarray) -> Dict[str, object]:
         state = np.asarray(shared_state, dtype=np.float64)
-        layout = self.backbone.describe_state_layout()
+        layout = self._augmented_backbone_layout()
         base = {
             "shared_state_dim": int(state.shape[1]) if state.ndim == 2 else int(layout.get("shared_state_dim", 0)),
             "compact_state_dim": int(layout.get("compact_state_dim", 0)),
@@ -1358,6 +1558,21 @@ class SingleModelMainlineWrapper(ModelBase):
             "multiscale_temporal_state_enabled": bool(layout.get("uses_multiscale_temporal_state", False)),
             "temporal_state_features_enabled": bool(layout.get("uses_temporal_state_features", False)),
             "spectral_state_features_enabled": bool(layout.get("uses_spectral_state_features", False)),
+            "process_state_feedback_dim": int(layout.get("process_state_feedback_dim", 0)),
+            "process_state_feedback_enabled": bool(layout.get("uses_process_state_feedback", False)),
+            "effective_process_state_feedback": bool(layout.get("effective_process_state_feedback", False)),
+            "process_state_feedback_activation_reason": str(
+                layout.get("process_state_feedback_activation_reason", "process_state_feedback_not_requested")
+            ),
+            "process_state_feedback_gate": float(layout.get("process_state_feedback_gate", 0.0)),
+            "process_state_feedback_source_scale": float(layout.get("process_state_feedback_source_scale", 0.0)),
+            "process_state_feedback_norm_cap_mean": float(layout.get("process_state_feedback_norm_cap_mean", 1.0)),
+            "process_state_feedback_predict_cap_scale": float(
+                layout.get("process_state_feedback_predict_cap_scale", 1.0)
+            ),
+            "process_state_feedback_reference_abs_mean": float(
+                layout.get("process_state_feedback_reference_abs_mean", 0.0)
+            ),
         }
         if state.ndim != 2 or state.size == 0:
             return {
@@ -1373,6 +1588,10 @@ class SingleModelMainlineWrapper(ModelBase):
                 "spectral_low_band_abs_mean": 0.0,
                 "spectral_mid_band_abs_mean": 0.0,
                 "spectral_high_band_abs_mean": 0.0,
+                **{
+                    f"process_feedback_{state_name}_abs_mean": 0.0
+                    for state_name in PROCESS_STATE_FAMILY_ORDER
+                },
             }
         row_l2 = np.sqrt(np.sum(np.square(state), axis=1))
         row_std = np.std(state, axis=1)
@@ -1380,20 +1599,45 @@ class SingleModelMainlineWrapper(ModelBase):
         summary_dim = int(layout.get("summary_state_dim", 0))
         temporal_dim = int(layout.get("temporal_state_dim", 0))
         spectral_dim = int(layout.get("spectral_state_dim", 0))
+        process_feedback_dim = int(layout.get("process_state_feedback_dim", 0))
         temporal_offset = compact_dim + summary_dim
         spectral_offset = temporal_offset + temporal_dim
+        process_feedback_offset = spectral_offset + spectral_dim
         temporal_feature_names = tuple(layout.get("temporal_feature_names", ()))
         spectral_feature_names = tuple(layout.get("spectral_feature_names", ()))
+        process_feedback_feature_names = tuple(layout.get("process_state_feedback_feature_names", ()))
         temporal_lookup = {name: idx for idx, name in enumerate(temporal_feature_names)}
         spectral_lookup = {name: idx for idx, name in enumerate(spectral_feature_names)}
+        process_feedback_lookup = {name: idx for idx, name in enumerate(process_feedback_feature_names)}
         temporal_block = state[:, temporal_offset:spectral_offset] if temporal_dim > 0 else np.zeros((len(state), 0), dtype=np.float64)
         spectral_block = state[:, spectral_offset:spectral_offset + spectral_dim] if spectral_dim > 0 else np.zeros((len(state), 0), dtype=np.float64)
+        process_feedback_block = (
+            state[:, -process_feedback_dim:]
+            if process_feedback_dim > 0 and state.shape[1] >= process_feedback_dim
+            else np.zeros((len(state), 0), dtype=np.float64)
+        )
+        process_feedback_feature_abs_mean = self._process_state_feedback_current_feature_abs_mean
 
         def _block_stat(block: np.ndarray, lookup: Dict[str, int], name: str) -> float:
             idx = lookup.get(name)
             if idx is None or block.shape[1] <= idx:
                 return 0.0
             return float(np.mean(np.abs(block[:, idx])))
+
+        def _feedback_stat(state_name: str) -> float:
+            if (
+                process_feedback_feature_abs_mean is not None
+                and process_feedback_feature_abs_mean.shape[0] == process_feedback_dim
+            ):
+                idx = process_feedback_lookup.get(f"process_feedback_{state_name}")
+                if idx is None or idx >= process_feedback_feature_abs_mean.shape[0]:
+                    return 0.0
+                return float(process_feedback_feature_abs_mean[idx])
+            return _block_stat(
+                process_feedback_block,
+                process_feedback_lookup,
+                f"process_feedback_{state_name}",
+            )
 
         return {
             **base,
@@ -1408,13 +1652,531 @@ class SingleModelMainlineWrapper(ModelBase):
             "spectral_low_band_abs_mean": _block_stat(spectral_block, spectral_lookup, "low_band_level"),
             "spectral_mid_band_abs_mean": _block_stat(spectral_block, spectral_lookup, "mid_band_level"),
             "spectral_high_band_abs_mean": _block_stat(spectral_block, spectral_lookup, "high_band_level"),
+            **{
+                f"process_feedback_{state_name}_abs_mean": _feedback_stat(state_name)
+                for state_name in PROCESS_STATE_FAMILY_ORDER
+            },
         }
+
+    def _resolve_process_state_feedback_gate(self, source_presence_share: float) -> tuple[float, str, float]:
+        if not self.enable_process_state_feedback:
+            return 0.0, "process_state_feedback_not_requested", 0.0
+        if self._horizon < self.process_state_feedback_min_horizon:
+            return 0.0, "process_state_feedback_horizon_blocked", 0.0
+        if sum(abs(weight) for weight in self.process_state_feedback_state_weights) <= 0.0:
+            return 0.0, "process_state_feedback_zero_weights", 0.0
+        source_scale = float(np.clip(1.0 - self.process_state_feedback_source_decay * source_presence_share, 0.0, 1.0))
+        gate = float(np.clip(self.process_state_feedback_strength * source_scale, 0.0, 1.0))
+        if gate <= 0.0:
+            return 0.0, "process_state_feedback_source_blocked", source_scale
+        if source_presence_share > 0.0:
+            return gate, "process_state_feedback_source_attenuated", source_scale
+        return gate, "process_state_feedback_gate_open", source_scale
+
+    def _store_process_state_feedback_reference(self, feedback_block: np.ndarray) -> None:
+        if feedback_block.ndim != 2 or feedback_block.size <= 0:
+            self._process_state_feedback_reference_abs_mean = 0.0
+            self._process_state_feedback_reference_row_l2_mean = 0.0
+            self._process_state_feedback_reference_feature_abs_mean = None
+            return
+        feature_abs_mean = np.mean(np.abs(feedback_block), axis=0).astype(np.float32, copy=False)
+        row_l2 = np.sqrt(np.sum(np.square(feedback_block), axis=1))
+        self._process_state_feedback_reference_feature_abs_mean = feature_abs_mean
+        self._process_state_feedback_reference_abs_mean = float(np.mean(feature_abs_mean))
+        self._process_state_feedback_reference_row_l2_mean = float(np.mean(row_l2)) if row_l2.size else 0.0
+
+    def _resolve_process_state_feedback_projection(self, shared_dim: int) -> np.ndarray:
+        if self._process_state_feedback_dim <= 0 or shared_dim <= 0:
+            return np.zeros((self._process_state_feedback_dim, max(shared_dim, 0)), dtype=np.float32)
+        if (
+            self._process_state_feedback_projection is not None
+            and self._process_state_feedback_projection_shared_dim == shared_dim
+            and self._process_state_feedback_projection.shape == (self._process_state_feedback_dim, shared_dim)
+        ):
+            return self._process_state_feedback_projection
+
+        if shared_dim < self._process_state_feedback_dim:
+            projection = np.zeros((self._process_state_feedback_dim, shared_dim), dtype=np.float32)
+            projection[:shared_dim, :shared_dim] = np.eye(shared_dim, dtype=np.float32)
+        else:
+            seed = 104729 + 97 * shared_dim + 31 * self._process_state_feedback_dim
+            rng = np.random.default_rng(seed)
+            basis = rng.standard_normal((shared_dim, self._process_state_feedback_dim))
+            q, _ = np.linalg.qr(basis, mode="reduced")
+            projection = q[:, :self._process_state_feedback_dim].T.astype(np.float32, copy=False)
+
+        self._process_state_feedback_projection = projection
+        self._process_state_feedback_projection_shared_dim = shared_dim
+        return projection
+
+    def _inject_process_state_feedback(
+        self,
+        shared_state: np.ndarray,
+        *,
+        feedback_block: np.ndarray,
+    ) -> np.ndarray:
+        if (
+            feedback_block.ndim != 2
+            or feedback_block.size <= 0
+            or shared_state.ndim != 2
+            or shared_state.shape[0] != feedback_block.shape[0]
+            or shared_state.shape[1] <= 0
+        ):
+            return np.asarray(shared_state, dtype=np.float32)
+        projection = self._resolve_process_state_feedback_projection(shared_state.shape[1])
+        projected_feedback = feedback_block @ projection
+        return (np.asarray(shared_state, dtype=np.float32) + projected_feedback).astype(
+            np.float32,
+            copy=False,
+        )
+
+    def _clip_process_state_feedback_by_shared_state(
+        self,
+        feedback_block: np.ndarray,
+        *,
+        base_shared_state: np.ndarray,
+    ) -> np.ndarray:
+        self._process_state_feedback_norm_cap_mean = 1.0
+        if (
+            feedback_block.ndim != 2
+            or feedback_block.size <= 0
+            or self.process_state_feedback_max_norm_share <= 0.0
+            or base_shared_state.ndim != 2
+            or base_shared_state.shape[0] != feedback_block.shape[0]
+        ):
+            return feedback_block
+        base_row_l2 = np.sqrt(np.sum(np.square(base_shared_state.astype(np.float64, copy=False)), axis=1))
+        feedback_row_l2 = np.sqrt(np.sum(np.square(feedback_block.astype(np.float64, copy=False)), axis=1))
+        scales = np.ones(feedback_block.shape[0], dtype=np.float32)
+        active = feedback_row_l2 > 1e-9
+        if not np.any(active):
+            return feedback_block
+        allowed_row_l2 = self.process_state_feedback_max_norm_share * np.maximum(base_row_l2, 1e-6)
+        scales[active] = np.minimum(1.0, allowed_row_l2[active] / feedback_row_l2[active]).astype(np.float32)
+        self._process_state_feedback_norm_cap_mean = float(np.mean(scales)) if len(scales) else 1.0
+        return (feedback_block * scales.reshape(-1, 1)).astype(np.float32, copy=False)
+
+    def _clip_process_state_feedback_by_reference(
+        self,
+        feedback_block: np.ndarray,
+        *,
+        phase: str,
+    ) -> np.ndarray:
+        self._process_state_feedback_predict_cap_scale = 1.0
+        if (
+            phase not in {"predict", "test"}
+            or feedback_block.ndim != 2
+            or feedback_block.size <= 0
+            or self.process_state_feedback_predict_scale_cap <= 0.0
+        ):
+            return feedback_block
+
+        scale = 1.0
+        current_feature_abs_mean = np.mean(np.abs(feedback_block), axis=0)
+        active_features = current_feature_abs_mean > 1e-9
+        if (
+            self._process_state_feedback_reference_feature_abs_mean is not None
+            and self._process_state_feedback_reference_feature_abs_mean.shape == current_feature_abs_mean.shape
+            and np.any(active_features)
+        ):
+            allowed_feature_abs_mean = (
+                self.process_state_feedback_predict_scale_cap
+                * np.maximum(self._process_state_feedback_reference_feature_abs_mean.astype(np.float64, copy=False), 1e-6)
+            )
+            feature_scale = float(
+                np.min(allowed_feature_abs_mean[active_features] / current_feature_abs_mean[active_features])
+            )
+            scale = min(scale, feature_scale)
+
+        current_abs_mean = float(np.mean(current_feature_abs_mean)) if current_feature_abs_mean.size else 0.0
+        if self._process_state_feedback_reference_abs_mean > 1e-9 and current_abs_mean > 1e-9:
+            scale = min(
+                scale,
+                float(
+                    self.process_state_feedback_predict_scale_cap
+                    * self._process_state_feedback_reference_abs_mean
+                    / current_abs_mean
+                ),
+            )
+
+        current_row_l2 = np.sqrt(np.sum(np.square(feedback_block.astype(np.float64, copy=False)), axis=1))
+        current_row_l2_mean = float(np.mean(current_row_l2)) if current_row_l2.size else 0.0
+        if self._process_state_feedback_reference_row_l2_mean > 1e-9 and current_row_l2_mean > 1e-9:
+            scale = min(
+                scale,
+                float(
+                    self.process_state_feedback_predict_scale_cap
+                    * self._process_state_feedback_reference_row_l2_mean
+                    / current_row_l2_mean
+                ),
+            )
+
+        scale = float(np.clip(scale, 0.0, 1.0))
+        self._process_state_feedback_predict_cap_scale = scale
+        if scale >= 0.999999:
+            return feedback_block
+        return (feedback_block * scale).astype(np.float32, copy=False)
+
+    def _build_process_state_feedback_block(
+        self,
+        process_bundle: Dict[str, object],
+        *,
+        source_presence_share: float,
+        base_shared_state: np.ndarray,
+        phase: str,
+    ) -> np.ndarray:
+        score_lookup = dict(process_bundle.get("scores", {}))
+        support_lookup = dict(process_bundle.get("support_shares", {}))
+        n_rows = 0
+        if score_lookup:
+            n_rows = len(next(iter(score_lookup.values())))
+        gate, reason, source_scale = self._resolve_process_state_feedback_gate(source_presence_share)
+        self._process_state_feedback_activation_reason = reason
+        self._process_state_feedback_gate = float(gate)
+        self._process_state_feedback_source_scale = float(source_scale)
+        if not self.enable_process_state_feedback:
+            self._process_state_feedback_feature_cols = []
+            self._process_state_feedback_dim = 0
+            self._effective_process_state_feedback = False
+            return np.zeros((n_rows, 0), dtype=np.float32)
+
+        self._process_state_feedback_feature_cols = [
+            f"process_feedback_{state_name}" for state_name in PROCESS_STATE_FAMILY_ORDER
+        ]
+        self._process_state_feedback_dim = len(self._process_state_feedback_feature_cols)
+        if n_rows <= 0:
+            self._effective_process_state_feedback = False
+            return np.zeros((0, self._process_state_feedback_dim), dtype=np.float32)
+
+        weights = np.asarray(self.process_state_feedback_state_weights, dtype=np.float32).reshape(1, -1)
+        support = np.asarray(
+            [float(support_lookup.get(state_name, 1.0)) for state_name in PROCESS_STATE_FAMILY_ORDER],
+            dtype=np.float32,
+        ).reshape(1, -1)
+        score_matrix = np.column_stack(
+            [
+                np.asarray(score_lookup.get(state_name, np.zeros(n_rows, dtype=np.float32)), dtype=np.float32)
+                for state_name in PROCESS_STATE_FAMILY_ORDER
+            ]
+        )
+        centered = np.tanh(2.0 * (score_matrix - 0.5)).astype(np.float32, copy=False)
+        feedback_block = float(gate) * centered * weights * support
+        feedback_block = self._clip_process_state_feedback_by_shared_state(
+            feedback_block.astype(np.float32, copy=False),
+            base_shared_state=base_shared_state,
+        )
+        feedback_block = self._clip_process_state_feedback_by_reference(
+            feedback_block,
+            phase=phase,
+        )
+        if phase in {"fit", "train"}:
+            self._store_process_state_feedback_reference(feedback_block)
+        self._effective_process_state_feedback = bool(np.any(np.abs(feedback_block) > 1e-6))
+        return feedback_block.astype(np.float32, copy=False)
+
+    def _build_process_state_feature_bundle(
+        self,
+        runtime_frame: pd.DataFrame,
+        *,
+        event_state_frame: pd.DataFrame,
+        shared_state_atoms: Dict[str, object],
+    ) -> Dict[str, object]:
+        if runtime_frame.empty or event_state_frame.empty:
+            zero_scores = {
+                state_name: np.zeros(len(runtime_frame), dtype=np.float64)
+                for state_name in PROCESS_STATE_FAMILY_ORDER
+            }
+            zero_support = {state_name: 0.0 for state_name in PROCESS_STATE_FAMILY_ORDER}
+            zero_couplings = {
+                "temporal_velocity": 0.0,
+                "temporal_shock": 0.0,
+                "spectral_low_band": 0.0,
+                "spectral_high_band": 0.0,
+            }
+            return {
+                "scores": zero_scores,
+                "support_shares": zero_support,
+                "couplings": zero_couplings,
+                "multiscale_coupling_enabled": False,
+            }
+
+        investors_count = pd.to_numeric(
+            runtime_frame.get("investors_count", pd.Series(0.0, index=runtime_frame.index)),
+            errors="coerce",
+        ).fillna(0.0)
+        minimum_investment = self._first_available_numeric_from_frame(
+            runtime_frame,
+            (
+                "last_minimum_investment_accepted",
+                "mean_minimum_investment_accepted",
+                "ema_minimum_investment_accepted",
+            ),
+        )
+        already_invested = self._first_available_numeric_from_frame(
+            runtime_frame,
+            (
+                "last_total_number_already_invested",
+                "mean_total_number_already_invested",
+                "ema_total_number_already_invested",
+            ),
+        )
+        non_accredited = self._first_available_numeric_from_frame(
+            runtime_frame,
+            (
+                "last_number_non_accredited_investors",
+                "mean_number_non_accredited_investors",
+                "ema_number_non_accredited_investors",
+            ),
+        )
+        non_national = self._first_available_numeric_from_frame(runtime_frame, ("non_national_investors",))
+        total_offering = self._first_available_numeric_from_frame(
+            runtime_frame,
+            (
+                "last_total_offering_amount",
+                "mean_total_offering_amount",
+                "ema_total_offering_amount",
+                "funding_goal_usd",
+            ),
+        )
+        total_sold = self._first_available_numeric_from_frame(
+            runtime_frame,
+            (
+                "last_total_amount_sold",
+                "mean_total_amount_sold",
+                "ema_total_amount_sold",
+                "funding_raised_usd",
+            ),
+        )
+        total_remaining = self._first_available_numeric_from_frame(
+            runtime_frame,
+            (
+                "last_total_remaining",
+                "mean_total_remaining",
+                "ema_total_remaining",
+            ),
+        )
+
+        denom = np.maximum.reduce(
+            [
+                investors_count.to_numpy(dtype=np.float64, copy=False),
+                already_invested.fillna(0.0).to_numpy(dtype=np.float64, copy=False),
+                np.ones(len(runtime_frame), dtype=np.float64),
+            ]
+        )
+        non_accredited_share = np.clip(
+            non_accredited.fillna(0.0).to_numpy(dtype=np.float64, copy=False) / denom,
+            0.0,
+            1.0,
+        )
+        non_national_share = np.clip(
+            non_national.fillna(0.0).to_numpy(dtype=np.float64, copy=False) / denom,
+            0.0,
+            1.0,
+        )
+        offering_total = np.maximum(total_offering.fillna(0.0).to_numpy(dtype=np.float64, copy=False), 1.0)
+        sold_total = np.clip(total_sold.fillna(0.0).to_numpy(dtype=np.float64, copy=False), 0.0, None)
+        remaining_total = np.clip(total_remaining.fillna(0.0).to_numpy(dtype=np.float64, copy=False), 0.0, None)
+
+        min_investment_score = self._log_tanh_score(minimum_investment, scale=6.0)
+        already_invested_score = self._log_tanh_score(already_invested, scale=3.5)
+        sold_progress = np.clip(sold_total / offering_total, 0.0, 1.0)
+        remaining_ratio = np.clip(remaining_total / offering_total, 0.0, 1.0)
+        funding_jump_score = np.tanh(
+            pd.to_numeric(event_state_frame["funding_jump_log"], errors="coerce").fillna(0.0).to_numpy(dtype=np.float64, copy=False)
+            / 4.0
+        )
+        goal_ratio = np.clip(
+            pd.to_numeric(event_state_frame["goal_ratio"], errors="coerce").fillna(0.0).to_numpy(dtype=np.float64, copy=False),
+            0.0,
+            1.0,
+        )
+        source_density = np.clip(
+            pd.to_numeric(event_state_frame["source_active_count"], errors="coerce").fillna(0.0).to_numpy(dtype=np.float64, copy=False)
+            / 2.0,
+            0.0,
+            1.0,
+        )
+        source_freshness = np.clip(
+            pd.to_numeric(event_state_frame["source_freshness"], errors="coerce").fillna(0.0).to_numpy(dtype=np.float64, copy=False),
+            0.0,
+            1.0,
+        )
+
+        temporal_velocity = float(np.tanh(4.0 * float(shared_state_atoms.get("temporal_velocity_abs_mean", 0.0))))
+        temporal_shock = float(np.tanh(4.0 * float(shared_state_atoms.get("temporal_shock_pressure_mean", 0.0))))
+        spectral_low = float(np.tanh(4.0 * float(shared_state_atoms.get("spectral_low_band_abs_mean", 0.0))))
+        spectral_high = float(np.tanh(4.0 * float(shared_state_atoms.get("spectral_high_band_abs_mean", 0.0))))
+
+        feedback_boost = {
+            state_name: float(
+                np.tanh(6.0 * float(shared_state_atoms.get(f"process_feedback_{state_name}_abs_mean", 0.0)))
+            )
+            for state_name in PROCESS_STATE_FAMILY_ORDER
+        }
+
+        attention_score = np.clip(
+            0.20 * pd.to_numeric(event_state_frame["investors_active"], errors="coerce").fillna(0.0).to_numpy(dtype=np.float64, copy=False)
+            + 0.15 * pd.to_numeric(event_state_frame["investor_jump_flag"], errors="coerce").fillna(0.0).to_numpy(dtype=np.float64, copy=False)
+            + 0.20 * source_density
+            + 0.15 * pd.to_numeric(event_state_frame["source_boundary_flag"], errors="coerce").fillna(0.0).to_numpy(dtype=np.float64, copy=False)
+            + 0.20 * source_freshness
+            + 0.10 * spectral_high
+            + 0.10 * feedback_boost["attention_diffusion"],
+            0.0,
+            1.0,
+        )
+        credibility_score = np.clip(
+            0.20 * pd.to_numeric(event_state_frame["funding_active"], errors="coerce").fillna(0.0).to_numpy(dtype=np.float64, copy=False)
+            + 0.20 * pd.to_numeric(event_state_frame["funded_active"], errors="coerce").fillna(0.0).to_numpy(dtype=np.float64, copy=False)
+            + 0.15 * pd.to_numeric(event_state_frame["goal_known"], errors="coerce").fillna(0.0).to_numpy(dtype=np.float64, copy=False)
+            + 0.15 * goal_ratio
+            + 0.20 * source_freshness
+            + 0.10 * spectral_low
+            + 0.10 * feedback_boost["credibility_confirmation"],
+            0.0,
+            1.0,
+        )
+        screening_score = np.clip(
+            0.30 * min_investment_score
+            + 0.25 * already_invested_score
+            + 0.25 * (1.0 - non_accredited_share)
+            + 0.20 * non_national_share
+            + 0.05 * feedback_boost["screening_selectivity"],
+            0.0,
+            1.0,
+        )
+        book_depth_score = np.clip(
+            0.35 * sold_progress
+            + 0.25 * (1.0 - remaining_ratio)
+            + 0.20 * goal_ratio
+            + 0.20 * funding_jump_score
+            + 0.05 * feedback_boost["book_depth_absorption"],
+            0.0,
+            1.0,
+        )
+        closure_score = np.clip(
+            0.25 * pd.to_numeric(event_state_frame["funded_active"], errors="coerce").fillna(0.0).to_numpy(dtype=np.float64, copy=False)
+            + 0.20 * pd.to_numeric(event_state_frame["goal_crossed"], errors="coerce").fillna(0.0).to_numpy(dtype=np.float64, copy=False)
+            + 0.15 * goal_ratio
+            + 0.15 * pd.to_numeric(event_state_frame["phase_transition_flag"], errors="coerce").fillna(0.0).to_numpy(dtype=np.float64, copy=False)
+            + 0.15 * temporal_shock
+            + 0.10 * temporal_velocity
+            + 0.15 * feedback_boost["closure_conversion"],
+            0.0,
+            1.0,
+        )
+
+        screening_support = max(
+            self._series_coverage_share(minimum_investment),
+            self._series_coverage_share(already_invested),
+            self._series_coverage_share(non_accredited),
+            self._series_coverage_share(non_national),
+        )
+        book_depth_support = max(
+            self._series_coverage_share(total_offering),
+            self._series_coverage_share(total_sold),
+            self._series_coverage_share(total_remaining),
+        )
+        multiscale_coupling_enabled = bool(
+            shared_state_atoms.get("temporal_state_features_enabled", False)
+            or shared_state_atoms.get("spectral_state_features_enabled", False)
+            or shared_state_atoms.get("process_state_feedback_enabled", False)
+        )
+        return {
+            "scores": {
+                "attention_diffusion": attention_score,
+                "credibility_confirmation": credibility_score,
+                "screening_selectivity": screening_score,
+                "book_depth_absorption": book_depth_score,
+                "closure_conversion": closure_score,
+            },
+            "support_shares": {
+                "attention_diffusion": 1.0,
+                "credibility_confirmation": 1.0,
+                "screening_selectivity": float(screening_support),
+                "book_depth_absorption": float(book_depth_support),
+                "closure_conversion": 1.0,
+            },
+            "couplings": {
+                "temporal_velocity": temporal_velocity,
+                "temporal_shock": temporal_shock,
+                "spectral_low_band": spectral_low,
+                "spectral_high_band": spectral_high,
+            },
+            "multiscale_coupling_enabled": multiscale_coupling_enabled,
+        }
+
+    def _summarize_process_state_bundle(self, process_bundle: Dict[str, object]) -> Dict[str, object]:
+        score_lookup = dict(process_bundle.get("scores", {}))
+        support_lookup = dict(process_bundle.get("support_shares", {}))
+        couplings = dict(process_bundle.get("couplings", {}))
+        mean_scores = {
+            state_name: float(np.mean(np.asarray(score_lookup.get(state_name, np.zeros(1, dtype=np.float64)), dtype=np.float64)))
+            if len(np.asarray(score_lookup.get(state_name, np.zeros(0, dtype=np.float64)))) > 0
+            else 0.0
+            for state_name in PROCESS_STATE_FAMILY_ORDER
+        }
+        return {
+            "schema_version": "process_state_v1",
+            "state_order": list(PROCESS_STATE_FAMILY_ORDER),
+            "multiscale_coupling_enabled": bool(process_bundle.get("multiscale_coupling_enabled", False)),
+            "attention_diffusion_score": mean_scores["attention_diffusion"],
+            "attention_diffusion_support_share": float(support_lookup.get("attention_diffusion", 0.0)),
+            "credibility_confirmation_score": mean_scores["credibility_confirmation"],
+            "credibility_confirmation_support_share": float(support_lookup.get("credibility_confirmation", 0.0)),
+            "screening_selectivity_score": mean_scores["screening_selectivity"],
+            "screening_selectivity_support_share": float(support_lookup.get("screening_selectivity", 0.0)),
+            "book_depth_absorption_score": mean_scores["book_depth_absorption"],
+            "book_depth_absorption_support_share": float(support_lookup.get("book_depth_absorption", 0.0)),
+            "closure_conversion_score": mean_scores["closure_conversion"],
+            "closure_conversion_support_share": float(support_lookup.get("closure_conversion", 0.0)),
+            "temporal_velocity_coupling": float(couplings.get("temporal_velocity", 0.0)),
+            "temporal_shock_coupling": float(couplings.get("temporal_shock", 0.0)),
+            "spectral_low_band_coupling": float(couplings.get("spectral_low_band", 0.0)),
+            "spectral_high_band_coupling": float(couplings.get("spectral_high_band", 0.0)),
+        }
+
+    def _summarize_process_state_families(
+        self,
+        runtime_frame: pd.DataFrame,
+        *,
+        event_state_frame: pd.DataFrame,
+        shared_state_atoms: Dict[str, object],
+    ) -> Dict[str, object]:
+        process_bundle = self._build_process_state_feature_bundle(
+            runtime_frame,
+            event_state_frame=event_state_frame,
+            shared_state_atoms=shared_state_atoms,
+        )
+        return self._summarize_process_state_bundle(process_bundle)
 
     def _mean_or_zero(self, values: pd.Series | np.ndarray) -> float:
         series = pd.Series(values).dropna()
         if len(series) <= 0:
             return 0.0
         return float(series.astype(np.float64).mean())
+
+    def _first_available_numeric_from_frame(
+        self,
+        frame: pd.DataFrame,
+        columns: tuple[str, ...],
+    ) -> pd.Series:
+        for column in columns:
+            if column not in frame.columns:
+                continue
+            series = pd.to_numeric(frame[column], errors="coerce")
+            if series.notna().any():
+                return series.reindex(frame.index)
+        return pd.Series(np.nan, index=frame.index, dtype=np.float64)
+
+    def _series_coverage_share(self, series: pd.Series) -> float:
+        if len(series) <= 0:
+            return 0.0
+        return float(pd.to_numeric(series, errors="coerce").notna().mean())
+
+    def _log_tanh_score(self, series: pd.Series, *, scale: float) -> np.ndarray:
+        values = pd.to_numeric(series, errors="coerce").fillna(0.0).clip(lower=0.0).to_numpy(dtype=np.float64, copy=False)
+        return np.tanh(np.log1p(values) / max(scale, 1e-6))
 
     def _refresh_investors_source_activation_regime(
         self,

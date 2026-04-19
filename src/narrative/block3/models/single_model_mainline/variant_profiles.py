@@ -122,6 +122,8 @@ MAINLINE_VARIANTS: Dict[str, MainlineVariantProfile] = {
             "enable_investors_selective_event_state_activation": True,
             "investors_event_state_allow_h1": False,
             "investors_event_state_max_source_presence_share": 0.0,
+            "enable_funding_gpd_tail": True,
+            "enable_funding_tail_focus": True,
         },
     ),
     "mainline_marked_investor_guard": MainlineVariantProfile(
@@ -241,8 +243,14 @@ MAINLINE_VARIANTS: Dict[str, MainlineVariantProfile] = {
         runtime_mode="native",
         delegate_variant="v740_alpha",
         description=(
-            "Generation-7 investors profile that upgrades the shared trunk with a "
+            "Generation-8 investors profile that upgrades the shared trunk with a "
             "Hawkes-process-inspired asymmetric event-driven intensity state. "
+            "Gen-8 fixes over Gen-7: (1) per-entity velocity computation eliminates "
+            "cross-entity contamination, (2) intensity clipped at 10.0 and compressed "
+            "via log1p to prevent unbounded accumulation, (3) z-score normalisation "
+            "and ±5σ safety clip ensure Hawkes features stay on the same scale as "
+            "other trunk dimensions, (4) wrapper correctly passes Hawkes params to "
+            "backbone spec. "
             "Unlike the symmetric rolling-window Gen-5 variants, this accumulates "
             "only POSITIVE financing shocks with exponential decay at three timescales "
             "(7 / 30 / 90 steps), capturing the self-exciting investor-arrival and "
