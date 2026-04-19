@@ -1,15 +1,22 @@
-"""GPD (Generalized Pareto Distribution) tail utilities for funding lane P2.
+"""GPD (Generalized Pareto Distribution) tail utilities for funding lane P2,
+and CQR (Conformal Quantile Regression) prediction intervals for funding lane P2.1.
 
-Implements Peaks-Over-Threshold (POT) tail correction:
+P2 — Peaks-Over-Threshold (POT) tail correction:
 - Fit GPD parameters (shape ξ, scale σ) from exceedances above a threshold u
 - Apply tail correction to funding predictions: when residual > u,
   replace simple clip with GPD-informed bound
 - Compute tail diagnostics (tail index, exceedance rate, expected shortfall)
 
+P2.1 — Conformal Quantile Regression (CQR) prediction intervals:
+- Train quantile regressors at α/2 and 1-α/2
+- On calibration set, compute conformity scores
+- Use conformal quantile to adjust intervals for finite-sample coverage
+
 References:
   Pickands (1975) — Statistical inference using extreme order statistics
   McNeil & Frey (2000) — Estimation of tail-related risk measures
   Embrechts et al. (1997) — Modelling Extremal Events
+  Romano, Patterson, Candès (NeurIPS 2019) — Conformalized Quantile Regression
 """
 from __future__ import annotations
 
@@ -148,3 +155,103 @@ def apply_gpd_tail_correction(
         pred[mask] = anc[mask] + np.minimum(residual[mask], upper_bound)
 
     return pred
+
+
+# ---------------------------------------------------------------------------
+# P2.1 — Conformal Quantile Regression (CQR) prediction intervals
+# ---------------------------------------------------------------------------
+# Romano, Patterson, Candès (NeurIPS 2019): "Conformalized Quantile Regression"
+#
+# The idea: train two quantile regressors at α/2 and 1-α/2 on training data,
+# then calibrate on a held-out calibration set by computing conformity scores
+#   E_i = max(q_lo(X_i) - Y_i,  Y_i - q_hi(X_i))
+# and computing Q_{1-α}(E_1,...,E_n, +∞) as the conformal correction.
+#
+# Final interval: [q_lo(X) - Q, q_hi(X) + Q]  — guaranteed ≥ 1-α coverage.
+# ---------------------------------------------------------------------------
+
+
+def cqr_conformity_scores(
+    y_cal: np.ndarray,
+    q_lo_cal: np.ndarray,
+    q_hi_cal: np.ndarray,
+) -> np.ndarray:
+    """Compute CQR conformity scores on calibration data.
+
+    E_i = max(q_lo(X_i) - Y_i,  Y_i - q_hi(X_i))
+    """
+    y = np.asarray(y_cal, dtype=np.float64)
+    lo = np.asarray(q_lo_cal, dtype=np.float64)
+    hi = np.asarray(q_hi_cal, dtype=np.float64)
+    return np.maximum(lo - y, y - hi)
+
+
+def cqr_conformal_quantile(
+    scores: np.ndarray,
+    alpha: float = 0.10,
+) -> float:
+    """Compute conformal quantile Q from calibration conformity scores.
+
+    Q = ceil((1-α)(n+1))/n -th quantile of scores,
+    which equals the (1-α)(1+1/n) quantile when n is finite.
+    This ensures finite-sample coverage ≥ 1-α.
+    """
+    s = np.asarray(scores, dtype=np.float64)
+    s = s[np.isfinite(s)]
+    if s.size == 0:
+        return 0.0
+    n = s.size
+    level = min((1.0 - alpha) * (1.0 + 1.0 / n), 1.0)
+    return float(np.quantile(s, level))
+
+
+def cqr_prediction_interval(
+    q_lo: np.ndarray,
+    q_hi: np.ndarray,
+    conformal_q: float,
+) -> tuple[np.ndarray, np.ndarray]:
+    """Apply CQR conformal correction to get prediction intervals.
+
+    Returns (lower, upper) = (q_lo - Q, q_hi + Q).
+    """
+    lo = np.asarray(q_lo, dtype=np.float64) - conformal_q
+    hi = np.asarray(q_hi, dtype=np.float64) + conformal_q
+    return lo, hi
+
+
+def cqr_interval_diagnostics(
+    y_test: np.ndarray,
+    lower: np.ndarray,
+    upper: np.ndarray,
+    alpha: float = 0.10,
+) -> dict[str, float]:
+    """Compute CQR interval diagnostics.
+
+    Returns coverage, mean width, median width, and whether
+    empirical coverage meets the target (1-α).
+    """
+    y = np.asarray(y_test, dtype=np.float64)
+    lo = np.asarray(lower, dtype=np.float64)
+    hi = np.asarray(upper, dtype=np.float64)
+    valid = np.isfinite(y) & np.isfinite(lo) & np.isfinite(hi)
+    if not valid.any():
+        return {
+            "coverage": 0.0,
+            "mean_width": 0.0,
+            "median_width": 0.0,
+            "target_coverage": 1.0 - alpha,
+            "coverage_met": False,
+            "n_valid": 0,
+        }
+    y_v, lo_v, hi_v = y[valid], lo[valid], hi[valid]
+    covered = (y_v >= lo_v) & (y_v <= hi_v)
+    widths = hi_v - lo_v
+    coverage = float(np.mean(covered))
+    return {
+        "coverage": coverage,
+        "mean_width": float(np.mean(widths)),
+        "median_width": float(np.median(widths)),
+        "target_coverage": 1.0 - alpha,
+        "coverage_met": bool(coverage >= (1.0 - alpha) - 1e-6),
+        "n_valid": int(valid.sum()),
+    }

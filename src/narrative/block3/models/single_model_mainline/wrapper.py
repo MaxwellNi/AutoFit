@@ -117,6 +117,8 @@ class SingleModelMainlineWrapper(ModelBase):
         self.funding_tail_weight = float(prototype_kwargs.get("funding_tail_weight", 2.0))
         self.funding_tail_quantile = float(prototype_kwargs.get("funding_tail_quantile", 0.85))
         self.enable_funding_gpd_tail = bool(prototype_kwargs.get("enable_funding_gpd_tail", False))
+        self.enable_funding_cqr_interval = bool(prototype_kwargs.get("enable_funding_cqr_interval", False))
+        self.funding_cqr_alpha = float(prototype_kwargs.get("funding_cqr_alpha", 0.10))
         self.enable_binary_calibration_shrinkage = bool(
             prototype_kwargs.get("enable_binary_calibration_shrinkage", False)
         )
@@ -544,6 +546,8 @@ class SingleModelMainlineWrapper(ModelBase):
                 tail_weight=self.funding_tail_weight if self.enable_funding_tail_focus else 0.0,
                 tail_quantile=self.funding_tail_quantile,
                 enable_gpd_tail=self.enable_funding_gpd_tail,
+                enable_cqr_interval=self.enable_funding_cqr_interval,
+                cqr_alpha=self.funding_cqr_alpha,
             )
             self._active_lane_model = self.funding_lane_runtime
         else:
@@ -824,6 +828,7 @@ class SingleModelMainlineWrapper(ModelBase):
                 "lane_anchor_dominance": float(self.funding_lane_runtime._anchor_dominance),
                 "lane_calibration_rows": int(self.funding_lane_runtime._calibration_rows),
                 "gpd_enabled": bool(self.enable_funding_gpd_tail),
+                "cqr_enabled": bool(self.enable_funding_cqr_interval),
                 **self.funding_lane_runtime.describe_tail(),
             },
         }

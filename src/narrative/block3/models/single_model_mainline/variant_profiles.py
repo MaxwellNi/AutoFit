@@ -124,6 +124,8 @@ MAINLINE_VARIANTS: Dict[str, MainlineVariantProfile] = {
             "investors_event_state_max_source_presence_share": 0.0,
             "enable_funding_gpd_tail": True,
             "enable_funding_tail_focus": True,
+            "enable_funding_cqr_interval": True,
+            "funding_cqr_alpha": 0.10,
         },
     ),
     "mainline_marked_investor_guard": MainlineVariantProfile(

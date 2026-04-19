@@ -104,11 +104,17 @@ class SharedTemporalBackbone:
         self._summary_splits: Tuple[int, ...] = ()
         self._fitted = False
         self._state_layout: Dict[str, Any] = self._empty_state_layout()
+        # Gen-8 Hawkes normalisation state (set on first transform after fit)
+        self._hawkes_mean: np.ndarray | None = None
+        self._hawkes_scale: np.ndarray | None = None
 
     def fit(self, frame: pd.DataFrame, feature_cols: Sequence[str] | None = None) -> "SharedTemporalBackbone":
         self.feature_cols = list(feature_cols) if feature_cols is not None else list(frame.columns)
         if not self.feature_cols:
             raise ValueError("SharedTemporalBackbone requires at least one feature column")
+        # Reset Hawkes normalisation so next transform recomputes from fit data
+        self._hawkes_mean = None
+        self._hawkes_scale = None
 
         numeric = self._numeric_matrix(frame)
         self._feature_mean = numeric.mean(axis=0).astype(np.float32, copy=False)
@@ -390,8 +396,16 @@ class SharedTemporalBackbone:
         formula I_t = decay * I_{t-1} + max(0, velocity_t - threshold)
         approximates a discrete-time Hawkes intensity (Hawkes 1971).
 
+        Gen-8 fixes over Gen-7:
+          - Velocity computed per-entity (not globally) to avoid cross-entity
+            contamination at entity boundaries.
+          - Intensity clipped at MAX_INTENSITY=10.0 and compressed via log1p
+            to prevent unbounded accumulation on long entity histories.
+          - Final features z-score normalised using fit-time statistics so
+            Hawkes dimensions are on the same scale as other trunk features.
+
         Features:
-          - hawkes_intensity_h<N>: decayed positive-shock sum at halflife N steps
+          - hawkes_intensity_h<N>: log1p-compressed decayed positive-shock sum
           - hawkes_time_since_event: steps since last positive shock, normalised
             by entity tenure (0 = just happened, 1 = never happened / very old)
         """
@@ -406,13 +420,10 @@ class SharedTemporalBackbone:
         if not self.spec.enable_hawkes_financing_state or n_rows == 0:
             return np.zeros((n_rows, 0), dtype=np.float32), ()
 
+        MAX_INTENSITY = 10.0  # hard clip before log1p compression
+
         # State level = mean of all standardised features (scalar per row)
         state_level = standardized.mean(axis=1).astype(np.float32)
-        # Positive velocity only (investor/funding arrivals are unidirectional)
-        velocity = np.empty(n_rows, dtype=np.float32)
-        velocity[0] = 0.0
-        velocity[1:] = state_level[1:] - state_level[:-1]
-        positive_shock = np.maximum(0.0, velocity - threshold)
 
         # Decay factor per halflife: alpha = exp(-ln2 / h)
         decay_factors = np.array(
@@ -438,14 +449,23 @@ class SharedTemporalBackbone:
 
         for row_indices in seen.values():
             e_n = len(row_indices)
-            e_shock = positive_shock[row_indices]
 
-            # Recursive Hawkes intensity
+            # --- Gen-8 fix: per-entity velocity (no cross-entity contamination) ---
+            e_state = state_level[row_indices]
+            e_velocity = np.empty(e_n, dtype=np.float32)
+            e_velocity[0] = 0.0
+            if e_n > 1:
+                e_velocity[1:] = e_state[1:] - e_state[:-1]
+            e_shock = np.maximum(0.0, e_velocity - threshold)
+
+            # Recursive Hawkes intensity with clip + log1p compression
             e_intensities = np.zeros((e_n, n_scales), dtype=np.float32)
             last_I = np.zeros(n_scales, dtype=np.float32)
             for t in range(e_n):
-                last_I = decay_factors * last_I + e_shock[t]
+                last_I = np.clip(decay_factors * last_I + e_shock[t], 0.0, MAX_INTENSITY)
                 e_intensities[t] = last_I
+            # log1p compression: maps [0, 10] → [0, ~2.4] — bounded and smooth
+            e_intensities = np.log1p(e_intensities)
             intensities[row_indices] = e_intensities
 
             # Time-since-last-positive-event (normalised by entity tenure)
@@ -461,6 +481,18 @@ class SharedTemporalBackbone:
             time_since[row_indices] = e_time_since
 
         result = np.concatenate([intensities, time_since[:, None]], axis=1).astype(np.float32)
+
+        # --- Gen-8 fix: z-score normalise using fit-time statistics ---
+        # Store stats at fit time; reuse at transform time for consistency.
+        if not hasattr(self, "_hawkes_mean") or self._hawkes_mean is None:
+            self._hawkes_mean = result.mean(axis=0).astype(np.float32)
+            hawkes_std = result.std(axis=0).astype(np.float32)
+            hawkes_std[hawkes_std < 1e-6] = 1.0
+            self._hawkes_scale = hawkes_std
+        result = (result - self._hawkes_mean) / self._hawkes_scale
+        # Final safety clip to ±5 sigma — prevents extreme outliers on new entities
+        np.clip(result, -5.0, 5.0, out=result)
+
         return result, feature_names
 
     def _empty_state_layout(self, compact_dim: int = 0, summary_dim: int = 0) -> Dict[str, Any]:

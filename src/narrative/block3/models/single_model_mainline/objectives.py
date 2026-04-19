@@ -151,7 +151,7 @@ class MainlineObjectiveSpec:
         if lane_name == "binary":
             return ("calibration", "hazard", "event_consistency")
         if lane_name == "funding":
-            return ("anchor_residual", "tail_guard")
+            return ("anchor_residual", "tail_guard", "cqr_interval")
         if lane_name == "investors":
             return ("occurrence", "hurdle")
         raise ValueError(f"Unsupported lane for objective runtime plan: {lane_name}")
@@ -175,6 +175,7 @@ class MainlineObjectiveSpec:
                 "anchor_residual_regression",
                 "calibrated_anchor_backoff",
                 "gpd_tail_correction",
+                "cqr_prediction_interval",
                 "nonnegative_clip",
             )
         if lane_name == "investors":

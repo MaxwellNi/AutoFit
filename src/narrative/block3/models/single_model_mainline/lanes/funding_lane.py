@@ -8,7 +8,14 @@ from typing import Dict, Tuple
 import numpy as np
 from sklearn.ensemble import HistGradientBoostingClassifier, HistGradientBoostingRegressor
 
-from ..tail_utils import apply_gpd_tail_correction, compute_tail_diagnostics, fit_gpd_pot
+from ..tail_utils import (
+    apply_gpd_tail_correction,
+    compute_tail_diagnostics,
+    cqr_conformal_quantile,
+    cqr_conformity_scores,
+    cqr_prediction_interval,
+    fit_gpd_pot,
+)
 
 
 @dataclass(frozen=True)
@@ -62,6 +69,13 @@ class FundingLaneRuntime:
         self._gpd_params: dict[str, float] = {"xi": 0.0, "sigma": 0.0, "n_exceedances": 0, "converged": False}
         self._gpd_threshold = 0.0
         self._gpd_enabled = False
+        # P2.1: CQR prediction interval state
+        self._cqr_enabled = False
+        self._cqr_conformal_q = 0.0
+        self._cqr_alpha = 0.10
+        self._cqr_q_lo_model: HistGradientBoostingRegressor | None = None
+        self._cqr_q_hi_model: HistGradientBoostingRegressor | None = None
+        self._cqr_converged = False
         self._fitted = False
 
     def fit(
@@ -76,6 +90,8 @@ class FundingLaneRuntime:
         tail_weight: float = 0.0,
         tail_quantile: float = 0.90,
         enable_gpd_tail: bool = False,
+        enable_cqr_interval: bool = False,
+        cqr_alpha: float = 0.10,
     ) -> "FundingLaneRuntime":
         target = np.asarray(y, dtype=np.float64)
         finite = target[np.isfinite(target)]
@@ -101,6 +117,12 @@ class FundingLaneRuntime:
         self._gpd_params = {"xi": 0.0, "sigma": 0.0, "n_exceedances": 0, "converged": False}
         self._gpd_threshold = 0.0
         self._gpd_enabled = bool(enable_gpd_tail)
+        self._cqr_enabled = bool(enable_cqr_interval)
+        self._cqr_alpha = float(np.clip(cqr_alpha, 0.01, 0.50))
+        self._cqr_conformal_q = 0.0
+        self._cqr_q_lo_model = None
+        self._cqr_q_hi_model = None
+        self._cqr_converged = False
         if target.size == 0:
             self._fitted = True
             return self
@@ -222,6 +244,19 @@ class FundingLaneRuntime:
                 tail_quantile=self._tail_quantile,
             )
 
+        # P2.1: CQR — train quantile regressors and compute conformal correction
+        if self._cqr_enabled and self._uses_jump_hurdle_head and calibration is not None:
+            self._cqr_q_lo_model, self._cqr_q_hi_model, self._cqr_conformal_q, self._cqr_converged = (
+                _fit_cqr_for_funding(
+                    train_design=calibration["train_design"],
+                    train_jump=calibration["train_jump"],
+                    cal_design=calibration["calibration_design"],
+                    cal_jump=calibration["calibration_jump"],
+                    alpha=self._cqr_alpha,
+                    random_state=self.random_state,
+                )
+            )
+
         self._fitted = True
         return self
 
@@ -261,8 +296,27 @@ class FundingLaneRuntime:
             gpd_threshold=self._gpd_threshold,
         )
 
+    def predict_interval(
+        self,
+        lane_state: np.ndarray,
+        aux_features: np.ndarray | None = None,
+        anchor: np.ndarray | None = None,
+    ) -> tuple[np.ndarray, np.ndarray] | None:
+        """Return CQR prediction interval (lower, upper) or None if CQR not fitted."""
+        if not self._cqr_converged or self._cqr_q_lo_model is None or self._cqr_q_hi_model is None:
+            return None
+        anchor_vec = _resolve_anchor(anchor, fallback=self._fallback_value, length=len(lane_state))
+        design = _merge_features(lane_state, aux_features, anchor_vec)
+        q_lo_raw = self._cqr_q_lo_model.predict(design)
+        q_hi_raw = self._cqr_q_hi_model.predict(design)
+        lower, upper = cqr_prediction_interval(q_lo_raw, q_hi_raw, self._cqr_conformal_q)
+        # Funding is non-negative
+        lower = np.maximum(lower, 0.0)
+        upper = np.maximum(upper, lower)
+        return lower, upper
+
     def describe_tail(self) -> dict[str, object]:
-        """Return GPD tail diagnostics for funding lane monitoring."""
+        """Return GPD + CQR tail diagnostics for funding lane monitoring."""
         return {
             "gpd_enabled": self._gpd_enabled,
             "gpd_threshold": self._gpd_threshold,
@@ -272,6 +326,10 @@ class FundingLaneRuntime:
             "gpd_converged": self._gpd_params.get("converged", False),
             "tail_weight": self._tail_weight,
             "tail_quantile": self._tail_quantile,
+            "cqr_enabled": self._cqr_enabled,
+            "cqr_converged": self._cqr_converged,
+            "cqr_conformal_q": self._cqr_conformal_q,
+            "cqr_alpha": self._cqr_alpha,
         }
 
 
@@ -666,3 +724,58 @@ def _fit_gpd_for_funding(
     exceedances = positive[positive > threshold] - threshold
     gpd_params = fit_gpd_pot(exceedances, min_exceedances=min_exceedances)
     return threshold, gpd_params
+
+
+def _fit_cqr_for_funding(
+    train_design: np.ndarray,
+    train_jump: np.ndarray,
+    cal_design: np.ndarray,
+    cal_jump: np.ndarray,
+    alpha: float = 0.10,
+    random_state: int = 0,
+    min_calibration_rows: int = 8,
+) -> tuple[
+    HistGradientBoostingRegressor | None,
+    HistGradientBoostingRegressor | None,
+    float,
+    bool,
+]:
+    """Fit CQR quantile regressors for funding prediction intervals.
+
+    1. Train two HGBR quantile regressors at α/2 and 1-α/2 on training jump data.
+    2. On calibration set, compute conformity scores.
+    3. Compute conformal quantile Q for finite-sample coverage.
+
+    Returns (q_lo_model, q_hi_model, conformal_q, converged).
+    """
+    y_train = np.asarray(train_jump, dtype=np.float64)
+    y_cal = np.asarray(cal_jump, dtype=np.float64)
+    if y_cal.size < min_calibration_rows or y_train.size < min_calibration_rows:
+        return None, None, 0.0, False
+
+    lo_quantile = alpha / 2.0
+    hi_quantile = 1.0 - alpha / 2.0
+
+    base_params = dict(
+        max_depth=3,
+        max_iter=100,
+        learning_rate=0.05,
+        min_samples_leaf=4,
+        random_state=random_state,
+    )
+    q_lo_model = HistGradientBoostingRegressor(
+        loss="quantile", quantile=lo_quantile, **base_params
+    )
+    q_hi_model = HistGradientBoostingRegressor(
+        loss="quantile", quantile=hi_quantile, **base_params
+    )
+
+    q_lo_model.fit(train_design, y_train)
+    q_hi_model.fit(train_design, y_train)
+
+    q_lo_cal = q_lo_model.predict(cal_design)
+    q_hi_cal = q_hi_model.predict(cal_design)
+    scores = cqr_conformity_scores(y_cal, q_lo_cal, q_hi_cal)
+    conformal_q = cqr_conformal_quantile(scores, alpha=alpha)
+
+    return q_lo_model, q_hi_model, conformal_q, True

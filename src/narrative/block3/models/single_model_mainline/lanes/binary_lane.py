@@ -9,6 +9,11 @@ import numpy as np
 from sklearn.linear_model import LogisticRegression
 
 from narrative.nbi_nci.calibration import reliability_metrics
+from narrative.block3.models.single_model_mainline.hazard_utils import (
+    daily_hazard_to_cumulative,
+    prob_to_daily_hazard,
+    survival_nll,
+)
 
 
 @dataclass(frozen=True)
@@ -46,6 +51,8 @@ class BinaryLaneRuntime:
         self._hazard_blend = 0.0
         self._temperature = 1.0
         self._uses_hazard_adapter = False
+        self._uses_hazard_space_calibration = False
+        self._hazard_calibration_horizon = 1
         self._identity_metrics: Dict[str, float] = {"brier": 0.25, "logloss": 0.6931471805599453, "ece": 0.0}
         self._selected_metrics: Dict[str, float] = dict(self._identity_metrics)
         self._calibration_shrinkage_target = "none"
@@ -59,6 +66,7 @@ class BinaryLaneRuntime:
         aux_features: np.ndarray | None = None,
         enable_calibration_shrinkage: bool = False,
         calibration_shrinkage_target: str = "auto",
+        horizon: int = 1,
     ) -> "BinaryLaneRuntime":
         target = (np.asarray(y, dtype=np.float32) > 0.5).astype(np.int32, copy=False)
         self._model = None
@@ -68,6 +76,8 @@ class BinaryLaneRuntime:
         self._temperature = 1.0
         self._hazard_blend = 0.0
         self._uses_hazard_adapter = False
+        self._uses_hazard_space_calibration = False
+        self._hazard_calibration_horizon = max(1, int(horizon))
         self._calibration_shrinkage_target = "none"
         self._calibration_shrinkage_strength = 0.0
         self._train_positive_rate = float(target.mean()) if target.size else 0.0
@@ -129,18 +139,25 @@ class BinaryLaneRuntime:
                 self._calibrator_name,
                 self._identity_metrics,
                 self._selected_metrics,
-            ) = _select_binary_calibrator(blended_prob, calibration_target, random_state=self.random_state)
+            ) = _select_binary_calibrator(
+                blended_prob, calibration_target,
+                random_state=self.random_state,
+                horizon=self._hazard_calibration_horizon,
+            )
+            self._uses_hazard_space_calibration = self._calibrator_name.startswith("hazard_")
             if enable_calibration_shrinkage:
                 calibration_calibrator = _fit_named_binary_calibrator(
                     blended_prob,
                     calibration_target,
                     self._calibrator_name,
                     random_state=self.random_state,
+                    horizon=self._hazard_calibration_horizon,
                 )
                 calibrated_prob = _apply_binary_calibrator(
                     self._calibrator_name,
                     calibration_calibrator,
                     blended_prob,
+                    horizon=self._hazard_calibration_horizon,
                 )
                 (
                     self._calibration_shrinkage_target,
@@ -182,10 +199,14 @@ class BinaryLaneRuntime:
             labels=target,
             name=self._calibrator_name,
             random_state=self.random_state,
+            horizon=self._hazard_calibration_horizon,
         )
         if self._selected_metrics == self._identity_metrics:
             self._selected_metrics = _binary_metrics(
-                _apply_binary_calibrator(self._calibrator_name, self._calibrator, blended_prob),
+                _apply_binary_calibrator(
+                    self._calibrator_name, self._calibrator, blended_prob,
+                    horizon=self._hazard_calibration_horizon,
+                ),
                 target,
             )
         self._fitted = True
@@ -211,7 +232,10 @@ class BinaryLaneRuntime:
             persistence_rate=self._persistence_rate,
         )
         blended_prob = _blend_binary_probability(base_prob, hazard_prior, self._hazard_blend)
-        calibrated = _apply_binary_calibrator(self._calibrator_name, self._calibrator, blended_prob)
+        calibrated = _apply_binary_calibrator(
+            self._calibrator_name, self._calibrator, blended_prob,
+            horizon=self._hazard_calibration_horizon,
+        )
         calibrated = _apply_probability_shrinkage(
             calibrated,
             _resolve_probability_shrinkage_target(
@@ -329,17 +353,35 @@ def _select_binary_calibrator(
     probs: np.ndarray,
     labels: np.ndarray,
     random_state: int,
+    horizon: int = 1,
 ) -> tuple[str, Dict[str, float], Dict[str, float],]:
     target = np.asarray(labels, dtype=np.int32)
-    identity_metrics = _binary_metrics(probs, target)
+    hz = max(1, int(horizon))
+    identity_metrics = _binary_metrics(probs, target, horizon=hz)
     candidates: Dict[str, Dict[str, float]] = {"identity": dict(identity_metrics)}
     if np.unique(np.asarray(probs, dtype=np.float64)).size >= 2:
         platt = _fit_named_binary_calibrator(probs, target, "platt", random_state=random_state)
         if platt is not None:
-            candidates["platt"] = _binary_metrics(_apply_binary_calibrator("platt", platt, probs), target)
+            candidates["platt"] = _binary_metrics(_apply_binary_calibrator("platt", platt, probs), target, horizon=hz)
         isotonic = _fit_named_binary_calibrator(probs, target, "isotonic", random_state=random_state)
         if isotonic is not None:
-            candidates["isotonic"] = _binary_metrics(_apply_binary_calibrator("isotonic", isotonic, probs), target)
+            candidates["isotonic"] = _binary_metrics(_apply_binary_calibrator("isotonic", isotonic, probs), target, horizon=hz)
+        # --- hazard-space calibration (P1 discrete-time survival) ---
+        if hz > 1:
+            haz_platt = _fit_named_binary_calibrator(
+                probs, target, "hazard_platt", random_state=random_state, horizon=hz,
+            )
+            if haz_platt is not None:
+                candidates["hazard_platt"] = _binary_metrics(
+                    _apply_binary_calibrator("hazard_platt", haz_platt, probs, horizon=hz), target, horizon=hz,
+                )
+            haz_isotonic = _fit_named_binary_calibrator(
+                probs, target, "hazard_isotonic", random_state=random_state, horizon=hz,
+            )
+            if haz_isotonic is not None:
+                candidates["hazard_isotonic"] = _binary_metrics(
+                    _apply_binary_calibrator("hazard_isotonic", haz_isotonic, probs, horizon=hz), target, horizon=hz,
+                )
     selected = _select_calibration_name(candidates)
     return selected, identity_metrics, dict(candidates[selected])
 
@@ -347,7 +389,17 @@ def _select_binary_calibrator(
 def _select_calibration_name(candidates: Dict[str, Dict[str, float]], ece_threshold: float = 0.05) -> str:
     scored = []
     for name, metrics in candidates.items():
-        score = 0.65 * float(metrics.get("brier", float("inf"))) + 0.35 * float(metrics.get("logloss", float("inf")))
+        # When survival_nll is available (horizon > 1), include it in the
+        # composite score to prefer calibrators that respect the hazard
+        # structure (P1.1 event consistency).
+        if "survival_nll" in metrics:
+            score = (
+                0.50 * float(metrics.get("brier", float("inf")))
+                + 0.25 * float(metrics.get("logloss", float("inf")))
+                + 0.25 * float(metrics.get("survival_nll", float("inf")))
+            )
+        else:
+            score = 0.65 * float(metrics.get("brier", float("inf"))) + 0.35 * float(metrics.get("logloss", float("inf")))
         scored.append((str(name), float(score), float(metrics.get("ece", float("inf")))))
     scored.sort(key=lambda item: item[1])
     identity_ece = float(candidates.get("identity", {}).get("ece", 1.0))
@@ -434,6 +486,7 @@ def _fit_named_binary_calibrator(
     labels: np.ndarray,
     name: str,
     random_state: int,
+    horizon: int = 1,
 ) -> Any | None:
     target = np.asarray(labels, dtype=np.int32)
     candidate_probs = np.asarray(probs, dtype=np.float64)
@@ -451,10 +504,28 @@ def _fit_named_binary_calibrator(
         model = IsotonicRegression(out_of_bounds="clip")
         model.fit(candidate_probs, target)
         return model
+    if name == "hazard_platt":
+        hz = max(1, int(horizon))
+        h = prob_to_daily_hazard(candidate_probs, hz)
+        model = LogisticRegression(max_iter=400, random_state=random_state + 71)
+        model.fit(h.reshape(-1, 1), target)
+        return model
+    if name == "hazard_isotonic":
+        try:
+            from sklearn.isotonic import IsotonicRegression
+        except Exception:
+            return None
+        hz = max(1, int(horizon))
+        h = prob_to_daily_hazard(candidate_probs, hz)
+        model = IsotonicRegression(out_of_bounds="clip")
+        model.fit(h, target)
+        return model
     return None
 
 
-def _apply_binary_calibrator(name: str, calibrator: Any | None, probs: np.ndarray) -> np.ndarray:
+def _apply_binary_calibrator(
+    name: str, calibrator: Any | None, probs: np.ndarray, horizon: int = 1,
+) -> np.ndarray:
     candidate_probs = np.asarray(probs, dtype=np.float64)
     if calibrator is None or name == "identity":
         return np.clip(candidate_probs, 0.0, 1.0)
@@ -465,18 +536,32 @@ def _apply_binary_calibrator(name: str, calibrator: Any | None, probs: np.ndarra
         )
     if name == "isotonic":
         return np.clip(np.asarray(calibrator.predict(candidate_probs), dtype=np.float64), 0.0, 1.0)
+    if name == "hazard_platt" and hasattr(calibrator, "predict_proba"):
+        hz = max(1, int(horizon))
+        h = prob_to_daily_hazard(candidate_probs, hz)
+        h_cal = calibrator.predict_proba(h.reshape(-1, 1))[:, 1]
+        return np.clip(daily_hazard_to_cumulative(h_cal, hz), 0.0, 1.0)
+    if name == "hazard_isotonic":
+        hz = max(1, int(horizon))
+        h = prob_to_daily_hazard(candidate_probs, hz)
+        h_cal = np.asarray(calibrator.predict(h), dtype=np.float64)
+        return np.clip(daily_hazard_to_cumulative(h_cal, hz), 0.0, 1.0)
     return np.clip(candidate_probs, 0.0, 1.0)
 
 
-def _binary_metrics(probs: np.ndarray, labels: np.ndarray) -> Dict[str, float]:
+def _binary_metrics(probs: np.ndarray, labels: np.ndarray, horizon: int = 1) -> Dict[str, float]:
     candidate_probs = np.clip(np.asarray(probs, dtype=np.float64), 1e-6, 1.0 - 1e-6)
     target = np.asarray(labels, dtype=np.int32)
     reliability = reliability_metrics(candidate_probs, target, n_bins=10)
-    return {
+    metrics = {
         "brier": float(reliability["brier"]),
         "logloss": _binary_logloss(candidate_probs, target),
         "ece": float(reliability["ece"]),
     }
+    hz = max(1, int(horizon))
+    if hz > 1:
+        metrics["survival_nll"] = survival_nll(candidate_probs, target, hz)
+    return metrics
 
 
 def _binary_logloss(probs: np.ndarray, labels: np.ndarray) -> float:
