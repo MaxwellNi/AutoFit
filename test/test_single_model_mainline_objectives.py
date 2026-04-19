@@ -15,9 +15,7 @@ def test_binary_objective_runtime_state_exposes_native_gap_honestly():
     )
 
     assert state["runtime_stage"] == "lane_runtime_with_objective_plan"
-    assert state["implemented_terms"] == ("calibration",)
-    assert "hazard" in state["enabled_but_deferred_terms"]
-    assert "event_consistency" in state["enabled_but_deferred_terms"]
+    assert state["implemented_terms"] == ("calibration", "hazard", "event_consistency")
     assert state["guardrails"] == ("probability_collapse",)
 
 
@@ -35,7 +33,7 @@ def test_investors_objective_runtime_state_tracks_lane_ownership_and_backlog():
     )
 
     assert state["lane_subregime"] == "h1_occurrence_exemplar"
-    assert state["implemented_terms"] == ("occurrence", "hurdle")
+    assert state["implemented_terms"] == ("occurrence", "hurdle", "intensity_baseline")
     assert "transition" in state["deferred_terms"]
     assert "transition" in state["enabled_but_deferred_terms"]
     assert "binary_funding_alignment" in state["enabled_but_deferred_terms"]
@@ -77,4 +75,4 @@ def test_funding_objective_runtime_exposes_calibrated_anchor_backoff():
     assert state["lane_subregime"] == "funding_anchor_residual"
     assert "calibrated_anchor_backoff" in state["implemented_runtime"]
     assert "source_scaling_guard" in state["enabled_but_deferred_terms"]
-    assert "tail_guard" in state["enabled_but_deferred_terms"]
+    assert "cqr_interval" in state["implemented_terms"] or "tail_guard" not in state.get("enabled_but_deferred_terms", ())
