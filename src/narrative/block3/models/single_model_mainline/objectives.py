@@ -153,7 +153,7 @@ class MainlineObjectiveSpec:
         if lane_name == "funding":
             return ("anchor_residual", "tail_guard", "cqr_interval")
         if lane_name == "investors":
-            return ("occurrence", "hurdle", "intensity_baseline", "jump_ode_state")
+            return ("occurrence", "hurdle", "intensity_baseline", "jump_ode_state", "shrinkage_gate")
         raise ValueError(f"Unsupported lane for objective runtime plan: {lane_name}")
 
     def _implemented_runtime(self, lane_name: str, horizon: int) -> Tuple[str, ...]:
@@ -183,6 +183,7 @@ class MainlineObjectiveSpec:
                 "occurrence_classifier",
                 "intensity_baseline_blend",
                 "jump_ode_state_evolution",
+                "adaptive_shrinkage_gate",
                 "positive_regressor",
                 "anchor_blend",
             )

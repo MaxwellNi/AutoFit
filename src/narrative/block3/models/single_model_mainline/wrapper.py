@@ -146,6 +146,12 @@ class SingleModelMainlineWrapper(ModelBase):
         self.investors_intensity_blend = float(
             prototype_kwargs.get("investors_intensity_blend", 0.5)
         )
+        self.enable_investors_shrinkage_gate = bool(
+            prototype_kwargs.get("enable_investors_shrinkage_gate", False)
+        )
+        self.investors_shrinkage_strength = float(
+            prototype_kwargs.get("investors_shrinkage_strength", 0.8)
+        )
         self.enable_investors_transition_correction = bool(
             prototype_kwargs.get("enable_investors_transition_correction", False)
         )
@@ -586,6 +592,8 @@ class SingleModelMainlineWrapper(ModelBase):
                 task_name=self._task_name,
                 enable_intensity_baseline=self.enable_investors_intensity_baseline,
                 intensity_blend=self.investors_intensity_blend,
+                enable_shrinkage_gate=self.enable_investors_shrinkage_gate,
+                shrinkage_strength=self.investors_shrinkage_strength,
             )
             self._active_lane_model = self.investors_lane_runtime
 

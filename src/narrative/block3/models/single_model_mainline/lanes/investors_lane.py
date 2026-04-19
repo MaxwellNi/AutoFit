@@ -15,6 +15,12 @@ from ..intensity_utils import (
     intensity_diagnostics,
     predict_intensity_probability,
 )
+from ..shrinkage_utils import (
+    apply_shrinkage,
+    fit_shrinkage_gate,
+    predict_shrinkage_alpha,
+    shrinkage_diagnostics,
+)
 
 
 @dataclass(frozen=True)
@@ -74,6 +80,11 @@ class InvestorsLaneRuntime:
         self._intensity_converged = False
         self._intensity_blend = 0.5
         self._intensity_diagnostics: dict[str, float] = {}
+        self._use_shrinkage_gate = False
+        self._shrinkage_model: HistGradientBoostingRegressor | None = None
+        self._shrinkage_converged = False
+        self._shrinkage_strength = 0.8
+        self._shrinkage_diagnostics: dict[str, float] = {}
         self._fitted = False
 
     def fit(
@@ -100,6 +111,8 @@ class InvestorsLaneRuntime:
         task_name: str = "",
         enable_intensity_baseline: bool = False,
         intensity_blend: float = 0.5,
+        enable_shrinkage_gate: bool = False,
+        shrinkage_strength: float = 0.8,
     ) -> "InvestorsLaneRuntime":
         target = np.clip(np.asarray(y, dtype=np.float64), 0.0, None)
         self._fallback_value = float(np.nanmedian(target)) if target.size else 0.0
@@ -122,6 +135,11 @@ class InvestorsLaneRuntime:
         self._intensity_converged = False
         self._intensity_blend = float(np.clip(intensity_blend, 0.0, 1.0))
         self._intensity_diagnostics = {}
+        self._use_shrinkage_gate = bool(enable_shrinkage_gate and self._horizon > 1)
+        self._shrinkage_model = None
+        self._shrinkage_converged = False
+        self._shrinkage_strength = float(np.clip(shrinkage_strength, 0.0, 1.0))
+        self._shrinkage_diagnostics = {}
         if target.size == 0:
             self._fitted = True
             return self
@@ -267,6 +285,20 @@ class InvestorsLaneRuntime:
                 target=target,
                 default_blend=self._anchor_blend,
             )
+
+            # --- P5 Adaptive Shrinkage Gate ---
+            if self._use_shrinkage_gate:
+                self._shrinkage_model, self._shrinkage_diagnostics = fit_shrinkage_gate(
+                    design=design,
+                    learned_pred=raw_pred,
+                    anchor=model_anchor,
+                    target=target,
+                    random_state=self.random_state + 997,
+                )
+                self._shrinkage_converged = (
+                    self._shrinkage_model is not None
+                    and self._shrinkage_diagnostics.get("shrinkage_status") == "converged"
+                )
 
             if normalized_source is not None and use_source_read_policy:
                 positive_profiles = _source_profile_ids(normalized_source[positive_mask])
@@ -519,6 +551,15 @@ class InvestorsLaneRuntime:
                 stability=_history_anchor_stability(aux_features),
             )
             pred = (1.0 - jump_strength) * pred + jump_strength * jump_target
+
+        # --- P5 Adaptive Shrinkage Gate ---
+        if self._use_shrinkage_gate and self._shrinkage_converged:
+            shrinkage_alpha = predict_shrinkage_alpha(
+                self._shrinkage_model, design
+            )
+            pred = apply_shrinkage(pred, model_anchor, shrinkage_alpha, self._shrinkage_strength)
+            pred = np.clip(pred, 0.0, None)
+
         if anchor is not None and self._global_anchor_blend > 0.0:
             anchor_blend = np.full(len(pred), self._global_anchor_blend, dtype=np.float64)
             if normalized_source is not None and use_source_read_policy and self._source_anchor_blend_by_profile:
@@ -572,6 +613,16 @@ class InvestorsLaneRuntime:
             "intensity_blend": self._intensity_blend,
         }
         base.update(self._intensity_diagnostics)
+        return base
+
+    def describe_shrinkage(self) -> dict:
+        """Return shrinkage gate diagnostics."""
+        base = {
+            "shrinkage_enabled": self._use_shrinkage_gate,
+            "shrinkage_converged": self._shrinkage_converged,
+            "shrinkage_strength": self._shrinkage_strength,
+        }
+        base.update(self._shrinkage_diagnostics)
         return base
 
 

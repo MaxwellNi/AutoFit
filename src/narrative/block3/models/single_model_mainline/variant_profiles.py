@@ -130,6 +130,35 @@ MAINLINE_VARIANTS: Dict[str, MainlineVariantProfile] = {
             "investors_intensity_blend": 0.5,
         },
     ),
+    "mainline_shrinkage_gate_guard": MainlineVariantProfile(
+        name="mainline_shrinkage_gate_guard",
+        runtime_mode="native",
+        delegate_variant="v740_alpha",
+        description=(
+            "Generation-10 (P5) investors profile that adds an adaptive shrinkage "
+            "gate on top of the selective event-state guard. Instead of expanding "
+            "the trunk (which failed twice: Hawkes -173%, Jump ODE -1.04%), this "
+            "profile operates entirely inside the investors lane. The shrinkage "
+            "gate learns per-sample optimal alpha to blend between learned "
+            "prediction and anchor, reducing MSE when uncertainty is high. "
+            "Inspired by James-Stein / ASH / Nash adaptive shrinkage."
+        ),
+        prototype_overrides={
+            **_MAINLINE_ALPHA_OVERRIDES,
+            "enable_investors_event_state_features": True,
+            "enable_investors_selective_event_state_activation": True,
+            "investors_event_state_allow_h1": False,
+            "investors_event_state_max_source_presence_share": 0.0,
+            "enable_funding_gpd_tail": True,
+            "enable_funding_tail_focus": True,
+            "enable_funding_cqr_interval": True,
+            "funding_cqr_alpha": 0.10,
+            "enable_investors_intensity_baseline": True,
+            "investors_intensity_blend": 0.5,
+            "enable_investors_shrinkage_gate": True,
+            "investors_shrinkage_strength": 0.8,
+        },
+    ),
     "mainline_marked_investor_guard": MainlineVariantProfile(
         name="mainline_marked_investor_guard",
         runtime_mode="native",
