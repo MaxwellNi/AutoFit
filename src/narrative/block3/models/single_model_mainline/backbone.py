@@ -40,6 +40,23 @@ class SharedTemporalBackboneSpec:
     temporal_state_windows: Tuple[int, ...] = (3, 7, 30)
     enable_temporal_state_features: bool = True
     enable_spectral_state_features: bool = True
+    enable_process_state_feedback: bool = False
+    process_state_feedback_strength: float = 0.0
+    process_state_feedback_source_decay: float = 0.65
+    process_state_feedback_min_horizon: int = 7
+    process_state_feedback_state_weights: Tuple[float, ...] = (0.25, 0.25, 0.0, 0.0, 0.5)
+    process_state_feedback_max_norm_share: float = 0.02
+    process_state_feedback_predict_scale_cap: float = 4.0
+    # Hawkes-process-inspired asymmetric event-driven intensity state.
+    # Unlike rolling-window statistics that treat positive/negative shocks
+    # symmetrically, this accumulates only POSITIVE jumps with exponential
+    # decay at multiple timescales.  Captures the self-exciting structure of
+    # investor-arrival and financing-momentum processes.
+    # Reference: Hawkes (1971); Aït-Sahalia et al. (2014); Neural Hawkes
+    # (NeurIPS 2017); EasyTPP (NeurIPS 2023).
+    enable_hawkes_financing_state: bool = False
+    hawkes_financing_decay_halflives: Tuple[float, ...] = (7.0, 30.0, 90.0)
+    hawkes_positive_shock_threshold: float = 0.5
 
     def as_dict(self) -> Dict[str, object]:
         return {
@@ -55,6 +72,16 @@ class SharedTemporalBackboneSpec:
             "temporal_state_windows": self.temporal_state_windows,
             "enable_temporal_state_features": self.enable_temporal_state_features,
             "enable_spectral_state_features": self.enable_spectral_state_features,
+            "enable_process_state_feedback": self.enable_process_state_feedback,
+            "process_state_feedback_strength": self.process_state_feedback_strength,
+            "process_state_feedback_source_decay": self.process_state_feedback_source_decay,
+            "process_state_feedback_min_horizon": self.process_state_feedback_min_horizon,
+            "process_state_feedback_state_weights": self.process_state_feedback_state_weights,
+            "process_state_feedback_max_norm_share": self.process_state_feedback_max_norm_share,
+            "process_state_feedback_predict_scale_cap": self.process_state_feedback_predict_scale_cap,
+            "enable_hawkes_financing_state": self.enable_hawkes_financing_state,
+            "hawkes_financing_decay_halflives": self.hawkes_financing_decay_halflives,
+            "hawkes_positive_shock_threshold": self.hawkes_positive_shock_threshold,
         }
 
 
@@ -122,7 +149,10 @@ class SharedTemporalBackbone:
             context_frame=context_frame,
             seed_frame=seed_frame,
         )
-        state = np.concatenate([compact, summaries, temporal_state, spectral_state], axis=1).astype(np.float32, copy=False)
+        hawkes_state, hawkes_names = self._build_event_driven_intensity_state(
+            standardized, context_frame=context_frame
+        )
+        state = np.concatenate([compact, summaries, temporal_state, spectral_state, hawkes_state], axis=1).astype(np.float32, copy=False)
         self._state_layout = {
             "uses_multiscale_temporal_state": bool(self.spec.enable_multiscale_temporal_state),
             "uses_temporal_state_features": bool(
@@ -131,13 +161,16 @@ class SharedTemporalBackbone:
             "uses_spectral_state_features": bool(
                 self.spec.enable_multiscale_temporal_state and self.spec.enable_spectral_state_features
             ),
+            "uses_hawkes_financing_state": bool(self.spec.enable_hawkes_financing_state),
             "compact_state_dim": int(compact.shape[1]),
             "summary_state_dim": int(summaries.shape[1]),
             "temporal_state_dim": int(temporal_state.shape[1]),
             "spectral_state_dim": int(spectral_state.shape[1]),
+            "hawkes_state_dim": int(hawkes_state.shape[1]),
             "shared_state_dim": int(state.shape[1]),
             "temporal_feature_names": tuple(state_names["temporal"]),
             "spectral_feature_names": tuple(state_names["spectral"]),
+            "hawkes_feature_names": tuple(hawkes_names),
             "seed_rows_required": int(self.required_seed_rows()),
         }
         return state
@@ -345,6 +378,91 @@ class SharedTemporalBackbone:
             return (windows[0], windows[1], windows[1])
         return (windows[0], windows[1], windows[-1])
 
+    def _build_event_driven_intensity_state(
+        self,
+        standardized: np.ndarray,
+        context_frame: pd.DataFrame | None,
+    ) -> Tuple[np.ndarray, Tuple[str, ...]]:
+        """Hawkes-process-inspired asymmetric event-driven intensity state.
+
+        For each entity time series, compute exponentially decaying sums of
+        POSITIVE state-level jumps at multiple timescales.  The recursive
+        formula I_t = decay * I_{t-1} + max(0, velocity_t - threshold)
+        approximates a discrete-time Hawkes intensity (Hawkes 1971).
+
+        Features:
+          - hawkes_intensity_h<N>: decayed positive-shock sum at halflife N steps
+          - hawkes_time_since_event: steps since last positive shock, normalised
+            by entity tenure (0 = just happened, 1 = never happened / very old)
+        """
+        halflives = self.spec.hawkes_financing_decay_halflives
+        threshold = float(self.spec.hawkes_positive_shock_threshold)
+        n_rows = standardized.shape[0]
+        n_scales = len(halflives)
+        feature_names: Tuple[str, ...] = tuple(
+            f"hawkes_intensity_h{int(h)}" for h in halflives
+        ) + ("hawkes_time_since_event",)
+
+        if not self.spec.enable_hawkes_financing_state or n_rows == 0:
+            return np.zeros((n_rows, 0), dtype=np.float32), ()
+
+        # State level = mean of all standardised features (scalar per row)
+        state_level = standardized.mean(axis=1).astype(np.float32)
+        # Positive velocity only (investor/funding arrivals are unidirectional)
+        velocity = np.empty(n_rows, dtype=np.float32)
+        velocity[0] = 0.0
+        velocity[1:] = state_level[1:] - state_level[:-1]
+        positive_shock = np.maximum(0.0, velocity - threshold)
+
+        # Decay factor per halflife: alpha = exp(-ln2 / h)
+        decay_factors = np.array(
+            [float(np.exp(-np.log(2.0) / max(1.0, float(h)))) for h in halflives],
+            dtype=np.float32,
+        )
+
+        # Per-entity grouping
+        if context_frame is not None and "entity_id" in context_frame.columns:
+            entity_ids = context_frame["entity_id"].astype(str).to_numpy(copy=False)
+        else:
+            entity_ids = np.repeat("__global__", n_rows)
+
+        intensities = np.zeros((n_rows, n_scales), dtype=np.float32)
+        time_since = np.ones(n_rows, dtype=np.float32)  # default = 1 (no event)
+
+        # Build ordered list of unique entities (preserve encounter order)
+        seen: dict[str, list[int]] = {}
+        for i, eid in enumerate(entity_ids):
+            if eid not in seen:
+                seen[eid] = []
+            seen[eid].append(i)
+
+        for row_indices in seen.values():
+            e_n = len(row_indices)
+            e_shock = positive_shock[row_indices]
+
+            # Recursive Hawkes intensity
+            e_intensities = np.zeros((e_n, n_scales), dtype=np.float32)
+            last_I = np.zeros(n_scales, dtype=np.float32)
+            for t in range(e_n):
+                last_I = decay_factors * last_I + e_shock[t]
+                e_intensities[t] = last_I
+            intensities[row_indices] = e_intensities
+
+            # Time-since-last-positive-event (normalised by entity tenure)
+            e_time_since = np.ones(e_n, dtype=np.float32)
+            last_event_step = -1
+            for t in range(e_n):
+                if e_shock[t] > 0.0:
+                    last_event_step = t
+                if last_event_step < 0:
+                    e_time_since[t] = 1.0  # no event yet
+                else:
+                    e_time_since[t] = float(t - last_event_step) / max(1.0, float(e_n - 1))
+            time_since[row_indices] = e_time_since
+
+        result = np.concatenate([intensities, time_since[:, None]], axis=1).astype(np.float32)
+        return result, feature_names
+
     def _empty_state_layout(self, compact_dim: int = 0, summary_dim: int = 0) -> Dict[str, Any]:
         return {
             "uses_multiscale_temporal_state": bool(self.spec.enable_multiscale_temporal_state),
@@ -354,12 +472,15 @@ class SharedTemporalBackbone:
             "uses_spectral_state_features": bool(
                 self.spec.enable_multiscale_temporal_state and self.spec.enable_spectral_state_features
             ),
+            "uses_hawkes_financing_state": bool(self.spec.enable_hawkes_financing_state),
             "compact_state_dim": int(compact_dim),
             "summary_state_dim": int(summary_dim),
             "temporal_state_dim": 0,
             "spectral_state_dim": 0,
+            "hawkes_state_dim": 0,
             "shared_state_dim": int(compact_dim + summary_dim),
             "temporal_feature_names": (),
             "spectral_feature_names": (),
+            "hawkes_feature_names": (),
             "seed_rows_required": int(self.required_seed_rows()),
         }

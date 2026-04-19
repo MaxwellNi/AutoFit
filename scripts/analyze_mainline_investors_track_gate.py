@@ -277,6 +277,31 @@ TRACK_CANDIDATES: Dict[str, Dict[str, Any]] = {
             "enable_spectral_state_features": True,
         },
     },
+    "hawkes_financing_state_guard": {
+        "role": "active_trunk_candidate",
+        "official_kwargs": {
+            "variant": "mainline_hawkes_financing_state_guard",
+            "seed": 7,
+            "use_delegate": False,
+        },
+        "dynamic_variant": {
+            "fit": {
+                "enable_hurdle_head": True,
+                "enable_count_jump": True,
+                "count_jump_strength": 0.30,
+                "enable_count_sparsity_gate": False,
+                "enable_investors_event_state_features": True,
+            },
+            "predict": {
+                "enable_investors_event_state_features": True,
+            },
+        },
+        "dynamic_backbone": {
+            "enable_hawkes_financing_state": True,
+            "hawkes_financing_decay_halflives": (7.0, 30.0, 90.0),
+            "hawkes_positive_shock_threshold": 0.5,
+        },
+    },
     "source_policy_transition_guard": {
         "role": "demoted_source_candidate",
         "official_kwargs": {

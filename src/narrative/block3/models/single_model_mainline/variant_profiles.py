@@ -144,6 +144,31 @@ MAINLINE_VARIANTS: Dict[str, MainlineVariantProfile] = {
             "enable_investors_mark_features": True,
         },
     ),
+    "mainline_process_state_feedback_guard": MainlineVariantProfile(
+        name="mainline_process_state_feedback_guard",
+        runtime_mode="native",
+        delegate_variant="v740_alpha",
+        description=(
+            "Generation-6 investors profile that preserves the selective event-state "
+            "contract while adding a bounded process-state feedback block into the "
+            "shared trunk. The updater stays target-agnostic, turns off on h1, and "
+            "attenuates rather than disables itself on source-rich official surfaces "
+            "so the trunk can move toward closure/attention state without the geometry "
+            "instability seen in the aggressive temporal/spectral variants."
+        ),
+        prototype_overrides={
+            **_MAINLINE_ALPHA_OVERRIDES,
+            "enable_investors_event_state_features": True,
+            "enable_investors_selective_event_state_activation": True,
+            "investors_event_state_allow_h1": False,
+            "investors_event_state_max_source_presence_share": 0.0,
+            "enable_process_state_feedback": True,
+            "process_state_feedback_strength": 0.02,
+            "process_state_feedback_source_decay": 0.65,
+            "process_state_feedback_min_horizon": 7,
+            "process_state_feedback_state_weights": (0.30, 0.20, 0.0, 0.0, 0.50),
+        },
+    ),
     "mainline_multiscale_state_guard": MainlineVariantProfile(
         name="mainline_multiscale_state_guard",
         runtime_mode="native",
@@ -209,6 +234,32 @@ MAINLINE_VARIANTS: Dict[str, MainlineVariantProfile] = {
             "temporal_state_windows": (3, 7, 30),
             "enable_temporal_state_features": False,
             "enable_spectral_state_features": True,
+        },
+    ),
+    "mainline_hawkes_financing_state_guard": MainlineVariantProfile(
+        name="mainline_hawkes_financing_state_guard",
+        runtime_mode="native",
+        delegate_variant="v740_alpha",
+        description=(
+            "Generation-7 investors profile that upgrades the shared trunk with a "
+            "Hawkes-process-inspired asymmetric event-driven intensity state. "
+            "Unlike the symmetric rolling-window Gen-5 variants, this accumulates "
+            "only POSITIVE financing shocks with exponential decay at three timescales "
+            "(7 / 30 / 90 steps), capturing the self-exciting investor-arrival and "
+            "funding-momentum dynamics documented in venture capital empirical finance "
+            "(Hawkes 1971; Ait-Sahalia et al. 2014; Neural Hawkes NeurIPS 2017). "
+            "The selective event-state activation guard is kept unchanged so the "
+            "improved trunk state is only read on h>1 and source-light surfaces."
+        ),
+        prototype_overrides={
+            **_MAINLINE_ALPHA_OVERRIDES,
+            "enable_investors_event_state_features": True,
+            "enable_investors_selective_event_state_activation": True,
+            "investors_event_state_allow_h1": False,
+            "investors_event_state_max_source_presence_share": 0.0,
+            "enable_hawkes_financing_state": True,
+            "hawkes_financing_decay_halflives": (7.0, 30.0, 90.0),
+            "hawkes_positive_shock_threshold": 0.5,
         },
     ),
 }
