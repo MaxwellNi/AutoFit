@@ -302,6 +302,36 @@ TRACK_CANDIDATES: Dict[str, Dict[str, Any]] = {
             "hawkes_positive_shock_threshold": 0.5,
         },
     },
+    "jump_ode_state_guard": {
+        "role": "active_trunk_candidate",
+        "official_kwargs": {
+            "variant": "mainline_jump_ode_state_guard",
+            "seed": 7,
+            "use_delegate": False,
+        },
+        "dynamic_variant": {
+            "fit": {
+                "enable_hurdle_head": True,
+                "enable_count_jump": True,
+                "count_jump_strength": 0.30,
+                "enable_count_sparsity_gate": False,
+                "enable_investors_event_state_features": True,
+                "enable_investors_intensity_baseline": True,
+                "investors_intensity_blend": 0.5,
+                "enable_funding_gpd_tail": True,
+                "enable_funding_cqr_interval": True,
+                "funding_cqr_alpha": 0.10,
+            },
+            "predict": {
+                "enable_investors_event_state_features": True,
+                "enable_investors_intensity_baseline": True,
+            },
+        },
+        "dynamic_backbone": {
+            "enable_jump_ode_state": True,
+            "jump_ode_dims": 8,
+        },
+    },
     "source_policy_transition_guard": {
         "role": "demoted_source_candidate",
         "official_kwargs": {
@@ -325,6 +355,8 @@ TRACK_CANDIDATES: Dict[str, Dict[str, Any]] = {
         },
     },
 }
+
+FULL_TRACK_CANDIDATES = TRACK_CANDIDATES
 
 PROCESS_STATE_FAMILIES = (
     "attention_diffusion",
@@ -367,6 +399,14 @@ def _parse_args() -> argparse.Namespace:
         help="Train-row cap per ablation for dynamic surfaces.",
     )
     ap.add_argument(
+        "--candidates",
+        default=None,
+        help=(
+            "Optional comma-separated candidate list to audit. "
+            "The script always keeps legacy_baseline and the active generation focus for comparison."
+        ),
+    )
+    ap.add_argument(
         "--official-input-json",
         type=Path,
         default=None,
@@ -394,6 +434,33 @@ def _parse_horizons(spec: str) -> tuple[int, ...]:
     return tuple(values)
 
 
+def _select_track_candidates(spec: str | None) -> Dict[str, Dict[str, Any]]:
+    if spec is None or not str(spec).strip():
+        return FULL_TRACK_CANDIDATES
+
+    requested: list[str] = []
+    for token in str(spec).split(","):
+        name = token.strip()
+        if not name:
+            continue
+        if name not in FULL_TRACK_CANDIDATES:
+            raise ValueError(f"Unknown candidate '{name}'")
+        if name not in requested:
+            requested.append(name)
+
+    selected_names: list[str] = []
+    for name in ("legacy_baseline", ACTIVE_GENERATION_FOCUS, *requested):
+        if name not in FULL_TRACK_CANDIDATES:
+            continue
+        if name not in selected_names:
+            selected_names.append(name)
+
+    if len(selected_names) < 2:
+        raise ValueError("Candidate filtering must retain at least baseline and one comparison candidate")
+
+    return {name: FULL_TRACK_CANDIDATES[name] for name in selected_names}
+
+
 def _track_contract() -> Dict[str, Any]:
     return {
         "runtime_owner": "single_model_mainline",
@@ -415,6 +482,7 @@ def _track_contract() -> Dict[str, Any]:
             "dynamic_geometry_shift_amplification_max": DYNAMIC_GEOMETRY_SHIFT_AMPLIFICATION_MAX,
             "dynamic_geometry_test_shift_share_max": DYNAMIC_GEOMETRY_TEST_SHIFT_SHARE_MAX,
         },
+        "active_candidate_always_included_in_filtered_runs": True,
     }
 
 
@@ -423,7 +491,7 @@ def _candidate_manifest() -> Dict[str, Dict[str, Any]]:
 
 
 def _candidate_variant_name(candidate_name: str) -> str | None:
-    payload = TRACK_CANDIDATES.get(candidate_name, {})
+    payload = TRACK_CANDIDATES.get(candidate_name, FULL_TRACK_CANDIDATES.get(candidate_name, {}))
     official_kwargs = payload.get("official_kwargs", {})
     variant = official_kwargs.get("variant")
     if variant is None:
@@ -1330,7 +1398,9 @@ def _build_promotion_recommendation(
 
 
 def main() -> int:
+    global TRACK_CANDIDATES
     args = _parse_args()
+    TRACK_CANDIDATES = _select_track_candidates(args.candidates)
     report: Dict[str, Any]
     if args.mode == "merge":
         if args.official_input_json is None or args.dynamic_input_json is None:
