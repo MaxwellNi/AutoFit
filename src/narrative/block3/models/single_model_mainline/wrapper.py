@@ -140,6 +140,12 @@ class SingleModelMainlineWrapper(ModelBase):
         self.enable_investors_mark_features = bool(
             prototype_kwargs.get("enable_investors_mark_features", False)
         )
+        self.enable_investors_intensity_baseline = bool(
+            prototype_kwargs.get("enable_investors_intensity_baseline", False)
+        )
+        self.investors_intensity_blend = float(
+            prototype_kwargs.get("investors_intensity_blend", 0.5)
+        )
         self.enable_investors_transition_correction = bool(
             prototype_kwargs.get("enable_investors_transition_correction", False)
         )
@@ -572,6 +578,8 @@ class SingleModelMainlineWrapper(ModelBase):
                 horizon=self._horizon,
                 anchor_blend=self.count_anchor_strength if self.enable_count_anchor else 0.0,
                 task_name=self._task_name,
+                enable_intensity_baseline=self.enable_investors_intensity_baseline,
+                intensity_blend=self.investors_intensity_blend,
             )
             self._active_lane_model = self.investors_lane_runtime
 
@@ -797,6 +805,7 @@ class SingleModelMainlineWrapper(ModelBase):
                 "lane_anchor_blend_reliability": float(self.investors_lane_runtime._global_anchor_blend_reliability),
                 "lane_jump_strength": float(self.investors_lane_runtime._global_jump_strength),
                 "lane_jump_reliability": float(self.investors_lane_runtime._global_jump_reliability),
+                **self.investors_lane_runtime.describe_intensity(),
             },
             "funding_process_contract": {
                 "process_family": "anchor_plus_jump_hurdle",

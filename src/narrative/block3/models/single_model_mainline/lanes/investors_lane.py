@@ -9,6 +9,13 @@ import numpy as np
 from sklearn.ensemble import HistGradientBoostingClassifier, HistGradientBoostingRegressor
 from sklearn.neighbors import KNeighborsRegressor
 
+from ..intensity_utils import (
+    fit_intensity_baseline,
+    hawkes_intensity_features,
+    intensity_diagnostics,
+    predict_intensity_probability,
+)
+
 
 @dataclass(frozen=True)
 class InvestorsLaneSpec:
@@ -62,6 +69,11 @@ class InvestorsLaneRuntime:
         self._global_anchor_blend_reliability = 0.0
         self._global_jump_strength = 0.0
         self._global_jump_reliability = 0.0
+        self._use_intensity_baseline = False
+        self._intensity_model: HistGradientBoostingRegressor | None = None
+        self._intensity_converged = False
+        self._intensity_blend = 0.5
+        self._intensity_diagnostics: dict[str, float] = {}
         self._fitted = False
 
     def fit(
@@ -86,6 +98,8 @@ class InvestorsLaneRuntime:
         horizon: int = 1,
         anchor_blend: float = 0.0,
         task_name: str = "",
+        enable_intensity_baseline: bool = False,
+        intensity_blend: float = 0.5,
     ) -> "InvestorsLaneRuntime":
         target = np.clip(np.asarray(y, dtype=np.float64), 0.0, None)
         self._fallback_value = float(np.nanmedian(target)) if target.size else 0.0
@@ -103,6 +117,11 @@ class InvestorsLaneRuntime:
         self._global_anchor_blend_reliability = 0.0
         self._global_jump_strength = 0.0
         self._global_jump_reliability = 0.0
+        self._use_intensity_baseline = bool(enable_intensity_baseline)
+        self._intensity_model = None
+        self._intensity_converged = False
+        self._intensity_blend = float(np.clip(intensity_blend, 0.0, 1.0))
+        self._intensity_diagnostics = {}
         if target.size == 0:
             self._fitted = True
             return self
@@ -152,6 +171,20 @@ class InvestorsLaneRuntime:
                 random_state=self.random_state,
             )
             self._occurrence_model.fit(design, active)
+
+        # --- Intensity baseline (P3 Marked TPP) ---
+        if self._use_intensity_baseline:
+            intensity_feats = hawkes_intensity_features(aux_features, model_anchor)
+            self._intensity_model, self._intensity_converged = fit_intensity_baseline(
+                intensity_feats,
+                active,
+                random_state=self.random_state,
+            )
+            if self._intensity_converged:
+                intensity_proba = predict_intensity_probability(
+                    self._intensity_model, intensity_feats, self._active_rate
+                )
+                self._intensity_diagnostics = intensity_diagnostics(active, intensity_proba)
 
         positive_mask = target > 0.0
         if positive_mask.any():
@@ -443,6 +476,15 @@ class InvestorsLaneRuntime:
             horizon=self._horizon,
         )
 
+        # --- Intensity blend (P3 Marked TPP) ---
+        if self._use_intensity_baseline and self._intensity_converged:
+            intensity_feats = hawkes_intensity_features(aux_features, model_anchor)
+            intensity_prob = predict_intensity_probability(
+                self._intensity_model, intensity_feats, self._active_rate
+            )
+            blend = self._intensity_blend
+            active_prob = (1.0 - blend) * active_prob + blend * intensity_prob
+
         base_log = np.log1p(np.clip(model_anchor, 0.0, None))
         if self._positive_model is None:
             positive_pred = np.clip(model_anchor, 0.0, None).astype(np.float64, copy=False)
@@ -521,6 +563,16 @@ class InvestorsLaneRuntime:
                 )
             pred = (1.0 - transition_strength) * pred + transition_strength * transition_target
         return pred.astype(np.float64, copy=False)
+
+    def describe_intensity(self) -> dict:
+        """Return intensity model diagnostics."""
+        base = {
+            "intensity_enabled": self._use_intensity_baseline,
+            "intensity_converged": self._intensity_converged,
+            "intensity_blend": self._intensity_blend,
+        }
+        base.update(self._intensity_diagnostics)
+        return base
 
 
 def _merge_features(
