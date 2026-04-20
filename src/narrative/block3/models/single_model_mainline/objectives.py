@@ -165,7 +165,7 @@ class MainlineObjectiveSpec:
         )
         if lane_name == "binary":
             return shared_runtime + (
-                "balanced_logistic_binary_head",
+                "hgbc_binary_head",
                 "hazard_space_calibration",
                 "survival_nll_calibrator_scoring",
                 "probability_output",
