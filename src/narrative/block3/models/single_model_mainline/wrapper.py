@@ -380,6 +380,9 @@ class SingleModelMainlineWrapper(ModelBase):
             jump_ode_dims=int(
                 prototype_kwargs.get("jump_ode_dims", 8)
             ),
+            normalize_mode=str(
+                prototype_kwargs.get("normalize_mode", "robust")
+            ),
         )
 
     def _normalize_process_state_feedback_weights(self, raw: object) -> tuple[float, ...]:
