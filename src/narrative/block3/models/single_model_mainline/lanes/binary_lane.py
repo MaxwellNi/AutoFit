@@ -145,6 +145,16 @@ class BinaryLaneRuntime:
                 horizon=self._hazard_calibration_horizon,
             )
             self._uses_hazard_space_calibration = self._calibrator_name.startswith("hazard_")
+            # P6.1.1: learn optimal temperature on calibration holdout
+            cal_calibrator = _fit_named_binary_calibrator(
+                blended_prob, calibration_target, self._calibrator_name,
+                random_state=self.random_state, horizon=self._hazard_calibration_horizon,
+            )
+            cal_calibrated = _apply_binary_calibrator(
+                self._calibrator_name, cal_calibrator, blended_prob,
+                horizon=self._hazard_calibration_horizon,
+            )
+            self._temperature = _calibrate_temperature(cal_calibrated, calibration_target)
             if enable_calibration_shrinkage:
                 calibration_calibrator = _fit_named_binary_calibrator(
                     blended_prob,
@@ -236,6 +246,8 @@ class BinaryLaneRuntime:
             self._calibrator_name, self._calibrator, blended_prob,
             horizon=self._hazard_calibration_horizon,
         )
+        # P6.1.1: temperature scaling with floor to prevent overconfidence
+        calibrated = _apply_temperature_scaling(calibrated, self._temperature)
         calibrated = _apply_probability_shrinkage(
             calibrated,
             _resolve_probability_shrinkage_target(
@@ -256,17 +268,22 @@ def _build_binary_model(random_state: int) -> LogisticRegression:
     )
 
 
+# P6.1.1: minimum calibration rows to prevent overfitting on tiny holdout.
+_MIN_CALIBRATION_ROWS = 128
+
+
 def _split_binary_calibration(
     design: np.ndarray,
     target: np.ndarray,
     lag1_active: np.ndarray,
 ) -> dict[str, np.ndarray] | None:
     n_rows = int(design.shape[0])
-    if n_rows < 24:
-        return None
-    calibration_rows = min(max(n_rows // 4, 6), 64)
+    # P6.1.1: dynamic sizing — at least _MIN_CALIBRATION_ROWS or 30% of data,
+    # whichever is larger, but never more than 50% (to keep training viable).
+    min_cal = max(_MIN_CALIBRATION_ROWS, n_rows * 3 // 10)
+    calibration_rows = min(min_cal, n_rows // 2)
     train_rows = n_rows - calibration_rows
-    if train_rows < 12:
+    if train_rows < 12 or calibration_rows < 12:
         return None
     calibration_target = np.asarray(target[train_rows:], dtype=np.int32)
     if np.unique(calibration_target).size < 2:
@@ -326,11 +343,16 @@ def _predict_hazard_prior(
     return np.clip(prior, 0.0, 1.0)
 
 
+# P6.1.1 hard constant: never let hazard prior fully replace model output.
+_MAX_HAZARD_BLEND = 0.80
+
+
 def _calibrate_hazard_blend(base_prob: np.ndarray, hazard_prior: np.ndarray, labels: np.ndarray) -> float:
     target = np.asarray(labels, dtype=np.int32)
     best_blend = 0.0
     best_score = float("inf")
-    for blend in (0.0, 0.10, 0.20, 0.35, 0.50, 0.65, 0.80, 1.0):
+    # P6.1.1: blend grid capped at _MAX_HAZARD_BLEND (was 1.0)
+    for blend in (0.0, 0.10, 0.20, 0.35, 0.50, 0.65, 0.80):
         candidate = _blend_binary_probability(base_prob, hazard_prior, float(blend))
         metrics = _binary_metrics(candidate, target)
         score = 0.65 * float(metrics["brier"]) + 0.35 * float(metrics["logloss"])
@@ -339,7 +361,7 @@ def _calibrate_hazard_blend(base_prob: np.ndarray, hazard_prior: np.ndarray, lab
             best_blend = float(blend)
         elif abs(score - best_score) <= 1e-12 and float(blend) < best_blend:
             best_blend = float(blend)
-    return float(best_blend)
+    return float(min(best_blend, _MAX_HAZARD_BLEND))
 
 
 def _blend_binary_probability(base_prob: np.ndarray, hazard_prior: np.ndarray, blend: float) -> np.ndarray:
@@ -547,6 +569,44 @@ def _apply_binary_calibrator(
         h_cal = np.asarray(calibrator.predict(h), dtype=np.float64)
         return np.clip(daily_hazard_to_cumulative(h_cal, hz), 0.0, 1.0)
     return np.clip(candidate_probs, 0.0, 1.0)
+
+
+# P6.1.1: temperature floor — prevents extreme overconfidence from
+# calibrators that overfit on small holdout sets.
+_MIN_TEMPERATURE = 0.5
+
+
+def _apply_temperature_scaling(probs: np.ndarray, temperature: float) -> np.ndarray:
+    """Apply temperature scaling to probability predictions.
+
+    Converts probabilities to logit space, divides by temperature, and
+    converts back.  Temperature < 1 sharpens; temperature > 1 softens.
+    The temperature is clamped to ``_MIN_TEMPERATURE`` from below.
+    """
+    t = float(max(temperature, _MIN_TEMPERATURE))
+    if abs(t - 1.0) < 1e-9:
+        return np.clip(np.asarray(probs, dtype=np.float64), 0.0, 1.0)
+    p = np.clip(np.asarray(probs, dtype=np.float64), 1e-7, 1.0 - 1e-7)
+    logits = np.log(p / (1.0 - p))
+    scaled = 1.0 / (1.0 + np.exp(-logits / t))
+    return np.clip(scaled, 0.0, 1.0)
+
+
+def _calibrate_temperature(probs: np.ndarray, labels: np.ndarray) -> float:
+    """Search for the best temperature on a grid, respecting _MIN_TEMPERATURE."""
+    target = np.asarray(labels, dtype=np.int32)
+    best_t = 1.0
+    best_score = float("inf")
+    for t in (0.5, 0.7, 0.85, 1.0, 1.2, 1.5, 2.0):
+        scaled = _apply_temperature_scaling(probs, t)
+        metrics = _binary_metrics(scaled, target)
+        score = 0.65 * float(metrics["brier"]) + 0.35 * float(metrics["logloss"])
+        if score + 1e-12 < best_score:
+            best_score = score
+            best_t = float(t)
+        elif abs(score - best_score) <= 1e-12 and abs(t - 1.0) < abs(best_t - 1.0):
+            best_t = float(t)
+    return float(max(best_t, _MIN_TEMPERATURE))
 
 
 def _binary_metrics(probs: np.ndarray, labels: np.ndarray, horizon: int = 1) -> Dict[str, float]:
