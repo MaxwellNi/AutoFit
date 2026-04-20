@@ -318,13 +318,9 @@ TRACK_CANDIDATES: Dict[str, Dict[str, Any]] = {
                 "enable_investors_event_state_features": True,
                 "enable_intensity_baseline": True,
                 "intensity_blend": 0.5,
-                "enable_funding_gpd_tail": True,
-                "enable_funding_cqr_interval": True,
-                "funding_cqr_alpha": 0.10,
             },
             "predict": {
                 "enable_investors_event_state_features": True,
-                "enable_intensity_baseline": True,
             },
         },
         "dynamic_backbone": {
@@ -353,7 +349,6 @@ TRACK_CANDIDATES: Dict[str, Dict[str, Any]] = {
             },
             "predict": {
                 "enable_investors_event_state_features": True,
-                "enable_intensity_baseline": True,
             },
         },
     },
