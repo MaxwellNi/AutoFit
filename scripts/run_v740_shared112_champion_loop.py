@@ -118,6 +118,14 @@ LOCAL_MAINLINE_ALIASES = {
         "use_delegate": False,
         "wrapper_overrides": {},
     },
+    "single_model_mainline_track_r2in_hawkes_revival": {
+        "variant": "mainline_alpha",
+        "use_delegate": False,
+        "wrapper_overrides": {
+            "enable_hawkes_financing_state": True,
+            "enable_jump_ode_state": True,
+        },
+    },
 }
 
 
