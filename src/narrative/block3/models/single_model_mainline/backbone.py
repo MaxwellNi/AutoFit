@@ -9,6 +9,37 @@ import numpy as np
 import pandas as pd
 
 
+# ---------------------------------------------------------------------------
+# P6.2  R²-IN: Robust location/scale estimation
+# ---------------------------------------------------------------------------
+_MAD_CONSISTENCY = np.float32(1.4826)  # MAD × 1.4826 ≈ σ for Gaussian data
+
+
+def _location_scale(
+    data: np.ndarray,
+    *,
+    mode: str = "robust",
+) -> tuple[np.ndarray, np.ndarray]:
+    """Compute column-wise location and scale.
+
+    Parameters
+    ----------
+    mode : str
+        ``"robust"`` — median / (MAD × 1.4826).  Resistant to heavy tails.
+        ``"zscore"`` — mean / std.  Legacy mode for backward compatibility.
+    """
+    arr = np.asarray(data, dtype=np.float32)
+    if mode == "robust":
+        loc = np.median(arr, axis=0).astype(np.float32)
+        mad = np.median(np.abs(arr - loc), axis=0).astype(np.float32)
+        scale = mad * _MAD_CONSISTENCY
+    else:  # zscore
+        loc = arr.mean(axis=0).astype(np.float32)
+        scale = arr.std(axis=0).astype(np.float32)
+    scale[scale < 1e-6] = np.float32(1.0)
+    return loc, scale
+
+
 @dataclass(frozen=True)
 class SharedTemporalBackboneSpec:
     """Minimal contract for the shared temporal trunk.
@@ -63,6 +94,10 @@ class SharedTemporalBackboneSpec:
     # does not require torchdiffeq or GPU training.
     enable_jump_ode_state: bool = False
     jump_ode_dims: int = 8
+    # P6.2: Normalization mode — 'robust' uses median/MAD (R²-IN),
+    # 'zscore' uses mean/std (legacy).  Robust mode prevents 107x scale
+    # shift collapse from outlier-driven mean/std.
+    normalize_mode: str = "robust"
 
     def as_dict(self) -> Dict[str, object]:
         return {
@@ -90,6 +125,7 @@ class SharedTemporalBackboneSpec:
             "hawkes_positive_shock_threshold": self.hawkes_positive_shock_threshold,
             "enable_jump_ode_state": self.enable_jump_ode_state,
             "jump_ode_dims": self.jump_ode_dims,
+            "normalize_mode": self.normalize_mode,
         }
 
 
@@ -132,10 +168,9 @@ class SharedTemporalBackbone:
         self._jump_ode_scale = None
 
         numeric = self._numeric_matrix(frame)
-        self._feature_mean = numeric.mean(axis=0).astype(np.float32, copy=False)
-        scale = numeric.std(axis=0).astype(np.float32, copy=False)
-        scale[scale < 1e-6] = 1.0
-        self._feature_scale = scale
+        self._feature_mean, self._feature_scale = _location_scale(
+            numeric, mode=self.spec.normalize_mode,
+        )
 
         input_dim = numeric.shape[1]
         compact_dim = max(8, min(self.spec.compact_state_dim, input_dim))
@@ -506,10 +541,9 @@ class SharedTemporalBackbone:
         # --- Gen-8 fix: z-score normalise using fit-time statistics ---
         # Store stats at fit time; reuse at transform time for consistency.
         if not hasattr(self, "_hawkes_mean") or self._hawkes_mean is None:
-            self._hawkes_mean = result.mean(axis=0).astype(np.float32)
-            hawkes_std = result.std(axis=0).astype(np.float32)
-            hawkes_std[hawkes_std < 1e-6] = 1.0
-            self._hawkes_scale = hawkes_std
+            self._hawkes_mean, self._hawkes_scale = _location_scale(
+                result, mode=self.spec.normalize_mode,
+            )
         result = (result - self._hawkes_mean) / self._hawkes_scale
         # Final safety clip to ±5 sigma — prevents extreme outliers on new entities
         np.clip(result, -5.0, 5.0, out=result)
@@ -600,10 +634,9 @@ class SharedTemporalBackbone:
 
         # Z-score normalisation: store at fit time, reuse at transform time
         if self._jump_ode_mean is None:
-            self._jump_ode_mean = ode_state.mean(axis=0).astype(np.float32)
-            ode_std = ode_state.std(axis=0).astype(np.float32)
-            ode_std[ode_std < 1e-6] = 1.0
-            self._jump_ode_scale = ode_std
+            self._jump_ode_mean, self._jump_ode_scale = _location_scale(
+                ode_state, mode=self.spec.normalize_mode,
+            )
         ode_state = (ode_state - self._jump_ode_mean) / self._jump_ode_scale
         np.clip(ode_state, -5.0, 5.0, out=ode_state)
 
