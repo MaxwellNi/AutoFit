@@ -326,6 +326,110 @@ class _NeuralHazardMLP:
 
 
 # ---------------------------------------------------------------------------
+# Knowledge distillation helper
+# ---------------------------------------------------------------------------
+
+def _fit_with_kd(
+    mlp: _NeuralHazardMLP,
+    X: np.ndarray,
+    y: np.ndarray,
+    horizon: int = 1,
+    class_weight_pos: float = 1.0,
+    teacher_probs: np.ndarray | None = None,
+    kd_alpha: float = 0.0,
+    rng_seed: int = 0,
+) -> _NeuralHazardMLP:
+    """Train MLP with survival NLL + optional KD soft-label MSE loss.
+
+    When teacher_probs is provided and kd_alpha > 0, adds:
+        L_kd = alpha * MSE(cumulative_prob, teacher_prob)
+    Gradient contribution: 2 * alpha * (p - teacher) added to dp.
+    """
+    if teacher_probs is None or kd_alpha <= 0:
+        return mlp.fit(
+            X, y, horizon=horizon, class_weight_pos=class_weight_pos,
+            rng_seed=rng_seed,
+        )
+
+    X = np.asarray(X, dtype=np.float64)
+    y = np.asarray(y, dtype=np.float64).ravel()
+    teacher = np.clip(np.asarray(teacher_probs, dtype=np.float64).ravel(), _EPS, 1.0 - _EPS)
+    n = len(y)
+    H = max(1, int(horizon))
+    alpha = float(kd_alpha)
+    rng = np.random.RandomState(rng_seed)
+
+    w = np.where(y > 0.5, class_weight_pos, 1.0)
+
+    best_loss = float("inf")
+    stale = 0
+    best_params = (mlp.W1.copy(), mlp.b1.copy(), mlp.W2.copy(), mlp.b2.copy())
+
+    for _epoch in range(_MAX_EPOCHS):
+        perm = rng.permutation(n)
+        epoch_loss = 0.0
+        epoch_count = 0
+
+        for start in range(0, n, _BATCH_SIZE):
+            idx = perm[start: start + _BATCH_SIZE]
+            Xb, yb, wb = X[idx], y[idx], w[idx]
+            tb = teacher[idx]
+            mb = len(idx)
+
+            h, a1, z1 = mlp._forward(Xb)
+            h = np.clip(h, _EPS, 1.0 - _EPS)
+
+            surv = np.power(1.0 - h, float(H))
+            p = np.clip(1.0 - surv, _EPS, 1.0 - _EPS)
+
+            # Survival NLL
+            nll = -(yb * np.log(p) + (1.0 - yb) * np.log(1.0 - p))
+            epoch_loss += float(np.sum(nll * wb))
+            # KD MSE
+            epoch_loss += alpha * float(np.sum((p - tb) ** 2))
+            epoch_count += mb
+
+            # Gradient: survival NLL w.r.t. p
+            dp = -(yb / p - (1.0 - yb) / (1.0 - p)) * wb
+            # Gradient: KD MSE w.r.t. p
+            dp += alpha * 2.0 * (p - tb)
+
+            dp_dh = np.maximum(float(H) * np.power(1.0 - h, float(H - 1)), _EPS)
+            dh_dz2 = h * (1.0 - h)
+            dz2 = (dp * dp_dh * dh_dz2).reshape(-1, 1)
+
+            dW2 = (a1.T @ dz2) / mb + _WEIGHT_DECAY * mlp.W2
+            db2 = dz2.mean(axis=0)
+            da1 = dz2 @ mlp.W2.T
+            dz1 = da1 * _relu_grad(z1)
+            dW1 = (Xb.T @ dz1) / mb + _WEIGHT_DECAY * mlp.W1
+            db1 = dz1.mean(axis=0)
+
+            for g in (dW1, db1, dW2, db2):
+                gnorm = np.linalg.norm(g)
+                if gnorm > 5.0:
+                    g *= 5.0 / gnorm
+
+            mlp.W1 -= _LEARNING_RATE * dW1
+            mlp.b1 -= _LEARNING_RATE * db1
+            mlp.W2 -= _LEARNING_RATE * dW2
+            mlp.b2 -= _LEARNING_RATE * db2
+
+        avg_loss = epoch_loss / max(epoch_count, 1)
+        if avg_loss + 1e-6 < best_loss:
+            best_loss = avg_loss
+            best_params = (mlp.W1.copy(), mlp.b1.copy(), mlp.W2.copy(), mlp.b2.copy())
+            stale = 0
+        else:
+            stale += 1
+            if stale >= _PATIENCE:
+                break
+
+    mlp.W1, mlp.b1, mlp.W2, mlp.b2 = best_params
+    return mlp
+
+
+# ---------------------------------------------------------------------------
 # BinaryLaneRuntime — end-to-end neural survival lane
 # ---------------------------------------------------------------------------
 
@@ -363,6 +467,8 @@ class BinaryLaneRuntime:
         enable_calibration_shrinkage: bool = False,
         calibration_shrinkage_target: str = "auto",
         horizon: int = 1,
+        teacher_probs: np.ndarray | None = None,
+        kd_alpha: float = 0.0,
     ) -> "BinaryLaneRuntime":
         target = (np.asarray(y, dtype=np.float32) > 0.5).astype(np.int32, copy=False)
         self._model = None
@@ -414,10 +520,12 @@ class BinaryLaneRuntime:
             hidden_dim=_HIDDEN_DIM,
             random_state=self.random_state,
         )
-        self._model.fit(
-            design, target,
+        _fit_with_kd(
+            self._model, design, target,
             horizon=hz,
             class_weight_pos=class_weight_pos,
+            teacher_probs=teacher_probs,
+            kd_alpha=kd_alpha,
             rng_seed=self.random_state + 7,
         )
 

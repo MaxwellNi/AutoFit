@@ -550,6 +550,8 @@ class SingleModelMainlineWrapper(ModelBase):
                 enable_calibration_shrinkage=self.enable_binary_calibration_shrinkage,
                 calibration_shrinkage_target=self.binary_calibration_shrinkage_target,
                 horizon=self._horizon,
+                teacher_probs=kwargs.get("teacher_probs"),
+                kd_alpha=float(kwargs.get("kd_alpha", 0.0)),
             )
             self._binary_event_rate = float(self.binary_lane_runtime._event_rate)
             self._binary_transition_rate = float(self.binary_lane_runtime._transition_rate)
