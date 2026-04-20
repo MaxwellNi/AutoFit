@@ -6,7 +6,6 @@ from dataclasses import dataclass
 from typing import Any, Dict, Tuple
 
 import numpy as np
-from sklearn.ensemble import HistGradientBoostingClassifier
 from sklearn.linear_model import LogisticRegression
 
 from narrative.nbi_nci.calibration import reliability_metrics
@@ -39,8 +38,8 @@ class BinaryLaneRuntime:
     def __init__(self, spec: BinaryLaneSpec | None = None, random_state: int = 0):
         self.spec = spec or BinaryLaneSpec()
         self.random_state = int(random_state)
-        self._model: HistGradientBoostingClassifier | None = None
-        self._hazard_model: HistGradientBoostingClassifier | None = None
+        self._model: LogisticRegression | None = None
+        self._hazard_model: LogisticRegression | None = None
         self._calibrator_name = "identity"
         self._calibrator: Any | None = None
         self._constant_probability = 0.5
@@ -249,11 +248,9 @@ class BinaryLaneRuntime:
         return np.clip(calibrated, 0.0, 1.0).astype(np.float64, copy=False)
 
 
-def _build_binary_model(random_state: int) -> HistGradientBoostingClassifier:
-    return HistGradientBoostingClassifier(
-        max_depth=3,
-        max_iter=150,
-        learning_rate=0.05,
+def _build_binary_model(random_state: int) -> LogisticRegression:
+    return LogisticRegression(
+        max_iter=400,
         class_weight="balanced",
         random_state=random_state,
     )
@@ -289,7 +286,7 @@ def _fit_hazard_model(
     target: np.ndarray,
     lag1_active: np.ndarray,
     random_state: int,
-) -> HistGradientBoostingClassifier | None:
+) -> LogisticRegression | None:
     at_risk_mask = np.asarray(lag1_active, dtype=np.float64) < 0.5
     if int(at_risk_mask.sum()) < 12:
         return None
@@ -303,7 +300,7 @@ def _fit_hazard_model(
 
 def _predict_binary_probability(
     design: np.ndarray,
-    model: HistGradientBoostingClassifier | None,
+    model: LogisticRegression | None,
     fallback_rate: float,
 ) -> np.ndarray:
     if model is None:
@@ -314,7 +311,7 @@ def _predict_binary_probability(
 def _predict_hazard_prior(
     design: np.ndarray,
     lag1_active: np.ndarray,
-    hazard_model: HistGradientBoostingClassifier | None,
+    hazard_model: LogisticRegression | None,
     transition_rate: float,
     persistence_rate: float,
 ) -> np.ndarray:
