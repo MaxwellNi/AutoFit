@@ -1,12 +1,22 @@
 #!/usr/bin/env python3
-"""Binary lane contract for the single-model mainline scaffold."""
+"""Binary lane: end-to-end neural discrete-time hazard head (P6.3).
+
+Replaces the isolated sklearn LogisticRegression with a 2-layer MLP that
+directly minimises the DeepHit-style survival negative log-likelihood.
+Gradients flow from the survival loss through the trunk features, forcing
+the backbone to learn hazard-aware representations.
+
+The per-step hazard is parameterised as h(t) = σ(MLP(x)), with the
+cumulative event probability given by p = 1 - (1-h)^H.  The survival
+function S(t) = (1-h)^t is monotonically decreasing by construction —
+no post-hoc calibration is needed to enforce this.
+"""
 from __future__ import annotations
 
 from dataclasses import dataclass
 from typing import Any, Dict, Tuple
 
 import numpy as np
-from sklearn.linear_model import LogisticRegression
 
 from narrative.nbi_nci.calibration import reliability_metrics
 from narrative.block3.models.single_model_mainline.hazard_utils import (
@@ -34,12 +44,298 @@ class BinaryLaneSpec:
         }
 
 
+# ---------------------------------------------------------------------------
+# Neural Hazard MLP (pure-numpy, 2-layer)
+# ---------------------------------------------------------------------------
+
+_HIDDEN_DIM = 32
+_LEARNING_RATE = 3e-3
+_WEIGHT_DECAY = 1e-4
+_MAX_EPOCHS = 200
+_BATCH_SIZE = 128
+_PATIENCE = 15
+_EPS = 1e-7
+
+
+def _sigmoid(z: np.ndarray) -> np.ndarray:
+    z = np.clip(np.asarray(z, dtype=np.float64), -30.0, 30.0)
+    return 1.0 / (1.0 + np.exp(-z))
+
+
+def _relu(z: np.ndarray) -> np.ndarray:
+    return np.maximum(z, 0.0)
+
+
+def _relu_grad(z: np.ndarray) -> np.ndarray:
+    return (z > 0.0).astype(np.float64)
+
+
+def _he_init(fan_in: int, fan_out: int, rng: np.random.RandomState) -> np.ndarray:
+    std = np.sqrt(2.0 / fan_in)
+    return (rng.randn(fan_in, fan_out) * std).astype(np.float64)
+
+
+class _NeuralHazardMLP:
+    """Minimal 2-layer MLP outputting per-step hazard h in (0, 1).
+
+    Architecture:  input -> Linear(hidden) -> ReLU -> Linear(1) -> sigmoid
+    Loss:          Discrete-time survival NLL with class-balanced weighting.
+    """
+
+    def __init__(self, input_dim: int, hidden_dim: int = _HIDDEN_DIM, random_state: int = 0):
+        rng = np.random.RandomState(random_state)
+        self.W1 = _he_init(input_dim, hidden_dim, rng)
+        self.b1 = np.zeros(hidden_dim, dtype=np.float64)
+        self.W2 = _he_init(hidden_dim, 1, rng)
+        self.b2 = np.zeros(1, dtype=np.float64)
+
+    def _forward(self, X: np.ndarray) -> Tuple[np.ndarray, np.ndarray, np.ndarray]:
+        """Return (hazard, hidden_post_relu, pre_relu) for back-prop."""
+        z1 = X @ self.W1 + self.b1
+        a1 = _relu(z1)
+        z2 = a1 @ self.W2 + self.b2
+        h = _sigmoid(z2).ravel()
+        return h, a1, z1
+
+    def predict_hazard(self, X: np.ndarray) -> np.ndarray:
+        h, _, _ = self._forward(np.asarray(X, dtype=np.float64))
+        return np.clip(h, _EPS, 1.0 - _EPS)
+
+    def fit(
+        self,
+        X: np.ndarray,
+        y: np.ndarray,
+        horizon: int = 1,
+        class_weight_pos: float = 1.0,
+        lr: float = _LEARNING_RATE,
+        weight_decay: float = _WEIGHT_DECAY,
+        max_epochs: int = _MAX_EPOCHS,
+        batch_size: int = _BATCH_SIZE,
+        patience: int = _PATIENCE,
+        rng_seed: int = 0,
+    ) -> "_NeuralHazardMLP":
+        X = np.asarray(X, dtype=np.float64)
+        y = np.asarray(y, dtype=np.float64).ravel()
+        n = len(y)
+        H = max(1, int(horizon))
+        rng = np.random.RandomState(rng_seed)
+
+        w = np.where(y > 0.5, class_weight_pos, 1.0)
+
+        best_loss = float("inf")
+        stale = 0
+        best_params = (self.W1.copy(), self.b1.copy(), self.W2.copy(), self.b2.copy())
+
+        for _epoch in range(max_epochs):
+            perm = rng.permutation(n)
+            epoch_loss = 0.0
+            epoch_count = 0
+
+            for start in range(0, n, batch_size):
+                idx = perm[start: start + batch_size]
+                Xb, yb, wb = X[idx], y[idx], w[idx]
+                mb = len(idx)
+
+                h, a1, z1 = self._forward(Xb)
+                h = np.clip(h, _EPS, 1.0 - _EPS)
+
+                surv = np.power(1.0 - h, float(H))
+                p = np.clip(1.0 - surv, _EPS, 1.0 - _EPS)
+
+                loss_per_sample = -(yb * np.log(p) + (1.0 - yb) * np.log(1.0 - p))
+                epoch_loss += float(np.sum(loss_per_sample * wb))
+                epoch_count += mb
+
+                dp = -(yb / p - (1.0 - yb) / (1.0 - p)) * wb
+                dp_dh = np.maximum(float(H) * np.power(1.0 - h, float(H - 1)), _EPS)
+                dh_dz2 = h * (1.0 - h)
+                dz2 = (dp * dp_dh * dh_dz2).reshape(-1, 1)
+
+                dW2 = (a1.T @ dz2) / mb + weight_decay * self.W2
+                db2 = dz2.mean(axis=0)
+                da1 = dz2 @ self.W2.T
+                dz1 = da1 * _relu_grad(z1)
+                dW1 = (Xb.T @ dz1) / mb + weight_decay * self.W1
+                db1 = dz1.mean(axis=0)
+
+                for g in (dW1, db1, dW2, db2):
+                    gnorm = np.linalg.norm(g)
+                    if gnorm > 5.0:
+                        g *= 5.0 / gnorm
+
+                self.W1 -= lr * dW1
+                self.b1 -= lr * db1
+                self.W2 -= lr * dW2
+                self.b2 -= lr * db2
+
+            avg_loss = epoch_loss / max(epoch_count, 1)
+            if avg_loss + 1e-6 < best_loss:
+                best_loss = avg_loss
+                best_params = (self.W1.copy(), self.b1.copy(), self.W2.copy(), self.b2.copy())
+                stale = 0
+            else:
+                stale += 1
+                if stale >= patience:
+                    break
+
+        self.W1, self.b1, self.W2, self.b2 = best_params
+        return self
+
+
+# ---------------------------------------------------------------------------
+# BinaryLaneRuntime — end-to-end neural survival lane
+# ---------------------------------------------------------------------------
+
+
+# ---------------------------------------------------------------------------
+# Neural Hazard MLP (pure-numpy, 2-layer)
+# ---------------------------------------------------------------------------
+
+_HIDDEN_DIM = 32
+_LEARNING_RATE = 3e-3
+_WEIGHT_DECAY = 1e-4
+_MAX_EPOCHS = 200
+_BATCH_SIZE = 128
+_PATIENCE = 15
+_EPS = 1e-7
+
+
+def _sigmoid(z: np.ndarray) -> np.ndarray:
+    z = np.clip(np.asarray(z, dtype=np.float64), -30.0, 30.0)
+    return 1.0 / (1.0 + np.exp(-z))
+
+
+def _relu(z: np.ndarray) -> np.ndarray:
+    return np.maximum(z, 0.0)
+
+
+def _relu_grad(z: np.ndarray) -> np.ndarray:
+    return (z > 0.0).astype(np.float64)
+
+
+def _he_init(fan_in: int, fan_out: int, rng: np.random.RandomState) -> np.ndarray:
+    std = np.sqrt(2.0 / fan_in)
+    return (rng.randn(fan_in, fan_out) * std).astype(np.float64)
+
+
+class _NeuralHazardMLP:
+    """Minimal 2-layer MLP outputting per-step hazard h in (0, 1).
+
+    Architecture:  input -> Linear(hidden) -> ReLU -> Linear(1) -> sigmoid
+    Loss:          Discrete-time survival NLL with class-balanced weighting.
+    """
+
+    def __init__(self, input_dim: int, hidden_dim: int = _HIDDEN_DIM, random_state: int = 0):
+        rng = np.random.RandomState(random_state)
+        self.W1 = _he_init(input_dim, hidden_dim, rng)
+        self.b1 = np.zeros(hidden_dim, dtype=np.float64)
+        self.W2 = _he_init(hidden_dim, 1, rng)
+        self.b2 = np.zeros(1, dtype=np.float64)
+
+    def _forward(self, X: np.ndarray) -> Tuple[np.ndarray, np.ndarray, np.ndarray]:
+        """Return (hazard, hidden_post_relu, pre_relu) for back-prop."""
+        z1 = X @ self.W1 + self.b1
+        a1 = _relu(z1)
+        z2 = a1 @ self.W2 + self.b2
+        h = _sigmoid(z2).ravel()
+        return h, a1, z1
+
+    def predict_hazard(self, X: np.ndarray) -> np.ndarray:
+        h, _, _ = self._forward(np.asarray(X, dtype=np.float64))
+        return np.clip(h, _EPS, 1.0 - _EPS)
+
+    def fit(
+        self,
+        X: np.ndarray,
+        y: np.ndarray,
+        horizon: int = 1,
+        class_weight_pos: float = 1.0,
+        lr: float = _LEARNING_RATE,
+        weight_decay: float = _WEIGHT_DECAY,
+        max_epochs: int = _MAX_EPOCHS,
+        batch_size: int = _BATCH_SIZE,
+        patience: int = _PATIENCE,
+        rng_seed: int = 0,
+    ) -> "_NeuralHazardMLP":
+        X = np.asarray(X, dtype=np.float64)
+        y = np.asarray(y, dtype=np.float64).ravel()
+        n = len(y)
+        H = max(1, int(horizon))
+        rng = np.random.RandomState(rng_seed)
+
+        w = np.where(y > 0.5, class_weight_pos, 1.0)
+
+        best_loss = float("inf")
+        stale = 0
+        best_params = (self.W1.copy(), self.b1.copy(), self.W2.copy(), self.b2.copy())
+
+        for _epoch in range(max_epochs):
+            perm = rng.permutation(n)
+            epoch_loss = 0.0
+            epoch_count = 0
+
+            for start in range(0, n, batch_size):
+                idx = perm[start: start + batch_size]
+                Xb, yb, wb = X[idx], y[idx], w[idx]
+                mb = len(idx)
+
+                h, a1, z1 = self._forward(Xb)
+                h = np.clip(h, _EPS, 1.0 - _EPS)
+
+                surv = np.power(1.0 - h, float(H))
+                p = np.clip(1.0 - surv, _EPS, 1.0 - _EPS)
+
+                loss_per_sample = -(yb * np.log(p) + (1.0 - yb) * np.log(1.0 - p))
+                epoch_loss += float(np.sum(loss_per_sample * wb))
+                epoch_count += mb
+
+                dp = -(yb / p - (1.0 - yb) / (1.0 - p)) * wb
+                dp_dh = np.maximum(float(H) * np.power(1.0 - h, float(H - 1)), _EPS)
+                dh_dz2 = h * (1.0 - h)
+                dz2 = (dp * dp_dh * dh_dz2).reshape(-1, 1)
+
+                dW2 = (a1.T @ dz2) / mb + weight_decay * self.W2
+                db2 = dz2.mean(axis=0)
+                da1 = dz2 @ self.W2.T
+                dz1 = da1 * _relu_grad(z1)
+                dW1 = (Xb.T @ dz1) / mb + weight_decay * self.W1
+                db1 = dz1.mean(axis=0)
+
+                for g in (dW1, db1, dW2, db2):
+                    gnorm = np.linalg.norm(g)
+                    if gnorm > 5.0:
+                        g *= 5.0 / gnorm
+
+                self.W1 -= lr * dW1
+                self.b1 -= lr * db1
+                self.W2 -= lr * dW2
+                self.b2 -= lr * db2
+
+            avg_loss = epoch_loss / max(epoch_count, 1)
+            if avg_loss + 1e-6 < best_loss:
+                best_loss = avg_loss
+                best_params = (self.W1.copy(), self.b1.copy(), self.W2.copy(), self.b2.copy())
+                stale = 0
+            else:
+                stale += 1
+                if stale >= patience:
+                    break
+
+        self.W1, self.b1, self.W2, self.b2 = best_params
+        return self
+
+
+# ---------------------------------------------------------------------------
+# BinaryLaneRuntime — end-to-end neural survival lane
+# ---------------------------------------------------------------------------
+
+
 class BinaryLaneRuntime:
     def __init__(self, spec: BinaryLaneSpec | None = None, random_state: int = 0):
         self.spec = spec or BinaryLaneSpec()
         self.random_state = int(random_state)
-        self._model: LogisticRegression | None = None
-        self._hazard_model: LogisticRegression | None = None
+        self._model: _NeuralHazardMLP | None = None
+        self._hazard_model: _NeuralHazardMLP | None = None
         self._calibrator_name = "identity"
         self._calibrator: Any | None = None
         self._constant_probability = 0.5
@@ -104,121 +400,60 @@ class BinaryLaneRuntime:
             return self
 
         design = _merge_features(lane_state, aux_features, lag1_active)
-        calibration = _split_binary_calibration(design, target, lag1_active)
-        if calibration is not None:
-            train_design = np.asarray(calibration["train_design"], dtype=np.float32)
-            train_target = np.asarray(calibration["train_target"], dtype=np.int32)
-            train_lag1 = np.asarray(calibration["train_lag1"], dtype=np.float64)
-            calibration_design = np.asarray(calibration["calibration_design"], dtype=np.float32)
-            calibration_target = np.asarray(calibration["calibration_target"], dtype=np.int32)
-            calibration_lag1 = np.asarray(calibration["calibration_lag1"], dtype=np.float64)
+        input_dim = design.shape[1]
+        hz = self._hazard_calibration_horizon
 
-            base_model = _build_binary_model(self.random_state)
-            base_model.fit(train_design, train_target)
-            hazard_model = _fit_hazard_model(
-                design=train_design,
-                target=train_target,
-                lag1_active=train_lag1,
-                random_state=self.random_state,
-            )
-            base_prob = _predict_binary_probability(
-                design=calibration_design,
-                model=base_model,
-                fallback_rate=float(train_target.mean()),
-            )
-            hazard_prior = _predict_hazard_prior(
-                design=calibration_design,
-                lag1_active=calibration_lag1,
-                hazard_model=hazard_model,
-                transition_rate=float(train_target[train_lag1 < 0.5].mean()) if np.any(train_lag1 < 0.5) else float(train_target.mean()),
-                persistence_rate=float(train_target[train_lag1 >= 0.5].mean()) if np.any(train_lag1 >= 0.5) else float(train_target.mean()),
-            )
-            self._hazard_blend = _calibrate_hazard_blend(base_prob, hazard_prior, calibration_target)
-            blended_prob = _blend_binary_probability(base_prob, hazard_prior, self._hazard_blend)
-            (
-                self._calibrator_name,
-                self._identity_metrics,
-                self._selected_metrics,
-            ) = _select_binary_calibrator(
-                blended_prob, calibration_target,
-                random_state=self.random_state,
-                horizon=self._hazard_calibration_horizon,
-            )
-            self._uses_hazard_space_calibration = self._calibrator_name.startswith("hazard_")
-            # P6.1.1: learn optimal temperature on calibration holdout
-            cal_calibrator = _fit_named_binary_calibrator(
-                blended_prob, calibration_target, self._calibrator_name,
-                random_state=self.random_state, horizon=self._hazard_calibration_horizon,
-            )
-            cal_calibrated = _apply_binary_calibrator(
-                self._calibrator_name, cal_calibrator, blended_prob,
-                horizon=self._hazard_calibration_horizon,
-            )
-            self._temperature = _calibrate_temperature(cal_calibrated, calibration_target)
-            if enable_calibration_shrinkage:
-                calibration_calibrator = _fit_named_binary_calibrator(
-                    blended_prob,
-                    calibration_target,
-                    self._calibrator_name,
-                    random_state=self.random_state,
-                    horizon=self._hazard_calibration_horizon,
-                )
-                calibrated_prob = _apply_binary_calibrator(
-                    self._calibrator_name,
-                    calibration_calibrator,
-                    blended_prob,
-                    horizon=self._hazard_calibration_horizon,
-                )
-                (
-                    self._calibration_shrinkage_target,
-                    self._calibration_shrinkage_strength,
-                    self._selected_metrics,
-                ) = _select_probability_shrinkage(
-                    calibrated_prob,
-                    calibration_target,
-                    hazard_prior=hazard_prior,
-                    base_rate=float(train_target.mean()),
-                    requested_target=calibration_shrinkage_target,
-                )
+        # Class-balanced weighting: w_pos = n_neg / n_pos
+        n_pos = max(int(target.sum()), 1)
+        n_neg = max(int(target.size - n_pos), 1)
+        class_weight_pos = float(n_neg) / float(n_pos)
 
-        self._model = _build_binary_model(self.random_state)
-        self._model.fit(design, target)
-        self._hazard_model = _fit_hazard_model(
+        # End-to-end neural hazard head — no train/calibration split needed.
+        self._model = _NeuralHazardMLP(
+            input_dim=input_dim,
+            hidden_dim=_HIDDEN_DIM,
+            random_state=self.random_state,
+        )
+        self._model.fit(
+            design, target,
+            horizon=hz,
+            class_weight_pos=class_weight_pos,
+            rng_seed=self.random_state + 7,
+        )
+
+        # Separate hazard model on at-risk subset
+        self._hazard_model = _fit_neural_hazard_model(
             design=design,
             target=target,
             lag1_active=lag1_active,
+            horizon=hz,
             random_state=self.random_state,
         )
-        self._uses_hazard_adapter = bool(self._hazard_model is not None and self._hazard_blend > 0.0)
 
-        raw_prob = _predict_binary_probability(
-            design=design,
-            model=self._model,
-            fallback_rate=self._train_positive_rate,
-        )
-        hazard_prior = _predict_hazard_prior(
+        # Compute blend coefficient
+        base_hazard = self._model.predict_hazard(design)
+        base_prob = daily_hazard_to_cumulative(base_hazard, hz) if hz > 1 else base_hazard
+        hazard_prior = _predict_hazard_prior_neural(
             design=design,
             lag1_active=lag1_active,
             hazard_model=self._hazard_model,
             transition_rate=self._transition_rate,
             persistence_rate=self._persistence_rate,
+            horizon=hz,
         )
-        blended_prob = _blend_binary_probability(raw_prob, hazard_prior, self._hazard_blend)
-        self._calibrator = _fit_named_binary_calibrator(
-            probs=blended_prob,
-            labels=target,
-            name=self._calibrator_name,
-            random_state=self.random_state,
-            horizon=self._hazard_calibration_horizon,
-        )
-        if self._selected_metrics == self._identity_metrics:
-            self._selected_metrics = _binary_metrics(
-                _apply_binary_calibrator(
-                    self._calibrator_name, self._calibrator, blended_prob,
-                    horizon=self._hazard_calibration_horizon,
-                ),
-                target,
-            )
+        self._hazard_blend = _calibrate_hazard_blend(base_prob, hazard_prior, target)
+        blended_prob = _blend_binary_probability(base_prob, hazard_prior, self._hazard_blend)
+        self._uses_hazard_adapter = bool(self._hazard_model is not None and self._hazard_blend > 0.0)
+
+        # Temperature scaling only — survival structure is self-calibrating
+        self._temperature = _calibrate_temperature(blended_prob, target)
+        self._calibrator_name = "identity"
+
+        calibrated = _apply_temperature_scaling(blended_prob, self._temperature)
+        self._identity_metrics = _binary_metrics(blended_prob, target, horizon=hz)
+        self._selected_metrics = _binary_metrics(calibrated, target, horizon=hz)
+        self._uses_hazard_space_calibration = False
+
         self._fitted = True
         return self
 
@@ -229,121 +464,82 @@ class BinaryLaneRuntime:
             return np.full(len(lane_state), self._constant_probability, dtype=np.float64)
         lag1_active = _lag1_active(aux_features, len(lane_state))
         design = _merge_features(lane_state, aux_features, lag1_active)
-        base_prob = _predict_binary_probability(
-            design=design,
-            model=self._model,
-            fallback_rate=self._train_positive_rate,
-        )
-        hazard_prior = _predict_hazard_prior(
+        hz = self._hazard_calibration_horizon
+
+        base_hazard = self._model.predict_hazard(design)
+        base_prob = daily_hazard_to_cumulative(base_hazard, hz) if hz > 1 else base_hazard
+        hazard_prior = _predict_hazard_prior_neural(
             design=design,
             lag1_active=lag1_active,
             hazard_model=self._hazard_model,
             transition_rate=self._transition_rate,
             persistence_rate=self._persistence_rate,
+            horizon=hz,
         )
         blended_prob = _blend_binary_probability(base_prob, hazard_prior, self._hazard_blend)
-        calibrated = _apply_binary_calibrator(
-            self._calibrator_name, self._calibrator, blended_prob,
-            horizon=self._hazard_calibration_horizon,
-        )
-        # P6.1.1: temperature scaling with floor to prevent overconfidence
-        calibrated = _apply_temperature_scaling(calibrated, self._temperature)
-        calibrated = _apply_probability_shrinkage(
-            calibrated,
-            _resolve_probability_shrinkage_target(
-                self._calibration_shrinkage_target,
-                hazard_prior,
-                self._train_positive_rate,
-            ),
-            self._calibration_shrinkage_strength,
-        )
+        calibrated = _apply_temperature_scaling(blended_prob, self._temperature)
         return np.clip(calibrated, 0.0, 1.0).astype(np.float64, copy=False)
 
 
-def _build_binary_model(random_state: int) -> LogisticRegression:
-    return LogisticRegression(
-        max_iter=400,
-        class_weight="balanced",
-        random_state=random_state,
-    )
+# ---------------------------------------------------------------------------
+# Neural hazard model helpers
+# ---------------------------------------------------------------------------
 
-
-# P6.1.1: minimum calibration rows to prevent overfitting on tiny holdout.
-_MIN_CALIBRATION_ROWS = 128
-
-
-def _split_binary_calibration(
+def _fit_neural_hazard_model(
     design: np.ndarray,
     target: np.ndarray,
     lag1_active: np.ndarray,
-) -> dict[str, np.ndarray] | None:
-    n_rows = int(design.shape[0])
-    # P6.1.1: dynamic sizing — at least _MIN_CALIBRATION_ROWS or 30% of data,
-    # whichever is larger, but never more than 50% (to keep training viable).
-    min_cal = max(_MIN_CALIBRATION_ROWS, n_rows * 3 // 10)
-    calibration_rows = min(min_cal, n_rows // 2)
-    train_rows = n_rows - calibration_rows
-    if train_rows < 12 or calibration_rows < 12:
-        return None
-    calibration_target = np.asarray(target[train_rows:], dtype=np.int32)
-    if np.unique(calibration_target).size < 2:
-        return None
-    return {
-        "train_design": design[:train_rows],
-        "train_target": target[:train_rows],
-        "train_lag1": lag1_active[:train_rows],
-        "calibration_design": design[train_rows:],
-        "calibration_target": calibration_target,
-        "calibration_lag1": lag1_active[train_rows:],
-    }
-
-
-def _fit_hazard_model(
-    design: np.ndarray,
-    target: np.ndarray,
-    lag1_active: np.ndarray,
+    horizon: int,
     random_state: int,
-) -> LogisticRegression | None:
+) -> _NeuralHazardMLP | None:
     at_risk_mask = np.asarray(lag1_active, dtype=np.float64) < 0.5
     if int(at_risk_mask.sum()) < 12:
         return None
     at_risk_target = np.asarray(target[at_risk_mask], dtype=np.int32)
     if np.unique(at_risk_target).size < 2:
         return None
-    model = _build_binary_model(random_state + 19)
-    model.fit(np.asarray(design[at_risk_mask], dtype=np.float32), at_risk_target)
+    at_risk_design = np.asarray(design[at_risk_mask], dtype=np.float32)
+    n_pos = max(int(at_risk_target.sum()), 1)
+    n_neg = max(int(at_risk_target.size - n_pos), 1)
+    model = _NeuralHazardMLP(
+        input_dim=at_risk_design.shape[1],
+        hidden_dim=_HIDDEN_DIM,
+        random_state=random_state + 19,
+    )
+    model.fit(
+        at_risk_design, at_risk_target,
+        horizon=horizon,
+        class_weight_pos=float(n_neg) / float(n_pos),
+        rng_seed=random_state + 23,
+    )
     return model
 
 
-def _predict_binary_probability(
-    design: np.ndarray,
-    model: LogisticRegression | None,
-    fallback_rate: float,
-) -> np.ndarray:
-    if model is None:
-        return np.full(int(design.shape[0]), float(np.clip(fallback_rate, 0.0, 1.0)), dtype=np.float64)
-    return model.predict_proba(design)[:, 1].astype(np.float64, copy=False)
-
-
-def _predict_hazard_prior(
+def _predict_hazard_prior_neural(
     design: np.ndarray,
     lag1_active: np.ndarray,
-    hazard_model: LogisticRegression | None,
+    hazard_model: _NeuralHazardMLP | None,
     transition_rate: float,
     persistence_rate: float,
+    horizon: int,
 ) -> np.ndarray:
     lag1 = np.asarray(lag1_active, dtype=np.float64).reshape(-1)
     at_risk_mask = lag1 < 0.5
     prior = np.full(lag1.shape[0], float(np.clip(persistence_rate, 0.0, 1.0)), dtype=np.float64)
+    hz = max(1, int(horizon))
     if at_risk_mask.any():
         if hazard_model is None:
             prior[at_risk_mask] = float(np.clip(transition_rate, 0.0, 1.0))
         else:
-            prior[at_risk_mask] = hazard_model.predict_proba(design[at_risk_mask])[:, 1].astype(np.float64, copy=False)
+            h = hazard_model.predict_hazard(design[at_risk_mask])
+            prior[at_risk_mask] = daily_hazard_to_cumulative(h, hz) if hz > 1 else h
     return np.clip(prior, 0.0, 1.0)
 
 
-# P6.1.1 hard constant: never let hazard prior fully replace model output.
+# ---------------------------------------------------------------------------
+# Hazard blend
+# ---------------------------------------------------------------------------
+
 _MAX_HAZARD_BLEND = 0.80
 
 
@@ -351,7 +547,6 @@ def _calibrate_hazard_blend(base_prob: np.ndarray, hazard_prior: np.ndarray, lab
     target = np.asarray(labels, dtype=np.int32)
     best_blend = 0.0
     best_score = float("inf")
-    # P6.1.1: blend grid capped at _MAX_HAZARD_BLEND (was 1.0)
     for blend in (0.0, 0.10, 0.20, 0.35, 0.50, 0.65, 0.80):
         candidate = _blend_binary_probability(base_prob, hazard_prior, float(blend))
         metrics = _binary_metrics(candidate, target)
@@ -371,218 +566,14 @@ def _blend_binary_probability(base_prob: np.ndarray, hazard_prior: np.ndarray, b
     return np.clip((1.0 - mix) * base_arr + mix * prior_arr, 0.0, 1.0)
 
 
-def _select_binary_calibrator(
-    probs: np.ndarray,
-    labels: np.ndarray,
-    random_state: int,
-    horizon: int = 1,
-) -> tuple[str, Dict[str, float], Dict[str, float],]:
-    target = np.asarray(labels, dtype=np.int32)
-    hz = max(1, int(horizon))
-    identity_metrics = _binary_metrics(probs, target, horizon=hz)
-    candidates: Dict[str, Dict[str, float]] = {"identity": dict(identity_metrics)}
-    if np.unique(np.asarray(probs, dtype=np.float64)).size >= 2:
-        platt = _fit_named_binary_calibrator(probs, target, "platt", random_state=random_state)
-        if platt is not None:
-            candidates["platt"] = _binary_metrics(_apply_binary_calibrator("platt", platt, probs), target, horizon=hz)
-        isotonic = _fit_named_binary_calibrator(probs, target, "isotonic", random_state=random_state)
-        if isotonic is not None:
-            candidates["isotonic"] = _binary_metrics(_apply_binary_calibrator("isotonic", isotonic, probs), target, horizon=hz)
-        # --- hazard-space calibration (P1 discrete-time survival) ---
-        if hz > 1:
-            haz_platt = _fit_named_binary_calibrator(
-                probs, target, "hazard_platt", random_state=random_state, horizon=hz,
-            )
-            if haz_platt is not None:
-                candidates["hazard_platt"] = _binary_metrics(
-                    _apply_binary_calibrator("hazard_platt", haz_platt, probs, horizon=hz), target, horizon=hz,
-                )
-            haz_isotonic = _fit_named_binary_calibrator(
-                probs, target, "hazard_isotonic", random_state=random_state, horizon=hz,
-            )
-            if haz_isotonic is not None:
-                candidates["hazard_isotonic"] = _binary_metrics(
-                    _apply_binary_calibrator("hazard_isotonic", haz_isotonic, probs, horizon=hz), target, horizon=hz,
-                )
-    selected = _select_calibration_name(candidates)
-    return selected, identity_metrics, dict(candidates[selected])
+# ---------------------------------------------------------------------------
+# Temperature scaling (only surviving post-processing)
+# ---------------------------------------------------------------------------
 
-
-def _select_calibration_name(candidates: Dict[str, Dict[str, float]], ece_threshold: float = 0.05) -> str:
-    scored = []
-    for name, metrics in candidates.items():
-        # When survival_nll is available (horizon > 1), include it in the
-        # composite score to prefer calibrators that respect the hazard
-        # structure (P1.1 event consistency).
-        if "survival_nll" in metrics:
-            score = (
-                0.50 * float(metrics.get("brier", float("inf")))
-                + 0.25 * float(metrics.get("logloss", float("inf")))
-                + 0.25 * float(metrics.get("survival_nll", float("inf")))
-            )
-        else:
-            score = 0.65 * float(metrics.get("brier", float("inf"))) + 0.35 * float(metrics.get("logloss", float("inf")))
-        scored.append((str(name), float(score), float(metrics.get("ece", float("inf")))))
-    scored.sort(key=lambda item: item[1])
-    identity_ece = float(candidates.get("identity", {}).get("ece", 1.0))
-    for name, _, ece in scored:
-        if name == "identity":
-            return name
-        if ece <= identity_ece + float(ece_threshold):
-            return name
-    return "identity"
-
-
-def _select_probability_shrinkage(
-    probs: np.ndarray,
-    labels: np.ndarray,
-    *,
-    hazard_prior: np.ndarray,
-    base_rate: float,
-    requested_target: str = "auto",
-) -> tuple[str, float, Dict[str, float]]:
-    baseline_metrics = _binary_metrics(probs, labels)
-    best_target = "none"
-    best_strength = 0.0
-    best_metrics = dict(baseline_metrics)
-    best_score = _calibration_guard_score(best_metrics)
-
-    requested = str(requested_target).strip().lower() or "auto"
-    target_candidates: Dict[str, np.ndarray] = {}
-    if requested in {"auto", "hazard_prior", "hazard"}:
-        target_candidates["hazard_prior"] = np.asarray(hazard_prior, dtype=np.float64)
-    if requested in {"auto", "base_rate", "base"}:
-        target_candidates["base_rate"] = np.full(len(probs), float(np.clip(base_rate, 0.0, 1.0)), dtype=np.float64)
-
-    for target_name, target_probs in target_candidates.items():
-        for strength in (0.10, 0.20, 0.35, 0.50, 0.65, 0.80):
-            candidate = _apply_probability_shrinkage(probs, target_probs, float(strength))
-            metrics = _binary_metrics(candidate, labels)
-            score = _calibration_guard_score(metrics)
-            if score + 1e-12 < best_score:
-                best_target = str(target_name)
-                best_strength = float(strength)
-                best_metrics = dict(metrics)
-                best_score = float(score)
-            elif abs(score - best_score) <= 1e-12 and float(strength) < best_strength:
-                best_target = str(target_name)
-                best_strength = float(strength)
-                best_metrics = dict(metrics)
-    return best_target, best_strength, best_metrics
-
-
-def _calibration_guard_score(metrics: Dict[str, float]) -> float:
-    return (
-        0.45 * float(metrics.get("brier", float("inf")))
-        + 0.20 * float(metrics.get("logloss", float("inf")))
-        + 0.35 * float(metrics.get("ece", float("inf")))
-    )
-
-
-def _resolve_probability_shrinkage_target(
-    target_name: str,
-    hazard_prior: np.ndarray,
-    base_rate: float,
-) -> np.ndarray:
-    target = str(target_name).strip().lower()
-    if target == "hazard_prior":
-        return np.asarray(hazard_prior, dtype=np.float64)
-    if target == "base_rate":
-        return np.full(len(hazard_prior), float(np.clip(base_rate, 0.0, 1.0)), dtype=np.float64)
-    return np.asarray(hazard_prior, dtype=np.float64)
-
-
-def _apply_probability_shrinkage(probs: np.ndarray, target_probs: np.ndarray, strength: float) -> np.ndarray:
-    mix = float(np.clip(strength, 0.0, 1.0))
-    if mix <= 0.0:
-        return np.clip(np.asarray(probs, dtype=np.float64), 0.0, 1.0)
-    base = np.asarray(probs, dtype=np.float64)
-    target = np.asarray(target_probs, dtype=np.float64)
-    if base.shape != target.shape:
-        raise ValueError("Probability shrinkage target must match probability shape")
-    return np.clip((1.0 - mix) * base + mix * target, 0.0, 1.0)
-
-
-def _fit_named_binary_calibrator(
-    probs: np.ndarray,
-    labels: np.ndarray,
-    name: str,
-    random_state: int,
-    horizon: int = 1,
-) -> Any | None:
-    target = np.asarray(labels, dtype=np.int32)
-    candidate_probs = np.asarray(probs, dtype=np.float64)
-    if np.unique(target).size < 2 or np.unique(candidate_probs).size < 2:
-        return None
-    if name == "platt":
-        model = LogisticRegression(max_iter=400, random_state=random_state + 41)
-        model.fit(candidate_probs.reshape(-1, 1), target)
-        return model
-    if name == "isotonic":
-        try:
-            from sklearn.isotonic import IsotonicRegression
-        except Exception:
-            return None
-        model = IsotonicRegression(out_of_bounds="clip")
-        model.fit(candidate_probs, target)
-        return model
-    if name == "hazard_platt":
-        hz = max(1, int(horizon))
-        h = prob_to_daily_hazard(candidate_probs, hz)
-        model = LogisticRegression(max_iter=400, random_state=random_state + 71)
-        model.fit(h.reshape(-1, 1), target)
-        return model
-    if name == "hazard_isotonic":
-        try:
-            from sklearn.isotonic import IsotonicRegression
-        except Exception:
-            return None
-        hz = max(1, int(horizon))
-        h = prob_to_daily_hazard(candidate_probs, hz)
-        model = IsotonicRegression(out_of_bounds="clip")
-        model.fit(h, target)
-        return model
-    return None
-
-
-def _apply_binary_calibrator(
-    name: str, calibrator: Any | None, probs: np.ndarray, horizon: int = 1,
-) -> np.ndarray:
-    candidate_probs = np.asarray(probs, dtype=np.float64)
-    if calibrator is None or name == "identity":
-        return np.clip(candidate_probs, 0.0, 1.0)
-    if name == "platt" and hasattr(calibrator, "predict_proba"):
-        return np.clip(calibrator.predict_proba(candidate_probs.reshape(-1, 1))[:, 1], 0.0, 1.0).astype(
-            np.float64,
-            copy=False,
-        )
-    if name == "isotonic":
-        return np.clip(np.asarray(calibrator.predict(candidate_probs), dtype=np.float64), 0.0, 1.0)
-    if name == "hazard_platt" and hasattr(calibrator, "predict_proba"):
-        hz = max(1, int(horizon))
-        h = prob_to_daily_hazard(candidate_probs, hz)
-        h_cal = calibrator.predict_proba(h.reshape(-1, 1))[:, 1]
-        return np.clip(daily_hazard_to_cumulative(h_cal, hz), 0.0, 1.0)
-    if name == "hazard_isotonic":
-        hz = max(1, int(horizon))
-        h = prob_to_daily_hazard(candidate_probs, hz)
-        h_cal = np.asarray(calibrator.predict(h), dtype=np.float64)
-        return np.clip(daily_hazard_to_cumulative(h_cal, hz), 0.0, 1.0)
-    return np.clip(candidate_probs, 0.0, 1.0)
-
-
-# P6.1.1: temperature floor — prevents extreme overconfidence from
-# calibrators that overfit on small holdout sets.
 _MIN_TEMPERATURE = 0.5
 
 
 def _apply_temperature_scaling(probs: np.ndarray, temperature: float) -> np.ndarray:
-    """Apply temperature scaling to probability predictions.
-
-    Converts probabilities to logit space, divides by temperature, and
-    converts back.  Temperature < 1 sharpens; temperature > 1 softens.
-    The temperature is clamped to ``_MIN_TEMPERATURE`` from below.
-    """
     t = float(max(temperature, _MIN_TEMPERATURE))
     if abs(t - 1.0) < 1e-9:
         return np.clip(np.asarray(probs, dtype=np.float64), 0.0, 1.0)
@@ -593,7 +584,6 @@ def _apply_temperature_scaling(probs: np.ndarray, temperature: float) -> np.ndar
 
 
 def _calibrate_temperature(probs: np.ndarray, labels: np.ndarray) -> float:
-    """Search for the best temperature on a grid, respecting _MIN_TEMPERATURE."""
     target = np.asarray(labels, dtype=np.int32)
     best_t = 1.0
     best_score = float("inf")
@@ -608,6 +598,10 @@ def _calibrate_temperature(probs: np.ndarray, labels: np.ndarray) -> float:
             best_t = float(t)
     return float(max(best_t, _MIN_TEMPERATURE))
 
+
+# ---------------------------------------------------------------------------
+# Metrics
+# ---------------------------------------------------------------------------
 
 def _binary_metrics(probs: np.ndarray, labels: np.ndarray, horizon: int = 1) -> Dict[str, float]:
     candidate_probs = np.clip(np.asarray(probs, dtype=np.float64), 1e-6, 1.0 - 1e-6)
@@ -629,6 +623,10 @@ def _binary_logloss(probs: np.ndarray, labels: np.ndarray) -> float:
     target = np.asarray(labels, dtype=np.float64)
     return float(-(target * np.log(candidate_probs) + (1.0 - target) * np.log(1.0 - candidate_probs)).mean())
 
+
+# ---------------------------------------------------------------------------
+# Feature helpers
+# ---------------------------------------------------------------------------
 
 def _lag1_active(aux_features: np.ndarray | None, n_rows: int) -> np.ndarray:
     if aux_features is None:

@@ -165,9 +165,9 @@ class MainlineObjectiveSpec:
         )
         if lane_name == "binary":
             return shared_runtime + (
-                "balanced_logistic_binary_head",
-                "hazard_space_calibration",
-                "survival_nll_calibrator_scoring",
+                "neural_survival_hazard_head",
+                "end_to_end_survival_nll",
+                "temperature_scaling_only",
                 "probability_output",
             )
         if lane_name == "funding":

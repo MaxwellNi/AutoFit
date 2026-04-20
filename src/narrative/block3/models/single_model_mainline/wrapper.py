@@ -687,7 +687,7 @@ class SingleModelMainlineWrapper(ModelBase):
             },
             "binary_process_contract": {
                 "process_family": "hazard_prior_plus_calibration",
-                "uses_logistic_head": bool(self.binary_lane_runtime._model is not None),
+                "uses_neural_hazard_head": bool(self.binary_lane_runtime._model is not None),
                 "uses_hazard_adapter": bool(self.binary_lane_runtime._uses_hazard_adapter),
                 "uses_hazard_space_calibration": bool(self.binary_lane_runtime._uses_hazard_space_calibration),
                 "hazard_calibration_horizon": int(self.binary_lane_runtime._hazard_calibration_horizon),

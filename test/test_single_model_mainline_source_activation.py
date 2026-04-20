@@ -41,6 +41,27 @@ def _make_investors_surface(
     return frame
 
 
+def _enrich_process_state_surface(frame: pd.DataFrame) -> pd.DataFrame:
+    enriched = frame.copy()
+    row_idx = np.arange(len(enriched), dtype=np.float64)
+    enriched["funding_goal_usd"] = 2500.0 + 20.0 * row_idx
+    enriched["last_total_amount_sold"] = np.where(
+        np.isfinite(enriched["last_total_amount_sold"]),
+        enriched["last_total_amount_sold"],
+        900.0 + 15.0 * row_idx,
+    )
+    enriched["last_total_offering_amount"] = enriched["funding_goal_usd"] + 800.0
+    enriched["last_total_remaining"] = np.maximum(
+        enriched["last_total_offering_amount"] - enriched["last_total_amount_sold"],
+        0.0,
+    )
+    enriched["last_minimum_investment_accepted"] = 100.0 + 5.0 * row_idx
+    enriched["last_total_number_already_invested"] = enriched["investors_count"] + 2.0
+    enriched["last_number_non_accredited_investors"] = np.clip(enriched["investors_count"] - 1.0, 0.0, None)
+    enriched["non_national_investors"] = np.clip(enriched["investors_count"] * 0.25, 0.0, None)
+    return enriched
+
+
 def _fit_wrapper(frame: pd.DataFrame, **kwargs) -> SingleModelMainlineWrapper:
     horizon = int(kwargs.pop("horizon", 1))
     wrapper = SingleModelMainlineWrapper(seed=7, **kwargs)
@@ -275,6 +296,93 @@ def test_explicit_opt_out_can_restore_legacy_long_horizon_process_contract():
     assert process_regime["effective_count_sparsity_gate"] is False
 
 
+def test_event_state_trunk_reports_audited_process_state_families() -> None:
+    frame = _enrich_process_state_surface(
+        _make_investors_surface(["edgar_only", "text_only", "mixed"], rows_per_profile=12)
+    )
+
+    wrapper = _fit_wrapper(
+        frame,
+        enable_investors_event_state_features=True,
+        enable_multiscale_temporal_state=True,
+        enable_temporal_state_features=True,
+        enable_spectral_state_features=True,
+    )
+
+    process_atoms = wrapper.get_regime_info()["event_state_trunk"]["process_state_atoms"]
+
+    assert process_atoms["schema_version"] == "process_state_v1"
+    assert process_atoms["state_order"] == [
+        "attention_diffusion",
+        "credibility_confirmation",
+        "screening_selectivity",
+        "book_depth_absorption",
+        "closure_conversion",
+    ]
+    assert process_atoms["multiscale_coupling_enabled"] is True
+    assert 0.0 < process_atoms["attention_diffusion_score"] <= 1.0
+    assert 0.0 < process_atoms["credibility_confirmation_score"] <= 1.0
+    assert 0.0 < process_atoms["screening_selectivity_score"] <= 1.0
+    assert 0.0 < process_atoms["book_depth_absorption_score"] <= 1.0
+    assert 0.0 < process_atoms["closure_conversion_score"] <= 1.0
+    assert process_atoms["screening_selectivity_support_share"] > 0.0
+    assert process_atoms["book_depth_absorption_support_share"] > 0.0
+    assert process_atoms["temporal_velocity_coupling"] >= 0.0
+    assert process_atoms["spectral_high_band_coupling"] >= 0.0
+
+
+def test_process_state_feedback_guard_changes_shared_trunk_on_long_horizon() -> None:
+    frame = _enrich_process_state_surface(
+        _make_investors_surface(["edgar_only", "text_only", "mixed"], rows_per_profile=12)
+    )
+
+    selective = _fit_wrapper(frame, variant="mainline_selective_event_state_guard", horizon=14)
+    feedback = _fit_wrapper(frame, variant="mainline_process_state_feedback_guard", horizon=14)
+
+    selective_trunk = selective.get_regime_info()["event_state_trunk"]
+    feedback_trunk = feedback.get_regime_info()["event_state_trunk"]
+    selective_shared = selective_trunk["shared_state_atoms"]
+    feedback_shared = feedback_trunk["shared_state_atoms"]
+    selective_process = selective_trunk["process_state_atoms"]
+    feedback_process = feedback_trunk["process_state_atoms"]
+
+    assert selective_shared["effective_process_state_feedback"] is False
+    assert feedback_shared["process_state_feedback_enabled"] is True
+    assert feedback_shared["effective_process_state_feedback"] is True
+    assert feedback_shared["process_state_feedback_activation_reason"] == "process_state_feedback_source_attenuated"
+    assert feedback_shared["process_state_feedback_gate"] > 0.0
+    assert feedback_shared["shared_state_dim"] == selective_shared["shared_state_dim"]
+    assert feedback_shared["process_feedback_attention_diffusion_abs_mean"] > 0.0
+    assert feedback_shared["process_feedback_closure_conversion_abs_mean"] > 0.0
+
+    shift_l1 = sum(
+        abs(float(feedback_process[f"{state_name}_score"]) - float(selective_process[f"{state_name}_score"]))
+        for state_name in [
+            "attention_diffusion",
+            "credibility_confirmation",
+            "screening_selectivity",
+            "book_depth_absorption",
+            "closure_conversion",
+        ]
+    )
+    assert shift_l1 > 0.0
+    assert feedback_process["closure_conversion_score"] >= selective_process["closure_conversion_score"]
+
+
+def test_process_state_feedback_guard_stays_blocked_on_h1() -> None:
+    frame = _enrich_process_state_surface(
+        _make_investors_surface(["edgar_only", "text_only", "mixed"], rows_per_profile=12)
+    )
+
+    feedback = _fit_wrapper(frame, variant="mainline_process_state_feedback_guard", horizon=1)
+    shared_atoms = feedback.get_regime_info()["event_state_trunk"]["shared_state_atoms"]
+
+    assert shared_atoms["process_state_feedback_enabled"] is True
+    assert shared_atoms["effective_process_state_feedback"] is False
+    assert shared_atoms["process_state_feedback_activation_reason"] == "process_state_feedback_horizon_blocked"
+    assert np.isclose(shared_atoms["process_state_feedback_gate"], 0.0)
+
+
 def test_explicit_component_flags_preserve_full_long_horizon_process_contract():
     frame = _make_investors_surface(["edgar_only", "text_only", "mixed"], rows_per_profile=12)
 
@@ -366,8 +474,8 @@ def test_binary_regime_surfaces_process_contract():
     assert regime["runtime"]["predict_time_current_target_masked"] is True
     assert regime["runtime"]["runtime_no_leak_contract"] == "predict_time_current_target_masked_before_history_and_anchor"
     assert process["process_family"] == "hazard_prior_plus_calibration"
-    assert process["uses_logistic_head"] is True
-    assert process["calibration_method"] in {"identity", "platt", "isotonic"}
+    assert process["uses_neural_hazard_head"] is True
+    assert process["calibration_method"] == "identity"
     assert process["selected_brier"] >= 0.0
     assert process["selected_logloss"] >= 0.0
     assert process["selected_ece"] >= 0.0
@@ -376,7 +484,7 @@ def test_binary_regime_surfaces_process_contract():
     assert np.isclose(process["event_rate"], 0.5)
     assert process["transition_rate"] > 0.0
     assert np.isclose(process["positive_class_weight"], 1.0)
-    assert np.isclose(process["temperature"], 1.0)
+    assert process["temperature"] >= 0.5
     assert np.isclose(process["teacher_weight"], 0.10)
     assert np.isclose(process["event_weight"], 0.15)
 
@@ -606,3 +714,45 @@ def test_multiscale_state_guard_exposes_backbone_layout_and_seeded_predict_path(
     assert regime["runtime"]["backbone_seed_rows"] > 0
     assert preds.shape == (len(frame),)
     assert np.all(np.isfinite(preds))
+
+
+def test_temporal_state_guard_keeps_temporal_block_and_disables_spectral_block():
+    frame = _make_investors_surface(["none", "none", "none"], rows_per_profile=12)
+
+    wrapper = _fit_wrapper(
+        frame,
+        variant="mainline_temporal_state_guard",
+        horizon=14,
+    )
+
+    regime = wrapper.get_regime_info()
+    layout = regime["state_stream"]["backbone_layout"]
+    shared_atoms = regime["event_state_trunk"]["shared_state_atoms"]
+
+    assert layout["uses_temporal_state_features"] is True
+    assert layout["uses_spectral_state_features"] is False
+    assert layout["temporal_state_dim"] > 0
+    assert layout["spectral_state_dim"] == 0
+    assert shared_atoms["temporal_state_dim"] == layout["temporal_state_dim"]
+    assert shared_atoms["spectral_state_dim"] == 0
+
+
+def test_spectral_state_guard_keeps_spectral_block_and_disables_temporal_block():
+    frame = _make_investors_surface(["none", "none", "none"], rows_per_profile=12)
+
+    wrapper = _fit_wrapper(
+        frame,
+        variant="mainline_spectral_state_guard",
+        horizon=14,
+    )
+
+    regime = wrapper.get_regime_info()
+    layout = regime["state_stream"]["backbone_layout"]
+    shared_atoms = regime["event_state_trunk"]["shared_state_atoms"]
+
+    assert layout["uses_temporal_state_features"] is False
+    assert layout["uses_spectral_state_features"] is True
+    assert layout["temporal_state_dim"] == 0
+    assert layout["spectral_state_dim"] > 0
+    assert shared_atoms["temporal_state_dim"] == 0
+    assert shared_atoms["spectral_state_dim"] == layout["spectral_state_dim"]
