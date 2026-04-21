@@ -70,6 +70,24 @@ def _cv_for_cell(preds: np.ndarray, targets: np.ndarray) -> tuple[float, float]:
     return pred_std / s_ref if s_ref > 0 else 0.0, s_ref
 
 
+def _hurdle_baseline_mae(targets: np.ndarray) -> float:
+    """Per-cell hurdle baseline: y_hat = pi_hat * m_hat (cell-wise)."""
+    targets = np.asarray(targets, dtype=float)
+    finite = targets[np.isfinite(targets)]
+    if finite.size == 0:
+        return float("nan")
+    positive = finite[finite > 0]
+    pi_hat = positive.size / max(finite.size, 1)
+    m_hat = float(np.mean(positive)) if positive.size else 0.0
+    return float(np.mean(np.abs(finite - pi_hat * m_hat)))
+
+
+def _skill_margin(model_mae: float, baseline_mae: float) -> float:
+    if not np.isfinite(model_mae) or not np.isfinite(baseline_mae) or baseline_mae <= 0:
+        return float("nan")
+    return (baseline_mae - model_mae) / baseline_mae
+
+
 def audit(roots: list[Path], tau: float, rho_fail: float) -> pd.DataFrame:
     rows = []
     for metrics_path in _iter_metrics(roots):
@@ -96,12 +114,13 @@ def audit(roots: list[Path], tau: float, rho_fail: float) -> pd.DataFrame:
                     & (preds_df.get("horizon") == horizon)
                 )
                 cell = preds_df[mask] if mask.any() else preds_df
-                cv, s_ref = _cv_for_cell(
-                    cell.get("prediction", pd.Series(dtype=float)).to_numpy(),
-                    cell.get("target_value", pd.Series(dtype=float)).to_numpy(),
-                )
+                target_vec = cell.get("target_value", pd.Series(dtype=float)).to_numpy()
+                pred_vec = cell.get("prediction", pd.Series(dtype=float)).to_numpy()
+                cv, s_ref = _cv_for_cell(pred_vec, target_vec)
+                hurdle_mae = _hurdle_baseline_mae(target_vec)
+                skill = _skill_margin(mae, hurdle_mae)
             else:
-                cv, s_ref = float("nan"), float("nan")
+                cv, s_ref, hurdle_mae, skill = (float("nan"),) * 4
             rows.append({
                 "metrics_path": str(metrics_path),
                 "model_name": model,
@@ -110,9 +129,12 @@ def audit(roots: list[Path], tau: float, rho_fail: float) -> pd.DataFrame:
                 "target": target,
                 "horizon": horizon,
                 "mae": mae,
+                "hurdle_baseline_mae": hurdle_mae,
+                "skill_margin": skill,
                 "cv": cv,
                 "s_ref": s_ref,
-                "cell_fail": bool(np.isfinite(cv) and cv < tau),
+                "cell_gate_fail": bool(np.isfinite(cv) and cv < tau),
+                "cell_skill_fail": bool(np.isfinite(skill) and skill <= 0.0),
             })
     df = pd.DataFrame(rows)
     if df.empty:
@@ -125,18 +147,26 @@ def audit(roots: list[Path], tau: float, rho_fail: float) -> pd.DataFrame:
     df["mae_std_across_h"] = group["mae"].transform(lambda s: np.nanstd(s.values))
     df["identical_mae_across_h"] = df["mae_std_across_h"] < 1e-6
 
-    # Aggregate gate decision per (model, task, ablation, target).
+    # Aggregate admissibility per (model, task, ablation, target).
+    # A triple is admissible iff it passes BOTH the CV gate (necessary,
+    # Definition 3.8) AND the skill check (sufficient filter against
+    # high-variance random predictors, Remark on gate-not-sufficient).
     agg = (
         group.agg(
-            n_cells=("cell_fail", "size"),
-            n_cell_fail=("cell_fail", "sum"),
+            n_cells=("cell_gate_fail", "size"),
+            n_cell_gate_fail=("cell_gate_fail", "sum"),
+            n_cell_skill_fail=("cell_skill_fail", "sum"),
             any_identical_h=("identical_mae_across_h", "any"),
+            median_skill=("skill_margin", "median"),
         )
         .reset_index()
     )
-    agg["cell_fail_rate"] = agg["n_cell_fail"] / agg["n_cells"].clip(lower=1)
+    agg["cell_gate_fail_rate"] = agg["n_cell_gate_fail"] / agg["n_cells"].clip(lower=1)
+    agg["cell_skill_fail_rate"] = agg["n_cell_skill_fail"] / agg["n_cells"].clip(lower=1)
     agg["triple_fail"] = (
-        (agg["cell_fail_rate"] > rho_fail) | agg["any_identical_h"].fillna(False)
+        (agg["cell_gate_fail_rate"] > rho_fail)
+        | (agg["cell_skill_fail_rate"] > rho_fail)
+        | agg["any_identical_h"].fillna(False)
     )
     return agg
 
@@ -158,21 +188,24 @@ def main() -> int:
     pd.set_option("display.width", 160)
     cols = [
         "model_name", "task", "ablation", "target",
-        "n_cells", "n_cell_fail", "cell_fail_rate",
-        "any_identical_h", "triple_fail",
+        "n_cells", "cell_gate_fail_rate", "cell_skill_fail_rate",
+        "median_skill", "any_identical_h", "triple_fail",
     ]
     print(agg[cols].to_string(index=False))
     print()
     failed = agg[agg["triple_fail"]]
     if not failed.empty:
-        print(f"[FAIL] {len(failed)} triples fail degeneracy gate "
-              f"(tau={args.tau}, rho_fail={args.rho_fail}):")
+        print(f"[FAIL] {len(failed)} triples fail admissibility "
+              f"(tau={args.tau}, rho_fail={args.rho_fail}, "
+              f"skill = MAE vs hurdle baseline):")
         for _, row in failed.iterrows():
             print(f"  - {row['model_name']}/{row['task']}/{row['ablation']}/"
-                  f"{row['target']}: fail_rate={row['cell_fail_rate']:.2f}, "
+                  f"{row['target']}: gate_fail={row['cell_gate_fail_rate']:.2f} "
+                  f"skill_fail={row['cell_skill_fail_rate']:.2f} "
+                  f"median_skill={row['median_skill']:.3f} "
                   f"identical_h={row['any_identical_h']}")
     else:
-        print("[OK] all triples pass degeneracy gate.")
+        print("[OK] all triples admissible (gate + skill).")
 
     if args.out is not None:
         args.out.parent.mkdir(parents=True, exist_ok=True)
