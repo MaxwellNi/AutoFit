@@ -31,4 +31,5 @@ MAINLINE_MODELS: Dict[str, Any] = {
     "MainlineBinaryCalibGuard":   _mainline_factory("mainline_binary_calibration_guard"),
     "MainlineDelegateV740Alpha":  _mainline_factory("mainline_delegate_alpha"),
     "MainlineTrunkNaked":         _mainline_factory("mainline_trunk_naked"),
+    "MainlineS5Trunk":            _mainline_factory("mainline_s5_trunk"),
 }

@@ -468,6 +468,36 @@ class BenchmarkShard:
             return [str(t["name"]) for t in targets]
         return [str(t) for t in targets]
 
+    def _run_post_run_gate_audit(self, metrics_path: Path) -> None:
+        """Run the degeneracy-gate + skill-check audit against the just-written
+        metrics.json. Emits a warning (or raises if BLOCK3_REQUIRE_GATE_PASS=1)
+        when any (model, task, ablation, target) triple fails admissibility.
+        Best-effort: a missing audit module or missing predictions.parquet is
+        logged at INFO and does not affect the run."""
+        try:
+            from scripts.audit_mainline_degeneracy_gate import audit as _gate_audit
+        except Exception as exc:
+            logger.info(f"[gate] audit module unavailable, skipping: {exc}")
+            return
+        try:
+            df = _gate_audit([metrics_path], tau=0.05, rho_fail=0.5)
+        except Exception as exc:
+            logger.info(f"[gate] audit raised, skipping: {exc}")
+            return
+        if df is None or len(df) == 0:
+            return
+        failed = df[df.get("triple_fail", False)]
+        if len(failed) == 0:
+            logger.info(f"[gate] admissibility audit PASS ({len(df)} triples)")
+            return
+        msg = (
+            f"[gate] admissibility audit FAIL: {len(failed)}/{len(df)} triples "
+            f"fail (tau=0.05, rho_fail=0.5)"
+        )
+        if os.environ.get("BLOCK3_REQUIRE_GATE_PASS", "") == "1":
+            raise RuntimeError(msg)
+        logger.warning(msg)
+
     def _build_manifest_payload(
         self,
         metrics_records: List[Dict[str, Any]],
@@ -475,7 +505,6 @@ class BenchmarkShard:
         status_override: Optional[str],
         existing_manifest: Optional[Dict[str, Any]],
     ) -> Dict[str, Any]:
-        """Build a directory-level manifest summary from merged on-disk state."""
         manifest_dict = self.manifest.to_dict()
         if existing_manifest:
             started_candidates = [
@@ -1486,6 +1515,11 @@ class BenchmarkShard:
             )
             if not partial:
                 logger.info(f"Saved manifest to {manifest_path}")
+                # Post-run degeneracy-gate audit (paper §3.5 Def 3.8 + §5.2
+                # skill check). Non-blocking by default; emits a warning
+                # when any triple fails. Set BLOCK3_REQUIRE_GATE_PASS=1 to
+                # raise instead.
+                self._run_post_run_gate_audit(metrics_path)
 
 
 # =============================================================================

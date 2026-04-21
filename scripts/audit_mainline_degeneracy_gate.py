@@ -82,6 +82,50 @@ def _hurdle_baseline_mae(targets: np.ndarray) -> float:
     return float(np.mean(np.abs(finite - pi_hat * m_hat)))
 
 
+def _brier_vs_baseline(preds: np.ndarray, targets: np.ndarray) -> tuple[float, float]:
+    """Return (candidate_brier, baseline_brier) for the occurrence component.
+
+    Both predictor and baseline are reduced to their implied pi_hat on the
+    cell. Strictly proper for binary events. Paper §5.2 (Gneiting-Raftery).
+    """
+    preds = np.asarray(preds, dtype=float)
+    targets = np.asarray(targets, dtype=float)
+    finite = np.isfinite(targets)
+    if not finite.any():
+        return float("nan"), float("nan")
+    y_bin = (targets[finite] > 0).astype(float)
+    p_pred = np.clip(preds[finite], 0.0, np.inf)
+    # Candidate occurrence proxy: sign of positive prediction.
+    # (A well-specified probabilistic predictor would expose a pi head;
+    # we approximate from the point predictor as a lower bound.)
+    p_cand = (p_pred > 0).astype(float)
+    p_base = float(y_bin.mean())
+    brier_cand = float(np.mean((p_cand - y_bin) ** 2))
+    brier_base = float(np.mean((p_base - y_bin) ** 2))
+    return brier_cand, brier_base
+
+
+def _pinball_positive(preds: np.ndarray, targets: np.ndarray,
+                      quantiles: tuple[float, ...] = (0.5, 0.9, 0.95)) -> float:
+    """Mean pinball loss of point predictions on {y>0} subset, averaged over
+    the requested quantiles. Strictly proper per-quantile; conservative for
+    point predictors (we treat the predictor as its own quantile estimate at
+    each q, which is a pessimistic upper bound used only to produce a
+    single monotonic skill number)."""
+    preds = np.asarray(preds, dtype=float)
+    targets = np.asarray(targets, dtype=float)
+    mask = np.isfinite(targets) & (targets > 0)
+    if not mask.any():
+        return float("nan")
+    y = targets[mask]
+    p = preds[mask]
+    loss = 0.0
+    for q in quantiles:
+        diff = y - p
+        loss += float(np.mean(np.maximum(q * diff, (q - 1) * diff)))
+    return loss / len(quantiles)
+
+
 def _skill_margin(model_mae: float, baseline_mae: float) -> float:
     if not np.isfinite(model_mae) or not np.isfinite(baseline_mae) or baseline_mae <= 0:
         return float("nan")
@@ -119,8 +163,13 @@ def audit(roots: list[Path], tau: float, rho_fail: float) -> pd.DataFrame:
                 cv, s_ref = _cv_for_cell(pred_vec, target_vec)
                 hurdle_mae = _hurdle_baseline_mae(target_vec)
                 skill = _skill_margin(mae, hurdle_mae)
+                # Strictly proper scoring components (paper §5.2).
+                brier_cand, brier_base = _brier_vs_baseline(pred_vec, target_vec)
+                brier_skill = _skill_margin(brier_cand, brier_base)
+                pinball = _pinball_positive(pred_vec, target_vec)
             else:
                 cv, s_ref, hurdle_mae, skill = (float("nan"),) * 4
+                brier_cand = brier_base = brier_skill = pinball = float("nan")
             rows.append({
                 "metrics_path": str(metrics_path),
                 "model_name": model,
@@ -131,10 +180,20 @@ def audit(roots: list[Path], tau: float, rho_fail: float) -> pd.DataFrame:
                 "mae": mae,
                 "hurdle_baseline_mae": hurdle_mae,
                 "skill_margin": skill,
+                "brier_candidate": brier_cand,
+                "brier_baseline": brier_base,
+                "brier_skill": brier_skill,
+                "pinball_positive": pinball,
                 "cv": cv,
                 "s_ref": s_ref,
                 "cell_gate_fail": bool(np.isfinite(cv) and cv < tau),
-                "cell_skill_fail": bool(np.isfinite(skill) and skill <= 0.0),
+                # Admissibility now requires the strictly-proper Brier score to
+                # beat baseline as well (paper §5.2); we relax to the weaker
+                # MAE skill margin only when predictions.parquet is absent.
+                "cell_skill_fail": bool(
+                    (np.isfinite(brier_skill) and brier_skill <= 0.0)
+                    or (not np.isfinite(brier_skill) and np.isfinite(skill) and skill <= 0.0)
+                ),
             })
     df = pd.DataFrame(rows)
     if df.empty:
