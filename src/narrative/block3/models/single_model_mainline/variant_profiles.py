@@ -368,6 +368,50 @@ MAINLINE_VARIANTS: Dict[str, MainlineVariantProfile] = {
             "enable_jump_ode_state": False,
         },
     ),
+    "mainline_s5_trunk": MainlineVariantProfile(
+        name="mainline_s5_trunk",
+        runtime_mode="native",
+        delegate_variant="v740_alpha",
+        description=(
+            "2026-04-22 path-3 trunk swap: replaces the Learnable Sparse MoE "
+            "trunk with the S5-style diagonal state-space trunk "
+            "(src/narrative/block3/models/single_model_mainline/state_space_trunk.py), "
+            "motivated by the 2026-04-21 mainline_trunk_collapse_verdict "
+            "(7/7 triples failed the admissibility gate with identical-MAE-across-h "
+            "collapse signature on the MoE trunk). All atoms are disabled (same "
+            "minimal baseline as mainline_trunk_naked) so that this variant "
+            "measures the signal quality of the S5 trunk alone."
+        ),
+        prototype_overrides={
+            # All atoms OFF (same as mainline_trunk_naked).
+            "enable_count_hurdle_head": False,
+            "enable_count_jump": False,
+            "enable_count_sparsity_gate": False,
+            "enable_funding_anchor": True,
+            "enable_funding_log_domain": False,
+            "enable_funding_source_scaling": False,
+            "enable_funding_tail_focus": False,
+            "enable_funding_gpd_tail": False,
+            "enable_funding_cqr_interval": False,
+            "enable_log1p_target": True,
+            "enable_hawkes_financing_state": False,
+            "enable_investors_event_state_features": False,
+            "enable_investors_selective_event_state_activation": False,
+            "enable_investors_intensity_baseline": False,
+            "enable_investors_shrinkage_gate": False,
+            "enable_jump_ode_state": False,
+            # Trunk swap.
+            "enable_learnable_trunk": False,
+            "enable_state_space_trunk": True,
+            "s5_d_model": 128,
+            "s5_d_state": 64,
+            "s5_n_blocks": 3,
+            "s5_dropout": 0.1,
+            "s5_max_epochs": 24,
+            "s5_batch_size": 512,
+            "s5_device": "cpu",
+        },
+    ),
 }
 
 

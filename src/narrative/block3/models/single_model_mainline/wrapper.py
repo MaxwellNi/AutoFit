@@ -19,6 +19,7 @@ from .lanes.funding_lane import FundingLaneRuntime, FundingLaneSpec
 from .lanes.investors_lane import InvestorsLaneRuntime, InvestorsLaneSpec, _transition_signal
 from .learnable_trunk import LearnableTrunkAdapter
 from .sequential_adapter import SequentialTrunkAdapter
+from .state_space_trunk import StateSpaceTrunkAdapter
 from .objectives import MainlineObjectiveSpec
 from .source_memory import SourceMemoryAssembler, SourceMemoryContract
 from .variant_profiles import build_delegate_kwargs, get_mainline_variant_profile
@@ -227,6 +228,30 @@ class SingleModelMainlineWrapper(ModelBase):
                 n_epochs=int(prototype_kwargs.get("learnable_n_epochs", 30)),
                 random_state=seed,
             )
+        # S5-style diagonal state-space trunk (2026-04-22 path-3 remedy
+        # for mainline trunk collapse verdict). Activated by
+        # `enable_state_space_trunk=True` in the variant profile; drops in
+        # for `_learnable_trunk` (same fit/transform API).
+        self.enable_state_space_trunk = bool(
+            prototype_kwargs.get("enable_state_space_trunk", False)
+        )
+        self._state_space_trunk: StateSpaceTrunkAdapter | None = None
+        if self.enable_state_space_trunk:
+            self._state_space_trunk = StateSpaceTrunkAdapter(
+                input_dim=int(prototype_kwargs.get("s5_input_dim", 64)),
+                d_model=int(prototype_kwargs.get("s5_d_model", 128)),
+                d_state=int(prototype_kwargs.get("s5_d_state", 64)),
+                n_blocks=int(prototype_kwargs.get("s5_n_blocks", 3)),
+                dropout=float(prototype_kwargs.get("s5_dropout", 0.1)),
+                max_epochs=int(prototype_kwargs.get("s5_max_epochs", 32)),
+                batch_size=int(prototype_kwargs.get("s5_batch_size", 512)),
+                device=str(prototype_kwargs.get("s5_device", "cpu")),
+            )
+            # If both learnable and state-space trunks are enabled the
+            # state-space trunk takes precedence (newer architecture).
+            if self._learnable_trunk is not None:
+                self._learnable_trunk = None
+                self.enable_learnable_trunk = False
         # Sequential ED-SSM + MoE trunk (temporal-aware upgrade)
         self.enable_sequential_trunk = bool(prototype_kwargs.get("enable_sequential_trunk", False))
         self._sequential_trunk: SequentialTrunkAdapter | None = None
@@ -575,6 +600,27 @@ class SingleModelMainlineWrapper(ModelBase):
             self._lane_state_dim = lane_input.shape[1]
             lane_states = {self._active_lane_name: lane_input}
             # Skip event state / process feedback for learnable trunk path
+            event_state_frame = pd.DataFrame(index=X.index)
+            self._investors_event_state_feature_cols = []
+            self._effective_investors_event_state_features = False
+            self._backbone_seed = None
+        # === State-Space (S5) Trunk path (2026-04-22 path-3 remedy) ===
+        elif self.enable_state_space_trunk and self._state_space_trunk is not None:
+            core_matrix = core_frame.to_numpy(dtype=np.float32, copy=False)
+            trunk_output = self._state_space_trunk.fit_transform(
+                core_matrix, y_arr, target_name=self._target_name,
+            )
+            condition_state = self.condition_encoder.broadcast(self._condition_key, len(X))
+            source_frame = self.source_memory.build_runtime_features(runtime_frame, layout=source_layout)
+            self._source_feature_cols = list(source_frame.columns)
+            source_state = source_frame.to_numpy(dtype=np.float32, copy=False)
+            self._edgar_source_density = float(source_frame["edgar_active"].mean()) if "edgar_active" in source_frame else 0.0
+            self._text_source_density = float(source_frame["text_active"].mean()) if "text_active" in source_frame else 0.0
+            lane_input = np.concatenate([trunk_output, condition_state, source_state], axis=1).astype(np.float32)
+            self._shared_state_dim = trunk_output.shape[1]
+            self._active_lane_name = self._lane_name_for_target(self._target_name)
+            self._lane_state_dim = lane_input.shape[1]
+            lane_states = {self._active_lane_name: lane_input}
             event_state_frame = pd.DataFrame(index=X.index)
             self._investors_event_state_feature_cols = []
             self._effective_investors_event_state_features = False
@@ -1008,6 +1054,24 @@ class SingleModelMainlineWrapper(ModelBase):
         elif self.enable_learnable_trunk and self._learnable_trunk is not None:
             core_matrix = core_frame.to_numpy(dtype=np.float32, copy=False)
             trunk_output = self._learnable_trunk.transform(
+                core_matrix, target_name=self._target_name,
+            )
+            condition_key = ConditionKey(
+                task=kwargs.get("task", self._task_name),
+                target=kwargs.get("target", self._target_name),
+                horizon=int(kwargs.get("horizon", self._horizon)),
+                ablation=kwargs.get("ablation", self._ablation_name),
+            )
+            condition_state = self.condition_encoder.broadcast(condition_key, len(feature_frame))
+            source_layout = self.source_memory.infer_layout(runtime_frame)
+            source_frame = self.source_memory.build_runtime_features(runtime_frame, layout=source_layout)
+            source_state = source_frame.reindex(columns=self._source_feature_cols, fill_value=0.0).to_numpy(dtype=np.float32, copy=False)
+            lane_input = np.concatenate([trunk_output, condition_state, source_state], axis=1).astype(np.float32)
+            lane_states = {self._active_lane_name: lane_input}
+        # === State-Space (S5) Trunk predict path ===
+        elif self.enable_state_space_trunk and self._state_space_trunk is not None:
+            core_matrix = core_frame.to_numpy(dtype=np.float32, copy=False)
+            trunk_output = self._state_space_trunk.transform(
                 core_matrix, target_name=self._target_name,
             )
             condition_key = ConditionKey(

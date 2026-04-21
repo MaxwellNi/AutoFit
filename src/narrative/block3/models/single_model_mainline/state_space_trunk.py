@@ -161,7 +161,7 @@ class StateSpaceTrunkAdapter:
 
     def __init__(
         self,
-        input_dim: int,
+        input_dim: Optional[int] = None,
         d_model: int = 128,
         d_state: int = 64,
         n_blocks: int = 3,
@@ -172,7 +172,7 @@ class StateSpaceTrunkAdapter:
         patience: int = 5,
         device: str = "cpu",
     ) -> None:
-        self.input_dim = int(input_dim)
+        self.input_dim = int(input_dim) if input_dim is not None else None
         self.d_model = int(d_model)
         self.d_state = int(d_state)
         self.n_blocks = int(n_blocks)
@@ -203,8 +203,13 @@ class StateSpaceTrunkAdapter:
         y: Optional[np.ndarray] = None,
         *,
         aux_task: str = "regression",
+        target_name: Optional[str] = None,
+        **_ignored,
     ) -> "StateSpaceTrunkAdapter":
-        """Fit the trunk with an auxiliary head over y (regression or binary)."""
+        """Fit the trunk with an auxiliary head over y (regression or binary).
+
+        Extra keyword arguments are accepted and ignored for API parity with
+        :class:`LearnableTrunkAdapter` (e.g. ``target_name``)."""
         self._robust_fit_scale(X)
         Xs = self._standardise(X)
         self.net = StateSpaceTrunk(
@@ -261,7 +266,7 @@ class StateSpaceTrunkAdapter:
                     break
         return self
 
-    def transform(self, X: np.ndarray) -> np.ndarray:
+    def transform(self, X: np.ndarray, *, target_name: Optional[str] = None, **_ignored) -> np.ndarray:
         assert self.net is not None, "fit() first"
         self.net.eval()
         with torch.no_grad():
