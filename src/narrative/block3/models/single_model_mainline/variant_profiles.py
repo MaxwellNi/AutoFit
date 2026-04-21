@@ -412,6 +412,14 @@ MAINLINE_VARIANTS: Dict[str, MainlineVariantProfile] = {
             "s5_device": "cpu",
         },
     ),
+    # TODO(2026-04-22, paper-round-5): register a paired
+    # `mainline_xi_unbounded` variant for the GPT-5.4 reviewer demand
+    # (paired ablation: same trunk + same training, only the tail-head xi
+    # activation differs between bounded `xi_max * sigma(z)` and unbounded
+    # `exp(z)`). Blocked on the FTE tail-head activation switch not yet
+    # being a runtime knob in the mainline lanes; track in the next
+    # engineering iteration once enable_funding_gpd_tail+xi_activation are
+    # exposed via the prototype-overrides surface.
 }
 
 
