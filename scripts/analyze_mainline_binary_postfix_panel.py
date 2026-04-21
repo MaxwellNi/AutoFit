@@ -83,6 +83,17 @@ def _parse_args() -> argparse.Namespace:
         action="store_true",
         help="Only run native mainline. Useful for quick no-leak binary probes before incumbent comparison.",
     )
+    ap.add_argument(
+        "--existing-panel-json",
+        type=Path,
+        default=None,
+        help="Reuse an existing binary postfix panel JSON and only fill missing incumbent/comparison fields.",
+    )
+    ap.add_argument(
+        "--use-benchmark-incumbent",
+        action="store_true",
+        help="Use recorded incumbent benchmark metrics from all_results.csv instead of rerunning incumbent models.",
+    )
     ap.add_argument("--output-json", type=Path, default=None)
     ap.add_argument("--input-size", type=_positive_int, default=60)
     ap.add_argument("--hidden-dim", type=_positive_int, default=64)
@@ -209,6 +220,73 @@ def _instantiate_incumbent(resolved_name: str):
     return get_model(resolved_name)
 
 
+def _load_benchmark_frame(all_results_csv: Path) -> pd.DataFrame:
+    frame = pd.read_csv(all_results_csv)
+    if "split" in frame.columns:
+        frame = frame[frame["split"] == "test"].copy()
+    frame["horizon"] = pd.to_numeric(frame["horizon"], errors="coerce").fillna(-1).astype(int)
+    return frame
+
+
+def _benchmark_case_row(benchmark_frame: pd.DataFrame, case: Dict[str, Any]) -> pd.Series | None:
+    mask = (
+        benchmark_frame["task"].astype(str).eq(str(case["task"]))
+        & benchmark_frame["ablation"].astype(str).eq(str(case["ablation"]))
+        & benchmark_frame["target"].astype(str).eq(str(case["target"]))
+        & benchmark_frame["horizon"].astype(int).eq(int(case["horizon"]))
+        & benchmark_frame["model_name"].astype(str).eq(str(case["incumbent_model"]))
+    )
+    rows = benchmark_frame.loc[mask].copy()
+    if rows.empty:
+        return None
+    rows = rows.sort_values(["mae", "model_name"], ascending=[True, True]).reset_index(drop=True)
+    return rows.iloc[0]
+
+
+def _build_benchmark_incumbent_report(benchmark_row: pd.Series | None) -> Dict[str, Any]:
+    if benchmark_row is None:
+        return {"error": "benchmark incumbent row not found"}
+    metrics: Dict[str, Any] = {
+        "mae": _safe_metric(benchmark_row.get("mae")),
+        "brier": _safe_metric(benchmark_row.get("binary_brier")),
+        "logloss": _safe_metric(benchmark_row.get("binary_logloss")),
+        "ece": _safe_metric(benchmark_row.get("binary_ece")),
+        "auc": None,
+        "prauc": _safe_metric(benchmark_row.get("binary_prauc")),
+    }
+    return {
+        "metrics": metrics,
+        "fit_seconds": _safe_metric(benchmark_row.get("train_time_seconds")),
+        "predict_seconds": _safe_metric(benchmark_row.get("inference_time_seconds")),
+        "prediction_std": None,
+        "binary_prob_std": None,
+        "constant_prediction": False,
+        "probability_collapse": False,
+        "train_rows": None,
+        "val_rows": None,
+        "test_rows": _safe_metric(benchmark_row.get("effective_eval_rows")),
+        "train_matrix_rows": None,
+        "test_matrix_rows": _safe_metric(benchmark_row.get("effective_eval_rows")),
+        "feature_count": None,
+        "pred_mean": None,
+        "pred_min": None,
+        "pred_max": None,
+        "target_mean": None,
+        "benchmark_source": "all_results_csv",
+        "hazard_calibration_method": benchmark_row.get("hazard_calibration_method"),
+    }
+
+
+def _safe_metric(value: Any) -> float | None:
+    if value is None:
+        return None
+    try:
+        numeric = float(value)
+    except (TypeError, ValueError):
+        return None
+    return numeric if np.isfinite(numeric) else None
+
+
 def _run_model(
     model,
     case: Dict[str, Any],
@@ -301,6 +379,73 @@ def _run_mainline_case(
     report["source_stats"] = dict(regime.get("source_stats", {}))
     report["binary_process_contract"] = dict(regime.get("binary_process_contract", {}))
     return report
+
+
+def _load_existing_case_reports(existing_panel_json: Path | None) -> Dict[str, Dict[str, Any]]:
+    if existing_panel_json is None:
+        return {}
+    payload = json.loads(existing_panel_json.read_text(encoding="utf-8"))
+    return {
+        str(report.get("case", {}).get("name")): dict(report)
+        for report in payload.get("cases", [])
+        if isinstance(report, dict) and report.get("case", {}).get("name")
+    }
+
+
+def _rebuild_case_from_report(existing_report: Dict[str, Any]) -> Dict[str, Any]:
+    case = dict(existing_report.get("case", {}))
+    case["name"] = str(case["name"])
+    case["task"] = str(case["task"])
+    case["ablation"] = str(case["ablation"])
+    case["target"] = str(case["target"])
+    case["horizon"] = int(case["horizon"])
+    case["max_entities"] = int(case["max_entities"])
+    case["max_rows"] = int(case["max_rows"])
+    case["incumbent_model"] = str(case["incumbent_model"])
+    case["incumbent_benchmark_mae"] = float(case["incumbent_benchmark_mae"])
+    return case
+
+
+def _should_reuse_mainline(existing_report: Dict[str, Any]) -> bool:
+    mainline = dict(existing_report.get("mainline", {}))
+    return bool(mainline) and ("metrics" in mainline) and ("error" not in mainline)
+
+
+def _merge_existing_panel_meta(existing_report: Dict[str, Any], args: argparse.Namespace, case_count: int) -> Dict[str, Any]:
+    panel = dict(existing_report.get("panel", {})) if existing_report else {}
+    panel.update(
+        {
+            "name": args.panel,
+            "description": PANEL_SPECS[args.panel]["description"],
+            "profile": args.profile,
+            "variant": args.variant,
+            "cases": int(case_count),
+            "skip_incumbent": bool(args.skip_incumbent),
+            "runtime_owner": "single_model_mainline",
+            "required_runtime_contract": NO_LEAK_CONTRACT,
+            "collapse_std_threshold": float(args.collapse_std_threshold),
+        }
+    )
+    return panel
+
+
+def _build_panel_report_payload(
+    existing_report: Dict[str, Any],
+    args: argparse.Namespace,
+    case_reports: List[Dict[str, Any]],
+) -> Dict[str, Any]:
+    return {
+        "panel": _merge_existing_panel_meta(existing_report, args, len(case_reports)),
+        "summary": _build_summary(case_reports),
+        "cases": case_reports,
+    }
+
+
+def _write_panel_report(output_json: Path | None, report: Dict[str, Any]) -> None:
+    if output_json is None:
+        return
+    output_json.parent.mkdir(parents=True, exist_ok=True)
+    output_json.write_text(json.dumps(report, indent=2, ensure_ascii=False), encoding="utf-8")
 
 
 def _aggregate_group(case_reports: Iterable[Dict[str, Any]]) -> Dict[str, Any]:
@@ -418,8 +563,13 @@ def _build_summary(case_reports: List[Dict[str, Any]]) -> Dict[str, Any]:
 
 def main() -> int:
     args = _parse_args()
+    existing_case_reports = _load_existing_case_reports(args.existing_panel_json)
+    existing_panel_report = (
+        json.loads(args.existing_panel_json.read_text(encoding="utf-8")) if args.existing_panel_json else {}
+    )
     manifest = _load_shared112_surface(args.all_results_csv, args.profile)
     cases = _select_panel_cases(manifest["cells"], args)
+    benchmark_frame = _load_benchmark_frame(args.all_results_csv) if args.use_benchmark_incumbent else None
     if not cases:
         raise SystemExit("No shared112 binary cases matched the selected panel filters.")
 
@@ -428,34 +578,43 @@ def main() -> int:
     for case in cases:
         print(f"[binary-postfix] preparing {case['name']} ({case['incumbent_model']} is incumbent)", flush=True)
         train, val, test = _build_case_frame(case, temporal_config)
-        case_report: Dict[str, Any] = {
-            "case": {
-                "name": case["name"],
-                "task": case["task"],
-                "ablation": case["ablation"],
-                "target": case["target"],
-                "horizon": int(case["horizon"]),
-                "max_entities": int(case["max_entities"]),
-                "max_rows": int(case["max_rows"]),
-                "incumbent_model": case["incumbent_model"],
-                "incumbent_benchmark_mae": float(case["incumbent_benchmark_mae"]),
-                "runner_up_model": case.get("runner_up_model"),
-                "runner_up_benchmark_mae": case.get("runner_up_benchmark_mae"),
-            },
-            "mainline": {},
-            "incumbent": {},
-            "calibration_issue": False,
-            "comparisons": {"vs_incumbent": {}},
-        }
-        try:
-            print(f"[binary-postfix] running native mainline on {case['name']}", flush=True)
-            case_report["mainline"] = _run_mainline_case(case, train, val, test, args)
-        except Exception as exc:
-            case_report["mainline"] = {"error": str(exc)}
-            print(f"[binary-postfix] mainline failed on {case['name']}: {exc}", flush=True)
+        case_report = dict(existing_case_reports.get(case["name"], {}))
+        if not case_report:
+            case_report = {
+                "case": {
+                    "name": case["name"],
+                    "task": case["task"],
+                    "ablation": case["ablation"],
+                    "target": case["target"],
+                    "horizon": int(case["horizon"]),
+                    "max_entities": int(case["max_entities"]),
+                    "max_rows": int(case["max_rows"]),
+                    "incumbent_model": case["incumbent_model"],
+                    "incumbent_benchmark_mae": float(case["incumbent_benchmark_mae"]),
+                    "runner_up_model": case.get("runner_up_model"),
+                    "runner_up_benchmark_mae": case.get("runner_up_benchmark_mae"),
+                },
+                "mainline": {},
+                "incumbent": {},
+                "calibration_issue": False,
+                "comparisons": {"vs_incumbent": {}},
+            }
+        case_report.setdefault("comparisons", {})
+        case_report["comparisons"].setdefault("vs_incumbent", {})
+        if _should_reuse_mainline(case_report):
+            print(f"[binary-postfix] reusing cached native mainline on {case['name']}", flush=True)
+        else:
+            try:
+                print(f"[binary-postfix] running native mainline on {case['name']}", flush=True)
+                case_report["mainline"] = _run_mainline_case(case, train, val, test, args)
+            except Exception as exc:
+                case_report["mainline"] = {"error": str(exc)}
+                print(f"[binary-postfix] mainline failed on {case['name']}: {exc}", flush=True)
 
         if args.skip_incumbent:
             case_report["incumbent"] = {"skipped": True}
+        elif args.use_benchmark_incumbent:
+            case_report["incumbent"] = _build_benchmark_incumbent_report(_benchmark_case_row(benchmark_frame, case))
         else:
             try:
                 print(f"[binary-postfix] running incumbent {case['incumbent_model']} on {case['name']}", flush=True)
@@ -487,26 +646,11 @@ def main() -> int:
                 )
             )
         case_reports.append(case_report)
+        _write_panel_report(args.output_json, _build_panel_report_payload(existing_panel_report, args, case_reports))
 
-    report = {
-        "panel": {
-            "name": args.panel,
-            "description": PANEL_SPECS[args.panel]["description"],
-            "profile": args.profile,
-            "variant": args.variant,
-            "cases": len(case_reports),
-            "skip_incumbent": bool(args.skip_incumbent),
-            "runtime_owner": "single_model_mainline",
-            "required_runtime_contract": NO_LEAK_CONTRACT,
-            "collapse_std_threshold": float(args.collapse_std_threshold),
-        },
-        "summary": _build_summary(case_reports),
-        "cases": case_reports,
-    }
+    report = _build_panel_report_payload(existing_panel_report, args, case_reports)
     payload = json.dumps(report, indent=2, ensure_ascii=False)
-    if args.output_json:
-        args.output_json.parent.mkdir(parents=True, exist_ok=True)
-        args.output_json.write_text(payload, encoding="utf-8")
+    _write_panel_report(args.output_json, report)
     print(payload)
     return 0
 

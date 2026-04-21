@@ -50,11 +50,24 @@ class MainlineConditionEncoder:
         self._horizon_map = {value: idx for idx, value in enumerate(self.schema.horizon_vocab)}
 
     def ids(self, key: ConditionKey) -> Dict[str, int]:
+        import logging as _logging
+        _clog = _logging.getLogger(__name__)
+        if key.task not in self._task_map:
+            _clog.warning(
+                "Unknown task name %r — not in vocab %s; defaulting to index 0."
+                " Valid names: task1_outcome, task2_forecast, task3_risk_adjust.",
+                key.task, list(self._task_map),
+            )
+        if key.horizon not in self._horizon_map:
+            _clog.warning(
+                "Unknown horizon %r — not in vocab %s; defaulting to index 0.",
+                key.horizon, list(self._horizon_map),
+            )
         return {
-            "task_id": self._task_map[key.task],
-            "target_id": self._target_map[key.target],
-            "horizon_id": self._horizon_map[key.horizon],
-            "ablation_id": self._ablation_map[key.ablation],
+            "task_id": self._task_map.get(key.task, 0),
+            "target_id": self._target_map.get(key.target, 0),
+            "horizon_id": self._horizon_map.get(key.horizon, 0),
+            "ablation_id": self._ablation_map.get(key.ablation, 0),
         }
 
     def encode(self, key: ConditionKey) -> np.ndarray:

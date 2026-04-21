@@ -100,6 +100,11 @@ def _example_rows(table: pd.DataFrame, flag_column: str, top_k: int = 10) -> lis
     return flagged[keep].head(top_k).to_dict(orient="records")
 
 
+def _value_counts_dict(series: pd.Series) -> Dict[str, int]:
+    counts = series.value_counts(dropna=False).to_dict()
+    return {str(key): int(value) for key, value in counts.items()}
+
+
 def main() -> int:
     args = _parse_args()
     pointer = load_pointer(args.pointer_path)
@@ -122,6 +127,18 @@ def main() -> int:
     for column in MARK_PROXY_COLUMNS:
         if column in table.columns:
             proxy_positive_mask |= pd.to_numeric(table[column], errors="coerce").fillna(0.0) > 0.0
+    raw_reference_mask = (
+        pd.to_numeric(table.get("mark_list_present", pd.Series(0.0, index=table.index)), errors="coerce").fillna(0.0) > 0.0
+    ) | (
+        pd.to_numeric(table.get("mark_website_present", pd.Series(0.0, index=table.index)), errors="coerce").fillna(0.0) > 0.0
+    ) | (
+        pd.to_numeric(table.get("mark_hash_present", pd.Series(0.0, index=table.index)), errors="coerce").fillna(0.0) > 0.0
+    )
+    surface_mode = pd.Series("surface_poor", index=table.index, dtype="object")
+    surface_mode = surface_mode.where(~(proxy_positive_mask & ~raw_reference_mask), "proxy_only")
+    surface_mode = surface_mode.where(~(raw_reference_mask & ~proxy_positive_mask), "raw_reference_only")
+    surface_mode = surface_mode.where(~(raw_reference_mask & proxy_positive_mask), "hybrid")
+    table["weak_surface_mode"] = surface_mode
     investment_type = table.get("investment_type", pd.Series("", index=table.index, dtype="object")).fillna("").astype(str)
     crowdfunding_type = investment_type.str.lower().str.contains("crowd")
 
@@ -170,6 +187,11 @@ def main() -> int:
             "max_rows": int(args.max_rows),
             "rows_with_any_edgar_proxy": int(proxy_positive_mask.sum()),
             "edgar_proxy_row_share": float(proxy_positive_mask.mean()) if len(table) else 0.0,
+            "rows_with_any_raw_reference": int(raw_reference_mask.sum()),
+            "raw_reference_row_share": float(raw_reference_mask.mean()) if len(table) else 0.0,
+            "rows_with_proxy_only_surface": int((proxy_positive_mask & ~raw_reference_mask).sum()),
+            "proxy_only_row_share": float((proxy_positive_mask & ~raw_reference_mask).mean()) if len(table) else 0.0,
+            "surface_mode_counts": _value_counts_dict(surface_mode),
             "available_mark_columns": {
                 column: bool(column in available)
                 for column in requested_columns
@@ -196,6 +218,10 @@ def main() -> int:
             "weak_high_threshold_offer_flag": int(table["weak_high_threshold_offer_flag"].sum()),
         },
         "label_counts": {str(key): int(value) for key, value in label_counts.items()},
+        "label_counts_by_surface_mode": {
+            mode: _value_counts_dict(table.loc[table["weak_surface_mode"] == mode, "weak_primary_label"])
+            for mode in sorted(table["weak_surface_mode"].astype(str).unique())
+        },
         "mark_score_means": {
             column: float(pd.to_numeric(table[column], errors="coerce").fillna(0.0).mean())
             for column in marks.columns

@@ -335,6 +335,39 @@ MAINLINE_VARIANTS: Dict[str, MainlineVariantProfile] = {
             "jump_ode_dims": 8,
         },
     ),
+    "mainline_trunk_naked": MainlineVariantProfile(
+        name="mainline_trunk_naked",
+        runtime_mode="native",
+        delegate_variant="v740_alpha",
+        description=(
+            "2026-04-21 ablation baseline: disable ALL atoms (Hawkes, GPD, CQR, "
+            "count jump/hurdle, funding log-domain/source-scaling/tail-focus, "
+            "investors event-state/intensity/shrinkage) so only the shared trunk "
+            "+ lane ridge readout (funding_lane trunk-fallback path) + hazard MLP "
+            "stays. Purpose: measure raw trunk signal quality without any atom "
+            "polluting the result. This is the ONLY scientifically valid baseline "
+            "for 'selective event-state trunk 路线是否有效' before atom ablation."
+        ),
+        prototype_overrides={
+            # Atoms OFF — trunk + minimal readout only.
+            "enable_count_hurdle_head": False,
+            "enable_count_jump": False,
+            "enable_count_sparsity_gate": False,
+            "enable_funding_anchor": True,  # keep anchor as baseline target shift
+            "enable_funding_log_domain": False,
+            "enable_funding_source_scaling": False,
+            "enable_funding_tail_focus": False,
+            "enable_funding_gpd_tail": False,
+            "enable_funding_cqr_interval": False,
+            "enable_log1p_target": True,  # keep: pure numerical stability, not an atom
+            "enable_hawkes_financing_state": False,
+            "enable_investors_event_state_features": False,
+            "enable_investors_selective_event_state_activation": False,
+            "enable_investors_intensity_baseline": False,
+            "enable_investors_shrinkage_gate": False,
+            "enable_jump_ode_state": False,
+        },
+    ),
 }
 
 

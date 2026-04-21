@@ -13,6 +13,8 @@
 #SBATCH --signal=USR1@120
 #SBATCH --requeue
 set -euo pipefail
+_requeue_handler() { echo "$(date -Iseconds) USR1: timeout approaching, requeuing $SLURM_JOB_ID"; scontrol requeue "$SLURM_JOB_ID"; }
+trap _requeue_handler USR1
 umask 002
 cd /home/users/npin/repo_root
 echo "AF739 ${SLURM_JOB_NAME} | Job $SLURM_JOB_ID on $(hostname)"

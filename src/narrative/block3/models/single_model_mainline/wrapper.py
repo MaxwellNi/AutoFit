@@ -17,6 +17,8 @@ from .investor_mark_encoder import InvestorMarkEncoder, InvestorMarkEncoderSpec
 from .lanes.binary_lane import BinaryLaneRuntime, BinaryLaneSpec
 from .lanes.funding_lane import FundingLaneRuntime, FundingLaneSpec
 from .lanes.investors_lane import InvestorsLaneRuntime, InvestorsLaneSpec, _transition_signal
+from .learnable_trunk import LearnableTrunkAdapter
+from .sequential_adapter import SequentialTrunkAdapter
 from .objectives import MainlineObjectiveSpec
 from .source_memory import SourceMemoryAssembler, SourceMemoryContract
 from .variant_profiles import build_delegate_kwargs, get_mainline_variant_profile
@@ -112,6 +114,10 @@ class SingleModelMainlineWrapper(ModelBase):
         self.enable_funding_anchor = bool(prototype_kwargs.get("enable_funding_anchor", True))
         self.funding_anchor_strength = float(prototype_kwargs.get("funding_anchor_strength", 0.85))
         self.enable_funding_log_domain = bool(prototype_kwargs.get("enable_funding_log_domain", False))
+        # Log1p target transform for regression lanes: maps heavy-tailed targets to
+        # a learnable manifold; predictions are restored via expm1 at inference time.
+        # Enabled by default for funding_raised_usd and investors_count.
+        self.enable_log1p_target = bool(prototype_kwargs.get("enable_log1p_target", True))
         self.enable_funding_source_scaling = bool(prototype_kwargs.get("enable_funding_source_scaling", False))
         self.enable_funding_tail_focus = bool(prototype_kwargs.get("enable_funding_tail_focus", False))
         self.funding_tail_weight = float(prototype_kwargs.get("funding_tail_weight", 2.0))
@@ -209,6 +215,38 @@ class SingleModelMainlineWrapper(ModelBase):
         self.financing_auxiliary_strength = float(prototype_kwargs.get("financing_auxiliary_strength", 0.0))
         self.financing_process_blend = float(prototype_kwargs.get("financing_process_blend", 0.0))
         self.enable_window_repair = bool(prototype_kwargs.get("enable_window_repair", False))
+        # Learnable Sparse MoE trunk (replaces random projection backbone + barrier)
+        self.enable_learnable_trunk = bool(prototype_kwargs.get("enable_learnable_trunk", False))
+        self._learnable_trunk: LearnableTrunkAdapter | None = None
+        if self.enable_learnable_trunk:
+            self._learnable_trunk = LearnableTrunkAdapter(
+                compact_dim=int(prototype_kwargs.get("learnable_compact_dim", 64)),
+                n_experts=int(prototype_kwargs.get("learnable_n_experts", 6)),
+                expert_dim=int(prototype_kwargs.get("learnable_expert_dim", 32)),
+                top_k=int(prototype_kwargs.get("learnable_top_k", 2)),
+                n_epochs=int(prototype_kwargs.get("learnable_n_epochs", 30)),
+                random_state=seed,
+            )
+        # Sequential ED-SSM + MoE trunk (temporal-aware upgrade)
+        self.enable_sequential_trunk = bool(prototype_kwargs.get("enable_sequential_trunk", False))
+        self._sequential_trunk: SequentialTrunkAdapter | None = None
+        if self.enable_sequential_trunk:
+            self._sequential_trunk = SequentialTrunkAdapter(
+                window_size=int(prototype_kwargs.get("seq_window_size", 30)),
+                d_model=int(prototype_kwargs.get("seq_d_model", 64)),
+                d_state=int(prototype_kwargs.get("seq_d_state", 16)),
+                n_ssm_layers=int(prototype_kwargs.get("seq_n_ssm_layers", 2)),
+                d_event=int(prototype_kwargs.get("seq_d_event", 0)),
+                compact_dim=int(prototype_kwargs.get("learnable_compact_dim", 64)),
+                n_experts=int(prototype_kwargs.get("learnable_n_experts", 6)),
+                expert_dim=int(prototype_kwargs.get("learnable_expert_dim", 32)),
+                top_k=int(prototype_kwargs.get("learnable_top_k", 2)),
+                n_epochs=int(prototype_kwargs.get("seq_n_epochs", 20)),
+                batch_size=int(prototype_kwargs.get("seq_batch_size", 512)),
+                decoder_branch=str(prototype_kwargs.get("seq_decoder_branch", "legacy")),
+                freeze_unified_ssm=bool(prototype_kwargs.get("seq_freeze_unified_ssm", True)),
+                random_state=seed,
+            )
         self.min_window_history = int(prototype_kwargs.get("min_window_history", 0))
         self.target_windows_per_entity = int(prototype_kwargs.get("target_windows_per_entity", 0))
 
@@ -261,6 +299,7 @@ class SingleModelMainlineWrapper(ModelBase):
         self._funding_source_scaling = False
         self._funding_anchor_enabled = False
         self._effective_funding_anchor_strength = 0.0
+        self._use_log1p_target = False  # set in fit() for non-binary regression targets
         self._funding_source_scale_mean = 0.0
         self._funding_source_scale_max = 0.0
         self._effective_task_modulation = self.enable_task_modulation
@@ -452,6 +491,9 @@ class SingleModelMainlineWrapper(ModelBase):
         self._funding_source_scaling = bool(self.enable_funding_source_scaling and self._funding_target)
         self._funding_anchor_enabled = bool(self.enable_funding_anchor and self._funding_target)
         self._effective_funding_anchor_strength = self.funding_anchor_strength if self._funding_anchor_enabled else 0.0
+        # Log1p target transform: enabled for all non-binary regression targets
+        # (funding_raised_usd and investors_count) to tame heavy-tailed distributions.
+        self._use_log1p_target = bool(self.enable_log1p_target and not self._binary_target)
         self._effective_task_modulation = bool(self.enable_task_modulation)
         self._condition_key = ConditionKey(
             task=self._task_name,
@@ -488,36 +530,87 @@ class SingleModelMainlineWrapper(ModelBase):
             self._core_feature_cols = list(self._train_feature_cols)
 
         core_frame = X.reindex(columns=self._core_feature_cols, fill_value=0.0)
-        shared_state = self.backbone.fit_transform(
-            core_frame,
-            feature_cols=self._core_feature_cols,
-            context_frame=runtime_frame,
-        )
-        self._backbone_seed = self.backbone.build_context_seed(runtime_frame, core_frame)
-        condition_state = self.condition_encoder.broadcast(self._condition_key, len(X))
-        source_frame = self.source_memory.build_runtime_features(runtime_frame, layout=source_layout)
-        self._source_feature_cols = list(source_frame.columns)
-        source_state = source_frame.to_numpy(dtype=np.float32, copy=False)
-        self._edgar_source_density = float(source_frame["edgar_active"].mean()) if "edgar_active" in source_frame else 0.0
-        self._text_source_density = float(source_frame["text_active"].mean()) if "text_active" in source_frame else 0.0
-        event_state_frame, shared_state = self._refresh_event_state_card_with_shared_state(
-            runtime_frame,
-            shared_state=shared_state,
-            source_frame=source_frame,
-            phase="train",
-        )
-        self._investors_event_state_feature_cols = list(event_state_frame.columns)
-        self._effective_investors_event_state_features = False
 
-        self.barrier.fit(
-            shared_dim=shared_state.shape[1],
-            condition_dim=condition_state.shape[1],
-            source_dim=source_state.shape[1],
-        )
-        lane_states = self.barrier.split(shared_state, condition_state, source_state)
-        self._shared_state_dim = shared_state.shape[1]
-        self._active_lane_name = self._lane_name_for_target(self._target_name)
-        self._lane_state_dim = lane_states[self._active_lane_name].shape[1]
+        # === Sequential ED-SSM + MoE Trunk path ===
+        if self.enable_sequential_trunk and self._sequential_trunk is not None:
+            core_matrix = core_frame.to_numpy(dtype=np.float32, copy=False)
+            raw_df = kwargs.get("train_raw")
+            entity_ids = raw_df["entity_id"].reindex(X.index).to_numpy() if raw_df is not None and "entity_id" in raw_df.columns else None
+            dates = raw_df["crawled_date_day"].reindex(X.index).to_numpy() if raw_df is not None and "crawled_date_day" in raw_df.columns else None
+            trunk_output = self._sequential_trunk.fit_transform(
+                core_matrix, y_arr, target_name=self._target_name,
+                entity_ids=entity_ids, dates=dates,
+            )
+            condition_state = self.condition_encoder.broadcast(self._condition_key, len(X))
+            source_frame = self.source_memory.build_runtime_features(runtime_frame, layout=source_layout)
+            self._source_feature_cols = list(source_frame.columns)
+            source_state = source_frame.to_numpy(dtype=np.float32, copy=False)
+            self._edgar_source_density = float(source_frame["edgar_active"].mean()) if "edgar_active" in source_frame else 0.0
+            self._text_source_density = float(source_frame["text_active"].mean()) if "text_active" in source_frame else 0.0
+            lane_input = np.concatenate([trunk_output, condition_state, source_state], axis=1).astype(np.float32)
+            self._shared_state_dim = trunk_output.shape[1]
+            self._active_lane_name = self._lane_name_for_target(self._target_name)
+            self._lane_state_dim = lane_input.shape[1]
+            lane_states = {self._active_lane_name: lane_input}
+            event_state_frame = pd.DataFrame(index=X.index)
+            self._investors_event_state_feature_cols = []
+            self._effective_investors_event_state_features = False
+            self._backbone_seed = None
+        # === Learnable Trunk path (replaces backbone + barrier) ===
+        elif self.enable_learnable_trunk and self._learnable_trunk is not None:
+            core_matrix = core_frame.to_numpy(dtype=np.float32, copy=False)
+            trunk_output = self._learnable_trunk.fit_transform(
+                core_matrix, y_arr, target_name=self._target_name,
+            )
+            condition_state = self.condition_encoder.broadcast(self._condition_key, len(X))
+            source_frame = self.source_memory.build_runtime_features(runtime_frame, layout=source_layout)
+            self._source_feature_cols = list(source_frame.columns)
+            source_state = source_frame.to_numpy(dtype=np.float32, copy=False)
+            self._edgar_source_density = float(source_frame["edgar_active"].mean()) if "edgar_active" in source_frame else 0.0
+            self._text_source_density = float(source_frame["text_active"].mean()) if "text_active" in source_frame else 0.0
+            # Combine trunk output + condition + source as lane state
+            lane_input = np.concatenate([trunk_output, condition_state, source_state], axis=1).astype(np.float32)
+            self._shared_state_dim = trunk_output.shape[1]
+            self._active_lane_name = self._lane_name_for_target(self._target_name)
+            self._lane_state_dim = lane_input.shape[1]
+            lane_states = {self._active_lane_name: lane_input}
+            # Skip event state / process feedback for learnable trunk path
+            event_state_frame = pd.DataFrame(index=X.index)
+            self._investors_event_state_feature_cols = []
+            self._effective_investors_event_state_features = False
+            self._backbone_seed = None
+        else:
+            # === Original backbone + barrier path ===
+            shared_state = self.backbone.fit_transform(
+                core_frame,
+                feature_cols=self._core_feature_cols,
+                context_frame=runtime_frame,
+            )
+            self._backbone_seed = self.backbone.build_context_seed(runtime_frame, core_frame)
+            condition_state = self.condition_encoder.broadcast(self._condition_key, len(X))
+            source_frame = self.source_memory.build_runtime_features(runtime_frame, layout=source_layout)
+            self._source_feature_cols = list(source_frame.columns)
+            source_state = source_frame.to_numpy(dtype=np.float32, copy=False)
+            self._edgar_source_density = float(source_frame["edgar_active"].mean()) if "edgar_active" in source_frame else 0.0
+            self._text_source_density = float(source_frame["text_active"].mean()) if "text_active" in source_frame else 0.0
+            event_state_frame, shared_state = self._refresh_event_state_card_with_shared_state(
+                runtime_frame,
+                shared_state=shared_state,
+                source_frame=source_frame,
+                phase="train",
+            )
+            self._investors_event_state_feature_cols = list(event_state_frame.columns)
+            self._effective_investors_event_state_features = False
+
+            self.barrier.fit(
+                shared_dim=shared_state.shape[1],
+                condition_dim=condition_state.shape[1],
+                source_dim=source_state.shape[1],
+            )
+            lane_states = self.barrier.split(shared_state, condition_state, source_state)
+            self._shared_state_dim = shared_state.shape[1]
+            self._active_lane_name = self._lane_name_for_target(self._target_name)
+            self._lane_state_dim = lane_states[self._active_lane_name].shape[1]
 
         history_frame = self._build_target_history_features(runtime_frame, include_seed=False)
         self._history_feature_cols = list(history_frame.columns)
@@ -542,6 +635,17 @@ class SingleModelMainlineWrapper(ModelBase):
         )
         investors_aux_matrix = self._compose_investors_aux_matrix(history_matrix, event_state_frame)
 
+        # ── Log1p target + anchor transform for regression lanes ──────────────
+        # Map heavy-tailed regression targets (funding, investors) to log space so
+        # downstream HGBR learns on a compact, symmetrically-distributed signal.
+        # anchor is also mapped so the jump residual stays in the same manifold.
+        if self._use_log1p_target:
+            y_lane = np.log1p(np.clip(y_arr, 0.0, None))
+            anchor_lane = np.log1p(np.clip(anchor, 0.0, None))
+        else:
+            y_lane = y_arr
+            anchor_lane = anchor
+
         if self._binary_target:
             self.binary_lane_runtime.fit(
                 lane_states["binary"],
@@ -560,9 +664,9 @@ class SingleModelMainlineWrapper(ModelBase):
         elif self._funding_target:
             self.funding_lane_runtime.fit(
                 lane_states["funding"],
-                y_arr,
+                y_lane,
                 aux_features=history_matrix,
-                anchor=anchor,
+                anchor=anchor_lane,
                 source_scale=funding_source_scale,
                 use_log_domain=self._funding_log_domain,
                 enable_source_scaling=self._funding_source_scaling,
@@ -576,9 +680,9 @@ class SingleModelMainlineWrapper(ModelBase):
         else:
             self.investors_lane_runtime.fit(
                 lane_states["investors"],
-                y_arr,
+                y_lane,
                 aux_features=investors_aux_matrix,
-                anchor=anchor,
+                anchor=anchor_lane,
                 source_features=investors_source_matrix,
                 mark_features=investors_mark_matrix,
                 enable_source_features=self._effective_investors_source_features,
@@ -874,31 +978,80 @@ class SingleModelMainlineWrapper(ModelBase):
         runtime_frame = self._mask_runtime_target_for_prediction(runtime_frame)
         feature_frame = X.reindex(columns=self._train_feature_cols, fill_value=0.0)
         core_frame = feature_frame.reindex(columns=self._core_feature_cols, fill_value=0.0)
-        shared_state = self.backbone.transform(
-            core_frame,
-            context_frame=runtime_frame,
-            seed_frame=self._backbone_seed,
-        )
-        condition_key = ConditionKey(
-            task=kwargs.get("task", self._task_name),
-            target=kwargs.get("target", self._target_name),
-            horizon=int(kwargs.get("horizon", self._horizon)),
-            ablation=kwargs.get("ablation", self._ablation_name),
-        )
-        condition_state = self.condition_encoder.broadcast(condition_key, len(feature_frame))
-        source_layout = self.source_memory.infer_layout(runtime_frame)
-        source_frame = self.source_memory.build_runtime_features(runtime_frame, layout=source_layout)
-        event_state_frame, shared_state = self._refresh_event_state_card_with_shared_state(
-            runtime_frame,
-            shared_state=shared_state,
-            source_frame=source_frame,
-            phase="test",
-        )
-        source_state = source_frame.reindex(columns=self._source_feature_cols, fill_value=0.0).to_numpy(dtype=np.float32, copy=False)
-        lane_states = self.barrier.split(shared_state, condition_state, source_state)
+
+        # Default: empty frame for trunk paths that skip event-state refresh.
+        event_state_frame = pd.DataFrame()
+
+        # === Sequential ED-SSM + MoE Trunk predict path ===
+        if self.enable_sequential_trunk and self._sequential_trunk is not None:
+            core_matrix = core_frame.to_numpy(dtype=np.float32, copy=False)
+            raw_df = kwargs.get("test_raw")
+            entity_ids = raw_df["entity_id"].reindex(X.index).to_numpy() if raw_df is not None and "entity_id" in raw_df.columns else None
+            dates = raw_df["crawled_date_day"].reindex(X.index).to_numpy() if raw_df is not None and "crawled_date_day" in raw_df.columns else None
+            trunk_output = self._sequential_trunk.transform(
+                core_matrix, target_name=self._target_name,
+                entity_ids=entity_ids, dates=dates,
+            )
+            condition_key = ConditionKey(
+                task=kwargs.get("task", self._task_name),
+                target=kwargs.get("target", self._target_name),
+                horizon=int(kwargs.get("horizon", self._horizon)),
+                ablation=kwargs.get("ablation", self._ablation_name),
+            )
+            condition_state = self.condition_encoder.broadcast(condition_key, len(feature_frame))
+            source_layout = self.source_memory.infer_layout(runtime_frame)
+            source_frame = self.source_memory.build_runtime_features(runtime_frame, layout=source_layout)
+            source_state = source_frame.reindex(columns=self._source_feature_cols, fill_value=0.0).to_numpy(dtype=np.float32, copy=False)
+            lane_input = np.concatenate([trunk_output, condition_state, source_state], axis=1).astype(np.float32)
+            lane_states = {self._active_lane_name: lane_input}
+        # === Learnable Trunk predict path ===
+        elif self.enable_learnable_trunk and self._learnable_trunk is not None:
+            core_matrix = core_frame.to_numpy(dtype=np.float32, copy=False)
+            trunk_output = self._learnable_trunk.transform(
+                core_matrix, target_name=self._target_name,
+            )
+            condition_key = ConditionKey(
+                task=kwargs.get("task", self._task_name),
+                target=kwargs.get("target", self._target_name),
+                horizon=int(kwargs.get("horizon", self._horizon)),
+                ablation=kwargs.get("ablation", self._ablation_name),
+            )
+            condition_state = self.condition_encoder.broadcast(condition_key, len(feature_frame))
+            source_layout = self.source_memory.infer_layout(runtime_frame)
+            source_frame = self.source_memory.build_runtime_features(runtime_frame, layout=source_layout)
+            source_state = source_frame.reindex(columns=self._source_feature_cols, fill_value=0.0).to_numpy(dtype=np.float32, copy=False)
+            lane_input = np.concatenate([trunk_output, condition_state, source_state], axis=1).astype(np.float32)
+            lane_states = {self._active_lane_name: lane_input}
+        else:
+            # === Original backbone + barrier predict path ===
+            shared_state = self.backbone.transform(
+                core_frame,
+                context_frame=runtime_frame,
+                seed_frame=self._backbone_seed,
+            )
+            condition_key = ConditionKey(
+                task=kwargs.get("task", self._task_name),
+                target=kwargs.get("target", self._target_name),
+                horizon=int(kwargs.get("horizon", self._horizon)),
+                ablation=kwargs.get("ablation", self._ablation_name),
+            )
+            condition_state = self.condition_encoder.broadcast(condition_key, len(feature_frame))
+            source_layout = self.source_memory.infer_layout(runtime_frame)
+            source_frame = self.source_memory.build_runtime_features(runtime_frame, layout=source_layout)
+            event_state_frame, shared_state = self._refresh_event_state_card_with_shared_state(
+                runtime_frame,
+                shared_state=shared_state,
+                source_frame=source_frame,
+                phase="test",
+            )
+            source_state = source_frame.reindex(columns=self._source_feature_cols, fill_value=0.0).to_numpy(dtype=np.float32, copy=False)
+            lane_states = self.barrier.split(shared_state, condition_state, source_state)
         history_frame = self._build_target_history_features(runtime_frame, include_seed=True)
         history_matrix = history_frame.reindex(columns=self._history_feature_cols, fill_value=0.0).fillna(0.0).to_numpy(dtype=np.float32, copy=False)
         anchor = self._resolve_anchor(history_frame)
+        # Apply log1p to anchor in predict path so the lane stays in the same
+        # manifold it was trained in (log space for non-binary regression targets).
+        anchor_pred = np.log1p(np.clip(anchor, 0.0, None)) if self._use_log1p_target else anchor
         investors_source_frame = self._build_investors_source_features(source_frame)
         investors_aux_matrix = self._compose_investors_aux_matrix(history_matrix, event_state_frame)
         investors_source_matrix = investors_source_frame.reindex(
@@ -918,14 +1071,17 @@ class SingleModelMainlineWrapper(ModelBase):
             preds = self.funding_lane_runtime.predict(
                 lane_states["funding"],
                 aux_features=history_matrix,
-                anchor=anchor,
+                anchor=anchor_pred,
                 source_scale=funding_source_scale,
             )
+            # Restore from log space → physical scale.
+            if self._use_log1p_target:
+                preds = np.expm1(np.clip(preds, 0.0, None))
             return np.clip(preds, 0.0, None).astype(np.float64, copy=False)
         preds = self.investors_lane_runtime.predict(
             lane_states["investors"],
             aux_features=investors_aux_matrix,
-            anchor=anchor,
+            anchor=anchor_pred,
             source_features=investors_source_matrix,
             mark_features=investors_mark_matrix,
             enable_source_features=self._effective_investors_source_features,
@@ -935,6 +1091,9 @@ class SingleModelMainlineWrapper(ModelBase):
             enable_source_transition_correction=self._effective_investors_transition_correction,
             enable_mark_features=self._effective_investors_mark_features,
         )
+        # Restore from log space → physical scale.
+        if self._use_log1p_target:
+            preds = np.expm1(np.clip(preds, 0.0, None))
         return np.clip(preds, 0.0, None).astype(np.float64, copy=False)
 
     def _prepare_runtime_frame(self, X: pd.DataFrame, raw_frame: pd.DataFrame | None) -> pd.DataFrame:

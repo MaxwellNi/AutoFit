@@ -4,8 +4,8 @@
 #SBATCH --partition=gpu
 #SBATCH --qos=normal
 #SBATCH --time=2-00:00:00
-#SBATCH --mem=150G
-#SBATCH --cpus-per-task=7
+#SBATCH --mem=280G
+#SBATCH --cpus-per-task=11
 #SBATCH --gres=gpu:1
 #SBATCH --output=/work/projects/eint/logs/phase15/af739_t2_s2_%j.out
 #SBATCH --error=/work/projects/eint/logs/phase15/af739_t2_s2_%j.err
@@ -13,6 +13,8 @@
 #SBATCH --signal=USR1@120
 #SBATCH --requeue
 set -euo pipefail
+_requeue_handler() { echo "$(date -Iseconds) USR1: timeout approaching, requeuing $SLURM_JOB_ID"; scontrol requeue "$SLURM_JOB_ID"; }
+trap _requeue_handler USR1
 umask 002
 cd /home/users/npin/repo_root
 echo "AF739 ${SLURM_JOB_NAME} | Job $SLURM_JOB_ID on $(hostname)"

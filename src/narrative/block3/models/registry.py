@@ -55,6 +55,7 @@ from .irregular_models import IRREGULAR_MODELS, get_irregular_model
 from ..autofit_status import CURRENT_AUTOFIT_BASELINE, get_retired_autofit_reason, is_retired_autofit_model
 from .autofit_wrapper import ACTIVE_AUTOFIT_MODELS
 from .tslib_models import TSLIB_MODELS
+from .mainline_registry import MAINLINE_MODELS
 
 
 # ============================================================================
@@ -70,6 +71,7 @@ MODEL_CATEGORIES: Dict[str, List[str]] = {
     "irregular":        list(IRREGULAR_MODELS.keys()),
     "tslib_sota":       list(TSLIB_MODELS.keys()),
     "autofit":          list(ACTIVE_AUTOFIT_MODELS.keys()),
+    "mainline":         list(MAINLINE_MODELS.keys()),
 }
 
 # Flattened registry for direct lookup
@@ -82,6 +84,7 @@ _ALL_MODELS.update(FOUNDATION_MODELS)
 _ALL_MODELS.update(IRREGULAR_MODELS)
 _ALL_MODELS.update(TSLIB_MODELS)
 _ALL_MODELS.update(ACTIVE_AUTOFIT_MODELS)
+_ALL_MODELS.update(MAINLINE_MODELS)
 
 
 # ============================================================================

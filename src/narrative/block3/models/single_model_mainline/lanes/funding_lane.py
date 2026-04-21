@@ -77,6 +77,17 @@ class FundingLaneRuntime:
         self._cqr_q_hi_model: HistGradientBoostingRegressor | None = None
         self._cqr_converged = False
         self._fitted = False
+        # 2026-04-21 18:57 CEST — anti-silent-collapse observability / trunk-fallback.
+        # When the jump-hurdle head refuses to train (zero-inflated target, small N,
+        # degenerate jump_target std), we MUST NOT silently return anchor_vec.
+        # Instead we train a ridge readout on the trunk lane_state so trunk signal
+        # quality can be independently measured.
+        self._anchor_only_mode = False
+        self._anchor_only_reason = ""
+        self._jump_target_std = 0.0
+        self._trunk_fallback_coef: np.ndarray | None = None
+        self._trunk_fallback_intercept = 0.0
+        self._trunk_fallback_fitted = False
 
     def fit(
         self,
@@ -153,11 +164,32 @@ class FundingLaneRuntime:
         self._guarded_calibration_mae = anchor_mae
         self._calibration_rows = int(target.size)
 
+        self._jump_target_std = float(np.nanstd(jump_target)) if jump_target.size else 0.0
+
         if (
             target.size < 12
             or self._positive_jump_rows < _minimum_positive_jump_rows(target.size)
-            or np.nanstd(jump_target) < 1e-8
+            or self._jump_target_std < 1e-8
         ):
+            # 2026-04-21 18:57 CEST — trunk-fallback instead of silent anchor-only.
+            # Without this, predict() used to collapse to a constant anchor_vec
+            # regardless of lane_state (trunk output), which made it impossible
+            # to measure trunk signal quality. Now we train a ridge on the
+            # trunk-derived design matrix so the trunk gets a real test.
+            self._anchor_only_mode = True
+            if target.size < 12:
+                self._anchor_only_reason = "n_too_small"
+            elif self._positive_jump_rows < _minimum_positive_jump_rows(target.size):
+                self._anchor_only_reason = "positive_jumps_below_threshold"
+            else:
+                self._anchor_only_reason = "jump_target_std_degenerate"
+            self._trunk_fallback_fitted = _fit_trunk_fallback_ridge(
+                self,
+                design=design,
+                target=target,
+                anchor_vec=anchor_vec,
+                use_log_domain=self._log_domain_enabled,
+            )
             self._fitted = True
             return self
 
@@ -273,6 +305,17 @@ class FundingLaneRuntime:
         anchor_vec = _resolve_anchor(anchor, fallback=self._fallback_value, length=len(lane_state))
         source_scale_vec = _resolve_source_scale(source_scale, length=len(lane_state))
         if not self._uses_jump_hurdle_head:
+            # 2026-04-21 18:57 CEST — use trunk ridge fallback instead of
+            # silently returning a constant anchor. This makes trunk quality
+            # measurable and breaks the horizon-invariant collapse.
+            if self._trunk_fallback_fitted and self._trunk_fallback_coef is not None:
+                design_pred = _merge_features(lane_state, aux_features, anchor_vec)
+                residual_log = design_pred @ self._trunk_fallback_coef + self._trunk_fallback_intercept
+                if self._log_domain_enabled:
+                    pred = np.expm1(np.log1p(np.clip(anchor_vec, 0.0, None)) + residual_log)
+                else:
+                    pred = np.clip(anchor_vec, 0.0, None) + residual_log
+                return np.clip(pred, 0.0, None).astype(np.float64, copy=False)
             return np.clip(anchor_vec, 0.0, None).astype(np.float64, copy=False)
 
         design = _merge_features(lane_state, aux_features, anchor_vec)
@@ -330,6 +373,13 @@ class FundingLaneRuntime:
             "cqr_converged": self._cqr_converged,
             "cqr_conformal_q": self._cqr_conformal_q,
             "cqr_alpha": self._cqr_alpha,
+            # 2026-04-21 anti-silent-collapse observability
+            "anchor_only_mode": bool(self._anchor_only_mode),
+            "anchor_only_reason": self._anchor_only_reason,
+            "jump_target_std": float(self._jump_target_std),
+            "positive_jump_rows": int(self._positive_jump_rows),
+            "lane_hurdle_engaged": bool(self._uses_jump_hurdle_head),
+            "trunk_fallback_fitted": bool(self._trunk_fallback_fitted),
         }
 
 
@@ -340,6 +390,54 @@ def _build_residual_model(random_state: int) -> HistGradientBoostingRegressor:
         learning_rate=0.05,
         random_state=random_state,
     )
+
+
+def _fit_trunk_fallback_ridge(
+    lane: "FundingLaneRuntime",
+    design: np.ndarray,
+    target: np.ndarray,
+    anchor_vec: np.ndarray,
+    use_log_domain: bool,
+    lambda_reg: float = 1e-2,
+) -> bool:
+    """Train a ridge readout on the trunk-derived design matrix.
+
+    Purpose (2026-04-21): replace the old silent anchor-only fallback so that
+    when the jump-hurdle head refuses to train, the lane still exposes a
+    model that actually USES the trunk state. This makes trunk quality
+    measurable and breaks the horizon-invariant constant-output collapse.
+
+    The ridge learns a residual on top of the anchor, in log-domain when the
+    lane is log-domain-enabled.
+    """
+    try:
+        X = np.asarray(design, dtype=np.float64)
+        y = np.asarray(target, dtype=np.float64)
+        a = np.asarray(anchor_vec, dtype=np.float64)
+        mask = np.isfinite(y) & np.isfinite(a) & np.all(np.isfinite(X), axis=1)
+        if int(mask.sum()) < 8 or X.shape[1] == 0:
+            return False
+        X = X[mask]
+        y = y[mask]
+        a = a[mask]
+        if use_log_domain:
+            residual = np.log1p(np.clip(y, 0.0, None)) - np.log1p(np.clip(a, 0.0, None))
+        else:
+            residual = y - a
+        if float(np.nanstd(residual)) < 1e-8:
+            return False
+        Xb = np.hstack([X, np.ones((X.shape[0], 1), dtype=np.float64)])
+        gram = Xb.T @ Xb + lambda_reg * np.eye(Xb.shape[1], dtype=np.float64)
+        rhs = Xb.T @ residual
+        try:
+            w = np.linalg.solve(gram, rhs)
+        except np.linalg.LinAlgError:
+            w = np.linalg.lstsq(gram, rhs, rcond=None)[0]
+        lane._trunk_fallback_coef = w[:-1].astype(np.float64, copy=False)
+        lane._trunk_fallback_intercept = float(w[-1])
+        return True
+    except Exception:
+        return False
 
 
 def _build_event_model(random_state: int) -> HistGradientBoostingClassifier:

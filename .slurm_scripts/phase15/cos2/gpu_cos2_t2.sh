@@ -13,6 +13,8 @@
 #SBATCH --signal=USR1@120
 #SBATCH --requeue
 set -euo pipefail
+_requeue_handler() { echo "$(date -Iseconds) USR1: timeout approaching, requeuing $SLURM_JOB_ID"; scontrol requeue "$SLURM_JOB_ID"; }
+trap _requeue_handler USR1
 umask 002
 cd /home/users/npin/repo_root
 echo "COS2 ${SLURM_JOB_NAME} | Job $SLURM_JOB_ID on $(hostname)"
@@ -20,4 +22,4 @@ echo "$(date -Iseconds) | Git: $(git rev-parse --short HEAD)"
 /mnt/aiongpfs/projects/eint/envs/.micromamba/envs/insider/bin/python3 scripts/run_block3_benchmark_shard.py \
     --task task2_forecast --category tslib_sota --ablation core_only_seed2 \
     --preset full --output-dir runs/benchmarks/block3_phase9_fair/task2_forecast/tslib_sota/core_only_seed2 --seed 42 \
-    --models CARD,CFPT,Crossformer,DUET,DeformableTST,ETSformer,FiLM,FilterTS,FreTS,Fredformer,LightTS,MSGNet,MICN,MambaSimple,ModernTCN,MultiPatchFormer,NonstationaryTransformer,PDF,PIR,PAttn,PathFormer,Pyraformer,Reformer,SCINet,SEMPO,SRSNet,SegRNN,SparseTSF,TimeBridge,TimeFilter,TimePerceiver,TimeRecipe,xPatch
+    --models CARD,Crossformer,DUET,ETSformer,FiLM,FilterTS,FreTS,Fredformer,LightTS,MSGNet,MambaSimple,ModernTCN,NonstationaryTransformer,PDF,PIR,PAttn,Pyraformer,Reformer,SCINet,SRSNet,SegRNN,TimeRecipe,xPatch

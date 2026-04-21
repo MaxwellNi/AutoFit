@@ -117,7 +117,7 @@ logger = logging.getLogger(__name__)
 
 GLOBAL_SEED = 42
 TASK_NAMES = ["task1_outcome", "task2_forecast", "task3_risk_adjust"]
-CATEGORY_NAMES = ["statistical", "ml_tabular", "deep_classical", "transformer_sota", "foundation", "irregular", "tslib_sota", "autofit"]
+CATEGORY_NAMES = ["statistical", "ml_tabular", "deep_classical", "transformer_sota", "foundation", "irregular", "tslib_sota", "autofit", "mainline"]
 ABLATION_NAMES = ["core_only", "core_text", "core_edgar", "full",
                   "core_only_seed2", "core_edgar_seed2"]
 PRESET_NAMES = ["smoke", "quick", "standard", "full"]

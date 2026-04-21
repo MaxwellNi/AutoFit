@@ -418,7 +418,7 @@ def _fit_shared_encoder(
     source_memory = SourceMemoryAssembler()
     condition_encoder = MainlineConditionEncoder()
     barrier = TargetIsolatedBarrier()
-    helper = SingleModelMainlineWrapper(seed=7)
+    helper = SingleModelMainlineWrapper(seed=7, **(backbone_kwargs or {}))
     helper._target_name = case.target
     helper._task_name = case.task
     helper._horizon = case.horizon
@@ -504,6 +504,12 @@ def _fit_shared_encoder(
         encoded[sample_ablation]["core_train"].reindex(columns=core_cols_union, fill_value=0.0),
         context_frame=encoded[sample_ablation]["runtime_train"],
     )
+    _, sample_shared = helper._refresh_event_state_card_with_shared_state(
+        encoded[sample_ablation]["runtime_train"],
+        shared_state=sample_shared,
+        source_frame=encoded[sample_ablation]["source_train"],
+        phase="train",
+    )
     barrier.fit(
         shared_dim=sample_shared.shape[1],
         condition_dim=sample_condition.shape[1],
@@ -521,22 +527,28 @@ def _fit_shared_encoder(
             context_frame=payload["runtime_test"],
             seed_frame=payload["backbone_seed"],
         )
+        event_state_train, shared_train = helper._refresh_event_state_card_with_shared_state(
+            payload["runtime_train"],
+            shared_state=shared_train,
+            source_frame=payload["source_train"],
+            phase="train",
+        )
+        payload["event_state_train"] = event_state_train
+        payload["event_state_trunk_train"] = dict(helper._event_state_card)
+        event_state_test, shared_test = helper._refresh_event_state_card_with_shared_state(
+            payload["runtime_test"],
+            shared_state=shared_test,
+            source_frame=payload["source_test"],
+            phase="test",
+        )
+        payload["event_state_test"] = event_state_test
+        payload["event_state_trunk_test"] = dict(helper._event_state_card)
         condition_train = condition_encoder.broadcast(key, len(payload["core_train"]))
         condition_test = condition_encoder.broadcast(key, len(payload["core_test"]))
         source_state_train = payload["source_train"].reindex(columns=source_state_cols, fill_value=0.0).to_numpy(dtype=np.float32, copy=False)
         source_state_test = payload["source_test"].reindex(columns=source_state_cols, fill_value=0.0).to_numpy(dtype=np.float32, copy=False)
         payload["lane_train"] = barrier.split(shared_train, condition_train, source_state_train)["investors"]
         payload["lane_test"] = barrier.split(shared_test, condition_test, source_state_test)["investors"]
-        payload["event_state_train"] = helper._refresh_event_state_card(
-            payload["runtime_train"],
-            shared_state=shared_train,
-            source_frame=payload["source_train"],
-        )
-        payload["event_state_test"] = helper._refresh_event_state_card(
-            payload["runtime_test"],
-            shared_state=shared_test,
-            source_frame=payload["source_test"],
-        )
 
     return encoded, investors_source_cols or []
 
