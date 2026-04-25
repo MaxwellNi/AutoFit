@@ -153,10 +153,13 @@ class SklearnModelWrapper(ModelBase):
         self._fitted = True
         return self
     
-    def predict(self, X: pd.DataFrame) -> np.ndarray:
+    def predict(self, X: pd.DataFrame, **kwargs) -> np.ndarray:
+        # Round-13 P0b (2026-04-24): benchmark shard now passes horizon/target/ablation
+        # kwargs to all categories uniformly. Ignore them for plain sklearn models
+        # whose predict() only needs X; this matches their legacy behaviour.
         return self.model.predict(X)
     
-    def predict_proba(self, X: pd.DataFrame) -> np.ndarray:
+    def predict_proba(self, X: pd.DataFrame, **kwargs) -> np.ndarray:
         if hasattr(self.model, "predict_proba"):
             return self.model.predict_proba(X)
         return super().predict_proba(X)
@@ -190,6 +193,12 @@ class GradientBoostingWrapper(ModelBase):
     def fit(self, X: pd.DataFrame, y: pd.Series, **kwargs) -> "GradientBoostingWrapper":
         self.model = self.model_class(**self.init_kwargs)
         
+        # Round-13 P0b (2026-04-24): swallow benchmark-shard horizon/target/ablation
+        # kwargs that are uniformly passed for all categories; only pass through
+        # sklearn-native kwargs (eval_set, sample_weight, etc.).
+        for _k in ("horizon", "target", "ablation", "train_raw", "val_raw"):
+            kwargs.pop(_k, None)
+
         # Handle eval_set if provided
         eval_set = kwargs.pop("eval_set", None)
         
@@ -205,7 +214,7 @@ class GradientBoostingWrapper(ModelBase):
     def predict(self, X: pd.DataFrame, **kwargs) -> np.ndarray:
         return self.model.predict(X)
     
-    def predict_proba(self, X: pd.DataFrame) -> np.ndarray:
+    def predict_proba(self, X: pd.DataFrame, **kwargs) -> np.ndarray:
         if hasattr(self.model, "predict_proba"):
             return self.model.predict_proba(X)
         return super().predict_proba(X)

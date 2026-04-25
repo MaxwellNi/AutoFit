@@ -126,6 +126,13 @@ class SingleModelMainlineWrapper(ModelBase):
         self.enable_funding_gpd_tail = bool(prototype_kwargs.get("enable_funding_gpd_tail", False))
         self.enable_funding_cqr_interval = bool(prototype_kwargs.get("enable_funding_cqr_interval", False))
         self.funding_cqr_alpha = float(prototype_kwargs.get("funding_cqr_alpha", 0.10))
+        # Route G (2026-04-23): explicit flag to bypass the short-circuit gates
+        # (positive_jump_rows threshold + jump_target_std degeneracy) so the
+        # severity atoms actually run even on sparse-event panels like h=7
+        # funding_raised_usd. Intentionally leaves the n<12 gate intact.
+        self.enable_funding_forced_hurdle = bool(
+            prototype_kwargs.get("enable_funding_forced_hurdle", False)
+        )
         self.enable_binary_calibration_shrinkage = bool(
             prototype_kwargs.get("enable_binary_calibration_shrinkage", False)
         )
@@ -496,6 +503,92 @@ class SingleModelMainlineWrapper(ModelBase):
             "modules": self.contract.as_dict(),
         }
 
+    def get_routing_info(self) -> Dict[str, object]:
+        """Return lane-internal audit diagnostics (Route E instrumentation).
+
+        Added 2026-04-23 Round 10 after Route D atom-isolation audit discovered
+        bit-exact MAE across distinct atom configurations, which meant two of
+        three atom toggles had no effect on the forward pass. These diagnostics
+        expose which lane branch actually executed so future audits can
+        compute toggle-effect deltas per branch.
+        """
+        info: Dict[str, object] = {
+            "lane_family": "mainline_funding" if self._funding_target else "mainline_other",
+            "lane_variant": self.variant,
+        }
+        runtime = getattr(self, "funding_lane_runtime", None)
+        if runtime is not None and self._funding_target:
+            try:
+                info["lane_anchor_only_mode"] = bool(getattr(runtime, "_anchor_only_mode", False))
+                info["lane_anchor_only_reason"] = str(getattr(runtime, "_anchor_only_reason", "") or "")
+                info["lane_trunk_fallback_fitted"] = bool(getattr(runtime, "_trunk_fallback_fitted", False))
+                info["lane_positive_jump_rows"] = int(getattr(runtime, "_positive_jump_rows", 0))
+                info["lane_jump_target_std"] = float(getattr(runtime, "_jump_target_std", 0.0))
+                info["lane_hurdle_engaged"] = bool(getattr(runtime, "_uses_jump_hurdle_head", False))
+                info["lane_source_scale_strength"] = float(getattr(runtime, "_source_scale_strength", 0.0))
+                info["lane_source_scale_reliability"] = float(getattr(runtime, "_source_scale_reliability", 0.0))
+                info["lane_tail_weight_effective"] = (
+                    float(self.funding_tail_weight) if self.enable_funding_tail_focus else 0.0
+                )
+                info["lane_jump_event_rate"] = float(getattr(runtime, "_jump_event_rate", 0.0))
+                # 2026-04-24 Round-12 calibration-decision exposure. Observed
+                # bit-exact MAE across (source_scaling, tail_focus) probes was
+                # caused by the residual-blend grid-search rejecting the
+                # severity path (residual_blend=0 → anchor-only prediction),
+                # not by short-circuit routing. These fields make that
+                # decision directly auditable in metrics.json + sidecar.
+                info["lane_residual_blend"] = float(getattr(runtime, "_residual_blend", 0.0))
+                info["lane_residual_cap"] = float(getattr(runtime, "_residual_cap", 0.0))
+                info["lane_anchor_calibration_mae"] = float(getattr(runtime, "_anchor_calibration_mae", 0.0))
+                info["lane_guarded_calibration_mae"] = float(getattr(runtime, "_guarded_calibration_mae", 0.0))
+                info["lane_source_scaling_enabled"] = bool(getattr(runtime, "_source_scaling_enabled", False))
+                info["lane_calibration_rows"] = int(getattr(runtime, "_calibration_rows", 0))
+                # Round-12 L2/K2 audit gates (2026-04-24)
+                info["lane_source_scale_silently_dead"] = bool(
+                    getattr(runtime, "_source_scale_silently_dead", False)
+                )
+                info["lane_ss_fallback_active"] = bool(
+                    getattr(runtime, "_ss_fallback_active", False)
+                )
+                info["lane_ss_fallback_env_requested_no_op"] = bool(
+                    getattr(runtime, "_ss_fallback_env_requested_no_op", False)
+                )
+            except Exception:  # noqa: BLE001 — best-effort audit, never block fit
+                pass
+        return info
+
+    def _write_lane_audit_sidecar(self) -> None:
+        """Persist lane forensic state next to predictions when MAINLINE_LANE_AUDIT_DIR set."""
+        import json
+        import os
+        audit_dir = os.environ.get("MAINLINE_LANE_AUDIT_DIR", "")
+        if not audit_dir:
+            return
+        try:
+            os.makedirs(audit_dir, exist_ok=True)
+            payload = {
+                "variant": self.variant,
+                "task": getattr(self, "_task_name", ""),
+                "target": getattr(self, "_target_name", ""),
+                "horizon": int(getattr(self, "_horizon", 0)),
+                "ablation": getattr(self, "_ablation_name", ""),
+                "routing_info": self.get_routing_info(),
+                "atom_flags": {
+                    "enable_funding_log_domain": bool(self.enable_funding_log_domain),
+                    "enable_funding_source_scaling": bool(self.enable_funding_source_scaling),
+                    "enable_funding_tail_focus": bool(self.enable_funding_tail_focus),
+                    "funding_tail_weight": float(self.funding_tail_weight),
+                    "funding_tail_quantile": float(self.funding_tail_quantile),
+                    "enable_funding_gpd_tail": bool(self.enable_funding_gpd_tail),
+                },
+            }
+            fname = f"{self.variant}_{payload['task']}_{payload['target']}_h{payload['horizon']}_lane_audit.json"
+            fname = fname.replace("/", "_")
+            with open(os.path.join(audit_dir, fname), "w") as fh:
+                json.dump(payload, fh, indent=2, default=str, sort_keys=True)
+        except Exception:  # noqa: BLE001 — audit is best-effort, never fail fit
+            pass
+
     def fit(self, X: pd.DataFrame, y: pd.Series, **kwargs) -> "SingleModelMainlineWrapper":
         self._target_name = kwargs.get("target", y.name or "funding_raised_usd")
         self._task_name = kwargs.get("task", "task1_outcome")
@@ -721,8 +814,30 @@ class SingleModelMainlineWrapper(ModelBase):
                 enable_gpd_tail=self.enable_funding_gpd_tail,
                 enable_cqr_interval=self.enable_funding_cqr_interval,
                 cqr_alpha=self.funding_cqr_alpha,
+                force_hurdle=self.enable_funding_forced_hurdle,
             )
             self._active_lane_model = self.funding_lane_runtime
+            # Round-12 audit gate #17 (2026-04-24): flag-activation assert.
+            # Warns when user sets enable_funding_source_scaling=True but the
+            # lane internal _source_scaling_enabled is False (silent death).
+            # This is the gate that would have caught §0r's bug one round
+            # earlier. Raises only under MAINLINE_STRICT_FLAG_CHECK=1.
+            import os as _os_w17
+            import logging as _logging_w17
+            _log_w17 = _logging_w17.getLogger("narrative.block3.mainline.wrapper")
+            _ss_flag = bool(self.enable_funding_source_scaling and self._funding_target)
+            _ss_real = bool(getattr(self.funding_lane_runtime, "_source_scaling_enabled", False))
+            _tf_flag = bool(self.enable_funding_tail_focus and self._funding_target)
+            _tf_real = float(getattr(self.funding_lane_runtime, "_tail_weight", 0.0)) > 0.0
+            if (_ss_flag and not _ss_real) or (_tf_flag and not _tf_real):
+                msg = (
+                    f"[AUDIT #17] Flag-activation mismatch: "
+                    f"source_scaling flag={_ss_flag} real={_ss_real}; "
+                    f"tail_focus flag={_tf_flag} real={_tf_real}"
+                )
+                if _os_w17.environ.get("MAINLINE_STRICT_FLAG_CHECK", "0") in ("1", "true", "True"):
+                    raise RuntimeError(msg)
+                _log_w17.warning(msg)
         else:
             self.investors_lane_runtime.fit(
                 lane_states["investors"],
@@ -755,6 +870,8 @@ class SingleModelMainlineWrapper(ModelBase):
         self._history_seed = self._collect_history_seed(runtime_frame)
         self.model = self._active_lane_model
         self._fitted = True
+        # Route E instrumentation: persist lane audit sidecar if env configured.
+        self._write_lane_audit_sidecar()
         return self
 
     def _source_contract_state(self) -> Dict[str, object]:

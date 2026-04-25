@@ -291,7 +291,36 @@ class ModelMetrics:
     reuse_source_run: Optional[str] = None
     pinball_q90: Optional[float] = None
     count_two_part_family: Optional[str] = None
-    
+
+    # ── Route E lane-forensic fields (2026-04-23, Round 10) ──
+    # Populated by SingleModelMainlineWrapper.get_routing_info() so that
+    # atom-isolation audits can distinguish which funding-lane branch executed.
+    lane_anchor_only_mode: Optional[bool] = None
+    lane_anchor_only_reason: Optional[str] = None
+    lane_trunk_fallback_fitted: Optional[bool] = None
+    lane_positive_jump_rows: Optional[int] = None
+    lane_jump_target_std: Optional[float] = None
+    lane_hurdle_engaged: Optional[bool] = None
+    lane_source_scale_strength: Optional[float] = None
+    lane_tail_weight_effective: Optional[float] = None
+    lane_jump_event_rate: Optional[float] = None
+
+    # ── Round-13 (2026-04-24): NC-CoPo split-conformal calibration ──
+    # Populated when BLOCK3_NCCOPO_WIRE=1. All fields None otherwise.
+    nccopo_wired: Optional[bool] = None
+    nccopo_alpha_primary: Optional[float] = None
+    nccopo_coverage_90: Optional[float] = None     # empirical test coverage at alpha=0.10
+    nccopo_coverage_80: Optional[float] = None     # empirical test coverage at alpha=0.20
+    nccopo_conformal_q_90: Optional[float] = None  # conformal quantile at alpha=0.10
+    nccopo_cal_coverage_90: Optional[float] = None # calibration-set coverage sanity
+    nccopo_n_cal: Optional[int] = None
+    nccopo_interval_width_mean: Optional[float] = None
+    nccopo_error: Optional[str] = None
+
+    # ── Round-13 (2026-04-24): y-shift diagnostics ──
+    y_shift_enabled: Optional[bool] = None
+    y_shift_dropped_tail_rows: Optional[int] = None
+
     def to_dict(self) -> Dict[str, Any]:
         return asdict(self)
 
@@ -787,10 +816,34 @@ class BenchmarkShard:
            (see _TARGET_LEAK_GROUPS) — prevents target-synonym leakage.
         2. Use dropna() on target instead of fillna(0) — NaN ≠ zero funding.
         3. Synchronise X and y indices after dropping NaN targets.
+
+        Round-13 (2026-04-24): Defect #1 fix — row-level y-shift materialisation.
+        When BLOCK3_Y_SHIFT=1, y becomes groupby('entity_id')[target].shift(-h)
+        per entity so that X(t) actually predicts y(t+h). Without this flag the
+        legacy behaviour `y = df_clean[target]` (y(t) predicts y(t)) is kept for
+        bit-exact parity with prior benchmarks. Tail rows whose shift overflows
+        the entity window are dropped. See handover §7 for full rationale.
         """
+        import os as _os_shift
+        enable_y_shift = _os_shift.environ.get("BLOCK3_Y_SHIFT", "0") in ("1", "true", "True")
+        self._last_y_shift_enabled = enable_y_shift
+        self._last_y_shift_dropped_tail = 0
+
         # --- 1. Drop NaN targets (NOT fill with 0) ---
-        valid_mask = df[target].notna()
-        df_clean = df[valid_mask].copy()
+        if enable_y_shift and "entity_id" in df.columns and "crawled_date_day" in df.columns:
+            df_sorted = df.sort_values(["entity_id", "crawled_date_day"]).reset_index(drop=True)
+            y_shifted_full = df_sorted.groupby("entity_id")[target].shift(-int(horizon))
+            valid_mask = y_shifted_full.notna()
+            df_clean = df_sorted.loc[valid_mask].copy().reset_index(drop=True)
+            _y_shift_series = y_shifted_full.loc[valid_mask].reset_index(drop=True).astype(np.float64)
+            self._last_y_shift_dropped_tail = int((~valid_mask).sum())
+            logger.info(
+                f"  [Y-SHIFT] enabled: target={target} h={horizon} dropped_tail_rows={self._last_y_shift_dropped_tail} kept={len(df_clean)}"
+            )
+        else:
+            _y_shift_series = None
+            valid_mask = df[target].notna()
+            df_clean = df[valid_mask].copy()
 
         if len(df_clean) == 0:
             logger.warning(f"No valid target values for {target}")
@@ -825,7 +878,23 @@ class BenchmarkShard:
             X = df_clean[feature_cols].copy()
         else:
             X = df_clean[feature_cols].fillna(0)
-        y = df_clean[target]
+        if _y_shift_series is not None:
+            # Round-13 P0a: use horizon-shifted target instead of identity target.
+            y = _y_shift_series
+        else:
+            y = df_clean[target]
+
+        # Round-12 Route M (2026-04-24): inject horizon as a feature column.
+        # Opt-in via BLOCK3_INJECT_HORIZON_FEATURE=1. Addresses the §0s finding
+        # that horizon is a label-dimension only, never entering X or y, so
+        # models cannot learn horizon-conditional structure. With this column,
+        # h=7/14/30 become genuinely distinct training cells instead of
+        # bit-identical redundant draws. Default OFF to preserve prior
+        # baselines until one full re-run validates the downstream effect.
+        import os as _os_m
+        if _os_m.environ.get("BLOCK3_INJECT_HORIZON_FEATURE", "0") in ("1", "true", "True"):
+            X = X.copy()
+            X["_horizon_feature"] = float(horizon)
 
         return X, y
     
@@ -1005,6 +1074,16 @@ class BenchmarkShard:
             "reuse_source_run": None,
             "pinball_q90": None,
             "count_two_part_family": None,
+            # Route E lane-forensic (2026-04-23)
+            "lane_anchor_only_mode": None,
+            "lane_anchor_only_reason": None,
+            "lane_trunk_fallback_fitted": None,
+            "lane_positive_jump_rows": None,
+            "lane_jump_target_std": None,
+            "lane_hurdle_engaged": None,
+            "lane_source_scale_strength": None,
+            "lane_tail_weight_effective": None,
+            "lane_jump_event_rate": None,
         }
         try:
             if hasattr(model, "get_routing_info"):
@@ -1111,6 +1190,29 @@ class BenchmarkShard:
                     cts = info.get("count_two_part_state")
                     if isinstance(cts, dict) and cts.get("fitted"):
                         signals["count_two_part_family"] = str(cts.get("family", "unknown"))
+                    # Route E lane-forensic extraction (2026-04-23)
+                    for _lane_key in (
+                        "lane_anchor_only_mode",
+                        "lane_anchor_only_reason",
+                        "lane_trunk_fallback_fitted",
+                        "lane_positive_jump_rows",
+                        "lane_jump_target_std",
+                        "lane_hurdle_engaged",
+                        "lane_source_scale_strength",
+                        "lane_tail_weight_effective",
+                        "lane_jump_event_rate",
+                        # Round-12 (2026-04-24) calibration-decision fields.
+                        "lane_residual_blend",
+                        "lane_residual_cap",
+                        "lane_anchor_calibration_mae",
+                        "lane_guarded_calibration_mae",
+                        "lane_source_scaling_enabled",
+                        "lane_calibration_rows",
+                        "lane_source_scale_silently_dead",
+                        "lane_ss_fallback_active",
+                    ):
+                        if _lane_key in info and info[_lane_key] is not None:
+                            signals[_lane_key] = info[_lane_key]
         except Exception:
             pass
         return signals
@@ -1159,14 +1261,24 @@ class BenchmarkShard:
             model = get_model(model_name, **model_kwargs)
 
             # Train - pass raw DataFrames to ALL panel-aware model categories
+            # Round-13 P0b (2026-04-24): mainline and ml_tabular were previously
+            # excluded from horizon pass-through, so MainlineS5FsLogSource.fit()
+            # got kwargs["horizon"]=None and defaulted _horizon=1 for every cell
+            # (Defect #2 in handover §8.1). Now all downstream categories receive
+            # horizon identically; panel-aware ones additionally get *_raw frames.
+            _PANEL_AWARE_CATEGORIES = (
+                "deep_classical", "transformer_sota", "foundation",
+                "statistical", "irregular", "tslib_sota", "autofit",
+            )
+            _HORIZON_AWARE_CATEGORIES = _PANEL_AWARE_CATEGORIES + ("mainline", "ml_tabular")
             train_start = time.time()
             fit_kwargs = {}
-            if self.category in ("deep_classical", "transformer_sota", "foundation",
-                                 "statistical", "irregular", "tslib_sota", "autofit"):
+            if self.category in _PANEL_AWARE_CATEGORIES:
                 fit_kwargs["train_raw"] = train
+                fit_kwargs["ablation"] = self.ablation
+            if self.category in _HORIZON_AWARE_CATEGORIES:
                 fit_kwargs["target"] = target
                 fit_kwargs["horizon"] = horizon
-                fit_kwargs["ablation"] = self.ablation
             if self.category == "autofit":
                 fit_kwargs["val_raw"] = val
             model.fit(X_train, y_train, **fit_kwargs)
@@ -1175,12 +1287,12 @@ class BenchmarkShard:
             # Predict — pass entity mapping for panel-aware categories
             infer_start = time.time()
             predict_kwargs = {}
-            if self.category in ("deep_classical", "transformer_sota", "foundation",
-                                 "statistical", "irregular", "tslib_sota", "autofit"):
+            if self.category in _PANEL_AWARE_CATEGORIES:
                 predict_kwargs["test_raw"] = test
+                predict_kwargs["ablation"] = self.ablation
+            if self.category in _HORIZON_AWARE_CATEGORIES:
                 predict_kwargs["target"] = target
                 predict_kwargs["horizon"] = horizon
-                predict_kwargs["ablation"] = self.ablation
             y_pred = np.asarray(model.predict(X_test, **predict_kwargs), dtype=float)
             infer_time = time.time() - infer_start
 
@@ -1216,6 +1328,105 @@ class BenchmarkShard:
             n_bootstrap = self.preset_config.n_bootstrap
             metrics_dict = self._compute_metrics(y_test.values, y_pred, n_bootstrap)
             effective_eval_rows = int(np.sum(np.isfinite(y_test.values) & np.isfinite(y_pred)))
+
+            # -------------------------------------------------------------
+            # Round-13 P1a (2026-04-24): NC-CoPo split-conformal calibration
+            # -------------------------------------------------------------
+            # Defect #3 fix from handover §8.1: previously the shard emitted
+            # zero coverage information, so NCCOPO's Theorem-1 guarantee was
+            # never empirically visible in benchmark cells. With
+            # BLOCK3_NCCOPO_WIRE=1 we fit NCCoPoCalibrator on the validation
+            # split (y_val, y_pred_val) and report test-set coverage at
+            # alpha in {0.10, 0.20}. The baseline residual score is used
+            # (use_studentized=False) so the wire works for ANY point
+            # predictor without a plug-in sigma; studentised mode is enabled
+            # only when the model exposes `predict_sigma`.
+            nccopo_fields = {
+                "nccopo_wired": False,
+                "nccopo_alpha_primary": None,
+                "nccopo_coverage_90": None,
+                "nccopo_coverage_80": None,
+                "nccopo_conformal_q_90": None,
+                "nccopo_cal_coverage_90": None,
+                "nccopo_n_cal": None,
+                "nccopo_interval_width_mean": None,
+                "nccopo_error": None,
+            }
+            if os.environ.get("BLOCK3_NCCOPO_WIRE", "0") in ("1", "true", "True"):
+                try:
+                    from narrative.block3.models.calibration.nccopo import (
+                        NCCoPoCalibrator, NCCoPoConfig,
+                    )
+                    X_val, y_val = self._prepare_features(val, target, horizon)
+                    if len(X_val) >= 50:
+                        val_predict_kwargs = {}
+                        if self.category in _PANEL_AWARE_CATEGORIES:
+                            val_predict_kwargs["test_raw"] = val
+                            val_predict_kwargs["ablation"] = self.ablation
+                        if self.category in _HORIZON_AWARE_CATEGORIES:
+                            val_predict_kwargs["target"] = target
+                            val_predict_kwargs["horizon"] = horizon
+                        y_pred_val = np.asarray(
+                            model.predict(X_val, **val_predict_kwargs), dtype=float
+                        )
+                        y_val_arr = np.asarray(y_val.values, dtype=float)
+                        finite_mask = (
+                            np.isfinite(y_val_arr) & np.isfinite(y_pred_val)
+                        )
+                        y_val_arr = y_val_arr[finite_mask]
+                        y_pred_val = y_pred_val[finite_mask]
+                        if len(y_val_arr) >= 50:
+                            y_test_arr = np.asarray(y_test.values, dtype=float)
+                            test_finite = (
+                                np.isfinite(y_test_arr) & np.isfinite(y_pred)
+                            )
+                            for alpha_ in (0.10, 0.20):
+                                cfg = NCCoPoConfig(
+                                    alpha=alpha_, use_studentized=False
+                                )
+                                cal = NCCoPoCalibrator(cfg).fit(
+                                    y_val_arr, y_pred_val
+                                )
+                                lo_t, hi_t = cal.predict_interval(
+                                    y_pred[test_finite]
+                                )
+                                y_t = y_test_arr[test_finite]
+                                cov = float(np.mean((y_t >= lo_t) & (y_t <= hi_t)))
+                                width_mean = float(np.mean(hi_t - lo_t))
+                                if abs(alpha_ - 0.10) < 1e-9:
+                                    nccopo_fields["nccopo_coverage_90"] = cov
+                                    nccopo_fields["nccopo_conformal_q_90"] = (
+                                        float(cal.result.conformal_q)
+                                    )
+                                    nccopo_fields["nccopo_cal_coverage_90"] = (
+                                        float(cal.result.cal_coverage)
+                                    )
+                                    nccopo_fields["nccopo_n_cal"] = int(
+                                        cal.result.n_cal
+                                    )
+                                    nccopo_fields["nccopo_interval_width_mean"] = (
+                                        width_mean
+                                    )
+                                    nccopo_fields["nccopo_alpha_primary"] = 0.10
+                                else:
+                                    nccopo_fields["nccopo_coverage_80"] = cov
+                            nccopo_fields["nccopo_wired"] = True
+                            logger.info(
+                                f"  [NCCOPO] alpha=0.10 coverage={nccopo_fields['nccopo_coverage_90']:.4f} "
+                                f"width={nccopo_fields['nccopo_interval_width_mean']:.3e} "
+                                f"n_cal={nccopo_fields['nccopo_n_cal']}"
+                            )
+                        else:
+                            nccopo_fields["nccopo_error"] = (
+                                f"insufficient_finite_val_n={len(y_val_arr)}"
+                            )
+                    else:
+                        nccopo_fields["nccopo_error"] = (
+                            f"val_too_small_n={len(X_val)}"
+                        )
+                except Exception as _nc_exc:
+                    nccopo_fields["nccopo_error"] = f"{type(_nc_exc).__name__}:{_nc_exc}"
+                    logger.warning(f"  [NCCOPO] wire failed: {_nc_exc}")
 
             result = ModelMetrics(
                 model_name=model_name,
@@ -1269,6 +1480,28 @@ class BenchmarkShard:
                 reuse_source_run=routing_signals.get("reuse_source_run"),
                 pinball_q90=routing_signals.get("pinball_q90"),
                 count_two_part_family=routing_signals.get("count_two_part_family"),
+                # Route E lane-forensic (2026-04-23 Round 10)
+                lane_anchor_only_mode=routing_signals.get("lane_anchor_only_mode"),
+                lane_anchor_only_reason=routing_signals.get("lane_anchor_only_reason"),
+                lane_trunk_fallback_fitted=routing_signals.get("lane_trunk_fallback_fitted"),
+                lane_positive_jump_rows=routing_signals.get("lane_positive_jump_rows"),
+                lane_jump_target_std=routing_signals.get("lane_jump_target_std"),
+                lane_hurdle_engaged=routing_signals.get("lane_hurdle_engaged"),
+                lane_source_scale_strength=routing_signals.get("lane_source_scale_strength"),
+                lane_tail_weight_effective=routing_signals.get("lane_tail_weight_effective"),
+                lane_jump_event_rate=routing_signals.get("lane_jump_event_rate"),
+                # Round-13 P0a/P1a (2026-04-24)
+                y_shift_enabled=bool(getattr(self, "_last_y_shift_enabled", False)),
+                y_shift_dropped_tail_rows=int(getattr(self, "_last_y_shift_dropped_tail", 0)),
+                nccopo_wired=nccopo_fields["nccopo_wired"],
+                nccopo_alpha_primary=nccopo_fields["nccopo_alpha_primary"],
+                nccopo_coverage_90=nccopo_fields["nccopo_coverage_90"],
+                nccopo_coverage_80=nccopo_fields["nccopo_coverage_80"],
+                nccopo_conformal_q_90=nccopo_fields["nccopo_conformal_q_90"],
+                nccopo_cal_coverage_90=nccopo_fields["nccopo_cal_coverage_90"],
+                nccopo_n_cal=nccopo_fields["nccopo_n_cal"],
+                nccopo_interval_width_mean=nccopo_fields["nccopo_interval_width_mean"],
+                nccopo_error=nccopo_fields["nccopo_error"],
                 **metrics_dict,
             )
 

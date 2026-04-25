@@ -88,6 +88,13 @@ class FundingLaneRuntime:
         self._trunk_fallback_coef: np.ndarray | None = None
         self._trunk_fallback_intercept = 0.0
         self._trunk_fallback_fitted = False
+        self._force_hurdle = False
+        # Round-12 Route L2/K2 state (2026-04-24)
+        self._source_scale_silently_dead = False
+        self._ss_fallback_active = False
+        # §0w (2026-04-24): audit-only note when SS_FALLBACK env is on but
+        # _source_scaling_enabled is False (core_only silently-dead case).
+        self._ss_fallback_env_requested_no_op = False
 
     def fit(
         self,
@@ -103,6 +110,7 @@ class FundingLaneRuntime:
         enable_gpd_tail: bool = False,
         enable_cqr_interval: bool = False,
         cqr_alpha: float = 0.10,
+        force_hurdle: bool = False,
     ) -> "FundingLaneRuntime":
         target = np.asarray(y, dtype=np.float64)
         finite = target[np.isfinite(target)]
@@ -165,12 +173,19 @@ class FundingLaneRuntime:
         self._calibration_rows = int(target.size)
 
         self._jump_target_std = float(np.nanstd(jump_target)) if jump_target.size else 0.0
+        self._force_hurdle = bool(force_hurdle)
 
-        if (
-            target.size < 12
-            or self._positive_jump_rows < _minimum_positive_jump_rows(target.size)
-            or self._jump_target_std < 1e-8
-        ):
+        # Route G (2026-04-23): force_hurdle=True bypasses the positive-jump
+        # row threshold and the jump_target_std degeneracy gate, but we keep
+        # the hard `target.size < 12` gate because severity models with <12
+        # rows are numerically non-identifiable regardless of toggle.
+        jumps_below_threshold = self._positive_jump_rows < _minimum_positive_jump_rows(target.size)
+        std_degenerate = self._jump_target_std < 1e-8
+        short_circuit = target.size < 12 or (
+            not self._force_hurdle and (jumps_below_threshold or std_degenerate)
+        )
+
+        if short_circuit:
             # 2026-04-21 18:57 CEST — trunk-fallback instead of silent anchor-only.
             # Without this, predict() used to collapse to a constant anchor_vec
             # regardless of lane_state (trunk output), which made it impossible
@@ -252,6 +267,68 @@ class FundingLaneRuntime:
                     guarded_mae=self._guarded_calibration_mae,
                 )
             self._calibration_rows = int(calibration["calibration_target"].size)
+
+        # ------------------------------------------------------------------
+        # Round-12 Route K2 fix (2026-04-24): calibration-rejection fallback.
+        # When _calibrate_anchor_residual_guard picks best_blend=0 (the
+        # severity path is rejected by grid-search), source_scaling and
+        # tail_focus atoms silently die — their effect is multiplied by
+        # residual_blend=0. K2 installs an explicit source-scaling fallback
+        # that applies on the anchor (NOT on residual) so the atom remains
+        # measurable even when severity is rejected.  Enabled via
+        # MAINLINE_FUNDING_SS_FALLBACK=1 (default OFF to preserve prior
+        # baselines). Also emits Route L2 warning when source-scaling is
+        # enabled at flag level but silently dead at data level.
+        # ------------------------------------------------------------------
+        import os as _os
+        import logging as _logging
+        _log = _logging.getLogger("narrative.block3.mainline.funding_lane")
+        if enable_source_scaling and not self._source_scaling_enabled:
+            # Route L2 gate: flag=True but vector all-zero.
+            _log.warning(
+                "[funding_lane L2] enable_source_scaling=True but "
+                "source_scale_vec all-zero (core_only ablation or missing "
+                "edgar/text columns). Atom is silently dead."
+            )
+            self._source_scale_silently_dead = True
+        else:
+            self._source_scale_silently_dead = False
+
+        self._ss_fallback_active = False
+        if (
+            _os.environ.get("MAINLINE_FUNDING_SS_FALLBACK", "0") in ("1", "true", "True")
+            and self._source_scaling_enabled
+            and self._residual_blend <= 1e-8
+        ):
+            self._residual_blend = 0.05
+            self._source_scale_strength = max(self._source_scale_strength, 0.5)
+            if not np.isfinite(self._residual_cap) or self._residual_cap <= 0.0:
+                # Use median positive-jump as a scale anchor.
+                self._residual_cap = max(
+                    2.0 * float(self._positive_jump_median + 1e-8),
+                    1.0,
+                )
+            self._ss_fallback_active = True
+            _log.info(
+                "[funding_lane K2] SS_FALLBACK activated: blend=0.05, "
+                "strength=%.3f, cap=%.3f",
+                self._source_scale_strength,
+                self._residual_cap,
+            )
+        elif (
+            _os.environ.get("MAINLINE_FUNDING_SS_FALLBACK", "0") in ("1", "true", "True")
+            and not self._source_scaling_enabled
+        ):
+            # §0w (2026-04-24): env flag is on but data-level enablement
+            # is False (core_only silently-dead case).  No numeric change,
+            # but audit telemetry records the request so downstream
+            # analyzers can correctly interpret sidecars.
+            self._ss_fallback_env_requested_no_op = True
+            _log.info(
+                "[funding_lane K2] SS_FALLBACK env=1 requested but "
+                "source_scaling_enabled=False (vector all-zero). "
+                "No-op; audit note recorded."
+            )
 
         full_models = _fit_jump_process_models(
             design=design,
@@ -358,6 +435,112 @@ class FundingLaneRuntime:
         upper = np.maximum(upper, lower)
         return lower, upper
 
+    def nccopo_inputs(
+        self,
+        lane_state: np.ndarray,
+        aux_features: np.ndarray | None = None,
+        anchor: np.ndarray | None = None,
+        source_scale: np.ndarray | None = None,
+    ) -> dict[str, np.ndarray]:
+        """Return plug-in compound-Poisson moment inputs for NC-CoPo calibration.
+
+        Round-12 (2026-04-24 02:10 CEST).  Emits per-row estimates of
+
+            mu_hat(x)    = E[Y | x]  = lambda_hat(x) * E[M | x],
+            sigma_hat(x) = sqrt( Var[Y | x] )
+                         = sqrt( lambda_hat(x) * (Var[M|x] + E[M|x]^2) ),
+
+        using (i) the anchor-guarded funding point prediction as
+        `mu_hat` and (ii) the GPD tail params + jump_event_rate as a
+        second-moment proxy when available.  When the hurdle head is
+        disengaged (anchor-only mode), `sigma_hat` falls back to a
+        local-sd estimate from residual_cap.
+
+        Output is consumable directly by
+        `narrative.block3.models.calibration.NCCoPoCalibrator`.
+        """
+        if not self._fitted:
+            raise ValueError("FundingLaneRuntime is not fitted")
+
+        mu_hat = self.predict(
+            lane_state,
+            aux_features=aux_features,
+            anchor=anchor,
+            source_scale=source_scale,
+        )
+        n = mu_hat.shape[0]
+
+        # First-moment rescue: positive floor (funding is non-negative).
+        mu_hat = np.clip(mu_hat, 0.0, None)
+
+        # Second moment: E[M^2] = Var[M] + E[M]^2.  We approximate E[M]
+        # by positive_jump_median (training-time empirical jump
+        # magnitude); Var[M] ~ (residual_cap/2)^2 under a Laplace-like
+        # envelope; lambda ~ jump_event_rate for a homogeneous rate.
+        # These are conservative; Theorem 3 gives asymptotic accuracy
+        # under the neural GEV training loss, while this closed form is
+        # only a finite-n plug-in.
+        E_M = max(self._positive_jump_median, 1e-6)
+        cap = float(self._residual_cap) if np.isfinite(self._residual_cap) else max(2.0 * E_M, 1.0)
+        Var_M = (cap / 2.0) ** 2
+        lam = max(self._jump_event_rate, 1e-6)
+        base_var = lam * (Var_M + E_M ** 2)
+        # When GPD tail is fitted, scale variance by the GPD second moment
+        # proxy (sigma_gpd^2 / (1 - 2*xi)) for xi < 0.5.
+        if self._gpd_enabled:
+            xi = float(self._gpd_params.get("xi", 0.0))
+            sig = float(self._gpd_params.get("sigma", 0.0))
+            if xi < 0.5 and sig > 0:
+                tail_var = (sig ** 2) / max(1.0 - 2.0 * xi, 1e-3)
+                base_var = max(base_var, tail_var)
+        sigma_hat = np.full(n, np.sqrt(max(base_var, 1e-8)))
+
+        # §0w (2026-04-24) per-row lambda_hat via trained event model so
+        # sigma_hat is genuinely heteroscedastic: Var[Y|x] = lambda(x) *
+        # (Var[M] + E[M]^2) + (small) severity-model variance proxy.  A
+        # homoscedastic sigma_hat collapses studentized == absolute for
+        # NC-CoPo and defeats Theorem 1-a's sharpness gain.
+        lambda_per_row = np.full(n, lam)
+        if self._event_model is not None:
+            try:
+                design_test = _merge_features(
+                    lane_state,
+                    aux_features,
+                    _resolve_anchor(anchor, fallback=self._fallback_value, length=n),
+                )
+                proba = self._event_model.predict_proba(design_test)[:, 1]
+                # Event probability is a plug-in for per-row lambda under
+                # a homogeneous Bernoulli-thinning hurdle; clip to avoid
+                # zero-variance blowups.
+                lambda_per_row = np.clip(proba.astype(np.float64), 1e-4, 1.0)
+            except Exception:  # noqa: BLE001 — best-effort heteroscedastic upgrade
+                pass
+        var_per_row = lambda_per_row * (Var_M + E_M ** 2)
+        if self._gpd_enabled:
+            xi = float(self._gpd_params.get("xi", 0.0))
+            sig = float(self._gpd_params.get("sigma", 0.0))
+            if xi < 0.5 and sig > 0:
+                # §0w (2026-04-24): additive GPD second-moment correction
+                # scaled by per-row lambda so heteroscedasticity survives.
+                tail_add = (sig ** 2) / max(1.0 - 2.0 * xi, 1e-3)
+                var_per_row = var_per_row + lambda_per_row * tail_add
+        sigma_hat = np.sqrt(np.maximum(var_per_row, 1e-8))
+
+        # Mondrian slice: predicted-intensity tertile of mu_hat itself.
+        if n >= 3:
+            q1, q2 = np.quantile(mu_hat, [1 / 3, 2 / 3])
+            groups = np.where(mu_hat <= q1, 0, np.where(mu_hat <= q2, 1, 2))
+        else:
+            groups = np.zeros(n, dtype=int)
+
+        return {
+            "mu_hat": mu_hat.astype(np.float64, copy=False),
+            "sigma_hat": sigma_hat.astype(np.float64, copy=False),
+            "mondrian_groups": groups.astype(np.int64, copy=False),
+            "lambda_hat": lambda_per_row.astype(np.float64, copy=False),
+            "residual_cap_used": float(cap),
+        }
+
     def describe_tail(self) -> dict[str, object]:
         """Return GPD + CQR tail diagnostics for funding lane monitoring."""
         return {
@@ -380,6 +563,28 @@ class FundingLaneRuntime:
             "positive_jump_rows": int(self._positive_jump_rows),
             "lane_hurdle_engaged": bool(self._uses_jump_hurdle_head),
             "trunk_fallback_fitted": bool(self._trunk_fallback_fitted),
+            "force_hurdle": bool(self._force_hurdle),
+            # 2026-04-24 Round-12 calibration-decision exposure: these
+            # three scalars reveal whether the grid-search in
+            # _calibrate_anchor_residual_guard accepted or rejected the
+            # severity path. residual_blend=0 means severity output was
+            # rejected (anchor-only prediction), which silently nullifies
+            # source_scaling and tail_focus atoms even when
+            # enable_source_scaling=True and tail_weight>0.
+            "residual_blend": float(self._residual_blend),
+            "residual_cap": float(self._residual_cap),
+            "anchor_calibration_mae": float(self._anchor_calibration_mae),
+            "guarded_calibration_mae": float(self._guarded_calibration_mae),
+            "source_scaling_enabled": bool(self._source_scaling_enabled),
+            "source_scale_strength": float(self._source_scale_strength),
+            "source_scale_reliability": float(self._source_scale_reliability),
+            "calibration_rows": int(self._calibration_rows),
+            # Round-12 Route L2/K2 audit gates (2026-04-24)
+            "source_scale_silently_dead": bool(self._source_scale_silently_dead),
+            "ss_fallback_active": bool(self._ss_fallback_active),
+            "ss_fallback_env_requested_no_op": bool(
+                self._ss_fallback_env_requested_no_op
+            ),
         }
 
 
@@ -493,6 +698,19 @@ def _positive_jump_target(target: np.ndarray, anchor_vec: np.ndarray, use_log_do
 
 
 def _minimum_positive_jump_rows(n_rows: int) -> int:
+    # Route F (2026-04-23 Round 10): allow env-override for audit probes that
+    # need the hurdle+severity path to activate on sparse positive-jump panels.
+    # Default behavior unchanged. Set MAINLINE_FUNDING_MIN_JUMP_ROWS=<int> to
+    # force a smaller threshold for forensic ablation only.
+    import os
+    override = os.environ.get("MAINLINE_FUNDING_MIN_JUMP_ROWS", "").strip()
+    if override:
+        try:
+            val = int(override)
+            if val >= 1:
+                return val
+        except ValueError:
+            pass
     return 4 if int(n_rows) < 128 else 6
 
 

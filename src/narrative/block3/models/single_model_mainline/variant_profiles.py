@@ -412,7 +412,52 @@ MAINLINE_VARIANTS: Dict[str, MainlineVariantProfile] = {
             "s5_device": "cpu",
         },
     ),
-    # TODO(2026-04-22, paper-round-5): register a paired
+    "mainline_s5_full": MainlineVariantProfile(
+        name="mainline_s5_full",
+        runtime_mode="native",
+        delegate_variant="v740_alpha",
+        description=(
+            "2026-04-22 path-3 FULL paper-method variant: S5 diagonal "
+            "state-space trunk + ALL FTE atoms enabled (hurdle, GPD tail, "
+            "CQR, Hawkes financing state, source scaling, tail focus, log "
+            "domain, jump ODE, investors event-state & intensity "
+            "baseline, shrinkage gate). This is the concrete executable "
+            "instantiation of the paper's C1 contribution (shared trunk + "
+            "factorised head + L_N regulariser). Paired with "
+            "mainline_s5_trunk as the trunk-only baseline: paired delta "
+            "measures the added value of atoms on top of the S5 trunk."
+        ),
+        prototype_overrides={
+            # Atoms ON — full FTE head pipeline.
+            "enable_count_hurdle_head": True,
+            "enable_count_jump": True,
+            "count_jump_strength": 0.30,
+            "enable_count_sparsity_gate": False,
+            "enable_funding_anchor": True,
+            "enable_funding_log_domain": True,
+            "enable_funding_source_scaling": True,
+            "enable_funding_tail_focus": True,
+            "enable_funding_gpd_tail": True,
+            "enable_funding_cqr_interval": True,
+            "enable_log1p_target": True,
+            "enable_hawkes_financing_state": True,
+            "enable_investors_event_state_features": True,
+            "enable_investors_selective_event_state_activation": True,
+            "enable_investors_intensity_baseline": True,
+            "enable_investors_shrinkage_gate": True,
+            "enable_jump_ode_state": True,
+            # Trunk: S5, not MoE.
+            "enable_learnable_trunk": False,
+            "enable_state_space_trunk": True,
+            "s5_d_model": 128,
+            "s5_d_state": 64,
+            "s5_n_blocks": 3,
+            "s5_dropout": 0.1,
+            "s5_max_epochs": 24,
+            "s5_batch_size": 512,
+            "s5_device": "cpu",
+        },
+    ),
     # `mainline_xi_unbounded` variant for the GPT-5.4 reviewer demand
     # (paired ablation: same trunk + same training, only the tail-head xi
     # activation differs between bounded `xi_max * sigma(z)` and unbounded
@@ -420,7 +465,209 @@ MAINLINE_VARIANTS: Dict[str, MainlineVariantProfile] = {
     # being a runtime knob in the mainline lanes; track in the next
     # engineering iteration once enable_funding_gpd_tail+xi_activation are
     # exposed via the prototype-overrides surface.
+    # ------------------------------------------------------------------
+    # Route B — MLP-adapter fallback for the case where the S5 trunk
+    # (Route A'/`mainline_s5_full`) does not close the gap on Task 2
+    # funding. Same FTE atoms ON as Route A', but trunk swapped from S5
+    # state-space to the (default) learnable MLP adapter. Serves as the
+    # pre-committed fallback per `docs/PROJECT_STATUS_UNIFIED.md` R1.
+    "mainline_mlp_full": MainlineVariantProfile(
+        name="mainline_mlp_full",
+        runtime_mode="native",
+        delegate_variant="v740_alpha",
+        description=(
+            "2026-04-22 Route B fallback: MLP adapter trunk + ALL FTE "
+            "atoms ON (hurdle, GPD tail, CQR, Hawkes state, investors "
+            "event-state, shrinkage gate, jump ODE). Activated when the "
+            "S5 trunk + full-atoms variant (`mainline_s5_full`) fails "
+            "to beat the NBEATS non-factorised baseline; the paired "
+            "delta S5_full vs MLP_full quantifies the trunk-architecture "
+            "contribution independently of the FTE head contribution."
+        ),
+        prototype_overrides={
+            "enable_count_hurdle_head": True,
+            "enable_count_jump": True,
+            "count_jump_strength": 0.30,
+            "enable_count_sparsity_gate": False,
+            "enable_funding_anchor": True,
+            "enable_funding_log_domain": True,
+            "enable_funding_source_scaling": True,
+            "enable_funding_tail_focus": True,
+            "enable_funding_gpd_tail": True,
+            "enable_funding_cqr_interval": True,
+            "enable_log1p_target": True,
+            "enable_hawkes_financing_state": True,
+            "enable_investors_event_state_features": True,
+            "enable_investors_selective_event_state_activation": True,
+            "enable_investors_intensity_baseline": True,
+            "enable_investors_shrinkage_gate": True,
+            "enable_jump_ode_state": True,
+            # Trunk: MLP adapter (the default when state-space flag is off).
+            "enable_learnable_trunk": True,
+            "enable_state_space_trunk": False,
+        },
+    ),
+    # ------------------------------------------------------------------
+    # Route C — 2026-04-23 post-mortem. Routes A'/B both collapsed on
+    # funding with identical 741255.5 MAE across 3 replicas (6-sig-digit
+    # match), while Route A (naked S5 trunk) settled at 646K (≈global
+    # mean, underfit, no collapse). The delta isolates the funding-
+    # specific atoms as the sole collapse driver. Route C keeps the S5
+    # trunk + all count/investors atoms ON, but strips funding back to
+    # {anchor + log1p} only — matching Route A's funding configuration
+    # while retaining the count/investors lanes that power T1 investor
+    # count and T2 binary targets. Paired contrast with mainline_s5_full
+    # isolates the marginal damage of the funding tail/GPD/CQR/source-
+    # scaling/log-domain atoms.
+    "mainline_s5_funding_stripped": MainlineVariantProfile(
+        name="mainline_s5_funding_stripped",
+        runtime_mode="native",
+        delegate_variant="v740_alpha",
+        description=(
+            "2026-04-23 Route C post-collapse recovery: S5 trunk + count/"
+            "investors atoms ON + funding atoms STRIPPED to anchor+log1p. "
+            "Designed to falsify the hypothesis that funding-specific "
+            "atoms (log_domain, source_scaling, tail_focus, gpd_tail, "
+            "cqr_interval) are the sole driver of the 741255.5 MAE "
+            "collapse observed in Routes A' and B across 3 replicas."
+        ),
+        prototype_overrides={
+            # Count atoms: ON (they do not collapse; only funding does).
+            "enable_count_hurdle_head": True,
+            "enable_count_jump": True,
+            "count_jump_strength": 0.30,
+            "enable_count_sparsity_gate": False,
+            # Funding atoms: STRIPPED to naked S5 equivalent (Route A
+            # configuration that produced 646K, not 741K).
+            "enable_funding_anchor": True,
+            "enable_funding_log_domain": False,
+            "enable_funding_source_scaling": False,
+            "enable_funding_tail_focus": False,
+            "enable_funding_gpd_tail": False,
+            "enable_funding_cqr_interval": False,
+            "enable_log1p_target": True,
+            # Investors atoms: ON.
+            "enable_hawkes_financing_state": True,
+            "enable_investors_event_state_features": True,
+            "enable_investors_selective_event_state_activation": True,
+            "enable_investors_intensity_baseline": True,
+            "enable_investors_shrinkage_gate": True,
+            "enable_jump_ode_state": True,
+            # Trunk: S5 (same as Route A'/mainline_s5_full).
+            "enable_learnable_trunk": False,
+            "enable_state_space_trunk": True,
+            "s5_d_model": 128,
+            "s5_d_state": 64,
+            "s5_n_blocks": 3,
+            "s5_dropout": 0.1,
+            "s5_max_epochs": 24,
+            "s5_batch_size": 512,
+            "s5_device": "cpu",
+        },
+    ),
 }
+
+# ------------------------------------------------------------------
+# Route D (2026-04-23 16:00 CEST) — ATOM ISOLATION SUITE.
+# Route C probe (5346102 npin=639K / 5346104 cfisch=646K) confirmed the
+# trunk already produces non-collapsed conditional predictions
+# (std=619K ≈ y_std, 2423 unique values, range 13..31.6M). Funding_lane
+# auto-enables hurdle-structured severity via `_uses_jump_hurdle_head`
+# when positive_jump_rows ≥ threshold. The remaining gap to NBEATS 380K
+# is tail compression, not mean collapse. These D-variants isolate ONE
+# funding atom at a time on top of Route C to find which atom
+# compresses the tail without inducing the 741K loss-optimal-constant
+# collapse.
+_ROUTE_C_BASE: Dict[str, Any] = dict(MAINLINE_VARIANTS["mainline_s5_funding_stripped"].prototype_overrides)
+
+
+def _route_d(name: str, description: str, **tweaks: Any) -> MainlineVariantProfile:
+    overrides = dict(_ROUTE_C_BASE)
+    overrides.update(tweaks)
+    return MainlineVariantProfile(
+        name=name,
+        runtime_mode="native",
+        delegate_variant="v740_alpha",
+        description=description,
+        prototype_overrides=overrides,
+    )
+
+
+MAINLINE_VARIANTS["mainline_s5_fs_log_only"] = _route_d(
+    "mainline_s5_fs_log_only",
+    "Route D1: Route C + log_domain ON. Tests whether log-domain severity "
+    "alone compresses the funding tail toward NBEATS 380K without the "
+    "741K loss-optimal collapse seen in A'/B.",
+    enable_funding_log_domain=True,
+)
+MAINLINE_VARIANTS["mainline_s5_fs_source_only"] = _route_d(
+    "mainline_s5_fs_source_only",
+    "Route D2: Route C + source_scaling ON. Tests whether EDGAR-source-"
+    "conditional scaling compresses the funding tail.",
+    enable_funding_source_scaling=True,
+)
+MAINLINE_VARIANTS["mainline_s5_fs_tailfocus_lite"] = _route_d(
+    "mainline_s5_fs_tailfocus_lite",
+    "Route D3: Route C + tail_focus(q=0.95, w=1.5). Lighter tail weighting "
+    "than the 0.85/2.0 that caused collapse in A'/B.",
+    enable_funding_tail_focus=True,
+    funding_tail_quantile=0.95,
+    funding_tail_weight=1.5,
+)
+MAINLINE_VARIANTS["mainline_s5_fs_log_source"] = _route_d(
+    "mainline_s5_fs_log_source",
+    "Route D4: Route C + log_domain + source_scaling pairwise combo.",
+    enable_funding_log_domain=True,
+    enable_funding_source_scaling=True,
+)
+
+# ----- Route G (2026-04-23): forced-hurdle variants -----
+# Route D exposed that at h=7 funding the short-circuit (positive_jump_rows
+# threshold + jump_target_std degeneracy) routes everything into the
+# trunk-fallback ridge, so source_scaling / tail_focus atoms are never
+# exercised (bit-exact MAE proved this in Round 10).  Route G flips the
+# `enable_funding_forced_hurdle` flag which bypasses those gates (the
+# hard n<12 gate is preserved) so the severity path actually runs and
+# every atom becomes measurable.
+
+
+def _route_g(name: str, description: str, **tweaks: Any) -> MainlineVariantProfile:
+    overrides = dict(_ROUTE_C_BASE)
+    overrides["enable_funding_forced_hurdle"] = True
+    overrides.update(tweaks)
+    return MainlineVariantProfile(
+        name=name,
+        runtime_mode="native",
+        delegate_variant="v740_alpha",
+        description=description,
+        prototype_overrides=overrides,
+    )
+
+
+MAINLINE_VARIANTS["mainline_s5_fs_forced_logonly"] = _route_g(
+    "mainline_s5_fs_forced_logonly",
+    "Route G1: Route C + forced hurdle + log_domain. Forces the "
+    "hurdle+severity head to run at h=7 funding so the log_domain atom "
+    "is actually exercised.",
+    enable_funding_log_domain=True,
+)
+MAINLINE_VARIANTS["mainline_s5_fs_forced_source"] = _route_g(
+    "mainline_s5_fs_forced_source",
+    "Route G2: Route C + forced hurdle + source_scaling.",
+    enable_funding_source_scaling=True,
+)
+MAINLINE_VARIANTS["mainline_s5_fs_forced_tailfocus"] = _route_g(
+    "mainline_s5_fs_forced_tailfocus",
+    "Route G3: Route C + forced hurdle + tail_focus(q=0.95,w=1.5).",
+    enable_funding_tail_focus=True,
+    funding_tail_quantile=0.95,
+    funding_tail_weight=1.5,
+)
+MAINLINE_VARIANTS["mainline_s5_fs_forced_base"] = _route_g(
+    "mainline_s5_fs_forced_base",
+    "Route G0: Route C + forced hurdle, no additional atoms. Baseline "
+    "to isolate the effect of running the hurdle path itself on this cell.",
+)
 
 
 def list_mainline_variants() -> Tuple[str, ...]:

@@ -32,4 +32,18 @@ MAINLINE_MODELS: Dict[str, Any] = {
     "MainlineDelegateV740Alpha":  _mainline_factory("mainline_delegate_alpha"),
     "MainlineTrunkNaked":         _mainline_factory("mainline_trunk_naked"),
     "MainlineS5Trunk":            _mainline_factory("mainline_s5_trunk"),
+    "MainlineS5Full":              _mainline_factory("mainline_s5_full"),
+    "MainlineMlpFull":             _mainline_factory("mainline_mlp_full"),
+    "MainlineS5FundingStripped":   _mainline_factory("mainline_s5_funding_stripped"),
+    # Route D atom-isolation suite (on top of Route C stripped base).
+    "MainlineS5FsLogOnly":         _mainline_factory("mainline_s5_fs_log_only"),
+    "MainlineS5FsSourceOnly":      _mainline_factory("mainline_s5_fs_source_only"),
+    "MainlineS5FsTailfocusLite":   _mainline_factory("mainline_s5_fs_tailfocus_lite"),
+    "MainlineS5FsLogSource":       _mainline_factory("mainline_s5_fs_log_source"),
+    # Route G forced-hurdle suite (bypasses short-circuit to actually run
+    # the severity path on sparse-event cells like h=7 funding).
+    "MainlineS5FsForcedBase":       _mainline_factory("mainline_s5_fs_forced_base"),
+    "MainlineS5FsForcedLogOnly":    _mainline_factory("mainline_s5_fs_forced_logonly"),
+    "MainlineS5FsForcedSource":     _mainline_factory("mainline_s5_fs_forced_source"),
+    "MainlineS5FsForcedTailfocus":  _mainline_factory("mainline_s5_fs_forced_tailfocus"),
 }
