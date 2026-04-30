@@ -58,6 +58,31 @@ def _script_exists(path: str) -> bool:
     return (ROOT / path).exists()
 
 
+def _latest_audit(stem: str) -> tuple[Path | None, dict[str, Any] | None]:
+    path = _latest(f"runs/audits/{stem}_*.json")
+    return path, _load(path)
+
+
+def _artifact_status(stem: str, script_path: str, pass_when_status_passed: bool = True) -> dict[str, Any]:
+    path, payload = _latest_audit(stem)
+    script_exists = _script_exists(script_path)
+    if payload and payload.get("status") == "passed" and pass_when_status_passed:
+        status = "passed"
+    elif payload:
+        status = str(payload.get("status") or "partial")
+    elif script_exists:
+        status = "partial"
+    else:
+        status = "not_passed"
+    return {
+        "status": status,
+        "script_path": script_path,
+        "script_exists": script_exists,
+        "latest_artifact": str(path) if path else None,
+        "artifact_status": None if not payload else payload.get("status"),
+    }
+
+
 def _coverage_gate(dashboard: dict[str, Any] | None) -> dict[str, Any]:
     checks = (dashboard or {}).get("checks", {})
     coverage = checks.get("2_v2_coverage", {})
@@ -138,14 +163,12 @@ def _text_edgar_gate(text_audit: dict[str, Any] | None, trunk_audit: dict[str, A
             "trunk_source_scale_positive_rows": guard.get("source_scale_positive_rows"),
             "note": "No source-scaling novelty claim is allowed while positive_rows is zero.",
         },
-        "missing_text_edgar_execution_items": [
-            item for item, exists in {
-                "embedding_model_bakeoff": _script_exists("scripts/r14_embedding_bakeoff.py"),
-                "event_semantics_probe": _script_exists("scripts/r14_event_semantics_probe.py"),
-                "text_counterfactual_ablation": _script_exists("scripts/r14_text_counterfactual_audit.py"),
-                "source_path_activation_fix": _script_exists("scripts/r14_source_path_activation_audit.py"),
-            }.items() if not exists
-        ],
+        "text_edgar_execution_artifacts": {
+            "embedding_model_bakeoff": _artifact_status("r14_embedding_bakeoff", "scripts/r14_embedding_bakeoff.py"),
+            "event_semantics_probe": _artifact_status("r14_event_semantics_probe", "scripts/r14_event_semantics_probe.py"),
+            "text_counterfactual_ablation": _artifact_status("r14_text_counterfactual_audit", "scripts/r14_text_counterfactual_audit.py"),
+            "source_path_activation_fix": _artifact_status("r14_source_path_activation_audit", "scripts/r14_source_path_activation_audit.py"),
+        },
     }
 
 
@@ -176,16 +199,25 @@ def _counterfactual_gate() -> dict[str, Any]:
 
 def _method_next_scripts_gate() -> dict[str, Any]:
     required = {
-        "sigma_residual_diagnostic": "scripts/r14_sigma_residual_diagnostic.py",
-        "subgroup_conformal_pilot": "scripts/r14_subgroup_conformal_pilot.py",
-        "cqr_pilot": "scripts/r14_cqr_pilot.py",
-        "gpd_evt_tail_pilot": "scripts/r14_gpd_evt_tail_pilot.py",
-        "fremtpl2_external_validation": "scripts/r14_fremtpl2_external_validation.py",
+        "sigma_residual_diagnostic": ("scripts/r14_sigma_residual_diagnostic.py", "r14_sigma_residual_diagnostic"),
+        "subgroup_conformal_pilot": ("scripts/r14_subgroup_conformal_pilot.py", "r14_subgroup_conformal_pilot"),
+        "cqr_pilot": ("scripts/r14_cqr_pilot.py", "r14_cqr_pilot"),
+        "gpd_evt_tail_pilot": ("scripts/r14_gpd_evt_tail_pilot.py", "r14_gpd_evt_tail_pilot"),
+        "fremtpl2_external_validation": ("scripts/r14_fremtpl2_external_validation.py", "r14_fremtpl2_external_validation"),
     }
-    return {
-        name: {"status": _status(_script_exists(path)), "path": path}
-        for name, path in required.items()
-    }
+    out = {}
+    for name, (script_path, stem) in required.items():
+        item = _artifact_status(stem, script_path)
+        path, payload = _latest_audit(stem)
+        if payload and "candidate_coverage_mean" in payload:
+            coverage = _finite(payload.get("candidate_coverage_mean"))
+            delta = _finite(payload.get("coverage_delta_mean"))
+            item.update({"candidate_coverage_mean": coverage, "coverage_delta_mean": delta})
+            item["status"] = _status(bool(coverage is not None and coverage >= 0.88 and (delta or 0.0) >= 0.0), partial=True)
+        elif payload and name == "sigma_residual_diagnostic":
+            item["status"] = "partial"
+        out[name] = item
+    return out
 
 
 def main() -> int:
