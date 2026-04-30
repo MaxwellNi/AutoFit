@@ -122,6 +122,53 @@ def _build_mondrian_groups_from_predictions(values: np.ndarray) -> np.ndarray:
     q1, q2 = np.quantile(arr, [1.0 / 3.0, 2.0 / 3.0])
     return np.digitize(arr, [q1, q2]).astype(np.int64, copy=False)
 
+
+def _asymmetric_residual_interval(
+    y_cal: np.ndarray,
+    y_pred_cal: np.ndarray,
+    y_pred_test: np.ndarray,
+    alpha: float = 0.10,
+) -> tuple[np.ndarray, np.ndarray, float, float]:
+    """CQR-lite fallback: asymmetric split-conformal residual interval."""
+    lower_scores = np.clip(np.asarray(y_pred_cal) - np.asarray(y_cal), 0.0, None)
+    upper_scores = np.clip(np.asarray(y_cal) - np.asarray(y_pred_cal), 0.0, None)
+    q_level = min(1.0, np.ceil((len(y_cal) + 1) * (1.0 - alpha / 2.0)) / len(y_cal))
+    q_lower = float(np.quantile(lower_scores, q_level, method="higher"))
+    q_upper = float(np.quantile(upper_scores, q_level, method="higher"))
+    y_pred_test = np.asarray(y_pred_test, dtype=np.float64)
+    return y_pred_test - q_lower, y_pred_test + q_upper, q_lower, q_upper
+
+
+def _gpd_evt_residual_interval(
+    y_cal: np.ndarray,
+    y_pred_cal: np.ndarray,
+    y_pred_test: np.ndarray,
+    alpha: float = 0.10,
+    threshold_q: float = 0.80,
+) -> tuple[np.ndarray, np.ndarray, float, str, int]:
+    """Tail-aware residual interval with GPD fit and empirical fallback."""
+    abs_resid = np.abs(np.asarray(y_cal, dtype=np.float64) - np.asarray(y_pred_cal, dtype=np.float64))
+    q_level = min(1.0, np.ceil((len(abs_resid) + 1) * (1.0 - alpha)) / len(abs_resid))
+    empirical_q = float(np.quantile(abs_resid, q_level, method="higher"))
+    threshold = float(np.quantile(abs_resid, threshold_q))
+    exceedances = abs_resid[abs_resid > threshold] - threshold
+    q = empirical_q
+    status = "empirical_fallback"
+    if len(exceedances) >= 100:
+        try:
+            from scipy.stats import genpareto
+            shape, loc, scale = genpareto.fit(exceedances, floc=0.0)
+            tail_fraction = max(1.0 - threshold_q, 1e-9)
+            tail_prob = min(max(((1.0 - alpha) - threshold_q) / tail_fraction, 0.0), 0.999)
+            candidate_q = threshold + float(genpareto.ppf(tail_prob, shape, loc=loc, scale=scale))
+            if np.isfinite(candidate_q) and candidate_q > 0.0:
+                q = candidate_q
+                status = "gpd_fit"
+        except Exception as exc:
+            status = f"empirical_fallback:{type(exc).__name__}"
+    y_pred_test = np.asarray(y_pred_test, dtype=np.float64)
+    return y_pred_test - q, y_pred_test + q, float(q), status, int(len(exceedances))
+
 # =============================================================================
 # Configuration
 # =============================================================================
@@ -323,13 +370,22 @@ class ModelMetrics:
     nccopo_coverage_90: Optional[float] = None     # empirical test coverage at alpha=0.10
     nccopo_coverage_90_mondrian: Optional[float] = None  # empirical test coverage with tertile Mondrian CP
     nccopo_coverage_90_studentized: Optional[float] = None  # empirical test coverage with sigma_hat-studentized CP
+    nccopo_coverage_90_cqr_lite: Optional[float] = None  # asymmetric residual conformal diagnostic branch
+    nccopo_coverage_90_gpd_evt: Optional[float] = None  # GPD/EVT tail residual conformal diagnostic branch
     nccopo_coverage_80: Optional[float] = None     # empirical test coverage at alpha=0.20
     nccopo_conformal_q_90: Optional[float] = None  # conformal quantile at alpha=0.10
     nccopo_conformal_q_90_studentized: Optional[float] = None
+    nccopo_conformal_q_90_cqr_lower: Optional[float] = None
+    nccopo_conformal_q_90_cqr_upper: Optional[float] = None
+    nccopo_conformal_q_90_gpd_evt: Optional[float] = None
     nccopo_cal_coverage_90: Optional[float] = None # calibration-set coverage sanity
     nccopo_n_cal: Optional[int] = None
     nccopo_interval_width_mean: Optional[float] = None
     nccopo_interval_width_mean_studentized: Optional[float] = None
+    nccopo_interval_width_mean_cqr_lite: Optional[float] = None
+    nccopo_interval_width_mean_gpd_evt: Optional[float] = None
+    nccopo_gpd_evt_fit_status: Optional[str] = None
+    nccopo_gpd_evt_n_exceedances: Optional[int] = None
     nccopo_error: Optional[str] = None
 
     # ── Round-13 (2026-04-24): y-shift diagnostics ──
@@ -912,6 +968,30 @@ class BenchmarkShard:
             X["_horizon_feature"] = float(horizon)
 
         return X, y
+
+    def _prepare_prediction_meta(
+        self,
+        df: pd.DataFrame,
+        target: str,
+        horizon: int,
+    ) -> pd.DataFrame:
+        """Return row identifiers aligned to _prepare_features output order."""
+        enable_y_shift = os.environ.get("BLOCK3_Y_SHIFT", "0") in ("1", "true", "True")
+        work = df.copy()
+        work["source_row_index"] = np.arange(len(work), dtype=np.int64)
+        if enable_y_shift and "entity_id" in work.columns and "crawled_date_day" in work.columns:
+            sorted_df = work.sort_values(["entity_id", "crawled_date_day"]).reset_index(drop=True)
+            shifted = sorted_df.groupby("entity_id")[target].shift(-int(horizon))
+            clean = sorted_df.loc[shifted.notna()].copy().reset_index(drop=True)
+        else:
+            clean = work.loc[work[target].notna()].copy()
+        meta = pd.DataFrame(index=np.arange(len(clean)))
+        for col in ("entity_id", "crawled_date_day", "cik", "offer_id", "source_row_index"):
+            if col in clean.columns:
+                meta[col] = clean[col].to_numpy()
+            else:
+                meta[col] = None
+        return meta
     
     def _compute_metrics(
         self,
@@ -1362,13 +1442,22 @@ class BenchmarkShard:
                 "nccopo_coverage_90": None,
                 "nccopo_coverage_90_mondrian": None,
                 "nccopo_coverage_90_studentized": None,
+                "nccopo_coverage_90_cqr_lite": None,
+                "nccopo_coverage_90_gpd_evt": None,
                 "nccopo_coverage_80": None,
                 "nccopo_conformal_q_90": None,
                 "nccopo_conformal_q_90_studentized": None,
+                "nccopo_conformal_q_90_cqr_lower": None,
+                "nccopo_conformal_q_90_cqr_upper": None,
+                "nccopo_conformal_q_90_gpd_evt": None,
                 "nccopo_cal_coverage_90": None,
                 "nccopo_n_cal": None,
                 "nccopo_interval_width_mean": None,
                 "nccopo_interval_width_mean_studentized": None,
+                "nccopo_interval_width_mean_cqr_lite": None,
+                "nccopo_interval_width_mean_gpd_evt": None,
+                "nccopo_gpd_evt_fit_status": None,
+                "nccopo_gpd_evt_n_exceedances": None,
                 "nccopo_error": None,
             }
             if os.environ.get("BLOCK3_NCCOPO_WIRE", "0") in ("1", "true", "True"):
@@ -1528,6 +1617,31 @@ class BenchmarkShard:
                                 nccopo_fields["nccopo_interval_width_mean_studentized"] = float(
                                     np.mean(hi_st - lo_st)
                                 )
+                            if os.environ.get("BLOCK3_NCCOPO_CQR_LITE", "0") in ("1", "true", "True"):
+                                lo_cqr, hi_cqr, q_lower, q_upper = _asymmetric_residual_interval(
+                                    y_val_arr, y_pred_val, y_pred[test_finite], alpha=0.10
+                                )
+                                nccopo_fields["nccopo_coverage_90_cqr_lite"] = float(
+                                    np.mean((y_t >= lo_cqr) & (y_t <= hi_cqr))
+                                )
+                                nccopo_fields["nccopo_conformal_q_90_cqr_lower"] = float(q_lower)
+                                nccopo_fields["nccopo_conformal_q_90_cqr_upper"] = float(q_upper)
+                                nccopo_fields["nccopo_interval_width_mean_cqr_lite"] = float(
+                                    np.mean(hi_cqr - lo_cqr)
+                                )
+                            if os.environ.get("BLOCK3_NCCOPO_GPD_EVT", "0") in ("1", "true", "True"):
+                                lo_gpd, hi_gpd, q_gpd, fit_status, n_exc = _gpd_evt_residual_interval(
+                                    y_val_arr, y_pred_val, y_pred[test_finite], alpha=0.10
+                                )
+                                nccopo_fields["nccopo_coverage_90_gpd_evt"] = float(
+                                    np.mean((y_t >= lo_gpd) & (y_t <= hi_gpd))
+                                )
+                                nccopo_fields["nccopo_conformal_q_90_gpd_evt"] = float(q_gpd)
+                                nccopo_fields["nccopo_interval_width_mean_gpd_evt"] = float(
+                                    np.mean(hi_gpd - lo_gpd)
+                                )
+                                nccopo_fields["nccopo_gpd_evt_fit_status"] = str(fit_status)
+                                nccopo_fields["nccopo_gpd_evt_n_exceedances"] = int(n_exc)
                             nccopo_fields["nccopo_wired"] = True
                             if nccopo_fields["nccopo_coverage_90_mondrian"] is not None:
                                 logger.info(
@@ -1548,6 +1662,19 @@ class BenchmarkShard:
                                     "  [NCCOPO] alpha=0.10 studentized=%.4f width=%.3e",
                                     nccopo_fields["nccopo_coverage_90_studentized"],
                                     nccopo_fields["nccopo_interval_width_mean_studentized"],
+                                )
+                            if nccopo_fields["nccopo_coverage_90_cqr_lite"] is not None:
+                                logger.info(
+                                    "  [NCCOPO] alpha=0.10 cqr_lite=%.4f width=%.3e",
+                                    nccopo_fields["nccopo_coverage_90_cqr_lite"],
+                                    nccopo_fields["nccopo_interval_width_mean_cqr_lite"],
+                                )
+                            if nccopo_fields["nccopo_coverage_90_gpd_evt"] is not None:
+                                logger.info(
+                                    "  [NCCOPO] alpha=0.10 gpd_evt=%.4f width=%.3e status=%s",
+                                    nccopo_fields["nccopo_coverage_90_gpd_evt"],
+                                    nccopo_fields["nccopo_interval_width_mean_gpd_evt"],
+                                    nccopo_fields["nccopo_gpd_evt_fit_status"],
                                 )
                         else:
                             nccopo_fields["nccopo_error"] = (
@@ -1631,13 +1758,22 @@ class BenchmarkShard:
                 nccopo_coverage_90=nccopo_fields["nccopo_coverage_90"],
                 nccopo_coverage_90_mondrian=nccopo_fields["nccopo_coverage_90_mondrian"],
                 nccopo_coverage_90_studentized=nccopo_fields["nccopo_coverage_90_studentized"],
+                nccopo_coverage_90_cqr_lite=nccopo_fields["nccopo_coverage_90_cqr_lite"],
+                nccopo_coverage_90_gpd_evt=nccopo_fields["nccopo_coverage_90_gpd_evt"],
                 nccopo_coverage_80=nccopo_fields["nccopo_coverage_80"],
                 nccopo_conformal_q_90=nccopo_fields["nccopo_conformal_q_90"],
                 nccopo_conformal_q_90_studentized=nccopo_fields["nccopo_conformal_q_90_studentized"],
+                nccopo_conformal_q_90_cqr_lower=nccopo_fields["nccopo_conformal_q_90_cqr_lower"],
+                nccopo_conformal_q_90_cqr_upper=nccopo_fields["nccopo_conformal_q_90_cqr_upper"],
+                nccopo_conformal_q_90_gpd_evt=nccopo_fields["nccopo_conformal_q_90_gpd_evt"],
                 nccopo_cal_coverage_90=nccopo_fields["nccopo_cal_coverage_90"],
                 nccopo_n_cal=nccopo_fields["nccopo_n_cal"],
                 nccopo_interval_width_mean=nccopo_fields["nccopo_interval_width_mean"],
                 nccopo_interval_width_mean_studentized=nccopo_fields["nccopo_interval_width_mean_studentized"],
+                nccopo_interval_width_mean_cqr_lite=nccopo_fields["nccopo_interval_width_mean_cqr_lite"],
+                nccopo_interval_width_mean_gpd_evt=nccopo_fields["nccopo_interval_width_mean_gpd_evt"],
+                nccopo_gpd_evt_fit_status=nccopo_fields["nccopo_gpd_evt_fit_status"],
+                nccopo_gpd_evt_n_exceedances=nccopo_fields["nccopo_gpd_evt_n_exceedances"],
                 nccopo_error=nccopo_fields["nccopo_error"],
                 **metrics_dict,
             )
@@ -1652,6 +1788,16 @@ class BenchmarkShard:
                 "horizon": horizon,
                 "target": target,
             })
+            if os.environ.get("BLOCK3_PREDICTION_ROW_KEYS", "0") in ("1", "true", "True"):
+                meta = self._prepare_prediction_meta(test, target, horizon)
+                if len(meta) == len(pred_df):
+                    for col in meta.columns:
+                        pred_df[col] = meta[col].to_numpy()
+                else:
+                    logger.warning(
+                        "  [ROW-KEYS] prediction meta length mismatch meta=%s pred=%s",
+                        len(meta), len(pred_df),
+                    )
             self.predictions.append(pred_df)
 
             mae_val = metrics_dict.get("mae")

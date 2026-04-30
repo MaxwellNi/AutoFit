@@ -92,8 +92,32 @@ def _coverage_gate(dashboard: dict[str, Any] | None) -> dict[str, Any]:
     mondrian_delta = _finite(coverage.get("mondrian_delta_mean"))
     studentized_delta = _finite(coverage.get("studentized_delta_mean"))
     studentized_n = int(coverage.get("studentized_n_records") or 0)
+    cqr_mean = _finite(coverage.get("cqr_lite_c90_mean"))
+    cqr_delta = _finite(coverage.get("cqr_lite_delta_mean"))
+    cqr_n = int(coverage.get("cqr_lite_n_records") or 0)
+    gpd_mean = _finite(coverage.get("gpd_evt_c90_mean"))
+    gpd_delta = _finite(coverage.get("gpd_evt_delta_mean"))
+    gpd_n = int(coverage.get("gpd_evt_n_records") or 0)
     read_error_count = int(read_errors.get("n_errors") or 0)
-    external_done = any(bool(v.get("exists")) for v in tpub.values() if isinstance(v, dict))
+    external_artifact_statuses: dict[str, list[str | None]] = {}
+    external_any_passed = False
+    external_any_artifact = False
+    for dataset_name, item in tpub.items():
+        if not isinstance(item, dict):
+            continue
+        statuses: list[str | None] = []
+        for artifact in item.get("artifacts") or []:
+            path = Path(str(artifact))
+            if path.suffix != ".json":
+                continue
+            payload = _load(path)
+            if payload is None:
+                continue
+            status = payload.get("status")
+            statuses.append(status)
+            external_any_artifact = True
+            external_any_passed = external_any_passed or status == "passed"
+        external_artifact_statuses[dataset_name] = statuses
     return {
         "marginal_coverage": {
             "status": _status(bool(c90_mean is not None and c90_mean >= 0.88)),
@@ -112,9 +136,24 @@ def _coverage_gate(dashboard: dict[str, Any] | None) -> dict[str, Any]:
             "metric_read_errors": read_error_count,
             "note": "If read errors are nonzero, studentized counts are readable-window lower bounds.",
         },
+        "cqr_lite_temporal_benchmark": {
+            "status": _status(bool(cqr_mean is not None and cqr_mean >= 0.88 and (cqr_delta or 0.0) >= 0.0 and read_error_count == 0), partial=cqr_n > 0),
+            "n_records": cqr_n,
+            "c90_mean": cqr_mean,
+            "delta_mean": cqr_delta,
+            "metric_read_errors": read_error_count,
+        },
+        "gpd_evt_temporal_benchmark": {
+            "status": _status(bool(gpd_mean is not None and gpd_mean >= 0.88 and (gpd_delta or 0.0) >= 0.0 and read_error_count == 0), partial=gpd_n > 0),
+            "n_records": gpd_n,
+            "c90_mean": gpd_mean,
+            "delta_mean": gpd_delta,
+            "metric_read_errors": read_error_count,
+        },
         "external_public_validation": {
-            "status": _status(external_done),
+            "status": _status(external_any_passed, partial=external_any_artifact),
             "datasets": tpub,
+            "artifact_statuses": external_artifact_statuses,
         },
     }
 

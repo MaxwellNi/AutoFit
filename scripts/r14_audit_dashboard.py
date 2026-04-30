@@ -69,6 +69,10 @@ def check_v2_coverage():
     mondrian_deltas = []
     studentized_recs = []
     studentized_deltas = []
+    cqr_recs = []
+    cqr_deltas = []
+    gpd_recs = []
+    gpd_deltas = []
     for f in files:
         m = _load_json(f)
         if m is None: continue
@@ -109,10 +113,36 @@ def check_v2_coverage():
                     studentized_deltas.append(
                         float(r.get('nccopo_coverage_90_studentized')) - float(r.get('nccopo_coverage_90'))
                     )
+            if isinstance(r, dict) and r.get('nccopo_coverage_90_cqr_lite') is not None:
+                cqr_recs.append(dict(
+                    model=r.get('model_name') or r.get('model'),
+                    horizon=r.get('horizon'),
+                    category=r.get('category'),
+                    c90_cqr_lite=r.get('nccopo_coverage_90_cqr_lite'),
+                    fair=r.get('fairness_pass'),
+                ))
+                if r.get('nccopo_coverage_90') is not None:
+                    cqr_deltas.append(
+                        float(r.get('nccopo_coverage_90_cqr_lite')) - float(r.get('nccopo_coverage_90'))
+                    )
+            if isinstance(r, dict) and r.get('nccopo_coverage_90_gpd_evt') is not None:
+                gpd_recs.append(dict(
+                    model=r.get('model_name') or r.get('model'),
+                    horizon=r.get('horizon'),
+                    category=r.get('category'),
+                    c90_gpd_evt=r.get('nccopo_coverage_90_gpd_evt'),
+                    fair=r.get('fairness_pass'),
+                ))
+                if r.get('nccopo_coverage_90') is not None:
+                    gpd_deltas.append(
+                        float(r.get('nccopo_coverage_90_gpd_evt')) - float(r.get('nccopo_coverage_90'))
+                    )
     n = len(recs)
     c90s = [r['c90'] for r in recs if r['c90'] is not None]
     mondrian_c90s = [r['c90_mondrian'] for r in mondrian_recs if r['c90_mondrian'] is not None]
     studentized_c90s = [r['c90_studentized'] for r in studentized_recs if r['c90_studentized'] is not None]
+    cqr_c90s = [r['c90_cqr_lite'] for r in cqr_recs if r['c90_cqr_lite'] is not None]
+    gpd_c90s = [r['c90_gpd_evt'] for r in gpd_recs if r['c90_gpd_evt'] is not None]
     return dict(n_records=n, n_files=len(files),
                 c90_mean=statistics.mean(c90s) if c90s else None,
                 c90_min=min(c90s) if c90s else None,
@@ -128,6 +158,16 @@ def check_v2_coverage():
                 studentized_c90_min=min(studentized_c90s) if studentized_c90s else None,
                 studentized_c90_max=max(studentized_c90s) if studentized_c90s else None,
                 studentized_delta_mean=statistics.mean(studentized_deltas) if studentized_deltas else None,
+                cqr_lite_n_records=len(cqr_recs),
+                cqr_lite_c90_mean=statistics.mean(cqr_c90s) if cqr_c90s else None,
+                cqr_lite_c90_min=min(cqr_c90s) if cqr_c90s else None,
+                cqr_lite_c90_max=max(cqr_c90s) if cqr_c90s else None,
+                cqr_lite_delta_mean=statistics.mean(cqr_deltas) if cqr_deltas else None,
+                gpd_evt_n_records=len(gpd_recs),
+                gpd_evt_c90_mean=statistics.mean(gpd_c90s) if gpd_c90s else None,
+                gpd_evt_c90_min=min(gpd_c90s) if gpd_c90s else None,
+                gpd_evt_c90_max=max(gpd_c90s) if gpd_c90s else None,
+                gpd_evt_delta_mean=statistics.mean(gpd_deltas) if gpd_deltas else None,
                 records=recs)
 
 # ─── Check 3: fairness_pass 分布 ───────────────────────────────────
@@ -220,6 +260,8 @@ def check_coverage_matrix():
     have = set()
     have_mondrian = set()
     have_studentized = set()
+    have_cqr = set()
+    have_gpd = set()
     for f in files:
         m = _load_json(f)
         if m is None: continue
@@ -238,6 +280,14 @@ def check_coverage_matrix():
                 key = (r.get('task') or '?', r.get('ablation') or '?',
                        r.get('category') or '?', r.get('horizon'))
                 have_studentized.add(key)
+            if r.get('nccopo_coverage_90_cqr_lite') is not None:
+                key = (r.get('task') or '?', r.get('ablation') or '?',
+                       r.get('category') or '?', r.get('horizon'))
+                have_cqr.add(key)
+            if r.get('nccopo_coverage_90_gpd_evt') is not None:
+                key = (r.get('task') or '?', r.get('ablation') or '?',
+                       r.get('category') or '?', r.get('horizon'))
+                have_gpd.add(key)
     return dict(
         n_cells_with_c90=len(have),
         cells=sorted(have, key=str),
@@ -245,6 +295,10 @@ def check_coverage_matrix():
         mondrian_cells=sorted(have_mondrian, key=str),
         n_cells_with_studentized_c90=len(have_studentized),
         studentized_cells=sorted(have_studentized, key=str),
+        n_cells_with_cqr_lite_c90=len(have_cqr),
+        cqr_lite_cells=sorted(have_cqr, key=str),
+        n_cells_with_gpd_evt_c90=len(have_gpd),
+        gpd_evt_cells=sorted(have_gpd, key=str),
     )
 
 def check_metric_read_errors():
