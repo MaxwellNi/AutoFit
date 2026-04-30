@@ -1277,6 +1277,130 @@ class SingleModelMainlineWrapper(ModelBase):
             preds = np.expm1(np.clip(preds, 0.0, None))
         return np.clip(preds, 0.0, None).astype(np.float64, copy=False)
 
+    def nccopo_inputs(self, X: pd.DataFrame, **kwargs) -> dict[str, np.ndarray]:
+        """Expose funding-lane plug-in moments for studentized NC-CoPo.
+
+        This is intentionally funding-only. Other targets do not yet expose a
+        benchmark-level sigma_hat contract, so callers should treat absence of
+        this method's output as a real unsupported state rather than silently
+        pretending studentized calibration is universal.
+        """
+        if not self._fitted:
+            raise ValueError("SingleModelMainlineWrapper is not fitted")
+        if self.use_delegate:
+            if self._delegate is not None and hasattr(self._delegate, "nccopo_inputs"):
+                return self._delegate.nccopo_inputs(X, **kwargs)
+            raise ValueError("Delegate does not expose nccopo_inputs")
+        if self._active_lane_name != "funding":
+            raise ValueError("nccopo_inputs is currently funding-lane only")
+
+        runtime_frame = self._prepare_runtime_frame(X, raw_frame=kwargs.get("test_raw"))
+        runtime_frame = self._mask_runtime_target_for_prediction(runtime_frame)
+        feature_frame = X.reindex(columns=self._train_feature_cols, fill_value=0.0)
+        core_frame = feature_frame.reindex(columns=self._core_feature_cols, fill_value=0.0)
+        event_state_frame = pd.DataFrame()
+
+        if self.enable_sequential_trunk and self._sequential_trunk is not None:
+            core_matrix = core_frame.to_numpy(dtype=np.float32, copy=False)
+            raw_df = kwargs.get("test_raw")
+            entity_ids = raw_df["entity_id"].reindex(X.index).to_numpy() if raw_df is not None and "entity_id" in raw_df.columns else None
+            dates = raw_df["crawled_date_day"].reindex(X.index).to_numpy() if raw_df is not None and "crawled_date_day" in raw_df.columns else None
+            trunk_output = self._sequential_trunk.transform(
+                core_matrix, target_name=self._target_name,
+                entity_ids=entity_ids, dates=dates,
+            )
+            condition_key = ConditionKey(
+                task=kwargs.get("task", self._task_name),
+                target=kwargs.get("target", self._target_name),
+                horizon=int(kwargs.get("horizon", self._horizon)),
+                ablation=kwargs.get("ablation", self._ablation_name),
+            )
+            condition_state = self.condition_encoder.broadcast(condition_key, len(feature_frame))
+            source_layout = self.source_memory.infer_layout(runtime_frame)
+            source_frame = self.source_memory.build_runtime_features(runtime_frame, layout=source_layout)
+            source_state = source_frame.reindex(columns=self._source_feature_cols, fill_value=0.0).to_numpy(dtype=np.float32, copy=False)
+            lane_input = np.concatenate([trunk_output, condition_state, source_state], axis=1).astype(np.float32)
+            lane_states = {self._active_lane_name: lane_input}
+        elif self.enable_learnable_trunk and self._learnable_trunk is not None:
+            core_matrix = core_frame.to_numpy(dtype=np.float32, copy=False)
+            trunk_output = self._learnable_trunk.transform(
+                core_matrix, target_name=self._target_name,
+            )
+            condition_key = ConditionKey(
+                task=kwargs.get("task", self._task_name),
+                target=kwargs.get("target", self._target_name),
+                horizon=int(kwargs.get("horizon", self._horizon)),
+                ablation=kwargs.get("ablation", self._ablation_name),
+            )
+            condition_state = self.condition_encoder.broadcast(condition_key, len(feature_frame))
+            source_layout = self.source_memory.infer_layout(runtime_frame)
+            source_frame = self.source_memory.build_runtime_features(runtime_frame, layout=source_layout)
+            source_state = source_frame.reindex(columns=self._source_feature_cols, fill_value=0.0).to_numpy(dtype=np.float32, copy=False)
+            lane_input = np.concatenate([trunk_output, condition_state, source_state], axis=1).astype(np.float32)
+            lane_states = {self._active_lane_name: lane_input}
+        elif self.enable_state_space_trunk and self._state_space_trunk is not None:
+            core_matrix = core_frame.to_numpy(dtype=np.float32, copy=False)
+            trunk_output = self._state_space_trunk.transform(
+                core_matrix, target_name=self._target_name,
+            )
+            condition_key = ConditionKey(
+                task=kwargs.get("task", self._task_name),
+                target=kwargs.get("target", self._target_name),
+                horizon=int(kwargs.get("horizon", self._horizon)),
+                ablation=kwargs.get("ablation", self._ablation_name),
+            )
+            condition_state = self.condition_encoder.broadcast(condition_key, len(feature_frame))
+            source_layout = self.source_memory.infer_layout(runtime_frame)
+            source_frame = self.source_memory.build_runtime_features(runtime_frame, layout=source_layout)
+            source_state = source_frame.reindex(columns=self._source_feature_cols, fill_value=0.0).to_numpy(dtype=np.float32, copy=False)
+            lane_input = np.concatenate([trunk_output, condition_state, source_state], axis=1).astype(np.float32)
+            lane_states = {self._active_lane_name: lane_input}
+        else:
+            shared_state = self.backbone.transform(
+                core_frame,
+                context_frame=runtime_frame,
+                seed_frame=self._backbone_seed,
+            )
+            condition_key = ConditionKey(
+                task=kwargs.get("task", self._task_name),
+                target=kwargs.get("target", self._target_name),
+                horizon=int(kwargs.get("horizon", self._horizon)),
+                ablation=kwargs.get("ablation", self._ablation_name),
+            )
+            condition_state = self.condition_encoder.broadcast(condition_key, len(feature_frame))
+            source_layout = self.source_memory.infer_layout(runtime_frame)
+            source_frame = self.source_memory.build_runtime_features(runtime_frame, layout=source_layout)
+            event_state_frame, shared_state = self._refresh_event_state_card_with_shared_state(
+                runtime_frame,
+                shared_state=shared_state,
+                source_frame=source_frame,
+                phase="test",
+            )
+            source_state = source_frame.reindex(columns=self._source_feature_cols, fill_value=0.0).to_numpy(dtype=np.float32, copy=False)
+            lane_states = self.barrier.split(shared_state, condition_state, source_state)
+
+        history_frame = self._build_target_history_features(runtime_frame, include_seed=True)
+        history_matrix = history_frame.reindex(columns=self._history_feature_cols, fill_value=0.0).fillna(0.0).to_numpy(dtype=np.float32, copy=False)
+        anchor = self._resolve_anchor(history_frame)
+        anchor_pred = np.log1p(np.clip(anchor, 0.0, None)) if self._use_log1p_target else anchor
+        funding_source_scale = self._build_funding_source_scale(source_frame)
+        payload = self.funding_lane_runtime.nccopo_inputs(
+            lane_states["funding"],
+            aux_features=history_matrix,
+            anchor=anchor_pred,
+            source_scale=funding_source_scale,
+        )
+        if self._use_log1p_target:
+            mu_log = np.asarray(payload.get("mu_hat"), dtype=np.float64)
+            sigma_log = np.asarray(payload.get("sigma_hat"), dtype=np.float64)
+            mu_phys = np.expm1(np.clip(mu_log, 0.0, None))
+            sigma_phys = sigma_log * np.maximum(1.0 + mu_phys, 1.0)
+            payload["mu_hat_log"] = mu_log
+            payload["sigma_hat_log"] = sigma_log
+            payload["mu_hat"] = np.clip(mu_phys, 0.0, None).astype(np.float64, copy=False)
+            payload["sigma_hat"] = np.clip(sigma_phys, 1e-8, None).astype(np.float64, copy=False)
+        return payload
+
     def _prepare_runtime_frame(self, X: pd.DataFrame, raw_frame: pd.DataFrame | None) -> pd.DataFrame:
         if raw_frame is not None and len(raw_frame) > 0:
             if X.index.isin(raw_frame.index).all():

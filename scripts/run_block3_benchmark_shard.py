@@ -111,6 +111,17 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
+
+def _build_mondrian_groups_from_predictions(values: np.ndarray) -> np.ndarray:
+    """Bucket predictions into low/mid/high tertiles for Mondrian CP."""
+    arr = np.asarray(values, dtype=np.float64).ravel()
+    if arr.size == 0:
+        return np.zeros(0, dtype=np.int64)
+    if arr.size < 3:
+        return np.zeros(arr.shape[0], dtype=np.int64)
+    q1, q2 = np.quantile(arr, [1.0 / 3.0, 2.0 / 3.0])
+    return np.digitize(arr, [q1, q2]).astype(np.int64, copy=False)
+
 # =============================================================================
 # Configuration
 # =============================================================================
@@ -310,11 +321,15 @@ class ModelMetrics:
     nccopo_wired: Optional[bool] = None
     nccopo_alpha_primary: Optional[float] = None
     nccopo_coverage_90: Optional[float] = None     # empirical test coverage at alpha=0.10
+    nccopo_coverage_90_mondrian: Optional[float] = None  # empirical test coverage with tertile Mondrian CP
+    nccopo_coverage_90_studentized: Optional[float] = None  # empirical test coverage with sigma_hat-studentized CP
     nccopo_coverage_80: Optional[float] = None     # empirical test coverage at alpha=0.20
     nccopo_conformal_q_90: Optional[float] = None  # conformal quantile at alpha=0.10
+    nccopo_conformal_q_90_studentized: Optional[float] = None
     nccopo_cal_coverage_90: Optional[float] = None # calibration-set coverage sanity
     nccopo_n_cal: Optional[int] = None
     nccopo_interval_width_mean: Optional[float] = None
+    nccopo_interval_width_mean_studentized: Optional[float] = None
     nccopo_error: Optional[str] = None
 
     # ── Round-13 (2026-04-24): y-shift diagnostics ──
@@ -1345,11 +1360,15 @@ class BenchmarkShard:
                 "nccopo_wired": False,
                 "nccopo_alpha_primary": None,
                 "nccopo_coverage_90": None,
+                "nccopo_coverage_90_mondrian": None,
+                "nccopo_coverage_90_studentized": None,
                 "nccopo_coverage_80": None,
                 "nccopo_conformal_q_90": None,
+                "nccopo_conformal_q_90_studentized": None,
                 "nccopo_cal_coverage_90": None,
                 "nccopo_n_cal": None,
                 "nccopo_interval_width_mean": None,
+                "nccopo_interval_width_mean_studentized": None,
                 "nccopo_error": None,
             }
             if os.environ.get("BLOCK3_NCCOPO_WIRE", "0") in ("1", "true", "True"):
@@ -1373,6 +1392,36 @@ class BenchmarkShard:
                         finite_mask = (
                             np.isfinite(y_val_arr) & np.isfinite(y_pred_val)
                         )
+                        sigma_val_arr = None
+                        sigma_test_arr = None
+                        enable_studentized = os.environ.get(
+                            "BLOCK3_NCCOPO_STUDENTIZED", "0"
+                        ) in ("1", "true", "True")
+                        sigma_test_full = None
+                        if enable_studentized:
+                            if hasattr(model, "nccopo_inputs"):
+                                try:
+                                    val_nc = model.nccopo_inputs(X_val, **val_predict_kwargs)
+                                    test_nc = model.nccopo_inputs(X_test, **predict_kwargs)
+                                    sigma_val_full = np.asarray(
+                                        val_nc.get("sigma_hat"), dtype=float
+                                    )
+                                    sigma_test_full = np.asarray(
+                                        test_nc.get("sigma_hat"), dtype=float
+                                    )
+                                    if len(sigma_val_full) == len(y_val_arr) and len(sigma_test_full) == len(y_pred):
+                                        sigma_val_arr = sigma_val_full[finite_mask]
+                                    else:
+                                        nccopo_fields["nccopo_error"] = (
+                                            f"studentized_sigma_shape_mismatch val={len(sigma_val_full)} y_val={len(y_val_arr)} "
+                                            f"test={len(sigma_test_full)} y_pred={len(y_pred)}"
+                                        )
+                                except Exception as _st_exc:
+                                    nccopo_fields["nccopo_error"] = (
+                                        f"studentized:{type(_st_exc).__name__}:{_st_exc}"
+                                    )
+                            else:
+                                nccopo_fields["nccopo_error"] = "studentized:model_has_no_nccopo_inputs"
                         y_val_arr = y_val_arr[finite_mask]
                         y_pred_val = y_pred_val[finite_mask]
                         if len(y_val_arr) >= 50:
@@ -1380,29 +1429,71 @@ class BenchmarkShard:
                             test_finite = (
                                 np.isfinite(y_test_arr) & np.isfinite(y_pred)
                             )
+                            if sigma_test_full is not None:
+                                sigma_test_arr = sigma_test_full[test_finite]
+                            enable_mondrian = os.environ.get(
+                                "BLOCK3_NCCOPO_MONDRIAN", "0"
+                            ) in ("1", "true", "True")
+                            y_t = y_test_arr[test_finite]
+                            groups_val = _build_mondrian_groups_from_predictions(
+                                y_pred_val
+                            ) if enable_mondrian else None
+                            groups_test = _build_mondrian_groups_from_predictions(
+                                y_pred[test_finite]
+                            ) if enable_mondrian else None
                             for alpha_ in (0.10, 0.20):
                                 cfg = NCCoPoConfig(
-                                    alpha=alpha_, use_studentized=False
+                                    alpha=alpha_,
+                                    use_studentized=False,
+                                    mondrian_groups=groups_val if (
+                                        enable_mondrian and abs(alpha_ - 0.10) < 1e-9
+                                    ) else None,
                                 )
                                 cal = NCCoPoCalibrator(cfg).fit(
                                     y_val_arr, y_pred_val
                                 )
                                 lo_t, hi_t = cal.predict_interval(
-                                    y_pred[test_finite]
+                                    y_pred[test_finite],
+                                    groups=groups_test if (
+                                        enable_mondrian and abs(alpha_ - 0.10) < 1e-9
+                                    ) else None,
                                 )
-                                y_t = y_test_arr[test_finite]
                                 cov = float(np.mean((y_t >= lo_t) & (y_t <= hi_t)))
                                 width_mean = float(np.mean(hi_t - lo_t))
                                 if abs(alpha_ - 0.10) < 1e-9:
-                                    nccopo_fields["nccopo_coverage_90"] = cov
+                                    if enable_mondrian:
+                                        nccopo_fields["nccopo_coverage_90_mondrian"] = cov
+                                        marginal_cal = NCCoPoCalibrator(
+                                            NCCoPoConfig(alpha=alpha_, use_studentized=False)
+                                        ).fit(y_val_arr, y_pred_val)
+                                        lo_m, hi_m = marginal_cal.predict_interval(
+                                            y_pred[test_finite]
+                                        )
+                                        nccopo_fields["nccopo_coverage_90"] = float(
+                                            np.mean((y_t >= lo_m) & (y_t <= hi_m))
+                                        )
+                                        nccopo_fields["nccopo_conformal_q_90"] = float(
+                                            marginal_cal.result.conformal_q
+                                        )
+                                        nccopo_fields["nccopo_cal_coverage_90"] = float(
+                                            marginal_cal.result.cal_coverage
+                                        )
+                                        nccopo_fields["nccopo_n_cal"] = int(
+                                            marginal_cal.result.n_cal
+                                        )
+                                    else:
+                                        nccopo_fields["nccopo_coverage_90"] = cov
+                                        nccopo_fields["nccopo_conformal_q_90"] = (
+                                            float(cal.result.conformal_q)
+                                        )
+                                        nccopo_fields["nccopo_cal_coverage_90"] = (
+                                            float(cal.result.cal_coverage)
+                                        )
+                                        nccopo_fields["nccopo_n_cal"] = int(
+                                            cal.result.n_cal
+                                        )
                                     nccopo_fields["nccopo_conformal_q_90"] = (
-                                        float(cal.result.conformal_q)
-                                    )
-                                    nccopo_fields["nccopo_cal_coverage_90"] = (
-                                        float(cal.result.cal_coverage)
-                                    )
-                                    nccopo_fields["nccopo_n_cal"] = int(
-                                        cal.result.n_cal
+                                        nccopo_fields["nccopo_conformal_q_90"]
                                     )
                                     nccopo_fields["nccopo_interval_width_mean"] = (
                                         width_mean
@@ -1410,12 +1501,54 @@ class BenchmarkShard:
                                     nccopo_fields["nccopo_alpha_primary"] = 0.10
                                 else:
                                     nccopo_fields["nccopo_coverage_80"] = cov
+                            if (
+                                enable_studentized
+                                and sigma_val_arr is not None
+                                and sigma_test_arr is not None
+                                and len(sigma_val_arr) == len(y_val_arr)
+                                and len(sigma_test_arr) == len(y_t)
+                            ):
+                                st_cal = NCCoPoCalibrator(
+                                    NCCoPoConfig(alpha=0.10, use_studentized=True)
+                                ).fit(
+                                    y_val_arr,
+                                    y_pred_val,
+                                    sigma_hat_cal=sigma_val_arr,
+                                )
+                                lo_st, hi_st = st_cal.predict_interval(
+                                    y_pred[test_finite],
+                                    sigma_hat=sigma_test_arr,
+                                )
+                                nccopo_fields["nccopo_coverage_90_studentized"] = float(
+                                    np.mean((y_t >= lo_st) & (y_t <= hi_st))
+                                )
+                                nccopo_fields["nccopo_conformal_q_90_studentized"] = float(
+                                    st_cal.result.conformal_q
+                                )
+                                nccopo_fields["nccopo_interval_width_mean_studentized"] = float(
+                                    np.mean(hi_st - lo_st)
+                                )
                             nccopo_fields["nccopo_wired"] = True
-                            logger.info(
-                                f"  [NCCOPO] alpha=0.10 coverage={nccopo_fields['nccopo_coverage_90']:.4f} "
-                                f"width={nccopo_fields['nccopo_interval_width_mean']:.3e} "
-                                f"n_cal={nccopo_fields['nccopo_n_cal']}"
-                            )
+                            if nccopo_fields["nccopo_coverage_90_mondrian"] is not None:
+                                logger.info(
+                                    "  [NCCOPO] alpha=0.10 marginal=%.4f mondrian=%.4f width=%.3e n_cal=%s",
+                                    nccopo_fields["nccopo_coverage_90"],
+                                    nccopo_fields["nccopo_coverage_90_mondrian"],
+                                    nccopo_fields["nccopo_interval_width_mean"],
+                                    nccopo_fields["nccopo_n_cal"],
+                                )
+                            else:
+                                logger.info(
+                                    f"  [NCCOPO] alpha=0.10 coverage={nccopo_fields['nccopo_coverage_90']:.4f} "
+                                    f"width={nccopo_fields['nccopo_interval_width_mean']:.3e} "
+                                    f"n_cal={nccopo_fields['nccopo_n_cal']}"
+                                )
+                            if nccopo_fields["nccopo_coverage_90_studentized"] is not None:
+                                logger.info(
+                                    "  [NCCOPO] alpha=0.10 studentized=%.4f width=%.3e",
+                                    nccopo_fields["nccopo_coverage_90_studentized"],
+                                    nccopo_fields["nccopo_interval_width_mean_studentized"],
+                                )
                         else:
                             nccopo_fields["nccopo_error"] = (
                                 f"insufficient_finite_val_n={len(y_val_arr)}"
@@ -1496,11 +1629,15 @@ class BenchmarkShard:
                 nccopo_wired=nccopo_fields["nccopo_wired"],
                 nccopo_alpha_primary=nccopo_fields["nccopo_alpha_primary"],
                 nccopo_coverage_90=nccopo_fields["nccopo_coverage_90"],
+                nccopo_coverage_90_mondrian=nccopo_fields["nccopo_coverage_90_mondrian"],
+                nccopo_coverage_90_studentized=nccopo_fields["nccopo_coverage_90_studentized"],
                 nccopo_coverage_80=nccopo_fields["nccopo_coverage_80"],
                 nccopo_conformal_q_90=nccopo_fields["nccopo_conformal_q_90"],
+                nccopo_conformal_q_90_studentized=nccopo_fields["nccopo_conformal_q_90_studentized"],
                 nccopo_cal_coverage_90=nccopo_fields["nccopo_cal_coverage_90"],
                 nccopo_n_cal=nccopo_fields["nccopo_n_cal"],
                 nccopo_interval_width_mean=nccopo_fields["nccopo_interval_width_mean"],
+                nccopo_interval_width_mean_studentized=nccopo_fields["nccopo_interval_width_mean_studentized"],
                 nccopo_error=nccopo_fields["nccopo_error"],
                 **metrics_dict,
             )

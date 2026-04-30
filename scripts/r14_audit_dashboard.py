@@ -13,6 +13,32 @@ OUT_MD = OUT_JSON.with_suffix(".md")
 OUT_JSON.parent.mkdir(parents=True, exist_ok=True)
 
 audit = {"timestamp_cest": datetime.now().isoformat(), "checks": {}}
+_METRIC_READ_ERRORS = []
+_METRIC_READ_ERROR_KEYS = set()
+
+
+def _load_json(path):
+    try:
+        return json.load(open(path))
+    except Exception as exc:
+        key = (str(path), type(exc).__name__, str(exc))
+        if key not in _METRIC_READ_ERROR_KEYS:
+            _METRIC_READ_ERROR_KEYS.add(key)
+            _METRIC_READ_ERRORS.append({
+                "path": str(path),
+                "error_type": type(exc).__name__,
+                "error": str(exc),
+            })
+        return None
+
+
+def _coverage_metric_files():
+    return sorted(set(
+        glob.glob(str(ROOT/"runs/benchmarks/r13patch_*v2*/metrics.json")) +
+        glob.glob(str(ROOT/"runs/benchmarks/r14fcast_*/metrics.json")) +
+        glob.glob(str(ROOT/"runs/benchmarks/r14mond_*/metrics.json")) +
+        glob.glob(str(ROOT/"runs/benchmarks/r14stud_*/metrics.json"))
+    ))
 
 # ─── Check 1: 旧 benchmark 是否已含 PI coverage？───────────────────
 def check_old_bench_coverage():
@@ -20,8 +46,8 @@ def check_old_bench_coverage():
     total = 0; has_nccopo = 0; has_cov90 = 0; has_pi90 = 0
     key_union = set()
     for f in files:
-        try: m = json.load(open(f))
-        except: continue
+        m = _load_json(f)
+        if m is None: continue
         if isinstance(m, dict) and 'results' in m: m = m['results']
         if not isinstance(m, list): continue
         for r in m:
@@ -37,14 +63,15 @@ def check_old_bench_coverage():
 
 # ─── Check 2: 新 v2 benchmark c90 分布 ─────────────────────────────
 def check_v2_coverage():
-    files = sorted(set(
-        glob.glob(str(ROOT/"runs/benchmarks/r13patch_*v2*/metrics.json")) +
-        glob.glob(str(ROOT/"runs/benchmarks/r14fcast_*/metrics.json"))
-    ))
+    files = _coverage_metric_files()
     recs = []
+    mondrian_recs = []
+    mondrian_deltas = []
+    studentized_recs = []
+    studentized_deltas = []
     for f in files:
-        try: m = json.load(open(f))
-        except: continue
+        m = _load_json(f)
+        if m is None: continue
         if isinstance(m, dict) and 'results' in m: m = m['results']
         for r in m:
             if isinstance(r, dict) and r.get('nccopo_coverage_90') is not None:
@@ -56,13 +83,51 @@ def check_v2_coverage():
                     c90=r.get('nccopo_coverage_90'),
                     fair=r.get('fairness_pass'),
                 ))
+            if isinstance(r, dict) and r.get('nccopo_coverage_90_mondrian') is not None:
+                mondrian_recs.append(dict(
+                    model=r.get('model_name') or r.get('model'),
+                    horizon=r.get('horizon'),
+                    category=r.get('category'),
+                    mae=r.get('mae'),
+                    c90_mondrian=r.get('nccopo_coverage_90_mondrian'),
+                    fair=r.get('fairness_pass'),
+                ))
+                if r.get('nccopo_coverage_90') is not None:
+                    mondrian_deltas.append(
+                        float(r.get('nccopo_coverage_90_mondrian')) - float(r.get('nccopo_coverage_90'))
+                    )
+            if isinstance(r, dict) and r.get('nccopo_coverage_90_studentized') is not None:
+                studentized_recs.append(dict(
+                    model=r.get('model_name') or r.get('model'),
+                    horizon=r.get('horizon'),
+                    category=r.get('category'),
+                    mae=r.get('mae'),
+                    c90_studentized=r.get('nccopo_coverage_90_studentized'),
+                    fair=r.get('fairness_pass'),
+                ))
+                if r.get('nccopo_coverage_90') is not None:
+                    studentized_deltas.append(
+                        float(r.get('nccopo_coverage_90_studentized')) - float(r.get('nccopo_coverage_90'))
+                    )
     n = len(recs)
     c90s = [r['c90'] for r in recs if r['c90'] is not None]
+    mondrian_c90s = [r['c90_mondrian'] for r in mondrian_recs if r['c90_mondrian'] is not None]
+    studentized_c90s = [r['c90_studentized'] for r in studentized_recs if r['c90_studentized'] is not None]
     return dict(n_records=n, n_files=len(files),
                 c90_mean=statistics.mean(c90s) if c90s else None,
                 c90_min=min(c90s) if c90s else None,
                 c90_max=max(c90s) if c90s else None,
                 undershoot_severity=statistics.mean([0.9-c for c in c90s]) if c90s else None,
+                mondrian_n_records=len(mondrian_recs),
+                mondrian_c90_mean=statistics.mean(mondrian_c90s) if mondrian_c90s else None,
+                mondrian_c90_min=min(mondrian_c90s) if mondrian_c90s else None,
+                mondrian_c90_max=max(mondrian_c90s) if mondrian_c90s else None,
+                mondrian_delta_mean=statistics.mean(mondrian_deltas) if mondrian_deltas else None,
+                studentized_n_records=len(studentized_recs),
+                studentized_c90_mean=statistics.mean(studentized_c90s) if studentized_c90s else None,
+                studentized_c90_min=min(studentized_c90s) if studentized_c90s else None,
+                studentized_c90_max=max(studentized_c90s) if studentized_c90s else None,
+                studentized_delta_mean=statistics.mean(studentized_deltas) if studentized_deltas else None,
                 records=recs)
 
 # ─── Check 3: fairness_pass 分布 ───────────────────────────────────
@@ -71,8 +136,8 @@ def check_fairness():
     total = 0; passed = 0; failed = 0; unknown = 0
     fail_models = {}
     for f in files:
-        try: m = json.load(open(f))
-        except: continue
+        m = _load_json(f)
+        if m is None: continue
         if isinstance(m, dict) and 'results' in m: m = m['results']
         if not isinstance(m, list): continue
         for r in m:
@@ -99,12 +164,34 @@ def check_tpub():
 
 # ─── Check 5: NC-CoPo wired 条件 vs 未 wired 条件 ────────────────
 def check_nccopo_wire_coverage():
-    # 旧 benchmark 全是 NC-CoPo wire 未启用；v2 全启用
-    # 计算：旧 17159 条 = 100% 无 c90；v2 ~20 条有 c90
     old_files = glob.glob(str(ROOT/"runs/benchmarks/block3_phase9_fair/**/metrics.json"), recursive=True)
-    v2_files = glob.glob(str(ROOT/"runs/benchmarks/r13patch_*v2*/metrics.json"))
-    return dict(old_files=len(old_files), v2_files=len(v2_files),
-                ratio_with_c90=f"~20 / {17159+20} = {20/17179*100:.2f}%")
+    v2_files = _coverage_metric_files()
+    old_records = 0
+    wired_records = 0
+    for f in old_files:
+        m = _load_json(f)
+        if m is None: continue
+        if isinstance(m, dict) and 'results' in m: m = m['results']
+        if not isinstance(m, list): continue
+        for r in m:
+            if not isinstance(r, dict): continue
+            old_records += 1
+    for f in v2_files:
+        m = _load_json(f)
+        if m is None: continue
+        if isinstance(m, dict) and 'results' in m: m = m['results']
+        if not isinstance(m, list): continue
+        for r in m:
+            if isinstance(r, dict) and r.get('nccopo_coverage_90') is not None:
+                wired_records += 1
+    total = old_records + wired_records
+    return dict(
+        old_files=len(old_files),
+        v2_files=len(v2_files),
+        old_records=old_records,
+        wired_records=wired_records,
+        ratio_with_c90=f"{wired_records} / {total} = {wired_records/total*100:.2f}%" if total else None,
+    )
 
 # ─── Check 6: y-shift 影响范围（P0a）──────────────────────────────
 def check_yshift_impact():
@@ -129,14 +216,13 @@ def check_iid_sanity():
 
 # ─── Check 8: task 覆盖（哪些 task×ablation×model 还没 c90） ──────
 def check_coverage_matrix():
-    files = sorted(set(
-        glob.glob(str(ROOT/"runs/benchmarks/r13patch_*v2*/metrics.json")) +
-        glob.glob(str(ROOT/"runs/benchmarks/r14fcast_*/metrics.json"))
-    ))
+    files = _coverage_metric_files()
     have = set()
+    have_mondrian = set()
+    have_studentized = set()
     for f in files:
-        try: m = json.load(open(f))
-        except: continue
+        m = _load_json(f)
+        if m is None: continue
         if isinstance(m, dict) and 'results' in m: m = m['results']
         for r in m:
             if not isinstance(r, dict): continue
@@ -144,7 +230,28 @@ def check_coverage_matrix():
                 key = (r.get('task') or '?', r.get('ablation') or '?',
                        r.get('category') or '?', r.get('horizon'))
                 have.add(key)
-    return dict(n_cells_with_c90=len(have), cells=sorted(have, key=str))
+            if r.get('nccopo_coverage_90_mondrian') is not None:
+                key = (r.get('task') or '?', r.get('ablation') or '?',
+                       r.get('category') or '?', r.get('horizon'))
+                have_mondrian.add(key)
+            if r.get('nccopo_coverage_90_studentized') is not None:
+                key = (r.get('task') or '?', r.get('ablation') or '?',
+                       r.get('category') or '?', r.get('horizon'))
+                have_studentized.add(key)
+    return dict(
+        n_cells_with_c90=len(have),
+        cells=sorted(have, key=str),
+        n_cells_with_mondrian_c90=len(have_mondrian),
+        mondrian_cells=sorted(have_mondrian, key=str),
+        n_cells_with_studentized_c90=len(have_studentized),
+        studentized_cells=sorted(have_studentized, key=str),
+    )
+
+def check_metric_read_errors():
+    return dict(
+        n_errors=len(_METRIC_READ_ERRORS),
+        errors=_METRIC_READ_ERRORS[:50],
+    )
 
 audit["checks"]["1_old_benchmark_coverage"] = check_old_bench_coverage()
 audit["checks"]["2_v2_coverage"] = check_v2_coverage()
@@ -154,6 +261,7 @@ audit["checks"]["5_nccopo_wire_ratio"] = check_nccopo_wire_coverage()
 audit["checks"]["6_yshift_impact"] = check_yshift_impact()
 audit["checks"]["7_iid_sanity"] = check_iid_sanity()
 audit["checks"]["8_coverage_matrix"] = check_coverage_matrix()
+audit["checks"]["9_metric_read_errors"] = check_metric_read_errors()
 
 with open(OUT_JSON, "w") as f: json.dump(audit, f, indent=2, default=str)
 
