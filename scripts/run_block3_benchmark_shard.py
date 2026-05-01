@@ -978,13 +978,13 @@ class BenchmarkShard:
         """Return row identifiers aligned to _prepare_features output order."""
         enable_y_shift = os.environ.get("BLOCK3_Y_SHIFT", "0") in ("1", "true", "True")
         work = df.copy()
-        work["source_row_index"] = np.arange(len(work), dtype=np.int64)
         if enable_y_shift and "entity_id" in work.columns and "crawled_date_day" in work.columns:
             sorted_df = work.sort_values(["entity_id", "crawled_date_day"]).reset_index(drop=True)
             shifted = sorted_df.groupby("entity_id")[target].shift(-int(horizon))
             clean = sorted_df.loc[shifted.notna()].copy().reset_index(drop=True)
         else:
-            clean = work.loc[work[target].notna()].copy()
+            clean = work.loc[work[target].notna()].copy().reset_index(drop=True)
+        clean["source_row_index"] = np.arange(len(clean), dtype=np.int64)
         meta = pd.DataFrame(index=np.arange(len(clean)))
         for col in ("entity_id", "crawled_date_day", "cik", "offer_id", "source_row_index"):
             if col in clean.columns:
