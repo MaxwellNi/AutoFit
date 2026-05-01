@@ -692,6 +692,7 @@ class BenchmarkShard:
     # -----------------------------------------------------------------
     _TEXT_EMB_DIR = Path("runs/text_embeddings")
     _TEXT_EMB_CACHE: Optional[pd.DataFrame] = None
+    _TEXT_EMB_CACHE_PATH: Optional[Path] = None
 
     def _join_text_embeddings(self, df: pd.DataFrame) -> pd.DataFrame:
         """Join pre-computed LLM text embeddings onto core DataFrame.
@@ -700,7 +701,8 @@ class BenchmarkShard:
         and LEFT JOINs on (entity_id, crawled_date_day). Falls back to the old
         raw text join if embeddings are not yet generated.
         """
-        emb_path = self._TEXT_EMB_DIR / "text_embeddings.parquet"
+        emb_dir = Path(os.environ.get("BLOCK3_TEXT_EMB_DIR", str(self._TEXT_EMB_DIR)))
+        emb_path = emb_dir / "text_embeddings.parquet"
         if not emb_path.exists():
             logger.warning(
                 f"Text embeddings not found at {emb_path}. "
@@ -710,9 +712,10 @@ class BenchmarkShard:
             return self.dataset.join_core_with_text(df)
 
         # Cache embeddings across calls within the same shard
-        if BenchmarkShard._TEXT_EMB_CACHE is None:
+        if BenchmarkShard._TEXT_EMB_CACHE is None or BenchmarkShard._TEXT_EMB_CACHE_PATH != emb_path:
             logger.info(f"Loading text embeddings from {emb_path}")
             BenchmarkShard._TEXT_EMB_CACHE = pd.read_parquet(emb_path)
+            BenchmarkShard._TEXT_EMB_CACHE_PATH = emb_path
             emb_cols = [c for c in BenchmarkShard._TEXT_EMB_CACHE.columns
                         if c.startswith("text_emb_")]
             logger.info(
