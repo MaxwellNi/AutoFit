@@ -12,6 +12,7 @@ from __future__ import annotations
 import glob
 import json
 import argparse
+import re
 from datetime import datetime
 from pathlib import Path
 
@@ -34,10 +35,25 @@ def _latest_text_audit():
 KEY_COLS = ["model", "task", "target", "horizon", "entity_id", "crawled_date_day", "source_row_index"]
 LOOSE_KEY_COLS = ["model", "task", "target", "horizon", "entity_id", "crawled_date_day"]
 VALUE_COLS = ["y_true", "y_pred", "ablation"]
+ABLATION_ABBR = {"co": "core_only", "ct": "core_text", "ce": "core_edgar", "full": "full"}
+RUN_KEY_RE = re.compile(r"_h(?P<horizon>\d+)_(?P<ablation>co|ct|ce|full)(?:_|$)")
 
 
-def _rowkey_prediction_files() -> list[Path]:
-    files: list[Path] = []
+def _infer_file_key(path: Path) -> tuple[str, int] | None:
+    match = RUN_KEY_RE.search(path.parent.name)
+    if match:
+        return ABLATION_ABBR[match.group("ablation")], int(match.group("horizon"))
+    try:
+        import pyarrow.parquet as pq
+        batch = next(pq.ParquetFile(path).iter_batches(columns=["ablation", "horizon"], batch_size=1))
+        row = batch.to_pandas().iloc[0]
+        return str(row["ablation"]), int(row["horizon"])
+    except Exception:
+        return None
+
+
+def _rowkey_prediction_file_selection() -> tuple[list[Path], dict]:
+    candidates: list[dict] = []
     for path_str in glob.glob(str(ROOT / "runs/benchmarks/r14fcast*/predictions.parquet")):
         path = Path(path_str)
         try:
@@ -46,8 +62,47 @@ def _rowkey_prediction_files() -> list[Path]:
         except Exception:
             continue
         if set(KEY_COLS + VALUE_COLS).issubset(names):
-            files.append(path)
-    return sorted(files)
+            key = _infer_file_key(path)
+            if key is None:
+                continue
+            candidates.append({
+                "path": path,
+                "ablation": key[0],
+                "horizon": key[1],
+                "mtime": path.stat().st_mtime,
+            })
+
+    latest: dict[tuple[str, int], dict] = {}
+    for item in candidates:
+        key = (item["ablation"], item["horizon"])
+        if key not in latest or item["mtime"] > latest[key]["mtime"]:
+            latest[key] = item
+
+    selected = sorted((item["path"] for item in latest.values()), key=lambda p: str(p))
+    selected_set = {str(path) for path in selected}
+    selection = {
+        "policy": "latest_predictions_per_ablation_horizon_by_mtime",
+        "eligible_files": len(candidates),
+        "selected_files": len(selected),
+        "selected": [
+            {
+                "path": str(item["path"]),
+                "ablation": item["ablation"],
+                "horizon": item["horizon"],
+                "mtime": item["mtime"],
+            }
+            for item in sorted(latest.values(), key=lambda x: (x["ablation"], x["horizon"]))
+        ],
+        "discarded_stale_files": [
+            str(item["path"]) for item in sorted(candidates, key=lambda x: str(x["path"]))
+            if str(item["path"]) not in selected_set
+        ],
+    }
+    return selected, selection
+
+
+def _rowkey_prediction_files() -> list[Path]:
+    return _rowkey_prediction_file_selection()[0]
 
 
 def _read_prediction_sample(path: Path, max_rows_per_file: int) -> pd.DataFrame:
@@ -86,12 +141,13 @@ def _overlap_counts_by_horizon(base: pd.DataFrame, alt: pd.DataFrame, keys: list
 
 
 def audit_strict_rowkey_counterfactual(max_rows_per_file: int = 250_000) -> dict:
-    files = _rowkey_prediction_files()
+    files, file_selection = _rowkey_prediction_file_selection()
     if not files:
         return {
             "status": "not_passed",
             "reason": "no_predictions_with_row_keys",
             "rowkey_prediction_files": [],
+            "rowkey_prediction_file_selection": file_selection,
             "comparisons": [],
         }
     frames = []
@@ -106,6 +162,7 @@ def audit_strict_rowkey_counterfactual(max_rows_per_file: int = 250_000) -> dict
             "status": "not_passed",
             "reason": "rowkey_files_unreadable_or_empty",
             "rowkey_prediction_files": [str(path) for path in files],
+            "rowkey_prediction_file_selection": file_selection,
             "comparisons": [],
         }
     comparisons = []
@@ -171,6 +228,7 @@ def audit_strict_rowkey_counterfactual(max_rows_per_file: int = 250_000) -> dict
         "status": "passed" if all_passed else ("partial" if any_partial else "not_passed"),
         "max_rows_per_file": max_rows_per_file,
         "rowkey_prediction_files": [str(path) for path in files],
+        "rowkey_prediction_file_selection": file_selection,
         "comparisons": comparisons,
     }
 
