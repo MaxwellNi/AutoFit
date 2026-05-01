@@ -32,6 +32,7 @@ def _latest_text_audit():
 
 
 KEY_COLS = ["model", "task", "target", "horizon", "entity_id", "crawled_date_day", "source_row_index"]
+LOOSE_KEY_COLS = ["model", "task", "target", "horizon", "entity_id", "crawled_date_day"]
 VALUE_COLS = ["y_true", "y_pred", "ablation"]
 
 
@@ -73,6 +74,17 @@ def _summarize(values: pd.Series) -> dict[str, float | None]:
     }
 
 
+def _overlap_counts_by_horizon(base: pd.DataFrame, alt: pd.DataFrame, keys: list[str]) -> dict[str, int]:
+    if base.empty or alt.empty:
+        return {}
+    base_keys = base[keys].drop_duplicates()
+    alt_keys = alt[keys].drop_duplicates()
+    joined = base_keys.merge(alt_keys, on=keys, how="inner")
+    if joined.empty:
+        return {}
+    return {str(int(k)): int(v) for k, v in joined.groupby("horizon", observed=True).size().sort_index().items()}
+
+
 def audit_strict_rowkey_counterfactual(max_rows_per_file: int = 250_000) -> dict:
     files = _rowkey_prediction_files()
     if not files:
@@ -100,8 +112,19 @@ def audit_strict_rowkey_counterfactual(max_rows_per_file: int = 250_000) -> dict
     for ablation in ("core_text", "core_edgar", "full"):
         base = data[data["ablation"] == "core_only"].copy()
         alt = data[data["ablation"] == ablation].copy()
+        loose_overlap_by_horizon = _overlap_counts_by_horizon(base, alt, LOOSE_KEY_COLS)
+        strict_key_overlap_by_horizon = _overlap_counts_by_horizon(base, alt, KEY_COLS)
+        loose_overlap = int(sum(loose_overlap_by_horizon.values()))
+        strict_key_overlap = int(sum(strict_key_overlap_by_horizon.values()))
         if base.empty or alt.empty:
-            comparisons.append({"ablation": ablation, "status": "missing_pair", "n_overlap": 0})
+            comparisons.append({
+                "ablation": ablation,
+                "status": "missing_pair",
+                "n_overlap": 0,
+                "n_overlap_without_source_row_index": loose_overlap,
+                "overlap_by_horizon": strict_key_overlap_by_horizon,
+                "overlap_without_source_row_index_by_horizon": loose_overlap_by_horizon,
+            })
             continue
         merged = base.merge(
             alt,
@@ -110,7 +133,14 @@ def audit_strict_rowkey_counterfactual(max_rows_per_file: int = 250_000) -> dict
             how="inner",
         )
         if merged.empty:
-            comparisons.append({"ablation": ablation, "status": "no_rowkey_overlap", "n_overlap": 0})
+            comparisons.append({
+                "ablation": ablation,
+                "status": "no_rowkey_overlap",
+                "n_overlap": 0,
+                "n_overlap_without_source_row_index": loose_overlap,
+                "overlap_by_horizon": strict_key_overlap_by_horizon,
+                "overlap_without_source_row_index_by_horizon": loose_overlap_by_horizon,
+            })
             continue
         y_true_equal = np.isclose(
             pd.to_numeric(merged["y_true_core_only"], errors="coerce"),
@@ -124,6 +154,10 @@ def audit_strict_rowkey_counterfactual(max_rows_per_file: int = 250_000) -> dict
             "ablation": ablation,
             "status": "passed" if len(merged) >= 1000 and float(np.mean(y_true_equal)) >= 0.999 else "partial",
             "n_overlap": int(len(merged)),
+            "n_overlap_unique_strict_keys": strict_key_overlap,
+            "n_overlap_without_source_row_index": loose_overlap,
+            "overlap_by_horizon": strict_key_overlap_by_horizon,
+            "overlap_without_source_row_index_by_horizon": loose_overlap_by_horizon,
             "y_true_equal_rate": float(np.mean(y_true_equal)),
             "model_count": int(merged["model"].nunique()),
             "horizons": sorted([int(x) for x in merged["horizon"].dropna().unique()]),
