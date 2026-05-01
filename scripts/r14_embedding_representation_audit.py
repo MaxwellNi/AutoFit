@@ -51,7 +51,7 @@ EVENT_KEYWORDS = {
 }
 
 
-def _read_first_rows(path: Path, columns: list[str], n_rows: int) -> pd.DataFrame:
+def _read_head_rows(path: Path, columns: list[str], n_rows: int) -> pd.DataFrame:
     parquet = pq.ParquetFile(path)
     chunks = []
     seen = 0
@@ -67,6 +67,27 @@ def _read_first_rows(path: Path, columns: list[str], n_rows: int) -> pd.DataFram
         chunks.append(frame)
         seen += len(frame)
         if seen >= n_rows:
+            break
+    return pd.concat(chunks, ignore_index=True) if chunks else pd.DataFrame(columns=cols)
+
+
+def _read_position_rows(path: Path, columns: list[str], positions: np.ndarray) -> pd.DataFrame:
+    parquet = pq.ParquetFile(path)
+    available = set(parquet.schema.names)
+    cols = [col for col in columns if col in available]
+    targets = np.sort(np.asarray(positions, dtype=np.int64))
+    chunks = []
+    offset = 0
+    for batch in parquet.iter_batches(columns=cols, batch_size=65536):
+        batch_len = batch.num_rows
+        lo = int(np.searchsorted(targets, offset, side="left"))
+        hi = int(np.searchsorted(targets, offset + batch_len, side="left"))
+        if hi > lo:
+            local_idx = targets[lo:hi] - offset
+            frame = batch.to_pandas()
+            chunks.append(frame.iloc[local_idx].copy())
+        offset += batch_len
+        if hi >= len(targets):
             break
     return pd.concat(chunks, ignore_index=True) if chunks else pd.DataFrame(columns=cols)
 
@@ -130,6 +151,7 @@ def main() -> int:
     parser.add_argument("--embedding-dir", default="runs/text_embeddings")
     parser.add_argument("--pointer", default="docs/audits/FULL_SCALE_POINTER.yaml")
     parser.add_argument("--sample-rows", type=int, default=200_000)
+    parser.add_argument("--sample-mode", choices=["random", "head"], default="random")
     parser.add_argument("--seed", type=int, default=42)
     args = parser.parse_args()
 
@@ -150,8 +172,16 @@ def main() -> int:
     emb_cols = [col for col in emb_schema.names if col.startswith("text_emb_")]
     emb_meta = pq.ParquetFile(emb_path).metadata
 
-    emb = _read_first_rows(emb_path, ["entity_id", "crawled_date_day", *emb_cols], args.sample_rows)
-    text = _read_first_rows(text_path, ["entity_id", "snapshot_ts", *TEXT_COLS], len(emb))
+    total_rows = min(int(emb_meta.num_rows), int(pq.ParquetFile(text_path).metadata.num_rows))
+    sample_rows = min(args.sample_rows, total_rows)
+    if args.sample_mode == "random":
+        rng = np.random.default_rng(args.seed)
+        positions = np.sort(rng.choice(total_rows, size=sample_rows, replace=False))
+        emb = _read_position_rows(emb_path, ["entity_id", "crawled_date_day", *emb_cols], positions)
+        text = _read_position_rows(text_path, ["entity_id", "snapshot_ts", *TEXT_COLS], positions)
+    else:
+        emb = _read_head_rows(emb_path, ["entity_id", "crawled_date_day", *emb_cols], sample_rows)
+        text = _read_head_rows(text_path, ["entity_id", "snapshot_ts", *TEXT_COLS], len(emb))
     text["crawled_date_day"] = pd.to_datetime(text["snapshot_ts"], errors="coerce").dt.strftime("%Y-%m-%d")
     emb["crawled_date_day"] = pd.to_datetime(emb["crawled_date_day"], errors="coerce").dt.strftime("%Y-%m-%d")
 
@@ -197,6 +227,7 @@ def main() -> int:
         "parquet_rows": int(emb_meta.num_rows),
         "embedding_columns": len(emb_cols),
         "sample_rows": int(len(emb)),
+        "sample_mode": args.sample_mode,
         "row_alignment_rate_first_sample": row_alignment_rate,
         "numeric_quality": {
             "finite_value_rate": float(np.mean(finite_mask)) if finite_mask.size else None,
