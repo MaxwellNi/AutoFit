@@ -285,6 +285,10 @@ def main():
                         help="Shard index for parallel processing (0 = all)")
     parser.add_argument("--n-shards", type=int, default=1,
                         help="Total number of shards")
+    parser.add_argument("--combine-shards", action="store_true",
+                        help="Combine embeddings_shard_*.npy files, apply PCA, and write final parquet")
+    parser.add_argument("--skip-existing-shard", action="store_true",
+                        help="In shard mode, exit successfully if this shard already exists")
     args = parser.parse_args()
 
     output_dir = Path(args.output)
@@ -302,6 +306,76 @@ def main():
     del combined
     gc.collect()
 
+    if args.combine_shards:
+        if args.n_shards <= 1:
+            raise ValueError("--combine-shards requires --n-shards > 1")
+        logger.info(f"Combining {args.n_shards} embedding shards from {output_dir}")
+        shard_arrays = []
+        missing = []
+        for shard_id in range(args.n_shards):
+            shard_size = (len(unique_texts) + args.n_shards - 1) // args.n_shards
+            start_i = shard_id * shard_size
+            end_i = min(start_i + shard_size, len(unique_texts))
+            expected = max(0, end_i - start_i)
+            shard_path = output_dir / f"embeddings_shard_{shard_id}.npy"
+            if not shard_path.exists():
+                missing.append(str(shard_path))
+                continue
+            arr = np.load(shard_path)
+            if arr.shape[0] != expected:
+                raise ValueError(
+                    f"Shard {shard_id} row mismatch: got {arr.shape[0]}, expected {expected} ({shard_path})"
+                )
+            shard_arrays.append(arr)
+        if missing:
+            raise FileNotFoundError("Missing embedding shard files: " + ", ".join(missing[:10]))
+        raw_embeddings = np.vstack(shard_arrays)
+        if raw_embeddings.shape[0] != len(unique_texts):
+            raise ValueError(f"Combined rows {raw_embeddings.shape[0]} != unique texts {len(unique_texts)}")
+        logger.info(f"Combined raw embeddings: {raw_embeddings.shape}")
+
+        if args.pca_dim > 0 and args.pca_dim < raw_embeddings.shape[1]:
+            embeddings, pca_model = apply_pca(raw_embeddings, n_components=args.pca_dim)
+            import pickle
+            with open(output_dir / "pca_model.pkl", "wb") as f:
+                pickle.dump(pca_model, f)
+        else:
+            embeddings = raw_embeddings
+            args.pca_dim = raw_embeddings.shape[1]
+            pca_model = None
+
+        logger.info("Mapping embeddings back to full corpus...")
+        full_embeddings = embeddings[row_to_unique]
+        emb_cols = [f"text_emb_{i}" for i in range(args.pca_dim)]
+        emb_df = pd.DataFrame(full_embeddings, columns=emb_cols)
+        emb_df["entity_id"] = df["entity_id"].values
+        emb_df["crawled_date_day"] = df["crawled_date_day"].values
+        emb_df = emb_df[["entity_id", "crawled_date_day"] + emb_cols]
+        out_path = output_dir / "text_embeddings.parquet"
+        emb_df.to_parquet(out_path, index=False, engine="pyarrow")
+        logger.info(f"Saved {len(emb_df):,} rows × {len(emb_cols)} dims to {out_path}")
+
+        meta = {
+            "model": args.model,
+            "batch_size": args.batch_size,
+            "max_length": args.max_length,
+            "max_chars": args.max_chars,
+            "pca_dim": args.pca_dim,
+            "raw_dim": raw_embeddings.shape[1],
+            "n_unique_texts": len(unique_texts),
+            "n_total_rows": len(df),
+            "n_entities": df["entity_id"].nunique(),
+            "text_columns_used": ALL_TEXT_COLS,
+            "n_shards": args.n_shards,
+            "pca_explained_variance": float(pca_model.explained_variance_ratio_.sum())
+            if pca_model is not None else 1.0,
+        }
+        with open(output_dir / "embedding_metadata.json", "w") as f:
+            json.dump(meta, f, indent=2)
+        logger.info(f"Metadata saved to {output_dir / 'embedding_metadata.json'}")
+        logger.info("Done!")
+        return
+
     # 4. Handle sharding for parallel processing
     if args.n_shards > 1:
         shard_size = (len(unique_texts) + args.n_shards - 1) // args.n_shards
@@ -309,6 +383,10 @@ def main():
         end = min(start + shard_size, len(unique_texts))
         unique_texts_shard = unique_texts[start:end]
         logger.info(f"Shard {args.shard_id}/{args.n_shards}: texts [{start}:{end}] ({len(unique_texts_shard):,})")
+        shard_path = output_dir / f"embeddings_shard_{args.shard_id}.npy"
+        if args.skip_existing_shard and shard_path.exists():
+            logger.info(f"Shard {args.shard_id} already exists at {shard_path}; skipping")
+            return
     else:
         unique_texts_shard = unique_texts
         start = 0
@@ -324,8 +402,17 @@ def main():
 
     # If sharded, save shard and exit
     if args.n_shards > 1:
-        shard_path = output_dir / f"embeddings_shard_{args.shard_id}.npy"
         np.save(shard_path, raw_embeddings)
+        with open(output_dir / f"embeddings_shard_{args.shard_id}.json", "w") as f:
+            json.dump({
+                "model": args.model,
+                "shard_id": args.shard_id,
+                "n_shards": args.n_shards,
+                "start": int(start),
+                "end": int(end),
+                "n_rows": int(raw_embeddings.shape[0]),
+                "raw_dim": int(raw_embeddings.shape[1]),
+            }, f, indent=2)
         logger.info(f"Saved shard {args.shard_id} to {shard_path}")
         return
 
