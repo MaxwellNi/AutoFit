@@ -527,6 +527,7 @@ class SingleModelMainlineWrapper(ModelBase):
                 info["lane_hurdle_engaged"] = bool(getattr(runtime, "_uses_jump_hurdle_head", False))
                 info["lane_source_scale_strength"] = float(getattr(runtime, "_source_scale_strength", 0.0))
                 info["lane_source_scale_signed_mode"] = bool(getattr(runtime, "_source_scale_signed_mode", False))
+                info["lane_source_scale_physical_calibration"] = bool(getattr(runtime, "_source_scale_physical_calibration", False))
                 info["lane_source_scale_reliability"] = float(getattr(runtime, "_source_scale_reliability", 0.0))
                 info["lane_tail_weight_effective"] = (
                     float(self.funding_tail_weight) if self.enable_funding_tail_focus else 0.0
@@ -816,6 +817,7 @@ class SingleModelMainlineWrapper(ModelBase):
                 enable_cqr_interval=self.enable_funding_cqr_interval,
                 cqr_alpha=self.funding_cqr_alpha,
                 force_hurdle=self.enable_funding_forced_hurdle,
+                target_is_log1p=self._use_log1p_target,
             )
             self._active_lane_model = self.funding_lane_runtime
             # Round-12 audit gate #17 (2026-04-24): flag-activation assert.
@@ -1112,6 +1114,9 @@ class SingleModelMainlineWrapper(ModelBase):
                 "lane_residual_blend": float(self.funding_lane_runtime._residual_blend),
                 "lane_process_blend": float(self.funding_lane_runtime._residual_blend),
                 "lane_source_scale_strength": float(self.funding_lane_runtime._source_scale_strength),
+                "lane_source_scale_physical_calibration": bool(
+                    self.funding_lane_runtime._source_scale_physical_calibration
+                ),
                 "lane_source_scale_reliability": float(self.funding_lane_runtime._source_scale_reliability),
                 "lane_residual_cap": None
                 if not np.isfinite(self.funding_lane_runtime._residual_cap)

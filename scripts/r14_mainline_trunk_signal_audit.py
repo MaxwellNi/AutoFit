@@ -200,6 +200,7 @@ def main() -> int:
             "source_pair_active_mae_ties": sum(1 for value in active_deltas if abs(value) <= 1e-9),
             "source_pair_active_mae_delta_mean": statistics.mean(active_deltas) if active_deltas else None,
             "lane_source_scaling_enabled": _bool_count(rows, "lane_source_scaling_enabled"),
+            "lane_source_scale_physical_calibration": _bool_count(rows, "lane_source_scale_physical_calibration"),
             "lane_source_scale_silently_dead": _bool_count(rows, "lane_source_scale_silently_dead"),
             "lane_ss_fallback_active": _bool_count(rows, "lane_ss_fallback_active"),
             "lane_ss_fallback_env_requested_no_op": _bool_count(rows, "lane_ss_fallback_env_requested_no_op"),

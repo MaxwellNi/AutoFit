@@ -48,6 +48,7 @@ def main() -> int:
         "source_pair_active_mae_losses": active_pair_losses,
         "source_pair_active_mae_delta_mean": active_pair_delta_mean,
         "source_scaling_enabled_counts": guard.get("lane_source_scaling_enabled"),
+        "source_scale_physical_calibration_counts": guard.get("lane_source_scale_physical_calibration"),
         "source_scale_silently_dead_counts": guard.get("lane_source_scale_silently_dead"),
         "source_scale_fallback_active_counts": guard.get("lane_ss_fallback_active"),
         "source_scale_fallback_no_op_counts": guard.get("lane_ss_fallback_env_requested_no_op"),

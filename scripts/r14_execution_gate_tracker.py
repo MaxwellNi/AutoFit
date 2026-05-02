@@ -260,6 +260,7 @@ def _text_edgar_gate(text_audit: dict[str, Any] | None, trunk_audit: dict[str, A
             "trunk_source_scale_negative_rows": guard.get("source_scale_negative_rows"),
             "trunk_source_scale_nonzero_rows": guard.get("source_scale_nonzero_rows"),
             "source_scaling_enabled_counts": guard.get("lane_source_scaling_enabled"),
+            "source_scale_physical_calibration_counts": guard.get("lane_source_scale_physical_calibration"),
             "source_scale_fallback_active_counts": guard.get("lane_ss_fallback_active"),
             "source_scale_silently_dead_counts": guard.get("lane_source_scale_silently_dead"),
             "note": "No source-scaling novelty claim is allowed unless active_rows > 0 and active source rows beat paired controls on MAE; signed source scaling reports positive and negative rows separately.",

@@ -67,6 +67,7 @@ class FundingLaneRuntime:
         self._source_scale_strength = 0.0
         self._source_scale_reliability = 0.0
         self._source_scale_signed_mode = False
+        self._source_scale_physical_calibration = False
         self._gpd_params: dict[str, float] = {"xi": 0.0, "sigma": 0.0, "n_exceedances": 0, "converged": False}
         self._gpd_threshold = 0.0
         self._gpd_enabled = False
@@ -112,6 +113,7 @@ class FundingLaneRuntime:
         enable_cqr_interval: bool = False,
         cqr_alpha: float = 0.10,
         force_hurdle: bool = False,
+        target_is_log1p: bool = False,
     ) -> "FundingLaneRuntime":
         target = np.asarray(y, dtype=np.float64)
         finite = target[np.isfinite(target)]
@@ -135,6 +137,7 @@ class FundingLaneRuntime:
         self._source_scale_strength = 0.0
         self._source_scale_reliability = 0.0
         self._source_scale_signed_mode = False
+        self._source_scale_physical_calibration = False
         self._gpd_params = {"xi": 0.0, "sigma": 0.0, "n_exceedances": 0, "converged": False}
         self._gpd_threshold = 0.0
         self._gpd_enabled = bool(enable_gpd_tail)
@@ -252,6 +255,7 @@ class FundingLaneRuntime:
             if self._source_scaling_enabled and calibration.get("calibration_source_scale") is not None:
                 import os as _os
                 self._source_scale_signed_mode = _os.environ.get("MAINLINE_FUNDING_SS_SIGNED", "0") in ("1", "true", "True")
+                self._source_scale_physical_calibration = _os.environ.get("MAINLINE_FUNDING_SS_PHYSICAL_CAL", "0") in ("1", "true", "True")
                 (
                     self._source_scale_strength,
                     self._guarded_calibration_mae,
@@ -266,6 +270,7 @@ class FundingLaneRuntime:
                     tail_weight=self._tail_weight,
                     tail_quantile=self._tail_quantile,
                     allow_signed_source_scale=self._source_scale_signed_mode,
+                    target_is_log1p=bool(target_is_log1p and self._source_scale_physical_calibration),
                 )
                 self._source_scale_reliability = _guard_improvement_ratio(
                     baseline_mae=self._anchor_calibration_mae,
@@ -584,6 +589,7 @@ class FundingLaneRuntime:
             "source_scale_strength": float(self._source_scale_strength),
             "source_scale_reliability": float(self._source_scale_reliability),
             "source_scale_signed_mode": bool(self._source_scale_signed_mode),
+            "source_scale_physical_calibration": bool(self._source_scale_physical_calibration),
             "calibration_rows": int(self._calibration_rows),
             # Round-12 Route L2/K2 audit gates (2026-04-24)
             "source_scale_silently_dead": bool(self._source_scale_silently_dead),
@@ -921,6 +927,7 @@ def _calibrate_source_scaling_guard(
     tail_weight: float = 0.0,
     tail_quantile: float = 0.90,
     allow_signed_source_scale: bool = False,
+    target_is_log1p: bool = False,
 ) -> tuple[float, float]:
     anchor_arr = np.asarray(anchor_vec, dtype=np.float64)
     target_arr = np.asarray(target_vec, dtype=np.float64)
@@ -934,10 +941,19 @@ def _calibrate_source_scaling_guard(
     target_arr = target_arr[mask]
     pred_arr = pred_arr[mask]
     scale_arr = np.clip(scale_arr[mask], 0.0, 1.0)
-    weights = _funding_error_weights(target_arr, tail_weight=tail_weight, tail_quantile=tail_quantile)
+    score_target = target_arr
+    if target_is_log1p:
+        score_target = np.expm1(np.clip(target_arr, 0.0, 30.0))
+    weights = _funding_error_weights(score_target, tail_weight=tail_weight, tail_quantile=tail_quantile)
+
+    def score(candidate: np.ndarray) -> float:
+        candidate_arr = np.asarray(candidate, dtype=np.float64)
+        if target_is_log1p:
+            candidate_arr = np.expm1(np.clip(candidate_arr, 0.0, 30.0))
+        return _weighted_mae(score_target, candidate_arr, weights)
+
     best_strength = 0.0
-    best_mae = _weighted_mae(
-        target_arr,
+    best_mae = score(
         _guarded_funding_prediction(
             anchor_vec=anchor_arr,
             residual_pred=pred_arr,
@@ -945,7 +961,6 @@ def _calibrate_source_scaling_guard(
             residual_cap=residual_cap,
             use_log_domain=use_log_domain,
         ),
-        weights,
     )
     if not np.any(scale_arr > 1e-8):
         return best_strength, best_mae
@@ -965,7 +980,7 @@ def _calibrate_source_scaling_guard(
             source_scale=scale_arr,
             source_scale_strength=float(strength),
         )
-        candidate_mae = _weighted_mae(target_arr, candidate, weights)
+        candidate_mae = score(candidate)
         if candidate_mae + 1e-9 < best_mae:
             best_strength = float(strength)
             best_mae = candidate_mae
