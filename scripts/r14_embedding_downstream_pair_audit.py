@@ -26,11 +26,30 @@ def _latest(pattern: str) -> Path | None:
     return paths[-1] if paths else None
 
 
+def _metric_paths(pattern: str) -> list[Path]:
+    return sorted(ROOT.glob(pattern))
+
+
 def _load_json(path: Path | None) -> Any:
     if path is None or not path.exists():
         return None
     with path.open() as handle:
         return json.load(handle)
+
+
+def _load_metric_rows(pattern: str) -> tuple[list[Path], list[dict[str, Any]]]:
+    paths = _metric_paths(pattern)
+    rows: list[dict[str, Any]] = []
+    for path in paths:
+        payload = _load_json(path)
+        if not isinstance(payload, list):
+            continue
+        for row in payload:
+            if isinstance(row, dict):
+                item = dict(row)
+                item["_metrics_path"] = str(path)
+                rows.append(item)
+    return paths, rows
 
 
 def _finite(value: Any) -> float | None:
@@ -69,12 +88,8 @@ def _mean(values: list[float]) -> float | None:
 
 
 def main() -> int:
-    baseline_path = _latest(BASELINE_GLOB)
-    candidate_path = _latest(CANDIDATE_GLOB)
-    baseline_rows = _load_json(baseline_path)
-    candidate_rows = _load_json(candidate_path)
-    baseline_rows = baseline_rows if isinstance(baseline_rows, list) else []
-    candidate_rows = candidate_rows if isinstance(candidate_rows, list) else []
+    baseline_paths, baseline_rows = _load_metric_rows(BASELINE_GLOB)
+    candidate_paths, candidate_rows = _load_metric_rows(CANDIDATE_GLOB)
 
     baseline = _index(baseline_rows)
     candidate = _index(candidate_rows)
@@ -155,13 +170,13 @@ def main() -> int:
         "status": status,
         "baseline": {
             "label": "gte-Qwen2-1.5B",
-            "metrics_path": str(baseline_path) if baseline_path else None,
+            "metrics_paths": [str(path) for path in baseline_paths],
             "metadata_path": str(BASELINE_META),
             "metadata": _load_json(BASELINE_META),
         },
         "candidate": {
             "label": "gte-Qwen2-7B-sharded",
-            "metrics_path": str(candidate_path) if candidate_path else None,
+            "metrics_paths": [str(path) for path in candidate_paths],
             "metadata_path": str(CANDIDATE_META),
             "metadata": _load_json(CANDIDATE_META),
         },
