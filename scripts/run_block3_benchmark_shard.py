@@ -1320,7 +1320,12 @@ class BenchmarkShard:
                         effective.get("funding_source_scaling")
                         or regime.get("funding_source_scaling")
                     )
-                    if funding_source_scaling and signals.get("lane_source_scale_strength") is None:
+                    current_strength = signals.get("lane_source_scale_strength")
+                    try:
+                        current_strength_value = float(current_strength)
+                    except Exception:
+                        current_strength_value = 0.0
+                    if funding_source_scaling and current_strength_value <= 0.0:
                         deltas: list[float] = []
                         for scale_value in source_scales.values():
                             try:
