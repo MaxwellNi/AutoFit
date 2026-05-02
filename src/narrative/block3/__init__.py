@@ -99,6 +99,13 @@ from .did_analysis import (
     event_study,
 )
 
+from .auditable_forecaster import (
+    AuditableConformalProtocolLayer,
+    AuditableForecastResult,
+    AuditableProtocolConfig,
+    strict_row_key_delta,
+)
+
 __all__ = [
     # Submodules
     "tasks",
@@ -148,6 +155,10 @@ __all__ = [
     "METRIC_REGISTRY",
     "get_metrics_for_task",
     "compute_all_metrics",
+    "AuditableConformalProtocolLayer",
+    "AuditableForecastResult",
+    "AuditableProtocolConfig",
+    "strict_row_key_delta",
     # OOD Evaluation
     "OODShiftType",
     "create_year_shift_split",
