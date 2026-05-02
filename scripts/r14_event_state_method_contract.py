@@ -239,8 +239,10 @@ def main() -> int:
     print(json.dumps({
         "status": report["status"],
         "strict_counterfactual": claim_levels["strict_counterfactual_claim"]["status"],
-        "cqr_lite_c90_mean": coverage.get("cqr_lite_c90_mean"),
-        "cqr_lite_delta_mean": coverage.get("cqr_lite_delta_mean"),
+        "cqr_lite_c90_mean_raw_all": coverage.get("cqr_lite_c90_mean"),
+        "cqr_lite_delta_mean_raw_all": coverage.get("cqr_lite_delta_mean"),
+        "canonical_cqr_lite_c90_mean": coverage.get("canonical_cqr_lite_c90_mean"),
+        "canonical_cqr_lite_delta_mean": coverage.get("canonical_cqr_lite_delta_mean"),
         "metric_read_errors": coverage.get("metric_read_errors"),
         "embedding_claim": claim_levels["text_embedding_claim"]["status"],
         "source_scaling_claim": claim_levels["source_scaling_novelty_claim"]["status"],
