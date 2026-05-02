@@ -243,6 +243,7 @@ def _method_next_scripts_gate() -> dict[str, Any]:
         "cqr_pilot": ("scripts/r14_cqr_pilot.py", "r14_cqr_pilot"),
         "gpd_evt_tail_pilot": ("scripts/r14_gpd_evt_tail_pilot.py", "r14_gpd_evt_tail_pilot"),
         "fremtpl2_external_validation": ("scripts/r14_fremtpl2_external_validation.py", "r14_fremtpl2_external_validation"),
+        "bikeshare_external_validation": ("scripts/r14_bikeshare_external_validation.py", "r14_bikeshare_external_validation"),
     }
     out = {}
     for name, (script_path, stem) in required.items():

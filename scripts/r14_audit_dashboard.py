@@ -197,7 +197,7 @@ def check_fairness():
 # ─── Check 4: T_pub external validation 状态 ───────────────────────
 def check_tpub():
     out = {}
-    for ds in ("mimic_iii", "fremtpl2", "m5"):
+    for ds in ("mimic_iii", "fremtpl2", "m5", "bikeshare"):
         hits = glob.glob(str(ROOT/f"runs/**/*{ds}*"), recursive=True) + glob.glob(str(ROOT/f"runs/**/*{ds.upper()}*"), recursive=True)
         out[ds] = dict(exists=bool(hits), artifacts=hits[:3])
     return out
