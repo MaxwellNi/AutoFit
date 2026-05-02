@@ -362,6 +362,15 @@ class ModelMetrics:
     lane_source_scale_strength: Optional[float] = None
     lane_tail_weight_effective: Optional[float] = None
     lane_jump_event_rate: Optional[float] = None
+    lane_residual_blend: Optional[float] = None
+    lane_residual_cap: Optional[float] = None
+    lane_anchor_calibration_mae: Optional[float] = None
+    lane_guarded_calibration_mae: Optional[float] = None
+    lane_source_scaling_enabled: Optional[bool] = None
+    lane_calibration_rows: Optional[int] = None
+    lane_source_scale_silently_dead: Optional[bool] = None
+    lane_ss_fallback_active: Optional[bool] = None
+    lane_ss_fallback_env_requested_no_op: Optional[bool] = None
 
     # ── Round-13 (2026-04-24): NC-CoPo split-conformal calibration ──
     # Populated when BLOCK3_NCCOPO_WIRE=1. All fields None otherwise.
@@ -1308,6 +1317,7 @@ class BenchmarkShard:
                         "lane_calibration_rows",
                         "lane_source_scale_silently_dead",
                         "lane_ss_fallback_active",
+                        "lane_ss_fallback_env_requested_no_op",
                     ):
                         if _lane_key in info and info[_lane_key] is not None:
                             signals[_lane_key] = info[_lane_key]
@@ -1776,6 +1786,15 @@ class BenchmarkShard:
                 lane_source_scale_strength=routing_signals.get("lane_source_scale_strength"),
                 lane_tail_weight_effective=routing_signals.get("lane_tail_weight_effective"),
                 lane_jump_event_rate=routing_signals.get("lane_jump_event_rate"),
+                lane_residual_blend=routing_signals.get("lane_residual_blend"),
+                lane_residual_cap=routing_signals.get("lane_residual_cap"),
+                lane_anchor_calibration_mae=routing_signals.get("lane_anchor_calibration_mae"),
+                lane_guarded_calibration_mae=routing_signals.get("lane_guarded_calibration_mae"),
+                lane_source_scaling_enabled=routing_signals.get("lane_source_scaling_enabled"),
+                lane_calibration_rows=routing_signals.get("lane_calibration_rows"),
+                lane_source_scale_silently_dead=routing_signals.get("lane_source_scale_silently_dead"),
+                lane_ss_fallback_active=routing_signals.get("lane_ss_fallback_active"),
+                lane_ss_fallback_env_requested_no_op=routing_signals.get("lane_ss_fallback_env_requested_no_op"),
                 # Round-13 P0a/P1a (2026-04-24)
                 y_shift_enabled=bool(getattr(self, "_last_y_shift_enabled", False)),
                 y_shift_dropped_tail_rows=int(getattr(self, "_last_y_shift_dropped_tail", 0)),
