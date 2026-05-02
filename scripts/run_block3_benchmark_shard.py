@@ -360,6 +360,7 @@ class ModelMetrics:
     lane_jump_target_std: Optional[float] = None
     lane_hurdle_engaged: Optional[bool] = None
     lane_source_scale_strength: Optional[float] = None
+    lane_source_scale_signed_mode: Optional[bool] = None
     lane_tail_weight_effective: Optional[float] = None
     lane_jump_event_rate: Optional[float] = None
     lane_residual_blend: Optional[float] = None
@@ -1306,6 +1307,7 @@ class BenchmarkShard:
                         "lane_jump_target_std",
                         "lane_hurdle_engaged",
                         "lane_source_scale_strength",
+                        "lane_source_scale_signed_mode",
                         "lane_tail_weight_effective",
                         "lane_jump_event_rate",
                         # Round-12 (2026-04-24) calibration-decision fields.
@@ -1784,6 +1786,7 @@ class BenchmarkShard:
                 lane_jump_target_std=routing_signals.get("lane_jump_target_std"),
                 lane_hurdle_engaged=routing_signals.get("lane_hurdle_engaged"),
                 lane_source_scale_strength=routing_signals.get("lane_source_scale_strength"),
+                lane_source_scale_signed_mode=routing_signals.get("lane_source_scale_signed_mode"),
                 lane_tail_weight_effective=routing_signals.get("lane_tail_weight_effective"),
                 lane_jump_event_rate=routing_signals.get("lane_jump_event_rate"),
                 lane_residual_blend=routing_signals.get("lane_residual_blend"),

@@ -526,6 +526,7 @@ class SingleModelMainlineWrapper(ModelBase):
                 info["lane_jump_target_std"] = float(getattr(runtime, "_jump_target_std", 0.0))
                 info["lane_hurdle_engaged"] = bool(getattr(runtime, "_uses_jump_hurdle_head", False))
                 info["lane_source_scale_strength"] = float(getattr(runtime, "_source_scale_strength", 0.0))
+                info["lane_source_scale_signed_mode"] = bool(getattr(runtime, "_source_scale_signed_mode", False))
                 info["lane_source_scale_reliability"] = float(getattr(runtime, "_source_scale_reliability", 0.0))
                 info["lane_tail_weight_effective"] = (
                     float(self.funding_tail_weight) if self.enable_funding_tail_focus else 0.0

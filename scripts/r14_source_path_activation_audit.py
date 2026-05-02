@@ -27,11 +27,15 @@ def main() -> int:
     source = text.get("result_delta_audit", {}).get("source_scale_activation", {})
     guard = trunk.get("guard_summary", {})
     positive = max(int(source.get("positive_rows") or 0), int(guard.get("source_scale_positive_rows") or 0))
+    negative = int(guard.get("source_scale_negative_rows") or 0)
+    nonzero = max(int(source.get("nonzero_rows") or 0), int(guard.get("source_scale_nonzero_rows") or 0), positive + negative)
     observed = max(int(source.get("observed_rows") or 0), int(guard.get("source_scale_observed_rows") or 0))
     report = {
         "timestamp_cest": datetime.now().isoformat(),
-        "status": "passed" if positive > 0 else "not_passed",
+        "status": "passed" if nonzero > 0 else "not_passed",
+        "source_scale_active_rows": nonzero,
         "source_scale_positive_rows": positive,
+        "source_scale_negative_rows": negative,
         "source_scale_observed_rows": observed,
         "source_scaling_enabled_counts": guard.get("lane_source_scaling_enabled"),
         "source_scale_silently_dead_counts": guard.get("lane_source_scale_silently_dead"),
@@ -43,15 +47,15 @@ def main() -> int:
         "text_audit": text_path,
         "trunk_audit": trunk_path,
         "guard_summary": guard,
-        "pass_rule": "passed only when lane_source_scale_strength has at least one positive landed metrics row; enabled/fallback/blend counts are diagnostic evidence, not sufficient by themselves.",
-        "required_next_fix": "Instrument and rerun source path so text/EDGAR scale is nonzero, then prove paired/counterfactual benefit.",
+        "pass_rule": "passed only when lane_source_scale_strength has at least one nonzero landed metrics row; sign is reported separately, and enabled/fallback/blend counts are diagnostic evidence, not sufficient by themselves.",
+        "required_next_fix": "If active rows remain zero, instrument and rerun source path so text/EDGAR scale is nonzero, then prove paired/counterfactual benefit.",
     }
     OUT_JSON.parent.mkdir(parents=True, exist_ok=True)
     OUT_JSON.write_text(json.dumps(report, indent=2, default=str) + "\n")
     OUT_MD.write_text("# R14 Source Path Activation Audit\n\n```json\n" + json.dumps(report, indent=2, default=str) + "\n```\n")
     print(f"OK: {OUT_JSON}")
     print(f"OK: {OUT_MD}")
-    print(json.dumps({"status": report["status"], "source_scale_positive_rows": positive, "source_scale_observed_rows": observed}, indent=2))
+    print(json.dumps({"status": report["status"], "source_scale_active_rows": nonzero, "source_scale_positive_rows": positive, "source_scale_negative_rows": negative, "source_scale_observed_rows": observed}, indent=2))
     return 0
 
 

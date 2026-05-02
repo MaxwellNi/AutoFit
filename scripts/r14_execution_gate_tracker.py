@@ -222,6 +222,8 @@ def _text_edgar_gate(text_audit: dict[str, Any] | None, trunk_audit: dict[str, A
     parquet = artifact.get("parquet", {})
     latest_edgar = join.get("latest_edgar_join") or {}
     source_positive = max(int(source.get("positive_rows") or 0), int(guard.get("source_scale_positive_rows") or 0))
+    source_negative = int(guard.get("source_scale_negative_rows") or 0)
+    source_active = max(int(source.get("nonzero_rows") or 0), int(guard.get("source_scale_nonzero_rows") or 0), source_positive + source_negative)
     source_observed = max(int(source.get("observed_rows") or 0), int(guard.get("source_scale_observed_rows") or 0))
     return {
         "artifact_join_integrity": {
@@ -234,14 +236,18 @@ def _text_edgar_gate(text_audit: dict[str, Any] | None, trunk_audit: dict[str, A
         "core_edgar_effect": ablation_status("core_edgar"),
         "full_effect": ablation_status("full"),
         "source_scaling_activation": {
-            "status": _status(source_positive > 0, partial=source_observed > 0),
+            "status": _status(source_active > 0, partial=source_observed > 0),
+            "active_rows": source_active,
             "positive_rows": source_positive,
+            "negative_rows": source_negative,
             "observed_rows": source_observed,
             "trunk_source_scale_positive_rows": guard.get("source_scale_positive_rows"),
+            "trunk_source_scale_negative_rows": guard.get("source_scale_negative_rows"),
+            "trunk_source_scale_nonzero_rows": guard.get("source_scale_nonzero_rows"),
             "source_scaling_enabled_counts": guard.get("lane_source_scaling_enabled"),
             "source_scale_fallback_active_counts": guard.get("lane_ss_fallback_active"),
             "source_scale_silently_dead_counts": guard.get("lane_source_scale_silently_dead"),
-            "note": "No source-scaling novelty claim is allowed while positive_rows is zero.",
+            "note": "No source-scaling novelty claim is allowed while active_rows is zero; signed source scaling reports positive and negative rows separately.",
         },
         "text_edgar_execution_artifacts": {
             "embedding_model_bakeoff": _artifact_status("r14_embedding_bakeoff", "scripts/r14_embedding_bakeoff.py"),
@@ -322,7 +328,7 @@ def main() -> int:
         "next_method_execution_gates": _method_next_scripts_gate(),
         "claim_policy": [
             "Do not claim text embeddings are effective until paired core_text deltas pass and event/counterfactual probes exist.",
-            "Do not claim source-scaling novelty while source_scale_positive_rows is zero.",
+            "Do not claim source-scaling novelty while source_scale_active_rows is zero.",
             "Do not claim coverage solved until c90 is near 0.90 without metric read errors.",
             "Do not claim external validation until at least one public dataset artifact exists.",
         ],

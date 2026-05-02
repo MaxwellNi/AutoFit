@@ -151,6 +151,8 @@ def main() -> int:
             "lane_trunk_fallback_fitted": _bool_count(rows, "lane_trunk_fallback_fitted"),
             "lane_hurdle_engaged": _bool_count(rows, "lane_hurdle_engaged"),
             "source_scale_positive_rows": sum(1 for value in source_strengths if value > 0.0),
+            "source_scale_negative_rows": sum(1 for value in source_strengths if value < 0.0),
+            "source_scale_nonzero_rows": sum(1 for value in source_strengths if abs(value) > 1e-12),
             "source_scale_observed_rows": len(source_strengths),
             "lane_source_scaling_enabled": _bool_count(rows, "lane_source_scaling_enabled"),
             "lane_source_scale_silently_dead": _bool_count(rows, "lane_source_scale_silently_dead"),

@@ -66,6 +66,7 @@ class FundingLaneRuntime:
         self._tail_quantile = 0.90
         self._source_scale_strength = 0.0
         self._source_scale_reliability = 0.0
+        self._source_scale_signed_mode = False
         self._gpd_params: dict[str, float] = {"xi": 0.0, "sigma": 0.0, "n_exceedances": 0, "converged": False}
         self._gpd_threshold = 0.0
         self._gpd_enabled = False
@@ -133,6 +134,7 @@ class FundingLaneRuntime:
         self._tail_quantile = float(np.clip(tail_quantile, 0.50, 0.99))
         self._source_scale_strength = 0.0
         self._source_scale_reliability = 0.0
+        self._source_scale_signed_mode = False
         self._gpd_params = {"xi": 0.0, "sigma": 0.0, "n_exceedances": 0, "converged": False}
         self._gpd_threshold = 0.0
         self._gpd_enabled = bool(enable_gpd_tail)
@@ -248,6 +250,8 @@ class FundingLaneRuntime:
                 tail_quantile=self._tail_quantile,
             )
             if self._source_scaling_enabled and calibration.get("calibration_source_scale") is not None:
+                import os as _os
+                self._source_scale_signed_mode = _os.environ.get("MAINLINE_FUNDING_SS_SIGNED", "0") in ("1", "true", "True")
                 (
                     self._source_scale_strength,
                     self._guarded_calibration_mae,
@@ -261,6 +265,7 @@ class FundingLaneRuntime:
                     use_log_domain=self._log_domain_enabled,
                     tail_weight=self._tail_weight,
                     tail_quantile=self._tail_quantile,
+                    allow_signed_source_scale=self._source_scale_signed_mode,
                 )
                 self._source_scale_reliability = _guard_improvement_ratio(
                     baseline_mae=self._anchor_calibration_mae,
@@ -578,6 +583,7 @@ class FundingLaneRuntime:
             "source_scaling_enabled": bool(self._source_scaling_enabled),
             "source_scale_strength": float(self._source_scale_strength),
             "source_scale_reliability": float(self._source_scale_reliability),
+            "source_scale_signed_mode": bool(self._source_scale_signed_mode),
             "calibration_rows": int(self._calibration_rows),
             # Round-12 Route L2/K2 audit gates (2026-04-24)
             "source_scale_silently_dead": bool(self._source_scale_silently_dead),
@@ -785,12 +791,12 @@ def _guarded_funding_prediction(
     guarded_residual = np.asarray(residual_pred, dtype=np.float64)
     if np.isfinite(residual_cap):
         guarded_residual = np.clip(guarded_residual, -residual_cap, residual_cap)
-    if source_scale is not None and float(source_scale_strength) > 0.0:
+    if source_scale is not None and abs(float(source_scale_strength)) > 0.0:
         scale_arr = _resolve_source_scale(source_scale, length=len(anchor_arr))
         guarded_residual = guarded_residual * np.clip(
             1.0 - float(source_scale_strength) * scale_arr,
             0.0,
-            1.0,
+            2.0,
         )
     if use_log_domain:
         pred = np.expm1(np.log1p(np.clip(anchor_arr, 0.0, None)) + float(residual_blend) * guarded_residual)
@@ -914,6 +920,7 @@ def _calibrate_source_scaling_guard(
     use_log_domain: bool = False,
     tail_weight: float = 0.0,
     tail_quantile: float = 0.90,
+    allow_signed_source_scale: bool = False,
 ) -> tuple[float, float]:
     anchor_arr = np.asarray(anchor_vec, dtype=np.float64)
     target_arr = np.asarray(target_vec, dtype=np.float64)
@@ -943,7 +950,12 @@ def _calibrate_source_scaling_guard(
     if not np.any(scale_arr > 1e-8):
         return best_strength, best_mae
 
-    for strength in (0.0, 0.15, 0.30, 0.45, 0.60, 0.75, 1.0):
+    if allow_signed_source_scale:
+        strength_grid = (-1.0, -0.75, -0.60, -0.45, -0.30, -0.15, 0.0, 0.15, 0.30, 0.45, 0.60, 0.75, 1.0)
+    else:
+        strength_grid = (0.0, 0.15, 0.30, 0.45, 0.60, 0.75, 1.0)
+
+    for strength in strength_grid:
         candidate = _guarded_funding_prediction(
             anchor_vec=anchor_arr,
             residual_pred=pred_arr,
@@ -957,7 +969,7 @@ def _calibrate_source_scaling_guard(
         if candidate_mae + 1e-9 < best_mae:
             best_strength = float(strength)
             best_mae = candidate_mae
-        elif abs(candidate_mae - best_mae) <= 1e-9 and float(strength) < best_strength:
+        elif abs(candidate_mae - best_mae) <= 1e-9 and abs(float(strength)) < abs(best_strength):
             best_strength = float(strength)
     return best_strength, best_mae
 
