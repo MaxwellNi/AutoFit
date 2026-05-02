@@ -127,6 +127,36 @@ def asymmetric_interval(cal: pd.DataFrame, test: pd.DataFrame, alpha: float = 0.
     }
 
 
+def drift_guard_interval(
+    cal: pd.DataFrame,
+    test: pd.DataFrame,
+    alpha: float = 0.10,
+    holdout_fraction: float = 0.20,
+) -> dict[str, Any]:
+    residuals = cal["abs_residual"].to_numpy(dtype=float)
+    split = int(len(residuals) * (1.0 - holdout_fraction))
+    split = min(max(split, 1), len(residuals) - 1)
+    early = residuals[:split]
+    late = residuals[split:]
+    nominal_level = 1.0 - alpha
+    early_q = float(np.quantile(early, nominal_level, method="higher"))
+    holdout_coverage = float(np.mean(late <= early_q)) if len(late) else float("nan")
+    adjusted_level = min(0.99, nominal_level + max(0.0, nominal_level - holdout_coverage))
+    guarded_q = float(np.quantile(residuals, adjusted_level, method="higher"))
+    pred = test["y_pred"].to_numpy(dtype=float)
+    lower = pred - guarded_q
+    upper = pred + guarded_q
+    return {
+        "nominal_level": nominal_level,
+        "holdout_fraction": holdout_fraction,
+        "holdout_coverage_at_nominal": holdout_coverage,
+        "adjusted_quantile_level": adjusted_level,
+        "q": guarded_q,
+        "coverage": empirical_coverage(test["y_true"], lower, upper),
+        "width_mean": width_mean(lower, upper),
+    }
+
+
 def gpd_interval(cal: pd.DataFrame, test: pd.DataFrame, alpha: float = 0.10, threshold_q: float = 0.80) -> dict[str, Any]:
     abs_resid = cal["abs_residual"].to_numpy(dtype=float)
     empirical_q = float(np.quantile(abs_resid, 1.0 - alpha))
@@ -177,6 +207,8 @@ def evaluate(method: str, max_files: int = 8, max_rows_per_group: int = 50000) -
             candidate = subgroup_yhat_interval(cal, test)
         elif method == "cqr_lite":
             candidate = asymmetric_interval(cal, test)
+        elif method == "drift_guard":
+            candidate = drift_guard_interval(cal, test)
         elif method == "gpd_evt":
             candidate = gpd_interval(cal, test)
         else:

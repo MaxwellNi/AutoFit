@@ -94,6 +94,7 @@ def main() -> int:
         "studentized": "nccopo_coverage_90_studentized",
         "cqr_lite": "nccopo_coverage_90_cqr_lite",
         "gpd_evt": "nccopo_coverage_90_gpd_evt",
+        "drift_guard": "nccopo_coverage_90_drift_guard",
     }
     records_by_metric: dict[str, list[dict[str, Any]]] = {key: [] for key in metric_fields}
     files = _metric_files()
