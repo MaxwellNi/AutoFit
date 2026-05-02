@@ -199,7 +199,9 @@ def check_tpub():
     out = {}
     for ds in ("mimic_iii", "fremtpl2", "m5", "bikeshare"):
         hits = glob.glob(str(ROOT/f"runs/**/*{ds}*"), recursive=True) + glob.glob(str(ROOT/f"runs/**/*{ds.upper()}*"), recursive=True)
-        out[ds] = dict(exists=bool(hits), artifacts=hits[:3])
+        json_hits = sorted([p for p in hits if str(p).endswith(".json")], key=os.path.getmtime, reverse=True)
+        other_hits = sorted([p for p in hits if not str(p).endswith(".json")], key=os.path.getmtime, reverse=True)
+        out[ds] = dict(exists=bool(hits), artifacts=(json_hits + other_hits)[:6])
     return out
 
 # ─── Check 5: NC-CoPo wired 条件 vs 未 wired 条件 ────────────────

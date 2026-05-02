@@ -131,6 +131,12 @@ def main() -> int:
     embedding_ready = embedding.get("bakeoff_artifact_status") == "passed"
     source_ready = (source_gate.get("positive_rows") or 0) > 0
     external_ready = external_gate.get("status") == "passed"
+    oral_blockers = [
+        "coverage not solved across broad temporal surface" if not cqr_near_threshold else None,
+        "external public datasets not passed" if not external_ready else None,
+        "embedding bakeoff not passed" if not embedding_ready else None,
+        "source scaling mechanism not activated" if not source_ready else None,
+    ]
 
     claim_levels = {
         "core_method_claim": {
@@ -152,7 +158,7 @@ def main() -> int:
         "text_embedding_claim": {
             "status": "not_passed" if not embedding_ready else "passed",
             "allowed": "Clean baseline embedding only; no best-representation claim." if not embedding_ready else "Embedding bakeoff passed under frozen-panel protocol.",
-            "blocked_by": ["7B sharded bakeoff/downstream benchmark not landed"] if not embedding_ready else [],
+            "blocked_by": ["matched 1.5B-vs-7B downstream pair audit not passed"] if not embedding_ready else [],
         },
         "source_scaling_novelty_claim": {
             "status": "not_passed" if not source_ready else "passed",
@@ -162,12 +168,7 @@ def main() -> int:
         "oral_grade_readiness": {
             "status": "not_passed",
             "allowed": "Use as an execution roadmap, not as a current acceptance claim.",
-            "blocked_by": [
-                "coverage not solved across broad temporal surface",
-                "external public datasets not passed",
-                "embedding bakeoff not passed",
-                "source scaling mechanism not activated",
-            ],
+            "blocked_by": [item for item in oral_blockers if item],
         },
     }
     for item in claim_levels.values():

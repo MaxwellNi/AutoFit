@@ -100,12 +100,16 @@ def _coverage_gate(dashboard: dict[str, Any] | None) -> dict[str, Any]:
     gpd_n = int(coverage.get("gpd_evt_n_records") or 0)
     read_error_count = int(read_errors.get("n_errors") or 0)
     external_artifact_statuses: dict[str, list[str | None]] = {}
+    external_scope_statuses: dict[str, list[dict[str, Any]]] = {}
     external_any_passed = False
     external_any_artifact = False
+    event_proxy_passed = False
+    heavy_tail_passed = False
     for dataset_name, item in tpub.items():
         if not isinstance(item, dict):
             continue
         statuses: list[str | None] = []
+        scopes: list[dict[str, Any]] = []
         for artifact in item.get("artifacts") or []:
             path = Path(str(artifact))
             if path.suffix != ".json":
@@ -115,9 +119,31 @@ def _coverage_gate(dashboard: dict[str, Any] | None) -> dict[str, Any]:
                 continue
             status = payload.get("status")
             statuses.append(status)
+            scope = payload.get("scope_status") or {}
+            if isinstance(scope, dict):
+                scopes.append(scope)
+                event_proxy_passed = event_proxy_passed or bool(
+                    scope.get("full_scope_run")
+                    and scope.get("public_event_proxy_pilot")
+                    and scope.get("event_state_point_improves_over_core")
+                    and (
+                        scope.get("cqr_lite_near_90_coverage")
+                        or scope.get("quantile_cqr_near_90_coverage")
+                        or scope.get("drift_guard_near_90_coverage")
+                    )
+                )
+                heavy_tail_passed = heavy_tail_passed or bool(
+                    scope.get("full_scope_run")
+                    and (
+                        scope.get("public_insurance_heavy_tail_pilot")
+                        or scope.get("public_heavy_tail_coverage_pilot")
+                    )
+                )
             external_any_artifact = True
             external_any_passed = external_any_passed or status == "passed"
         external_artifact_statuses[dataset_name] = statuses
+        external_scope_statuses[dataset_name] = scopes
+    external_ladder_passed = bool(event_proxy_passed and heavy_tail_passed)
     return {
         "marginal_coverage": {
             "status": _status(bool(c90_mean is not None and c90_mean >= 0.88)),
@@ -151,9 +177,14 @@ def _coverage_gate(dashboard: dict[str, Any] | None) -> dict[str, Any]:
             "metric_read_errors": read_error_count,
         },
         "external_public_validation": {
-            "status": _status(external_any_passed, partial=external_any_artifact),
+            "status": _status(external_ladder_passed, partial=external_any_artifact),
             "datasets": tpub,
             "artifact_statuses": external_artifact_statuses,
+            "scope_statuses": external_scope_statuses,
+            "event_proxy_passed": event_proxy_passed,
+            "heavy_tail_passed": heavy_tail_passed,
+            "any_artifact_status_passed": external_any_passed,
+            "pass_rule": "Requires at least one full-scope public event-proxy validation with point improvement and near-90 conformal coverage (CQR-lite, quantile-CQR, or calibration-only drift guard), plus at least one full-scope public heavy-tail coverage validation.",
         },
     }
 
