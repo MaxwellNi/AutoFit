@@ -132,7 +132,7 @@ def main() -> int:
     cqr_near_threshold = (coverage.get("canonical_cqr_lite_c90_mean") or coverage.get("cqr_lite_c90_mean") or 0) >= 0.88
     no_read_errors = coverage.get("metric_read_errors") == 0
     embedding_ready = embedding.get("bakeoff_artifact_status") == "passed"
-    source_ready = (source_gate.get("active_rows") or source_gate.get("positive_rows") or 0) > 0
+    source_ready = (source_gate.get("active_rows") or source_gate.get("positive_rows") or 0) > 0 and bool(source_gate.get("paired_benefit_passed"))
     external_ready = external_gate.get("status") == "passed"
     oral_blockers = [
         "coverage not solved across broad temporal surface" if not cqr_near_threshold else None,
@@ -168,8 +168,8 @@ def main() -> int:
         },
         "source_scaling_novelty_claim": {
             "status": "not_passed" if not source_ready else "passed",
-            "allowed": "Do not claim source-scaling novelty while source-scale active rows are zero." if not source_ready else "Source-scaling path is activated and eligible for mechanism claims.",
-            "blocked_by": ["source_scale_active_rows == 0"] if not source_ready else [],
+            "allowed": "Do not claim source-scaling novelty while source-scale active rows are zero or active source rows fail paired-benefit checks." if not source_ready else "Source-scaling path is activated and active source rows beat paired controls.",
+            "blocked_by": ["source_scale_active_rows == 0 or paired_benefit_passed is false"] if not source_ready else [],
         },
         "oral_grade_readiness": {
             "status": "not_passed",
@@ -224,7 +224,7 @@ def main() -> int:
             "Do not claim NeurIPS acceptance certainty; only claim audit-backed readiness milestones.",
             "Do not call this a universal SOTA replacement until public external validation passes.",
             "Do not headline text embeddings until bakeoff and downstream matched benchmark pass.",
-            "Do not headline source-scaling novelty until source_scale_active_rows is nonzero.",
+            "Do not headline source-scaling novelty until source_scale_active_rows is nonzero and paired_benefit_passed is true.",
         ],
     }
 

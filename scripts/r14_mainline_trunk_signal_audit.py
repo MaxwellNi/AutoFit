@@ -136,6 +136,42 @@ def main() -> int:
         for row in rows
         if _finite(row.get("lane_residual_blend")) is not None
     ]
+    source_pair_models = (
+        ("MainlineS5FsForcedSource", "MainlineS5FsForcedBase"),
+        ("MainlineS5FsLogSource", "MainlineS5FsLogOnly"),
+        ("MainlineS5FsSourceOnly", "MainlineS5FundingStripped"),
+    )
+    source_pair_checks = []
+    by_run_cell: dict[tuple[str, str, str], dict[str, dict[str, Any]]] = defaultdict(dict)
+    for row in rows:
+        key = (str(row.get("_metrics_path") or "?"), str(row.get("ablation") or "?"), str(row.get("horizon") or "?"))
+        by_run_cell[key][str(row.get("model_name") or row.get("model") or "?")] = row
+    for (metrics_path, ablation, horizon), model_rows in sorted(by_run_cell.items(), key=lambda item: item[0]):
+        for source_model, control_model in source_pair_models:
+            source_row = model_rows.get(source_model)
+            control_row = model_rows.get(control_model)
+            if not source_row or not control_row:
+                continue
+            source_mae = _finite(source_row.get("mae"))
+            control_mae = _finite(control_row.get("mae"))
+            if source_mae is None or control_mae is None:
+                continue
+            source_strength = _finite(source_row.get("lane_source_scale_strength")) or 0.0
+            delta = source_mae - control_mae
+            source_pair_checks.append({
+                "metrics_path": metrics_path,
+                "ablation": ablation,
+                "horizon": horizon,
+                "source_model": source_model,
+                "control_model": control_model,
+                "source_mae": source_mae,
+                "control_mae": control_mae,
+                "mae_delta_source_minus_control": delta,
+                "source_scale_strength": source_strength,
+                "source_scale_active": abs(source_strength) > 1e-12,
+            })
+    active_pair_checks = [item for item in source_pair_checks if item["source_scale_active"]]
+    active_deltas = [float(item["mae_delta_source_minus_control"]) for item in active_pair_checks]
     c90s = [_finite(row.get("nccopo_coverage_90")) for row in rows]
     mondrian = [_finite(row.get("nccopo_coverage_90_mondrian")) for row in rows]
     studentized = [_finite(row.get("nccopo_coverage_90_studentized")) for row in rows]
@@ -154,6 +190,15 @@ def main() -> int:
             "source_scale_negative_rows": sum(1 for value in source_strengths if value < 0.0),
             "source_scale_nonzero_rows": sum(1 for value in source_strengths if abs(value) > 1e-12),
             "source_scale_observed_rows": len(source_strengths),
+            "source_pair_total": len(source_pair_checks),
+            "source_pair_mae_wins": sum(1 for item in source_pair_checks if item["mae_delta_source_minus_control"] < -1e-9),
+            "source_pair_mae_losses": sum(1 for item in source_pair_checks if item["mae_delta_source_minus_control"] > 1e-9),
+            "source_pair_mae_ties": sum(1 for item in source_pair_checks if abs(item["mae_delta_source_minus_control"]) <= 1e-9),
+            "source_pair_active_total": len(active_pair_checks),
+            "source_pair_active_mae_wins": sum(1 for value in active_deltas if value < -1e-9),
+            "source_pair_active_mae_losses": sum(1 for value in active_deltas if value > 1e-9),
+            "source_pair_active_mae_ties": sum(1 for value in active_deltas if abs(value) <= 1e-9),
+            "source_pair_active_mae_delta_mean": statistics.mean(active_deltas) if active_deltas else None,
             "lane_source_scaling_enabled": _bool_count(rows, "lane_source_scaling_enabled"),
             "lane_source_scale_silently_dead": _bool_count(rows, "lane_source_scale_silently_dead"),
             "lane_ss_fallback_active": _bool_count(rows, "lane_ss_fallback_active"),
@@ -177,6 +222,7 @@ def main() -> int:
             "y_shift_drop_varies_groups": sum(1 for item in horizon_checks if (item.get("y_shift_dropped_tail_rows_range") or 0.0) > 0.0),
         },
         "horizon_variation_examples": horizon_checks[:25],
+        "source_pair_examples": source_pair_checks[:40],
         "interpretation_limits": [
             "This audit can show horizon-conditioned outputs and guard fields vary in landed metrics.",
             "It cannot prove causal trunk learning without an identical-row counterfactual run.",

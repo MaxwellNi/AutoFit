@@ -30,13 +30,23 @@ def main() -> int:
     negative = int(guard.get("source_scale_negative_rows") or 0)
     nonzero = max(int(source.get("nonzero_rows") or 0), int(guard.get("source_scale_nonzero_rows") or 0), positive + negative)
     observed = max(int(source.get("observed_rows") or 0), int(guard.get("source_scale_observed_rows") or 0))
+    active_pairs = int(guard.get("source_pair_active_total") or 0)
+    active_pair_wins = int(guard.get("source_pair_active_mae_wins") or 0)
+    active_pair_losses = int(guard.get("source_pair_active_mae_losses") or 0)
+    active_pair_delta_mean = guard.get("source_pair_active_mae_delta_mean")
+    paired_benefit_passed = active_pairs >= 3 and active_pair_wins > active_pair_losses and (active_pair_delta_mean is not None and float(active_pair_delta_mean) < 0.0)
     report = {
         "timestamp_cest": datetime.now().isoformat(),
-        "status": "passed" if nonzero > 0 else "not_passed",
+        "status": "passed" if nonzero > 0 and paired_benefit_passed else "not_passed",
         "source_scale_active_rows": nonzero,
         "source_scale_positive_rows": positive,
         "source_scale_negative_rows": negative,
         "source_scale_observed_rows": observed,
+        "paired_benefit_passed": paired_benefit_passed,
+        "source_pair_active_total": active_pairs,
+        "source_pair_active_mae_wins": active_pair_wins,
+        "source_pair_active_mae_losses": active_pair_losses,
+        "source_pair_active_mae_delta_mean": active_pair_delta_mean,
         "source_scaling_enabled_counts": guard.get("lane_source_scaling_enabled"),
         "source_scale_silently_dead_counts": guard.get("lane_source_scale_silently_dead"),
         "source_scale_fallback_active_counts": guard.get("lane_ss_fallback_active"),
@@ -47,7 +57,7 @@ def main() -> int:
         "text_audit": text_path,
         "trunk_audit": trunk_path,
         "guard_summary": guard,
-        "pass_rule": "passed only when lane_source_scale_strength has at least one nonzero landed metrics row; sign is reported separately, and enabled/fallback/blend counts are diagnostic evidence, not sufficient by themselves.",
+        "pass_rule": "passed only when lane_source_scale_strength has nonzero landed rows AND active source rows beat paired controls on MAE (active_pairs>=3, wins>losses, mean active MAE delta<0). Sign is reported separately; enabled/fallback/blend counts are diagnostic only.",
         "required_next_fix": "If active rows remain zero, instrument and rerun source path so text/EDGAR scale is nonzero, then prove paired/counterfactual benefit.",
     }
     OUT_JSON.parent.mkdir(parents=True, exist_ok=True)
@@ -55,7 +65,7 @@ def main() -> int:
     OUT_MD.write_text("# R14 Source Path Activation Audit\n\n```json\n" + json.dumps(report, indent=2, default=str) + "\n```\n")
     print(f"OK: {OUT_JSON}")
     print(f"OK: {OUT_MD}")
-    print(json.dumps({"status": report["status"], "source_scale_active_rows": nonzero, "source_scale_positive_rows": positive, "source_scale_negative_rows": negative, "source_scale_observed_rows": observed}, indent=2))
+    print(json.dumps({"status": report["status"], "source_scale_active_rows": nonzero, "source_scale_positive_rows": positive, "source_scale_negative_rows": negative, "source_scale_observed_rows": observed, "paired_benefit_passed": paired_benefit_passed, "source_pair_active_mae_wins": active_pair_wins, "source_pair_active_mae_losses": active_pair_losses}, indent=2))
     return 0
 
 

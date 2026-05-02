@@ -225,6 +225,16 @@ def _text_edgar_gate(text_audit: dict[str, Any] | None, trunk_audit: dict[str, A
     source_negative = int(guard.get("source_scale_negative_rows") or 0)
     source_active = max(int(source.get("nonzero_rows") or 0), int(guard.get("source_scale_nonzero_rows") or 0), source_positive + source_negative)
     source_observed = max(int(source.get("observed_rows") or 0), int(guard.get("source_scale_observed_rows") or 0))
+    active_pairs = int(guard.get("source_pair_active_total") or 0)
+    active_pair_wins = int(guard.get("source_pair_active_mae_wins") or 0)
+    active_pair_losses = int(guard.get("source_pair_active_mae_losses") or 0)
+    active_pair_delta_mean = guard.get("source_pair_active_mae_delta_mean")
+    paired_benefit_passed = bool(
+        active_pairs >= 3
+        and active_pair_wins > active_pair_losses
+        and active_pair_delta_mean is not None
+        and float(active_pair_delta_mean) < 0.0
+    )
     return {
         "artifact_join_integrity": {
             "status": _status(bool(parquet.get("exists") and parquet.get("n_text_emb_columns") == 64 and latest_edgar)),
@@ -236,18 +246,23 @@ def _text_edgar_gate(text_audit: dict[str, Any] | None, trunk_audit: dict[str, A
         "core_edgar_effect": ablation_status("core_edgar"),
         "full_effect": ablation_status("full"),
         "source_scaling_activation": {
-            "status": _status(source_active > 0, partial=source_observed > 0),
+            "status": _status(source_active > 0 and paired_benefit_passed, partial=source_observed > 0),
             "active_rows": source_active,
             "positive_rows": source_positive,
             "negative_rows": source_negative,
             "observed_rows": source_observed,
+            "paired_benefit_passed": paired_benefit_passed,
+            "source_pair_active_total": active_pairs,
+            "source_pair_active_mae_wins": active_pair_wins,
+            "source_pair_active_mae_losses": active_pair_losses,
+            "source_pair_active_mae_delta_mean": active_pair_delta_mean,
             "trunk_source_scale_positive_rows": guard.get("source_scale_positive_rows"),
             "trunk_source_scale_negative_rows": guard.get("source_scale_negative_rows"),
             "trunk_source_scale_nonzero_rows": guard.get("source_scale_nonzero_rows"),
             "source_scaling_enabled_counts": guard.get("lane_source_scaling_enabled"),
             "source_scale_fallback_active_counts": guard.get("lane_ss_fallback_active"),
             "source_scale_silently_dead_counts": guard.get("lane_source_scale_silently_dead"),
-            "note": "No source-scaling novelty claim is allowed while active_rows is zero; signed source scaling reports positive and negative rows separately.",
+            "note": "No source-scaling novelty claim is allowed unless active_rows > 0 and active source rows beat paired controls on MAE; signed source scaling reports positive and negative rows separately.",
         },
         "text_edgar_execution_artifacts": {
             "embedding_model_bakeoff": _artifact_status("r14_embedding_bakeoff", "scripts/r14_embedding_bakeoff.py"),
