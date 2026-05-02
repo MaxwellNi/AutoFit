@@ -131,6 +131,11 @@ def main() -> int:
         for row in rows
         if _finite(row.get("lane_tail_weight_effective")) is not None
     ]
+    residual_blends = [
+        _finite(row.get("lane_residual_blend"))
+        for row in rows
+        if _finite(row.get("lane_residual_blend")) is not None
+    ]
     c90s = [_finite(row.get("nccopo_coverage_90")) for row in rows]
     mondrian = [_finite(row.get("nccopo_coverage_90_mondrian")) for row in rows]
     studentized = [_finite(row.get("nccopo_coverage_90_studentized")) for row in rows]
@@ -147,6 +152,13 @@ def main() -> int:
             "lane_hurdle_engaged": _bool_count(rows, "lane_hurdle_engaged"),
             "source_scale_positive_rows": sum(1 for value in source_strengths if value > 0.0),
             "source_scale_observed_rows": len(source_strengths),
+            "lane_source_scaling_enabled": _bool_count(rows, "lane_source_scaling_enabled"),
+            "lane_source_scale_silently_dead": _bool_count(rows, "lane_source_scale_silently_dead"),
+            "lane_ss_fallback_active": _bool_count(rows, "lane_ss_fallback_active"),
+            "lane_ss_fallback_env_requested_no_op": _bool_count(rows, "lane_ss_fallback_env_requested_no_op"),
+            "residual_blend_observed_rows": len(residual_blends),
+            "residual_blend_positive_rows": sum(1 for value in residual_blends if value > 0.0),
+            "residual_blend_mean": statistics.mean(residual_blends) if residual_blends else None,
             "tail_weight_positive_rows": sum(1 for value in tail_weights if value > 0.0),
             "tail_weight_observed_rows": len(tail_weights),
         },

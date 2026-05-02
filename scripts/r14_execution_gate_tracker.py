@@ -221,8 +221,8 @@ def _text_edgar_gate(text_audit: dict[str, Any] | None, trunk_audit: dict[str, A
 
     parquet = artifact.get("parquet", {})
     latest_edgar = join.get("latest_edgar_join") or {}
-    source_positive = int(source.get("positive_rows") or 0)
-    source_observed = int(source.get("observed_rows") or 0)
+    source_positive = max(int(source.get("positive_rows") or 0), int(guard.get("source_scale_positive_rows") or 0))
+    source_observed = max(int(source.get("observed_rows") or 0), int(guard.get("source_scale_observed_rows") or 0))
     return {
         "artifact_join_integrity": {
             "status": _status(bool(parquet.get("exists") and parquet.get("n_text_emb_columns") == 64 and latest_edgar)),
@@ -238,6 +238,9 @@ def _text_edgar_gate(text_audit: dict[str, Any] | None, trunk_audit: dict[str, A
             "positive_rows": source_positive,
             "observed_rows": source_observed,
             "trunk_source_scale_positive_rows": guard.get("source_scale_positive_rows"),
+            "source_scaling_enabled_counts": guard.get("lane_source_scaling_enabled"),
+            "source_scale_fallback_active_counts": guard.get("lane_ss_fallback_active"),
+            "source_scale_silently_dead_counts": guard.get("lane_source_scale_silently_dead"),
             "note": "No source-scaling novelty claim is allowed while positive_rows is zero.",
         },
         "text_edgar_execution_artifacts": {
