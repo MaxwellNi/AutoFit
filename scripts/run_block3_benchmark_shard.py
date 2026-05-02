@@ -1311,6 +1311,24 @@ class BenchmarkShard:
                     ):
                         if _lane_key in info and info[_lane_key] is not None:
                             signals[_lane_key] = info[_lane_key]
+            if hasattr(model, "get_regime_info"):
+                regime = model.get_regime_info()
+                if isinstance(regime, dict):
+                    effective = regime.get("effective") if isinstance(regime.get("effective"), dict) else {}
+                    source_scales = regime.get("source_scales") if isinstance(regime.get("source_scales"), dict) else {}
+                    funding_source_scaling = bool(
+                        effective.get("funding_source_scaling")
+                        or regime.get("funding_source_scaling")
+                    )
+                    if funding_source_scaling and signals.get("lane_source_scale_strength") is None:
+                        deltas: list[float] = []
+                        for scale_value in source_scales.values():
+                            try:
+                                deltas.append(abs(float(scale_value) - 1.0))
+                            except Exception:
+                                continue
+                        if deltas:
+                            signals["lane_source_scale_strength"] = float(max(deltas))
         except Exception:
             pass
         return signals
