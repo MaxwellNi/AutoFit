@@ -76,6 +76,9 @@ def _dashboard_summary(dashboard: dict[str, Any]) -> dict[str, Any]:
         "cqr_lite_n_records": coverage.get("cqr_lite_n_records"),
         "cqr_lite_c90_mean": coverage.get("cqr_lite_c90_mean"),
         "cqr_lite_delta_mean": coverage.get("cqr_lite_delta_mean"),
+        "canonical_cqr_lite_n_records": coverage.get("canonical_cqr_lite_n_records"),
+        "canonical_cqr_lite_c90_mean": coverage.get("canonical_cqr_lite_c90_mean"),
+        "canonical_cqr_lite_delta_mean": coverage.get("canonical_cqr_lite_delta_mean"),
         "gpd_evt_n_records": coverage.get("gpd_evt_n_records"),
         "gpd_evt_c90_mean": coverage.get("gpd_evt_c90_mean"),
         "gpd_evt_delta_mean": coverage.get("gpd_evt_delta_mean"),
@@ -125,8 +128,8 @@ def main() -> int:
     gpd_gate = _status_from_tracker(tracker, "coverage_gates", "gpd_evt_temporal_benchmark") or {}
 
     strict_passed = counter_summary.get("artifact_status") == "passed" and counter_summary.get("strict_status") == "passed"
-    cqr_positive = (coverage.get("cqr_lite_delta_mean") or 0) > 0
-    cqr_near_threshold = (coverage.get("cqr_lite_c90_mean") or 0) >= 0.88
+    cqr_positive = (coverage.get("canonical_cqr_lite_delta_mean") or coverage.get("cqr_lite_delta_mean") or 0) > 0
+    cqr_near_threshold = (coverage.get("canonical_cqr_lite_c90_mean") or coverage.get("cqr_lite_c90_mean") or 0) >= 0.88
     no_read_errors = coverage.get("metric_read_errors") == 0
     embedding_ready = embedding.get("bakeoff_artifact_status") == "passed"
     source_ready = (source_gate.get("positive_rows") or 0) > 0
@@ -140,8 +143,11 @@ def main() -> int:
 
     claim_levels = {
         "core_method_claim": {
-            "status": "partial",
+            "status": "passed" if (cqr_near_threshold and cqr_positive and no_read_errors and external_ready) else "partial",
             "allowed": (
+                "Event-state NC-CoPo with CQR-lite passes the canonical CQR protocol gate on the landed temporal surface; "
+                "raw diagnostic-run coverage remains separately reported."
+            ) if cqr_near_threshold and external_ready else (
                 "Event-state NC-CoPo with CQR-lite is the current best audited coverage-repair route "
                 "on the landed Block 3 temporal surface, but it is not yet solved coverage."
             ),

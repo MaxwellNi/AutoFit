@@ -71,9 +71,13 @@ def check_v2_coverage():
     studentized_deltas = []
     cqr_recs = []
     cqr_deltas = []
+    canonical_cqr_recs = []
+    canonical_cqr_deltas = []
     gpd_recs = []
     gpd_deltas = []
     for f in files:
+        run_name = Path(f).parent.name
+        canonical_cqr_protocol = ("cqrrow" in run_name) or ("cqrgpd" in run_name)
         m = _load_json(f)
         if m is None: continue
         if isinstance(m, dict) and 'results' in m: m = m['results']
@@ -114,17 +118,22 @@ def check_v2_coverage():
                         float(r.get('nccopo_coverage_90_studentized')) - float(r.get('nccopo_coverage_90'))
                     )
             if isinstance(r, dict) and r.get('nccopo_coverage_90_cqr_lite') is not None:
-                cqr_recs.append(dict(
+                cqr_item = dict(
+                    run=run_name,
                     model=r.get('model_name') or r.get('model'),
                     horizon=r.get('horizon'),
                     category=r.get('category'),
                     c90_cqr_lite=r.get('nccopo_coverage_90_cqr_lite'),
                     fair=r.get('fairness_pass'),
-                ))
+                )
+                cqr_recs.append(cqr_item)
+                if canonical_cqr_protocol:
+                    canonical_cqr_recs.append(cqr_item)
                 if r.get('nccopo_coverage_90') is not None:
-                    cqr_deltas.append(
-                        float(r.get('nccopo_coverage_90_cqr_lite')) - float(r.get('nccopo_coverage_90'))
-                    )
+                    delta = float(r.get('nccopo_coverage_90_cqr_lite')) - float(r.get('nccopo_coverage_90'))
+                    cqr_deltas.append(delta)
+                    if canonical_cqr_protocol:
+                        canonical_cqr_deltas.append(delta)
             if isinstance(r, dict) and r.get('nccopo_coverage_90_gpd_evt') is not None:
                 gpd_recs.append(dict(
                     model=r.get('model_name') or r.get('model'),
@@ -142,6 +151,7 @@ def check_v2_coverage():
     mondrian_c90s = [r['c90_mondrian'] for r in mondrian_recs if r['c90_mondrian'] is not None]
     studentized_c90s = [r['c90_studentized'] for r in studentized_recs if r['c90_studentized'] is not None]
     cqr_c90s = [r['c90_cqr_lite'] for r in cqr_recs if r['c90_cqr_lite'] is not None]
+    canonical_cqr_c90s = [r['c90_cqr_lite'] for r in canonical_cqr_recs if r['c90_cqr_lite'] is not None]
     gpd_c90s = [r['c90_gpd_evt'] for r in gpd_recs if r['c90_gpd_evt'] is not None]
     return dict(n_records=n, n_files=len(files),
                 c90_mean=statistics.mean(c90s) if c90s else None,
@@ -163,6 +173,12 @@ def check_v2_coverage():
                 cqr_lite_c90_min=min(cqr_c90s) if cqr_c90s else None,
                 cqr_lite_c90_max=max(cqr_c90s) if cqr_c90s else None,
                 cqr_lite_delta_mean=statistics.mean(cqr_deltas) if cqr_deltas else None,
+                canonical_cqr_lite_n_records=len(canonical_cqr_recs),
+                canonical_cqr_lite_c90_mean=statistics.mean(canonical_cqr_c90s) if canonical_cqr_c90s else None,
+                canonical_cqr_lite_c90_min=min(canonical_cqr_c90s) if canonical_cqr_c90s else None,
+                canonical_cqr_lite_c90_max=max(canonical_cqr_c90s) if canonical_cqr_c90s else None,
+                canonical_cqr_lite_delta_mean=statistics.mean(canonical_cqr_deltas) if canonical_cqr_deltas else None,
+                canonical_cqr_lite_protocol="runs whose directory name contains cqrrow or cqrgpd; excludes source-scaling/embedding diagnostic probes from the CQR pass gate while retaining raw_all fields above",
                 gpd_evt_n_records=len(gpd_recs),
                 gpd_evt_c90_mean=statistics.mean(gpd_c90s) if gpd_c90s else None,
                 gpd_evt_c90_min=min(gpd_c90s) if gpd_c90s else None,

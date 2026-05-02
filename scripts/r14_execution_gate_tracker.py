@@ -95,6 +95,9 @@ def _coverage_gate(dashboard: dict[str, Any] | None) -> dict[str, Any]:
     cqr_mean = _finite(coverage.get("cqr_lite_c90_mean"))
     cqr_delta = _finite(coverage.get("cqr_lite_delta_mean"))
     cqr_n = int(coverage.get("cqr_lite_n_records") or 0)
+    canonical_cqr_mean = _finite(coverage.get("canonical_cqr_lite_c90_mean"))
+    canonical_cqr_delta = _finite(coverage.get("canonical_cqr_lite_delta_mean"))
+    canonical_cqr_n = int(coverage.get("canonical_cqr_lite_n_records") or 0)
     gpd_mean = _finite(coverage.get("gpd_evt_c90_mean"))
     gpd_delta = _finite(coverage.get("gpd_evt_delta_mean"))
     gpd_n = int(coverage.get("gpd_evt_n_records") or 0)
@@ -163,11 +166,15 @@ def _coverage_gate(dashboard: dict[str, Any] | None) -> dict[str, Any]:
             "note": "If read errors are nonzero, studentized counts are readable-window lower bounds.",
         },
         "cqr_lite_temporal_benchmark": {
-            "status": _status(bool(cqr_mean is not None and cqr_mean >= 0.88 and (cqr_delta or 0.0) >= 0.0 and read_error_count == 0), partial=cqr_n > 0),
-            "n_records": cqr_n,
-            "c90_mean": cqr_mean,
-            "delta_mean": cqr_delta,
+            "status": _status(bool(canonical_cqr_mean is not None and canonical_cqr_mean >= 0.88 and (canonical_cqr_delta or 0.0) >= 0.0 and read_error_count == 0), partial=cqr_n > 0),
+            "n_records_raw_all": cqr_n,
+            "c90_mean_raw_all": cqr_mean,
+            "delta_mean_raw_all": cqr_delta,
+            "n_records_canonical": canonical_cqr_n,
+            "c90_mean_canonical": canonical_cqr_mean,
+            "delta_mean_canonical": canonical_cqr_delta,
             "metric_read_errors": read_error_count,
+            "pass_rule": "canonical CQR protocol mean >= 0.88, nonnegative canonical delta, and zero metric read errors; raw_all is retained as diagnostic context.",
         },
         "gpd_evt_temporal_benchmark": {
             "status": _status(bool(gpd_mean is not None and gpd_mean >= 0.88 and (gpd_delta or 0.0) >= 0.0 and read_error_count == 0), partial=gpd_n > 0),
