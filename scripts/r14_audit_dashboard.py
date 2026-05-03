@@ -75,6 +75,8 @@ def check_v2_coverage():
     canonical_cqr_deltas = []
     gpd_recs = []
     gpd_deltas = []
+    hard_cell_recs = []
+    hard_cell_deltas = []
     for f in files:
         run_name = Path(f).parent.name
         canonical_cqr_protocol = ("cqrrow" in run_name) or ("cqrgpd" in run_name)
@@ -146,6 +148,18 @@ def check_v2_coverage():
                     gpd_deltas.append(
                         float(r.get('nccopo_coverage_90_gpd_evt')) - float(r.get('nccopo_coverage_90'))
                     )
+            if isinstance(r, dict) and r.get('nccopo_coverage_90_hard_cell_tail_guard') is not None:
+                hard_cell_recs.append(dict(
+                    model=r.get('model_name') or r.get('model'),
+                    horizon=r.get('horizon'),
+                    category=r.get('category'),
+                    c90_hard_cell_tail_guard=r.get('nccopo_coverage_90_hard_cell_tail_guard'),
+                    fair=r.get('fairness_pass'),
+                ))
+                if r.get('nccopo_coverage_90') is not None:
+                    hard_cell_deltas.append(
+                        float(r.get('nccopo_coverage_90_hard_cell_tail_guard')) - float(r.get('nccopo_coverage_90'))
+                    )
     n = len(recs)
     c90s = [r['c90'] for r in recs if r['c90'] is not None]
     mondrian_c90s = [r['c90_mondrian'] for r in mondrian_recs if r['c90_mondrian'] is not None]
@@ -153,6 +167,7 @@ def check_v2_coverage():
     cqr_c90s = [r['c90_cqr_lite'] for r in cqr_recs if r['c90_cqr_lite'] is not None]
     canonical_cqr_c90s = [r['c90_cqr_lite'] for r in canonical_cqr_recs if r['c90_cqr_lite'] is not None]
     gpd_c90s = [r['c90_gpd_evt'] for r in gpd_recs if r['c90_gpd_evt'] is not None]
+    hard_cell_c90s = [r['c90_hard_cell_tail_guard'] for r in hard_cell_recs if r['c90_hard_cell_tail_guard'] is not None]
     return dict(n_records=n, n_files=len(files),
                 c90_mean=statistics.mean(c90s) if c90s else None,
                 c90_min=min(c90s) if c90s else None,
@@ -184,6 +199,11 @@ def check_v2_coverage():
                 gpd_evt_c90_min=min(gpd_c90s) if gpd_c90s else None,
                 gpd_evt_c90_max=max(gpd_c90s) if gpd_c90s else None,
                 gpd_evt_delta_mean=statistics.mean(gpd_deltas) if gpd_deltas else None,
+                hard_cell_tail_guard_n_records=len(hard_cell_recs),
+                hard_cell_tail_guard_c90_mean=statistics.mean(hard_cell_c90s) if hard_cell_c90s else None,
+                hard_cell_tail_guard_c90_min=min(hard_cell_c90s) if hard_cell_c90s else None,
+                hard_cell_tail_guard_c90_max=max(hard_cell_c90s) if hard_cell_c90s else None,
+                hard_cell_tail_guard_delta_mean=statistics.mean(hard_cell_deltas) if hard_cell_deltas else None,
                 records=recs)
 
 # ─── Check 3: fairness_pass 分布 ───────────────────────────────────

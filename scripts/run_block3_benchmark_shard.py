@@ -200,6 +200,82 @@ def _temporal_drift_guard_residual_interval(
     y_pred_test = np.asarray(y_pred_test, dtype=np.float64)
     return y_pred_test - q, y_pred_test + q, q, holdout_coverage, adjusted_level
 
+
+def _hard_cell_tail_guard_residual_interval(
+    y_cal: np.ndarray,
+    y_pred_cal: np.ndarray,
+    y_pred_test: np.ndarray,
+    *,
+    target: str,
+    horizon: int,
+    alpha: float = 0.10,
+    holdout_fraction: float = 0.20,
+) -> tuple[np.ndarray, np.ndarray, float, float, float, float, float, str]:
+    """Calibration-only asymmetric guard for known hard tail cells.
+
+    Funding h30 is a pre-declared heavy-tail cell. The guard may widen the
+    upper residual side using only calibration residuals and cell metadata;
+    test labels are used only after the interval is fixed to report coverage.
+    """
+    y_cal_arr = np.asarray(y_cal, dtype=np.float64)
+    y_pred_cal_arr = np.asarray(y_pred_cal, dtype=np.float64)
+    lower_scores = np.clip(y_pred_cal_arr - y_cal_arr, 0.0, None)
+    upper_scores = np.clip(y_cal_arr - y_pred_cal_arr, 0.0, None)
+    base_level = 1.0 - alpha / 2.0
+
+    split = int(len(upper_scores) * (1.0 - holdout_fraction))
+    split = min(max(split, 1), len(upper_scores) - 1)
+    early_upper = upper_scores[:split]
+    late_upper = upper_scores[split:]
+    early_lower = lower_scores[:split]
+    late_lower = lower_scores[split:]
+
+    upper_early_q = float(np.quantile(early_upper, base_level, method="higher"))
+    lower_early_q = float(np.quantile(early_lower, base_level, method="higher"))
+    upper_holdout_coverage = float(np.mean(late_upper <= upper_early_q)) if len(late_upper) else float("nan")
+    lower_holdout_coverage = float(np.mean(late_lower <= lower_early_q)) if len(late_lower) else float("nan")
+
+    target_key = str(target or "")
+    try:
+        h = int(horizon)
+    except Exception:
+        h = 0
+    hard_status = "standard_asymmetric"
+    upper_floor = base_level
+    lower_floor = base_level
+    if target_key == "funding_raised_usd" and h >= 30:
+        upper_floor = float(os.environ.get("BLOCK3_NCCOPO_HARD_CELL_FUNDING_H30_UPPER_LEVEL", "0.995"))
+        lower_floor = float(os.environ.get("BLOCK3_NCCOPO_HARD_CELL_FUNDING_H30_LOWER_LEVEL", "0.950"))
+        hard_status = "hard_cell:funding_h30_upper_tail"
+    elif target_key == "funding_raised_usd" and h >= 14:
+        upper_floor = float(os.environ.get("BLOCK3_NCCOPO_HARD_CELL_FUNDING_H14_UPPER_LEVEL", "0.975"))
+        lower_floor = float(os.environ.get("BLOCK3_NCCOPO_HARD_CELL_FUNDING_H14_LOWER_LEVEL", "0.950"))
+        hard_status = "hard_cell:funding_h14_upper_tail"
+
+    cap = float(os.environ.get("BLOCK3_NCCOPO_HARD_CELL_MAX_LEVEL", "0.999"))
+    upper_level = max(base_level, upper_floor)
+    lower_level = max(base_level, lower_floor)
+    if np.isfinite(upper_holdout_coverage):
+        upper_level = max(upper_level, base_level + max(0.0, base_level - upper_holdout_coverage))
+    if np.isfinite(lower_holdout_coverage):
+        lower_level = max(lower_level, base_level + max(0.0, base_level - lower_holdout_coverage))
+    upper_level = min(cap, upper_level)
+    lower_level = min(cap, lower_level)
+
+    q_lower = float(np.quantile(lower_scores, lower_level, method="higher"))
+    q_upper = float(np.quantile(upper_scores, upper_level, method="higher"))
+    y_pred_test_arr = np.asarray(y_pred_test, dtype=np.float64)
+    return (
+        y_pred_test_arr - q_lower,
+        y_pred_test_arr + q_upper,
+        q_lower,
+        q_upper,
+        lower_level,
+        upper_level,
+        upper_holdout_coverage,
+        hard_status,
+    )
+
 # =============================================================================
 # Configuration
 # =============================================================================
@@ -416,6 +492,7 @@ class ModelMetrics:
     nccopo_coverage_90_cqr_lite: Optional[float] = None  # asymmetric residual conformal diagnostic branch
     nccopo_coverage_90_gpd_evt: Optional[float] = None  # GPD/EVT tail residual conformal diagnostic branch
     nccopo_coverage_90_drift_guard: Optional[float] = None  # calibration-holdout drift-guard residual branch
+    nccopo_coverage_90_hard_cell_tail_guard: Optional[float] = None  # pre-declared hard-cell asymmetric tail branch
     nccopo_coverage_80: Optional[float] = None     # empirical test coverage at alpha=0.20
     nccopo_conformal_q_90: Optional[float] = None  # conformal quantile at alpha=0.10
     nccopo_conformal_q_90_studentized: Optional[float] = None
@@ -423,8 +500,14 @@ class ModelMetrics:
     nccopo_conformal_q_90_cqr_upper: Optional[float] = None
     nccopo_conformal_q_90_gpd_evt: Optional[float] = None
     nccopo_conformal_q_90_drift_guard: Optional[float] = None
+    nccopo_conformal_q_90_hard_cell_lower: Optional[float] = None
+    nccopo_conformal_q_90_hard_cell_upper: Optional[float] = None
     nccopo_drift_guard_holdout_coverage: Optional[float] = None
     nccopo_drift_guard_adjusted_level: Optional[float] = None
+    nccopo_hard_cell_lower_level: Optional[float] = None
+    nccopo_hard_cell_upper_level: Optional[float] = None
+    nccopo_hard_cell_upper_holdout_coverage: Optional[float] = None
+    nccopo_hard_cell_status: Optional[str] = None
     nccopo_cal_coverage_90: Optional[float] = None # calibration-set coverage sanity
     nccopo_n_cal: Optional[int] = None
     nccopo_interval_width_mean: Optional[float] = None
@@ -432,6 +515,7 @@ class ModelMetrics:
     nccopo_interval_width_mean_cqr_lite: Optional[float] = None
     nccopo_interval_width_mean_gpd_evt: Optional[float] = None
     nccopo_interval_width_mean_drift_guard: Optional[float] = None
+    nccopo_interval_width_mean_hard_cell_tail_guard: Optional[float] = None
     nccopo_gpd_evt_fit_status: Optional[str] = None
     nccopo_gpd_evt_n_exceedances: Optional[int] = None
     nccopo_error: Optional[str] = None
@@ -1523,6 +1607,7 @@ class BenchmarkShard:
                 "nccopo_coverage_90_cqr_lite": None,
                 "nccopo_coverage_90_gpd_evt": None,
                 "nccopo_coverage_90_drift_guard": None,
+                "nccopo_coverage_90_hard_cell_tail_guard": None,
                 "nccopo_coverage_80": None,
                 "nccopo_conformal_q_90": None,
                 "nccopo_conformal_q_90_studentized": None,
@@ -1530,8 +1615,14 @@ class BenchmarkShard:
                 "nccopo_conformal_q_90_cqr_upper": None,
                 "nccopo_conformal_q_90_gpd_evt": None,
                 "nccopo_conformal_q_90_drift_guard": None,
+                "nccopo_conformal_q_90_hard_cell_lower": None,
+                "nccopo_conformal_q_90_hard_cell_upper": None,
                 "nccopo_drift_guard_holdout_coverage": None,
                 "nccopo_drift_guard_adjusted_level": None,
+                "nccopo_hard_cell_lower_level": None,
+                "nccopo_hard_cell_upper_level": None,
+                "nccopo_hard_cell_upper_holdout_coverage": None,
+                "nccopo_hard_cell_status": None,
                 "nccopo_cal_coverage_90": None,
                 "nccopo_n_cal": None,
                 "nccopo_interval_width_mean": None,
@@ -1539,6 +1630,7 @@ class BenchmarkShard:
                 "nccopo_interval_width_mean_cqr_lite": None,
                 "nccopo_interval_width_mean_gpd_evt": None,
                 "nccopo_interval_width_mean_drift_guard": None,
+                "nccopo_interval_width_mean_hard_cell_tail_guard": None,
                 "nccopo_gpd_evt_fit_status": None,
                 "nccopo_gpd_evt_n_exceedances": None,
                 "nccopo_error": None,
@@ -1738,6 +1830,36 @@ class BenchmarkShard:
                                 nccopo_fields["nccopo_interval_width_mean_drift_guard"] = float(
                                     np.mean(hi_dg - lo_dg)
                                 )
+                            if os.environ.get("BLOCK3_NCCOPO_HARD_CELL_TAIL_GUARD", "0") in ("1", "true", "True"):
+                                (
+                                    lo_hc,
+                                    hi_hc,
+                                    q_hc_lower,
+                                    q_hc_upper,
+                                    hc_lower_level,
+                                    hc_upper_level,
+                                    hc_upper_holdout_cov,
+                                    hc_status,
+                                ) = _hard_cell_tail_guard_residual_interval(
+                                    y_val_arr,
+                                    y_pred_val,
+                                    y_pred[test_finite],
+                                    target=target,
+                                    horizon=horizon,
+                                    alpha=0.10,
+                                )
+                                nccopo_fields["nccopo_coverage_90_hard_cell_tail_guard"] = float(
+                                    np.mean((y_t >= lo_hc) & (y_t <= hi_hc))
+                                )
+                                nccopo_fields["nccopo_conformal_q_90_hard_cell_lower"] = float(q_hc_lower)
+                                nccopo_fields["nccopo_conformal_q_90_hard_cell_upper"] = float(q_hc_upper)
+                                nccopo_fields["nccopo_hard_cell_lower_level"] = float(hc_lower_level)
+                                nccopo_fields["nccopo_hard_cell_upper_level"] = float(hc_upper_level)
+                                nccopo_fields["nccopo_hard_cell_upper_holdout_coverage"] = float(hc_upper_holdout_cov)
+                                nccopo_fields["nccopo_hard_cell_status"] = str(hc_status)
+                                nccopo_fields["nccopo_interval_width_mean_hard_cell_tail_guard"] = float(
+                                    np.mean(hi_hc - lo_hc)
+                                )
                             nccopo_fields["nccopo_wired"] = True
                             if nccopo_fields["nccopo_coverage_90_mondrian"] is not None:
                                 logger.info(
@@ -1779,6 +1901,14 @@ class BenchmarkShard:
                                     nccopo_fields["nccopo_interval_width_mean_drift_guard"],
                                     nccopo_fields["nccopo_drift_guard_holdout_coverage"],
                                     nccopo_fields["nccopo_drift_guard_adjusted_level"],
+                                )
+                            if nccopo_fields["nccopo_coverage_90_hard_cell_tail_guard"] is not None:
+                                logger.info(
+                                    "  [NCCOPO] alpha=0.10 hard_cell_tail_guard=%.4f width=%.3e upper_level=%.4f status=%s",
+                                    nccopo_fields["nccopo_coverage_90_hard_cell_tail_guard"],
+                                    nccopo_fields["nccopo_interval_width_mean_hard_cell_tail_guard"],
+                                    nccopo_fields["nccopo_hard_cell_upper_level"],
+                                    nccopo_fields["nccopo_hard_cell_status"],
                                 )
                         else:
                             nccopo_fields["nccopo_error"] = (
@@ -1877,6 +2007,7 @@ class BenchmarkShard:
                 nccopo_coverage_90_cqr_lite=nccopo_fields["nccopo_coverage_90_cqr_lite"],
                 nccopo_coverage_90_gpd_evt=nccopo_fields["nccopo_coverage_90_gpd_evt"],
                 nccopo_coverage_90_drift_guard=nccopo_fields["nccopo_coverage_90_drift_guard"],
+                nccopo_coverage_90_hard_cell_tail_guard=nccopo_fields["nccopo_coverage_90_hard_cell_tail_guard"],
                 nccopo_coverage_80=nccopo_fields["nccopo_coverage_80"],
                 nccopo_conformal_q_90=nccopo_fields["nccopo_conformal_q_90"],
                 nccopo_conformal_q_90_studentized=nccopo_fields["nccopo_conformal_q_90_studentized"],
@@ -1884,8 +2015,14 @@ class BenchmarkShard:
                 nccopo_conformal_q_90_cqr_upper=nccopo_fields["nccopo_conformal_q_90_cqr_upper"],
                 nccopo_conformal_q_90_gpd_evt=nccopo_fields["nccopo_conformal_q_90_gpd_evt"],
                 nccopo_conformal_q_90_drift_guard=nccopo_fields["nccopo_conformal_q_90_drift_guard"],
+                nccopo_conformal_q_90_hard_cell_lower=nccopo_fields["nccopo_conformal_q_90_hard_cell_lower"],
+                nccopo_conformal_q_90_hard_cell_upper=nccopo_fields["nccopo_conformal_q_90_hard_cell_upper"],
                 nccopo_drift_guard_holdout_coverage=nccopo_fields["nccopo_drift_guard_holdout_coverage"],
                 nccopo_drift_guard_adjusted_level=nccopo_fields["nccopo_drift_guard_adjusted_level"],
+                nccopo_hard_cell_lower_level=nccopo_fields["nccopo_hard_cell_lower_level"],
+                nccopo_hard_cell_upper_level=nccopo_fields["nccopo_hard_cell_upper_level"],
+                nccopo_hard_cell_upper_holdout_coverage=nccopo_fields["nccopo_hard_cell_upper_holdout_coverage"],
+                nccopo_hard_cell_status=nccopo_fields["nccopo_hard_cell_status"],
                 nccopo_cal_coverage_90=nccopo_fields["nccopo_cal_coverage_90"],
                 nccopo_n_cal=nccopo_fields["nccopo_n_cal"],
                 nccopo_interval_width_mean=nccopo_fields["nccopo_interval_width_mean"],
@@ -1893,6 +2030,7 @@ class BenchmarkShard:
                 nccopo_interval_width_mean_cqr_lite=nccopo_fields["nccopo_interval_width_mean_cqr_lite"],
                 nccopo_interval_width_mean_gpd_evt=nccopo_fields["nccopo_interval_width_mean_gpd_evt"],
                 nccopo_interval_width_mean_drift_guard=nccopo_fields["nccopo_interval_width_mean_drift_guard"],
+                nccopo_interval_width_mean_hard_cell_tail_guard=nccopo_fields["nccopo_interval_width_mean_hard_cell_tail_guard"],
                 nccopo_gpd_evt_fit_status=nccopo_fields["nccopo_gpd_evt_fit_status"],
                 nccopo_gpd_evt_n_exceedances=nccopo_fields["nccopo_gpd_evt_n_exceedances"],
                 nccopo_error=nccopo_fields["nccopo_error"],

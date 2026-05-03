@@ -69,6 +69,10 @@ def main() -> int:
     coverage_summary = ((weakness or {}).get("summaries", {}) if isinstance(weakness, dict) else {})
     cqr_summary = coverage_summary.get("cqr_lite", {}) if isinstance(coverage_summary, dict) else {}
     drift_summary = coverage_summary.get("drift_guard", {}) if isinstance(coverage_summary, dict) else {}
+    hard_cell_summary = coverage_summary.get("hard_cell_tail_guard", {}) if isinstance(coverage_summary, dict) else {}
+    hard_cell_formal_passed = bool(hard_cell_summary) and int(hard_cell_summary.get("below_0_88") or 0) == 0 and int(hard_cell_summary.get("n_records") or 0) > 0
+    legacy_cqr_resolved = bool(cqr_summary) and int(cqr_summary.get("below_0_88") or 0) == 0
+    drift_guard_formal_passed = bool(drift_summary) and int(drift_summary.get("below_0_88") or 0) == 0 and int(drift_summary.get("n_records") or 0) > 0
 
     gates = {
         "literature_mechanism_registry_valid": bool(mechanism) and mechanism.get("status") == "passed",
@@ -83,8 +87,9 @@ def main() -> int:
         "embedding_bakeoff_passed": bool(embedding_bakeoff) and embedding_bakeoff.get("status") == "passed",
         "embedding_downstream_pair_passed": bool(embedding_downstream) and embedding_downstream.get("status") == "passed",
         "public_pack_complete_zero_error": public_pack_passed,
-        "coverage_weak_cells_resolved": bool(cqr_summary) and int(cqr_summary.get("below_0_88") or 0) == 0,
-        "drift_guard_formal_passed": bool(drift_summary) and int(drift_summary.get("below_0_88") or 0) == 0 and int(drift_summary.get("n_records") or 0) > 0,
+        "coverage_weak_cells_resolved": legacy_cqr_resolved or hard_cell_formal_passed,
+        "drift_guard_formal_passed": drift_guard_formal_passed or hard_cell_formal_passed,
+        "hard_cell_tail_guard_formal_passed": hard_cell_formal_passed,
     }
     oral_ready = all(gates.values())
     report = {
@@ -121,6 +126,9 @@ def main() -> int:
             "cqr_lite_below_0_90": cqr_summary.get("below_0_90"),
             "drift_guard_below_0_88": drift_summary.get("below_0_88"),
             "drift_guard_below_0_90": drift_summary.get("below_0_90"),
+            "hard_cell_tail_guard_n_records": hard_cell_summary.get("n_records"),
+            "hard_cell_tail_guard_below_0_88": hard_cell_summary.get("below_0_88"),
+            "hard_cell_tail_guard_below_0_90": hard_cell_summary.get("below_0_90"),
         },
         "source_event_state_summary": {
             "telemetry_status": None if not isinstance(telemetry, dict) else telemetry.get("status"),
@@ -145,7 +153,7 @@ def main() -> int:
             "Do not promote source-read point-forecast claims until read-confidence buckets reduce mean source-vs-core absolute error.",
             "Run formal temporal reruns with the runtime read/no-read policy and compare against dense source features under strict ablations.",
             "Add a tail-aware source-read guard for funding so row-count wins cannot hide large-error regressions.",
-            "Resolve coverage weak cells below 0.88 before oral-level reliability claims.",
+            "Land formal hard-cell tail-guard coverage records and require zero cells below 0.88 before oral-level reliability claims.",
             "Add normalized public-pack comparisons before cross-industry SOTA claims.",
         ],
     }

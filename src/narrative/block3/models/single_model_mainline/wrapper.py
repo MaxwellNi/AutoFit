@@ -1433,9 +1433,11 @@ class SingleModelMainlineWrapper(ModelBase):
                 runtime.index = X.index
         else:
             runtime = pd.DataFrame(index=X.index)
-        for col in X.columns:
-            if col not in runtime.columns:
-                runtime[col] = X[col].values
+        missing_cols = [col for col in X.columns if col not in runtime.columns]
+        if missing_cols:
+            missing = X.loc[:, missing_cols].copy()
+            missing.index = runtime.index
+            runtime = pd.concat([runtime, missing], axis=1)
         return runtime
 
     def _build_source_frame(

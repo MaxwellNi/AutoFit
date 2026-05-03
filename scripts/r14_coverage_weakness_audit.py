@@ -95,6 +95,7 @@ def main() -> int:
         "cqr_lite": "nccopo_coverage_90_cqr_lite",
         "gpd_evt": "nccopo_coverage_90_gpd_evt",
         "drift_guard": "nccopo_coverage_90_drift_guard",
+        "hard_cell_tail_guard": "nccopo_coverage_90_hard_cell_tail_guard",
     }
     records_by_metric: dict[str, list[dict[str, Any]]] = {key: [] for key in metric_fields}
     files = _metric_files()
@@ -118,6 +119,7 @@ def main() -> int:
             "This audit locates weak cells; it does not change pass/fail gates by itself.",
             "Canonical CQR-lite is reported separately because diagnostic probes can depress raw-all coverage.",
             "Cells below 0.88 are immediate pass-threshold blockers; cells below 0.90 are practical coverage gaps.",
+            "Hard-cell tail guard is a separate calibration-only candidate and is not proof of global coverage until enough formal cells land.",
         ],
     }
     OUT_JSON.parent.mkdir(parents=True, exist_ok=True)
@@ -128,6 +130,7 @@ def main() -> int:
         "metric_read_errors": len(read_errors),
         "marginal": report["summaries"]["marginal"],
         "canonical_cqr_lite": report["canonical_cqr_lite_summary"],
+        "hard_cell_tail_guard": report["summaries"]["hard_cell_tail_guard"],
     }, indent=2, default=str))
     return 0
 
