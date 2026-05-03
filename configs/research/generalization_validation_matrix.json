@@ -1,0 +1,33 @@
+{
+  "registry_name": "generalization_validation_matrix",
+  "registry_version": "2026-05-03",
+  "purpose": "Define the external validation surface required before Block 3 source/event-state methods can claim cross-domain generality.",
+  "claim_boundary": [
+    "This matrix is a validation contract, not evidence that a method already generalizes.",
+    "Public-pack metrics are monitoring artifacts until every expected family is complete and normalized comparisons are added.",
+    "Industry transfer claims require held-out external datasets plus no-regression checks on Block 3."
+  ],
+  "public_pack_families": [
+    {"family": "ett", "industry_analogy": "energy operations and sensor panels", "minimum_gate": "all horizons complete; no run errors"},
+    {"family": "ecl", "industry_analogy": "electric load and demand planning", "minimum_gate": "all horizons complete; no run errors"},
+    {"family": "traffic", "industry_analogy": "mobility, logistics, marketplace flow", "minimum_gate": "all horizons complete; no run errors"},
+    {"family": "weather", "industry_analogy": "environmental drivers and seasonal covariates", "minimum_gate": "all horizons complete; no run errors"},
+    {"family": "exchange", "industry_analogy": "financial non-stationary regimes", "minimum_gate": "all horizons complete; no run errors"},
+    {"family": "ili", "industry_analogy": "event bursts and sparse incidence", "minimum_gate": "all horizons complete; no run errors"},
+    {"family": "solar", "industry_analogy": "energy production and exogenous seasonality", "minimum_gate": "all horizons complete; no run errors"}
+  ],
+  "block3_required_gates": [
+    "strict row-key counterfactual for source/text/EDGAR deltas",
+    "source-regime calibration improvement without point-accuracy overclaim",
+    "formal temporal rerun for weak cells, not diagnostic row-order split only",
+    "three-head no-regression: binary, funding, investors",
+    "coverage weak-cell audit below 0.88 and below 0.90",
+    "runtime and memory deployment audit"
+  ],
+  "promotion_rules": [
+    "No NeurIPS-level method claim from literature plausibility alone.",
+    "No source mechanism claim unless row-key strict counterfactual and formal temporal evidence agree.",
+    "No generalization claim until public-pack expected families are complete with zero run errors.",
+    "No point-accuracy claim unless paired MAE wins dominate losses on the relevant head/horizon slice."
+  ]
+}
