@@ -1,0 +1,149 @@
+{
+  "registry_name": "frontier_mechanism_audit",
+  "registry_version": "2026-05-03",
+  "purpose": "Convert 2025-2026 frontier literature signals into auditable Block 3 mechanism hypotheses and gates.",
+  "claim_boundary": [
+    "Rows marked official_verified are supported by existing repo official-source notes; rows marked repo_tracked require a fresh official-page pass before paper claims.",
+    "This registry defines mechanism hypotheses and validation gates; it does not claim any mechanism has passed until a linked artifact says so.",
+    "Source is treated as event-state/regime/context evidence, not as a direct residual multiplier."
+  ],
+  "mechanisms": [
+    {
+      "id": "source_regime_conformal",
+      "status": "active_candidate",
+      "frontier_signals": ["JAPAN", "adaptive_conformal", "Mondrian_conformal", "weighted_conformal"],
+      "source_verification": "mixed_repo_tracked",
+      "implementation_surface": [
+        "scripts/r14_source_regime_conformal_audit.py",
+        "scripts/r14_coverage_weakness_audit.py",
+        "BLOCK3_NCCOPO_DRIFT_GUARD env branch"
+      ],
+      "hypothesis": "EDGAR/text should define calibration regimes and drift/coverage controls, not multiply residual scale directly.",
+      "required_gates": [
+        "source-regime paired MAE/coverage audit vs core_only",
+        "formal temporal benchmark with nccopo_coverage_90_drift_guard",
+        "coverage >= 0.88 mean and materially fewer weak cells without unacceptable width inflation",
+        "strict row-key counterfactual for source/text contribution"
+      ],
+      "current_evidence": [
+        "source-scaling multiplier failed paired-benefit and physical-scale gates",
+        "drift_guard diagnostic pilot improved coverage but is not yet formal temporal validation"
+      ]
+    },
+    {
+      "id": "static_dynamic_source_factorization",
+      "status": "active_candidate",
+      "frontier_signals": ["TimeEmb", "DIAN", "invariant_variant_factorization"],
+      "source_verification": "partly_official_verified",
+      "implementation_surface": [
+        "src/narrative/block3/models/v740_alpha.py::StaticDynamicTimeFusion",
+        "source-native event memory encoders"
+      ],
+      "hypothesis": "Separate dynamic business state from static/source context, then let lane-conditioned gates decide if source should be read.",
+      "required_gates": [
+        "static-dynamic/source gate ablation on/off",
+        "no-read fallback activation audit",
+        "paired MAE and coverage by target/horizon/source regime",
+        "source dropout/delay counterfactual"
+      ],
+      "current_evidence": [
+        "v740_alpha contains TimeEmb-inspired fusion scaffolding",
+        "existing source multiplier evidence says source must be guarded rather than always active"
+      ]
+    },
+    {
+      "id": "distributional_multistep_alignment",
+      "status": "candidate_not_implemented",
+      "frontier_signals": ["DistDF", "QDF", "quantile_distribution_matching"],
+      "source_verification": "partly_official_verified",
+      "implementation_surface": ["future objectives.py or funding lane objective stack"],
+      "hypothesis": "Funding and long-horizon severity should be trained with multistep distribution alignment instead of point loss only.",
+      "required_gates": [
+        "funding h7/h14/h30 paired MAE improvement",
+        "tail-slice MAE or quantile loss improvement",
+        "CQR/NC-CoPo coverage improvement or no degradation",
+        "runtime overhead bounded for deployment"
+      ],
+      "current_evidence": [
+        "funding targets are heavy-tailed and coverage weak cells concentrate in funding h14/h30",
+        "DistDF/QDF are mechanism signals, not landed local modules"
+      ]
+    },
+    {
+      "id": "selective_hard_region_learning",
+      "status": "candidate_not_implemented",
+      "frontier_signals": ["Selective Learning", "hard-cell weighting", "curriculum"],
+      "source_verification": "repo_tracked",
+      "implementation_surface": ["future training sampler/objective weighting"],
+      "hypothesis": "The hardest temporal/source regimes should receive calibration-only or train-only weighting rather than a uniform global loss.",
+      "required_gates": [
+        "hard-cell weakpoint audit before/after",
+        "no easy-cell collapse",
+        "paired target/horizon gains in investors h1 and funding tail cells"
+      ],
+      "current_evidence": [
+        "coverage weakness audit shows many cells below 0.88 despite acceptable canonical mean"
+      ]
+    },
+    {
+      "id": "retrieval_event_memory",
+      "status": "active_candidate",
+      "frontier_signals": ["FLAIRR-TS", "TEMPO", "TS-RAG", "exogenous-language retrieval"],
+      "source_verification": "mixed_repo_tracked",
+      "implementation_surface": [
+        "v740_alpha event memory encoders",
+        "text embedding strict counterfactual audit",
+        "future source-native sparse memory lane reads"
+      ],
+      "hypothesis": "Text/EDGAR should enter as sparse event memory with recency, novelty, and coverage confidence rather than dense daily columns.",
+      "required_gates": [
+        "dense source vs sparse event memory ablation",
+        "retrieved event novelty and recency telemetry",
+        "strict counterfactual benefit by lane",
+        "no-read fallback when source coverage is weak"
+      ],
+      "current_evidence": [
+        "text embedding bakeoff passed strict counterfactual gate",
+        "champion analysis found text embeddings often hurt unless gated"
+      ]
+    },
+    {
+      "id": "lightweight_local_context_branch",
+      "status": "active_candidate",
+      "frontier_signals": ["CASA", "LightGTS", "SAMformer", "LiPFormer"],
+      "source_verification": "partly_official_verified",
+      "implementation_surface": [
+        "public-pack SAMformer smoke/full shards",
+        "future lightweight branch in TESF/shared trunk"
+      ],
+      "hypothesis": "A low-cost local-context branch can cover short/medium horizon regimes more efficiently than heavier universal backbones.",
+      "required_gates": [
+        "public-pack full-scope completion",
+        "latency and memory audit",
+        "paired Block 3 cell comparison against incumbent SOTA"
+      ],
+      "current_evidence": [
+        "SAMformer public-pack family smoke passed 40/40",
+        "full public-pack SAMformer array is partial until traffic shard completes"
+      ]
+    },
+    {
+      "id": "offline_specialist_distillation",
+      "status": "candidate_not_implemented",
+      "frontier_signals": ["privileged_KD", "teacher_distilled_single_student", "UniTS"],
+      "source_verification": "repo_tracked",
+      "implementation_surface": ["future TESF teacher/student training contract"],
+      "hypothesis": "Specialist champions should teach a single deployable student at training time; runtime selector behavior should not be part of deployment.",
+      "required_gates": [
+        "student vs specialist frontier paired gap",
+        "runtime cost lower than ensemble/selector",
+        "three-head no-regression gate",
+        "distillation on/off ablation"
+      ],
+      "current_evidence": [
+        "champion atlas is stable enough to define teachers",
+        "mainline value audit does not yet prove three-head superiority"
+      ]
+    }
+  ]
+}
