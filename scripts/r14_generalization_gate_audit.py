@@ -38,6 +38,7 @@ def main() -> int:
     source_path_path = _latest("r14_source_path_activation_audit_*.json")
     telemetry_path = _latest("r14_source_event_state_telemetry_audit_*.json")
     source_features_path = _latest("r14_source_event_state_features_*.json")
+    read_gate_path = _latest("r14_source_read_gate_counterfactual_audit_*.json")
     embedding_bakeoff_path = _latest("r14_embedding_bakeoff_*.json")
     embedding_downstream_path = _latest("r14_embedding_downstream_pair_audit_*.json")
 
@@ -49,6 +50,7 @@ def main() -> int:
     source_path = _read(source_path_path)
     telemetry = _read(telemetry_path)
     source_features = _read(source_features_path)
+    read_gate = _read(read_gate_path)
     embedding_bakeoff = _read(embedding_bakeoff_path)
     embedding_downstream = _read(embedding_downstream_path)
 
@@ -73,6 +75,7 @@ def main() -> int:
         "rowkey_regime_diagnostic_available": bool(rowkey_regime) and rowkey_regime.get("status") == "diagnostic_completed",
         "source_event_state_telemetry_passed": bool(telemetry) and telemetry.get("status") == "passed",
         "source_event_state_feature_table_passed": bool(source_features) and source_features.get("status") == "passed",
+        "source_read_gate_counterfactual_passed": bool(read_gate) and read_gate.get("status") == "passed",
         "source_path_activation_passed": bool(source_path) and source_path.get("status") == "passed",
         "embedding_bakeoff_passed": bool(embedding_bakeoff) and embedding_bakeoff.get("status") == "passed",
         "embedding_downstream_pair_passed": bool(embedding_downstream) and embedding_downstream.get("status") == "passed",
@@ -97,6 +100,7 @@ def main() -> int:
             "source_path_activation_audit": str(source_path_path.relative_to(ROOT)) if source_path_path else None,
             "source_event_state_telemetry_audit": str(telemetry_path.relative_to(ROOT)) if telemetry_path else None,
             "source_event_state_features_audit": str(source_features_path.relative_to(ROOT)) if source_features_path else None,
+            "source_read_gate_counterfactual_audit": str(read_gate_path.relative_to(ROOT)) if read_gate_path else None,
             "embedding_bakeoff_audit": str(embedding_bakeoff_path.relative_to(ROOT)) if embedding_bakeoff_path else None,
             "embedding_downstream_pair_audit": str(embedding_downstream_path.relative_to(ROOT)) if embedding_downstream_path else None,
         },
@@ -123,15 +127,18 @@ def main() -> int:
             "source_path_paired_benefit_passed": None if not isinstance(source_path, dict) else source_path.get("paired_benefit_passed"),
             "source_feature_table_status": None if not isinstance(source_features, dict) else source_features.get("status"),
             "source_feature_table_summary": None if not isinstance(source_features, dict) else source_features.get("summary"),
+            "source_read_gate_counterfactual_status": None if not isinstance(read_gate, dict) else read_gate.get("status"),
+            "source_read_gate_counterfactual_overall": None if not isinstance(read_gate, dict) else read_gate.get("overall"),
+            "source_read_gate_counterfactual_by_bucket": None if not isinstance(read_gate, dict) else read_gate.get("by_read_bucket"),
             "embedding_bakeoff_status": None if not isinstance(embedding_bakeoff, dict) else embedding_bakeoff.get("status"),
             "embedding_downstream_status": None if not isinstance(embedding_downstream, dict) else embedding_downstream.get("status"),
             "embedding_downstream_summary": None if not isinstance(embedding_downstream, dict) else embedding_downstream.get("summary"),
         },
         "claim_boundary": matrix.get("claim_boundary", []),
         "next_required_actions": [
-            "Complete missing public-pack family shards and rerun public-pack summary.",
-            "Promote source-regime calibration only after row-key diagnostic and formal temporal rerun agree.",
-            "Implement source-native event memory/no-read confidence and compare against dense source features.",
+            "Do not promote source-read point-forecast claims until read-confidence buckets reduce mean source-vs-core absolute error.",
+            "Wire source-native event-state features into the benchmark and compare against dense source features under strict ablations.",
+            "Add a tail-aware source-read guard for funding so row-count wins cannot hide large-error regressions.",
             "Resolve coverage weak cells below 0.88 before oral-level reliability claims.",
             "Add normalized public-pack comparisons before cross-industry SOTA claims.",
         ],

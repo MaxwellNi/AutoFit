@@ -46,6 +46,7 @@
       "required_gates": [
         "static-dynamic/source gate ablation on/off",
         "no-read fallback activation audit",
+        "read-confidence bucket must predict source-vs-core error reduction",
         "paired MAE and coverage by target/horizon/source regime",
         "source dropout/delay counterfactual"
       ],
@@ -53,6 +54,7 @@
         "v740_alpha contains TimeEmb-inspired fusion scaffolding",
         "source event-state telemetry passed on strict prediction row keys",
         "ablation-aware source feature table now enforces no-read fallback and counterfactual permissions",
+        "read-gate counterfactual audit did not pass: source won more rows but lost on mean absolute error due large-error rows",
         "existing source multiplier evidence says source must be guarded rather than always active"
       ]
     },
@@ -71,6 +73,7 @@
       ],
       "current_evidence": [
         "funding targets are heavy-tailed and coverage weak cells concentrate in funding h14/h30",
+        "read-gate counterfactual audit shows source can create large-error funding regressions despite row-count wins",
         "DistDF/QDF are mechanism signals, not landed local modules"
       ]
     },
