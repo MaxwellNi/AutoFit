@@ -43,7 +43,7 @@
   "thresholds": {
     "coverage_floor": 0.88,
     "coverage_target": 0.9,
-    "hard_cell_min_records_for_matrix": 8,
+    "hard_cell_min_unique_cells_for_matrix": 8,
     "hard_cell_max_width_ratio_vs_marginal": 3.0,
     "mainline_min_paired_cells": 30,
     "mainline_min_win_rate_vs_best_non_mainline": 0.5,

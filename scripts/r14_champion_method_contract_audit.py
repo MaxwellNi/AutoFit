@@ -114,18 +114,37 @@ def _hard_cell_records() -> list[dict[str, Any]]:
 def _hard_cell_summary(records: list[dict[str, Any]], thresholds: dict[str, Any]) -> dict[str, Any]:
     floor = float(thresholds.get("coverage_floor", 0.88))
     max_ratio = float(thresholds.get("hard_cell_max_width_ratio_vs_marginal", 3.0))
-    matrix_min = int(thresholds.get("hard_cell_min_records_for_matrix", 8))
+    matrix_min = int(
+        thresholds.get(
+            "hard_cell_min_unique_cells_for_matrix",
+            thresholds.get("hard_cell_min_records_for_matrix", 8),
+        )
+    )
     coverages = [float(row["coverage"]) for row in records if row.get("coverage") is not None]
     ratios = [float(row["width_ratio_vs_marginal"]) for row in records if row.get("width_ratio_vs_marginal") is not None]
+    unique_cells = {
+        (str(row.get("target")), str(row.get("horizon")), str(row.get("ablation")))
+        for row in records
+    }
+    unique_cell_floor = []
+    for cell in sorted(unique_cells):
+        cell_records = [
+            row for row in records
+            if (str(row.get("target")), str(row.get("horizon")), str(row.get("ablation"))) == cell
+            and row.get("coverage") is not None
+        ]
+        if cell_records:
+            unique_cell_floor.append(min(float(row["coverage"]) for row in cell_records))
     return {
         "n_records": len(records),
+        "n_unique_cells": len(unique_cells),
         "coverage_min": min(coverages) if coverages else None,
         "coverage_mean": sum(coverages) / len(coverages) if coverages else None,
         "below_floor": sum(1 for value in coverages if value < floor),
         "width_ratio_mean": sum(ratios) / len(ratios) if ratios else None,
         "width_ratio_max": max(ratios) if ratios else None,
         "single_formal_record_passed": bool(coverages) and min(coverages) >= floor,
-        "matrix_sufficient": len(records) >= matrix_min and bool(coverages) and min(coverages) >= floor,
+        "matrix_sufficient": len(unique_cells) >= matrix_min and bool(unique_cell_floor) and min(unique_cell_floor) >= floor,
         "width_sharpness_guard_passed": bool(ratios) and max(ratios) <= max_ratio,
         "weakest_records": sorted(records, key=lambda row: row.get("coverage") or -1.0)[:10],
     }
