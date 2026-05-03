@@ -15,6 +15,7 @@
       "source_verification": "mixed_repo_tracked",
       "implementation_surface": [
         "scripts/r14_source_regime_conformal_audit.py",
+        "scripts/r14_source_regime_rowkey_conformal_diagnostic.py",
         "scripts/r14_coverage_weakness_audit.py",
         "BLOCK3_NCCOPO_DRIFT_GUARD env branch"
       ],
@@ -27,7 +28,8 @@
       ],
       "current_evidence": [
         "source-scaling multiplier failed paired-benefit and physical-scale gates",
-        "drift_guard diagnostic pilot improved coverage but is not yet formal temporal validation"
+        "drift_guard diagnostic pilot improved coverage but formal h30/core_text rerun stayed below 0.88",
+        "row-key h30/main/funding diagnostic: marginal coverage 0.9055 beat simple source-regime Mondrian/weighted variants"
       ]
     },
     {
@@ -37,7 +39,8 @@
       "source_verification": "partly_official_verified",
       "implementation_surface": [
         "src/narrative/block3/models/v740_alpha.py::StaticDynamicTimeFusion",
-        "source-native event memory encoders"
+        "src/narrative/block3/models/single_model_mainline/source_memory.py",
+        "scripts/r14_build_source_event_state_features.py"
       ],
       "hypothesis": "Separate dynamic business state from static/source context, then let lane-conditioned gates decide if source should be read.",
       "required_gates": [
@@ -48,6 +51,8 @@
       ],
       "current_evidence": [
         "v740_alpha contains TimeEmb-inspired fusion scaffolding",
+        "source event-state telemetry passed on strict prediction row keys",
+        "ablation-aware source feature table now enforces no-read fallback and counterfactual permissions",
         "existing source multiplier evidence says source must be guarded rather than always active"
       ]
     },
@@ -82,7 +87,8 @@
         "paired target/horizon gains in investors h1 and funding tail cells"
       ],
       "current_evidence": [
-        "coverage weakness audit shows many cells below 0.88 despite acceptable canonical mean"
+        "coverage weakness audit shows many cells below 0.88 despite acceptable canonical mean",
+        "latest CQR-lite weakness audit still has 383 records below 0.88"
       ]
     },
     {
@@ -92,6 +98,8 @@
       "source_verification": "mixed_repo_tracked",
       "implementation_surface": [
         "v740_alpha event memory encoders",
+        "scripts/r14_source_event_state_telemetry_audit.py",
+        "scripts/r14_build_source_event_state_features.py",
         "text embedding strict counterfactual audit",
         "future source-native sparse memory lane reads"
       ],
@@ -104,6 +112,7 @@
       ],
       "current_evidence": [
         "text embedding bakeoff passed strict counterfactual gate",
+        "7B-vs-1.5B downstream pair passed but source_scale_positive_rows_7b remains 0",
         "champion analysis found text embeddings often hurt unless gated"
       ]
     },
@@ -124,7 +133,7 @@
       ],
       "current_evidence": [
         "SAMformer public-pack family smoke passed 40/40",
-        "full public-pack SAMformer array is partial until traffic shard completes"
+        "full public-pack SAMformer array completed 7/7 families with 40/40 results and 0 errors"
       ]
     },
     {
