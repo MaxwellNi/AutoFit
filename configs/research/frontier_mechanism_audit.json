@@ -54,6 +54,7 @@
         "v740_alpha contains TimeEmb-inspired fusion scaffolding",
         "source event-state telemetry passed on strict prediction row keys",
         "ablation-aware source feature table now enforces no-read fallback and counterfactual permissions",
+        "runtime wrapper now applies ablation-aware source read/no-read policy before funding scale and lane source-state construction",
         "read-gate counterfactual audit did not pass: source won more rows but lost on mean absolute error due large-error rows",
         "existing source multiplier evidence says source must be guarded rather than always active"
       ]

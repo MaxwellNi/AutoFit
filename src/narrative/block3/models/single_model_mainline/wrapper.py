@@ -334,6 +334,9 @@ class SingleModelMainlineWrapper(ModelBase):
         self._use_log1p_target = False  # set in fit() for non-binary regression targets
         self._funding_source_scale_mean = 0.0
         self._funding_source_scale_max = 0.0
+        self._funding_read_confidence_mean = 0.0
+        self._funding_read_confidence_max = 0.0
+        self._funding_no_read_rate = 1.0
         self._effective_task_modulation = self.enable_task_modulation
         self._investors_source_profile_counts: Dict[str, int] = {}
         self._investors_source_eligible_profiles: tuple[str, ...] = ()
@@ -662,9 +665,9 @@ class SingleModelMainlineWrapper(ModelBase):
                 entity_ids=entity_ids, dates=dates,
             )
             condition_state = self.condition_encoder.broadcast(self._condition_key, len(X))
-            source_frame = self.source_memory.build_runtime_features(runtime_frame, layout=source_layout)
-            self._source_feature_cols = list(source_frame.columns)
-            source_state = source_frame.to_numpy(dtype=np.float32, copy=False)
+            source_frame = self._build_source_frame(runtime_frame, layout=source_layout)
+            self._source_feature_cols = self._source_state_columns(source_frame)
+            source_state = source_frame.reindex(columns=self._source_feature_cols, fill_value=0.0).to_numpy(dtype=np.float32, copy=False)
             self._edgar_source_density = float(source_frame["edgar_active"].mean()) if "edgar_active" in source_frame else 0.0
             self._text_source_density = float(source_frame["text_active"].mean()) if "text_active" in source_frame else 0.0
             lane_input = np.concatenate([trunk_output, condition_state, source_state], axis=1).astype(np.float32)
@@ -683,9 +686,9 @@ class SingleModelMainlineWrapper(ModelBase):
                 core_matrix, y_arr, target_name=self._target_name,
             )
             condition_state = self.condition_encoder.broadcast(self._condition_key, len(X))
-            source_frame = self.source_memory.build_runtime_features(runtime_frame, layout=source_layout)
-            self._source_feature_cols = list(source_frame.columns)
-            source_state = source_frame.to_numpy(dtype=np.float32, copy=False)
+            source_frame = self._build_source_frame(runtime_frame, layout=source_layout)
+            self._source_feature_cols = self._source_state_columns(source_frame)
+            source_state = source_frame.reindex(columns=self._source_feature_cols, fill_value=0.0).to_numpy(dtype=np.float32, copy=False)
             self._edgar_source_density = float(source_frame["edgar_active"].mean()) if "edgar_active" in source_frame else 0.0
             self._text_source_density = float(source_frame["text_active"].mean()) if "text_active" in source_frame else 0.0
             # Combine trunk output + condition + source as lane state
@@ -706,9 +709,9 @@ class SingleModelMainlineWrapper(ModelBase):
                 core_matrix, y_arr, target_name=self._target_name,
             )
             condition_state = self.condition_encoder.broadcast(self._condition_key, len(X))
-            source_frame = self.source_memory.build_runtime_features(runtime_frame, layout=source_layout)
-            self._source_feature_cols = list(source_frame.columns)
-            source_state = source_frame.to_numpy(dtype=np.float32, copy=False)
+            source_frame = self._build_source_frame(runtime_frame, layout=source_layout)
+            self._source_feature_cols = self._source_state_columns(source_frame)
+            source_state = source_frame.reindex(columns=self._source_feature_cols, fill_value=0.0).to_numpy(dtype=np.float32, copy=False)
             self._edgar_source_density = float(source_frame["edgar_active"].mean()) if "edgar_active" in source_frame else 0.0
             self._text_source_density = float(source_frame["text_active"].mean()) if "text_active" in source_frame else 0.0
             lane_input = np.concatenate([trunk_output, condition_state, source_state], axis=1).astype(np.float32)
@@ -729,9 +732,9 @@ class SingleModelMainlineWrapper(ModelBase):
             )
             self._backbone_seed = self.backbone.build_context_seed(runtime_frame, core_frame)
             condition_state = self.condition_encoder.broadcast(self._condition_key, len(X))
-            source_frame = self.source_memory.build_runtime_features(runtime_frame, layout=source_layout)
-            self._source_feature_cols = list(source_frame.columns)
-            source_state = source_frame.to_numpy(dtype=np.float32, copy=False)
+            source_frame = self._build_source_frame(runtime_frame, layout=source_layout)
+            self._source_feature_cols = self._source_state_columns(source_frame)
+            source_state = source_frame.reindex(columns=self._source_feature_cols, fill_value=0.0).to_numpy(dtype=np.float32, copy=False)
             self._edgar_source_density = float(source_frame["edgar_active"].mean()) if "edgar_active" in source_frame else 0.0
             self._text_source_density = float(source_frame["text_active"].mean()) if "text_active" in source_frame else 0.0
             event_state_frame, shared_state = self._refresh_event_state_card_with_shared_state(
@@ -767,6 +770,17 @@ class SingleModelMainlineWrapper(ModelBase):
         funding_source_scale = self._build_funding_source_scale(source_frame)
         self._funding_source_scale_mean = float(np.mean(funding_source_scale)) if len(funding_source_scale) else 0.0
         self._funding_source_scale_max = float(np.max(funding_source_scale)) if len(funding_source_scale) else 0.0
+        funding_read_confidence = pd.to_numeric(
+            source_frame.get("funding_read_confidence", pd.Series(0.0, index=source_frame.index)),
+            errors="coerce",
+        ).fillna(0.0)
+        self._funding_read_confidence_mean = float(funding_read_confidence.mean()) if len(funding_read_confidence) else 0.0
+        self._funding_read_confidence_max = float(funding_read_confidence.max()) if len(funding_read_confidence) else 0.0
+        funding_no_read = pd.to_numeric(
+            source_frame.get("funding_no_read_fallback", pd.Series(1.0, index=source_frame.index)),
+            errors="coerce",
+        ).fillna(1.0)
+        self._funding_no_read_rate = float(funding_no_read.mean()) if len(funding_no_read) else 1.0
         self._refresh_investors_source_activation_regime(
             investors_source_frame,
             runtime_frame=runtime_frame,
@@ -1106,6 +1120,9 @@ class SingleModelMainlineWrapper(ModelBase):
                 "funding_tail_quantile": float(self.funding_tail_quantile),
                 "train_source_scale_mean": float(self._funding_source_scale_mean),
                 "train_source_scale_max": float(self._funding_source_scale_max),
+                "train_funding_read_confidence_mean": float(self._funding_read_confidence_mean),
+                "train_funding_read_confidence_max": float(self._funding_read_confidence_max),
+                "train_funding_no_read_rate": float(self._funding_no_read_rate),
                 "lane_uses_jump_hurdle_head": bool(self.funding_lane_runtime._uses_jump_hurdle_head),
                 "lane_jump_event_rate": float(self.funding_lane_runtime._jump_event_rate),
                 "lane_positive_jump_rows": int(self.funding_lane_runtime._positive_jump_rows),
@@ -1169,7 +1186,7 @@ class SingleModelMainlineWrapper(ModelBase):
             )
             condition_state = self.condition_encoder.broadcast(condition_key, len(feature_frame))
             source_layout = self.source_memory.infer_layout(runtime_frame)
-            source_frame = self.source_memory.build_runtime_features(runtime_frame, layout=source_layout)
+            source_frame = self._build_source_frame(runtime_frame, layout=source_layout, ablation=condition_key.ablation, horizon=condition_key.horizon)
             source_state = source_frame.reindex(columns=self._source_feature_cols, fill_value=0.0).to_numpy(dtype=np.float32, copy=False)
             lane_input = np.concatenate([trunk_output, condition_state, source_state], axis=1).astype(np.float32)
             lane_states = {self._active_lane_name: lane_input}
@@ -1187,7 +1204,7 @@ class SingleModelMainlineWrapper(ModelBase):
             )
             condition_state = self.condition_encoder.broadcast(condition_key, len(feature_frame))
             source_layout = self.source_memory.infer_layout(runtime_frame)
-            source_frame = self.source_memory.build_runtime_features(runtime_frame, layout=source_layout)
+            source_frame = self._build_source_frame(runtime_frame, layout=source_layout, ablation=condition_key.ablation, horizon=condition_key.horizon)
             source_state = source_frame.reindex(columns=self._source_feature_cols, fill_value=0.0).to_numpy(dtype=np.float32, copy=False)
             lane_input = np.concatenate([trunk_output, condition_state, source_state], axis=1).astype(np.float32)
             lane_states = {self._active_lane_name: lane_input}
@@ -1205,7 +1222,7 @@ class SingleModelMainlineWrapper(ModelBase):
             )
             condition_state = self.condition_encoder.broadcast(condition_key, len(feature_frame))
             source_layout = self.source_memory.infer_layout(runtime_frame)
-            source_frame = self.source_memory.build_runtime_features(runtime_frame, layout=source_layout)
+            source_frame = self._build_source_frame(runtime_frame, layout=source_layout, ablation=condition_key.ablation, horizon=condition_key.horizon)
             source_state = source_frame.reindex(columns=self._source_feature_cols, fill_value=0.0).to_numpy(dtype=np.float32, copy=False)
             lane_input = np.concatenate([trunk_output, condition_state, source_state], axis=1).astype(np.float32)
             lane_states = {self._active_lane_name: lane_input}
@@ -1224,7 +1241,7 @@ class SingleModelMainlineWrapper(ModelBase):
             )
             condition_state = self.condition_encoder.broadcast(condition_key, len(feature_frame))
             source_layout = self.source_memory.infer_layout(runtime_frame)
-            source_frame = self.source_memory.build_runtime_features(runtime_frame, layout=source_layout)
+            source_frame = self._build_source_frame(runtime_frame, layout=source_layout, ablation=condition_key.ablation, horizon=condition_key.horizon)
             event_state_frame, shared_state = self._refresh_event_state_card_with_shared_state(
                 runtime_frame,
                 shared_state=shared_state,
@@ -1323,7 +1340,7 @@ class SingleModelMainlineWrapper(ModelBase):
             )
             condition_state = self.condition_encoder.broadcast(condition_key, len(feature_frame))
             source_layout = self.source_memory.infer_layout(runtime_frame)
-            source_frame = self.source_memory.build_runtime_features(runtime_frame, layout=source_layout)
+            source_frame = self._build_source_frame(runtime_frame, layout=source_layout, ablation=condition_key.ablation, horizon=condition_key.horizon)
             source_state = source_frame.reindex(columns=self._source_feature_cols, fill_value=0.0).to_numpy(dtype=np.float32, copy=False)
             lane_input = np.concatenate([trunk_output, condition_state, source_state], axis=1).astype(np.float32)
             lane_states = {self._active_lane_name: lane_input}
@@ -1340,7 +1357,7 @@ class SingleModelMainlineWrapper(ModelBase):
             )
             condition_state = self.condition_encoder.broadcast(condition_key, len(feature_frame))
             source_layout = self.source_memory.infer_layout(runtime_frame)
-            source_frame = self.source_memory.build_runtime_features(runtime_frame, layout=source_layout)
+            source_frame = self._build_source_frame(runtime_frame, layout=source_layout, ablation=condition_key.ablation, horizon=condition_key.horizon)
             source_state = source_frame.reindex(columns=self._source_feature_cols, fill_value=0.0).to_numpy(dtype=np.float32, copy=False)
             lane_input = np.concatenate([trunk_output, condition_state, source_state], axis=1).astype(np.float32)
             lane_states = {self._active_lane_name: lane_input}
@@ -1357,7 +1374,7 @@ class SingleModelMainlineWrapper(ModelBase):
             )
             condition_state = self.condition_encoder.broadcast(condition_key, len(feature_frame))
             source_layout = self.source_memory.infer_layout(runtime_frame)
-            source_frame = self.source_memory.build_runtime_features(runtime_frame, layout=source_layout)
+            source_frame = self._build_source_frame(runtime_frame, layout=source_layout, ablation=condition_key.ablation, horizon=condition_key.horizon)
             source_state = source_frame.reindex(columns=self._source_feature_cols, fill_value=0.0).to_numpy(dtype=np.float32, copy=False)
             lane_input = np.concatenate([trunk_output, condition_state, source_state], axis=1).astype(np.float32)
             lane_states = {self._active_lane_name: lane_input}
@@ -1375,7 +1392,7 @@ class SingleModelMainlineWrapper(ModelBase):
             )
             condition_state = self.condition_encoder.broadcast(condition_key, len(feature_frame))
             source_layout = self.source_memory.infer_layout(runtime_frame)
-            source_frame = self.source_memory.build_runtime_features(runtime_frame, layout=source_layout)
+            source_frame = self._build_source_frame(runtime_frame, layout=source_layout, ablation=condition_key.ablation, horizon=condition_key.horizon)
             event_state_frame, shared_state = self._refresh_event_state_card_with_shared_state(
                 runtime_frame,
                 shared_state=shared_state,
@@ -1420,6 +1437,36 @@ class SingleModelMainlineWrapper(ModelBase):
             if col not in runtime.columns:
                 runtime[col] = X[col].values
         return runtime
+
+    def _build_source_frame(
+        self,
+        runtime_frame: pd.DataFrame,
+        *,
+        layout,
+        ablation: str | None = None,
+        horizon: int | None = None,
+    ) -> pd.DataFrame:
+        base = self.source_memory.build_runtime_features(runtime_frame, layout=layout)
+        return self.source_memory.build_target_read_policy_features(
+            base,
+            ablation=self._ablation_name if ablation is None else ablation,
+            horizon=self._horizon if horizon is None else horizon,
+        )
+
+    def _source_state_columns(self, source_frame: pd.DataFrame) -> list[str]:
+        policy_tokens = (
+            "confidence",
+            "ablation_allowed",
+            "read_confidence",
+            "no_read_fallback",
+            "low_confidence_read",
+            "high_confidence_read",
+            "source_any_",
+        )
+        return [
+            column for column in source_frame.columns
+            if not any(token in column for token in policy_tokens)
+        ]
 
     def _lane_name_for_target(self, target_name: str) -> str:
         if target_name == "is_funded":
@@ -1534,6 +1581,12 @@ class SingleModelMainlineWrapper(ModelBase):
         edgar_nonzero = np.clip(_source_col("edgar_nonzero_share"), 0.0, 1.0)
         text_nonzero = np.clip(_source_col("text_nonzero_share"), 0.0, 1.0)
         scale = 0.35 * edgar_active + 0.35 * text_active + 0.15 * edgar_nonzero + 0.15 * text_nonzero
+        if "funding_read_confidence" in source_frame.columns:
+            read_confidence = np.clip(_source_col("funding_read_confidence"), 0.0, 1.0)
+            scale = scale * read_confidence
+        if "funding_no_read_fallback" in source_frame.columns:
+            no_read = np.clip(_source_col("funding_no_read_fallback"), 0.0, 1.0)
+            scale = scale * (1.0 - no_read)
         return np.clip(scale, 0.0, 1.0).astype(np.float64, copy=False)
 
     def _refresh_event_state_card_with_shared_state(

@@ -2,6 +2,7 @@ import numpy as np
 import pandas as pd
 
 from narrative.block3.models.single_model_mainline import SingleModelMainlineWrapper
+from narrative.block3.models.single_model_mainline.source_memory import SourceMemoryAssembler
 
 
 def _make_investors_surface(
@@ -113,6 +114,57 @@ def _make_binary_frame(n_rows: int = 24) -> pd.DataFrame:
             }
         )
     return pd.DataFrame(rows)
+
+
+def test_source_memory_read_policy_enforces_ablation_permissions():
+    frame = _make_investors_surface(["mixed"], rows_per_profile=12)
+    assembler = SourceMemoryAssembler()
+    layout = assembler.infer_layout(frame)
+    source = assembler.build_runtime_features(frame, layout=layout)
+
+    core_only = assembler.build_target_read_policy_features(source, ablation="core_only", horizon=30)
+    core_text = assembler.build_target_read_policy_features(source, ablation="core_text", horizon=30)
+    core_edgar = assembler.build_target_read_policy_features(source, ablation="core_edgar", horizon=30)
+    full = assembler.build_target_read_policy_features(source, ablation="full", horizon=30)
+
+    assert core_only["source_any_allowed"].max() == 0.0
+    assert core_only["text_effective_confidence"].max() == 0.0
+    assert core_only["edgar_effective_confidence"].max() == 0.0
+    assert core_only["funding_no_read_fallback"].min() == 1.0
+
+    assert core_text["text_effective_confidence"].max() > 0.0
+    assert core_text["edgar_effective_confidence"].max() == 0.0
+    assert core_edgar["text_effective_confidence"].max() == 0.0
+    assert core_edgar["edgar_effective_confidence"].max() > 0.0
+    assert full["funding_read_confidence"].max() >= core_text["funding_read_confidence"].max()
+
+
+def test_funding_source_scale_is_blocked_by_core_only_read_policy():
+    frame = _make_funding_frame()
+    frame["last_total_amount_sold"] = np.linspace(1000.0, 5000.0, len(frame))
+    frame["edgar_has_filing"] = 1.0
+    frame["text_emb_0"] = np.linspace(0.1, 1.0, len(frame))
+    frame["text_emb_1"] = np.linspace(0.2, 1.2, len(frame))
+
+    wrapper = SingleModelMainlineWrapper(seed=17, enable_funding_source_scaling=True)
+    X = frame[["core_signal", "last_total_amount_sold", "edgar_has_filing", "text_emb_0", "text_emb_1"]].copy()
+    y = frame["funding_raised_usd"].copy()
+    y.name = "funding_raised_usd"
+    wrapper.fit(
+        X,
+        y,
+        train_raw=frame,
+        target="funding_raised_usd",
+        task="task1_outcome",
+        ablation="core_only",
+        horizon=30,
+    )
+
+    process = wrapper.get_regime_info()["funding_process_contract"]
+
+    assert process["train_source_scale_max"] == 0.0
+    assert process["train_funding_read_confidence_max"] == 0.0
+    assert process["train_funding_no_read_rate"] == 1.0
 
 
 def test_homogeneous_source_surface_disables_requested_source_path_and_matches_baseline():

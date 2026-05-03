@@ -29,6 +29,8 @@ class SourceMemoryContract:
     exposes_coverage_adequacy: bool = True
     low_coverage_threshold: float = 0.05
     adequate_coverage_threshold: float = 0.20
+    read_low_confidence_threshold: float = 0.10
+    read_high_confidence_threshold: float = 0.55
     no_read_fallback_mode: str = "zero_features_with_metadata_flag"
 
     def as_dict(self) -> Dict[str, object]:
@@ -42,6 +44,8 @@ class SourceMemoryContract:
             "exposes_coverage_adequacy": self.exposes_coverage_adequacy,
             "low_coverage_threshold": self.low_coverage_threshold,
             "adequate_coverage_threshold": self.adequate_coverage_threshold,
+            "read_low_confidence_threshold": self.read_low_confidence_threshold,
+            "read_high_confidence_threshold": self.read_high_confidence_threshold,
             "no_read_fallback_mode": self.no_read_fallback_mode,
         }
 
@@ -86,6 +90,72 @@ class SourceMemoryAssembler:
         text = self._summarize_source_block(frame, layout.text_cols, prefix="text", with_novelty=True)
         features = pd.concat([edgar, text], axis=1)
         return features.fillna(0.0).astype(np.float32)
+
+    def build_target_read_policy_features(
+        self,
+        source_frame: pd.DataFrame,
+        *,
+        ablation: str,
+        horizon: int | float = 1,
+    ) -> pd.DataFrame:
+        out = self.apply_ablation_permissions(source_frame, ablation=ablation)
+        text_conf = self._runtime_source_confidence(out, "text")
+        edgar_conf = self._runtime_source_confidence(out, "edgar")
+        text_allowed, edgar_allowed = self.ablation_permissions(ablation)
+
+        out["text_confidence"] = text_conf.astype(np.float32)
+        out["edgar_confidence"] = edgar_conf.astype(np.float32)
+        out["text_ablation_allowed"] = np.full(len(out), float(text_allowed), dtype=np.float32)
+        out["edgar_ablation_allowed"] = np.full(len(out), float(edgar_allowed), dtype=np.float32)
+        out["text_effective_confidence"] = (text_conf * float(text_allowed)).astype(np.float32)
+        out["edgar_effective_confidence"] = (edgar_conf * float(edgar_allowed)).astype(np.float32)
+        out["source_any_allowed"] = np.full(len(out), float(text_allowed or edgar_allowed), dtype=np.float32)
+        text_active = pd.to_numeric(out.get("text_active", pd.Series(0.0, index=out.index)), errors="coerce").fillna(0.0)
+        edgar_active = pd.to_numeric(out.get("edgar_active", pd.Series(0.0, index=out.index)), errors="coerce").fillna(0.0)
+        text_nonzero = pd.to_numeric(out.get("text_nonzero_share", pd.Series(0.0, index=out.index)), errors="coerce").fillna(0.0)
+        edgar_nonzero = pd.to_numeric(out.get("edgar_nonzero_share", pd.Series(0.0, index=out.index)), errors="coerce").fillna(0.0)
+        out["source_any_available"] = (
+            (text_active > 0.0) | (edgar_active > 0.0)
+        ).astype(np.float32)
+        out["source_any_nonzero"] = (
+            (text_nonzero > 0.0) | (edgar_nonzero > 0.0)
+        ).astype(np.float32)
+
+        horizon_value = float(horizon)
+        text_eff = out["text_effective_confidence"].to_numpy(dtype=np.float32, copy=False)
+        edgar_eff = out["edgar_effective_confidence"].to_numpy(dtype=np.float32, copy=False)
+        short_weight = 0.75 if horizon_value <= 1.0 else 0.55
+        out["binary_read_confidence"] = np.maximum(text_eff, edgar_eff).astype(np.float32)
+        out["funding_read_confidence"] = (0.45 * text_eff + 0.55 * edgar_eff).astype(np.float32)
+        out["investors_read_confidence"] = (short_weight * text_eff + (1.0 - short_weight) * edgar_eff).astype(np.float32)
+        for lane in ("binary", "funding", "investors"):
+            conf = out[f"{lane}_read_confidence"].to_numpy(dtype=np.float32, copy=False)
+            out[f"{lane}_no_read_fallback"] = (conf < self.contract.read_low_confidence_threshold).astype(np.float32)
+            out[f"{lane}_low_confidence_read"] = (
+                (conf >= self.contract.read_low_confidence_threshold)
+                & (conf < self.contract.read_high_confidence_threshold)
+            ).astype(np.float32)
+            out[f"{lane}_high_confidence_read"] = (
+                conf >= self.contract.read_high_confidence_threshold
+            ).astype(np.float32)
+        return out.fillna(0.0).astype(np.float32)
+
+    def apply_ablation_permissions(self, source_frame: pd.DataFrame, *, ablation: str) -> pd.DataFrame:
+        out = source_frame.copy()
+        text_allowed, edgar_allowed = self.ablation_permissions(ablation)
+        if not text_allowed:
+            for column in [col for col in out.columns if col.startswith("text_")]:
+                out[column] = 0.0
+        if not edgar_allowed:
+            for column in [col for col in out.columns if col.startswith("edgar_")]:
+                out[column] = 0.0
+        return out
+
+    def ablation_permissions(self, ablation: str) -> tuple[bool, bool]:
+        name = str(ablation)
+        text_allowed = name in {"core_text", "full"}
+        edgar_allowed = name in {"core_edgar", "full"}
+        return text_allowed, edgar_allowed
 
     def build_entity_memory(
         self,
@@ -198,6 +268,24 @@ class SourceMemoryAssembler:
             "coverage_adequacy": coverage_adequacy if self.contract.exposes_coverage_adequacy else "disabled",
             "no_read_fallback_active": no_read_fallback_active,
         }
+
+    def _runtime_source_confidence(self, source_frame: pd.DataFrame, prefix: str) -> pd.Series:
+        index = source_frame.index
+
+        def _col(name: str, default: float = 0.0) -> pd.Series:
+            return pd.to_numeric(
+                source_frame.get(name, pd.Series(default, index=index, dtype=np.float32)),
+                errors="coerce",
+            ).fillna(default).astype(np.float32)
+
+        active = _col(f"{prefix}_active").clip(lower=0.0, upper=1.0)
+        nonzero = _col(f"{prefix}_nonzero_share").clip(lower=0.0, upper=1.0)
+        abs_max = _col(f"{prefix}_abs_max").clip(lower=0.0)
+        recency = _col(f"{prefix}_recency_days", 9999.0).clip(lower=0.0)
+        freshness = pd.Series(np.exp(-recency.to_numpy(dtype=np.float64, copy=False) / 365.0), index=index)
+        magnitude = pd.Series(np.tanh(abs_max.to_numpy(dtype=np.float64, copy=False)), index=index)
+        confidence = active * (0.45 * nonzero + 0.35 * freshness.astype(np.float32) + 0.20 * magnitude.astype(np.float32))
+        return confidence.clip(lower=0.0, upper=1.0).astype(np.float32)
 
     def _empty_recent(self, leading_width: int) -> np.ndarray:
         width = leading_width

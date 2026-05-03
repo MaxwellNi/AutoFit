@@ -560,7 +560,10 @@ class InvestorsLaneRuntime:
             pred = apply_shrinkage(pred, model_anchor, shrinkage_alpha, self._shrinkage_strength)
             pred = np.clip(pred, 0.0, None)
 
-        if anchor is not None and self._global_anchor_blend > 0.0:
+        if anchor is not None and (
+            self._global_anchor_blend > 0.0
+            or (normalized_source is not None and use_source_read_policy and self._source_anchor_blend_by_profile)
+        ):
             anchor_blend = np.full(len(pred), self._global_anchor_blend, dtype=np.float64)
             if normalized_source is not None and use_source_read_policy and self._source_anchor_blend_by_profile:
                 profile_ids = _source_profile_ids(normalized_source)
