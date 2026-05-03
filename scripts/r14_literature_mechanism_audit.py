@@ -62,8 +62,9 @@ def main() -> int:
         "active_candidate_ids": [row.get("id") for row in active],
         "not_implemented_ids": [row.get("id") for row in not_implemented],
         "highest_priority_next_steps": [
-            "Run source-regime conformal audit over landed metrics.",
-            "Complete formal drift-guard temporal rerun for h30/core_text weak coverage cell.",
+            "Run the champion method contract audit and treat it as the oral-grade method gate.",
+            "Expand formal hard-cell tail-guard reruns into a matrix and add width/sharpness checks.",
+            "Convert distributional tail objectives, selective hard-region learning, and offline distillation into bounded local experiments.",
             "Run official-source refresh for QDF/JAPAN/Selective Learning/retrieval lines before paper claims.",
             "Promote only mechanisms with linked artifacts, not literature plausibility alone.",
         ],

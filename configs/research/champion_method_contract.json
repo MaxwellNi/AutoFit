@@ -1,0 +1,139 @@
+{
+  "registry_name": "champion_method_contract",
+  "registry_version": "2026-05-03",
+  "last_updated_cest": "2026-05-03 23:25:41 CEST",
+  "purpose": "Define the oral-grade Block 3 champion method contract beyond metric patching: business-evolution atoms, target-isolated generative laws, auditable calibration, external generalization, and strict claim gates.",
+  "claim_boundary": [
+    "This is a method contract and audit rubric, not evidence that the champion method has passed.",
+    "Coverage repair is not point-forecast improvement unless paired point metrics also pass.",
+    "Source/text/EDGAR may be promoted only as event-state/regime evidence after strict row-key counterfactual and paired-benefit gates pass.",
+    "A NeurIPS oral-grade claim requires business-atom validity, point accuracy, calibrated reliability, width/sharpness control, external transfer, and reproducibility to pass together."
+  ],
+  "main_method_spine": {
+    "name": "TESF auditable event-state forecaster",
+    "plain_language_goal": "Learn how company financing state evolves, not just attach source labels to rows.",
+    "factorization": [
+      "one shared business-evolution/event-state geometry trunk",
+      "hard target-isolated observation and generative processes for binary funding occurrence, heavy-tail funding severity, and zero-inflated investor counts",
+      "source/text/EDGAR as sparse regime and event-memory evidence with no-read fallback",
+      "post-hoc auditable conformal/calibration protocol for row-keyed reliability"
+    ],
+    "required_business_atoms": [
+      "event boundary",
+      "financing phase",
+      "funded flip",
+      "funding jump severity",
+      "investor jump process",
+      "goal crossing",
+      "financing persistence",
+      "source topology",
+      "source arrival and decay",
+      "shared-state energy",
+      "tail-risk regime",
+      "no-read/source-missing regime"
+    ],
+    "anti_patterns": [
+      "promoting a source residual multiplier after paired-benefit failure",
+      "claiming coverage success without width/sharpness accounting",
+      "using source/text labels as a shortcut for business-state learning",
+      "treating public-pack forecasting completion as proof of Block 3 target-geometry transfer",
+      "counting diagnostic rows as formal temporal benchmark evidence"
+    ]
+  },
+  "thresholds": {
+    "coverage_floor": 0.88,
+    "coverage_target": 0.9,
+    "hard_cell_min_records_for_matrix": 8,
+    "hard_cell_max_width_ratio_vs_marginal": 3.0,
+    "mainline_min_paired_cells": 30,
+    "mainline_min_win_rate_vs_best_non_mainline": 0.5,
+    "source_read_min_win_rate": 0.55,
+    "source_read_requires_mean_delta_below_zero": true
+  },
+  "gate_groups": [
+    {
+      "id": "business_atom_and_runtime",
+      "why_it_matters": "The method must represent business-state evolution and source availability before any result can be interpreted mechanistically.",
+      "required_evidence": [
+        "source_event_state_telemetry_passed",
+        "source_event_state_feature_table_passed",
+        "source_runtime_read_policy_wired"
+      ]
+    },
+    {
+      "id": "source_as_regime_not_multiplier",
+      "why_it_matters": "Source must help through calibrated event-state/regime reading, not by a brittle residual multiplier.",
+      "required_evidence": [
+        "source_read_gate_counterfactual_passed",
+        "source_path_activation_passed",
+        "source_regime_has_point_accuracy_signal"
+      ]
+    },
+    {
+      "id": "point_champion",
+      "why_it_matters": "A champion method must beat strong non-mainline forecasters on paired point metrics, not only produce valid intervals.",
+      "required_evidence": [
+        "mainline_point_champion_vs_best_non_mainline"
+      ]
+    },
+    {
+      "id": "calibrated_reliability",
+      "why_it_matters": "Reliability must pass weak-cell audits while controlling interval width so the solution is not just over-wide.",
+      "required_evidence": [
+        "hard_cell_tail_guard_formal_passed",
+        "hard_cell_tail_guard_matrix_sufficient",
+        "hard_cell_width_sharpness_guard_passed",
+        "cqr_lite_global_weak_cells_resolved"
+      ]
+    },
+    {
+      "id": "external_generalization",
+      "why_it_matters": "The method must not be only a Block 3 artifact; it must survive source-free public forecasting and later target-geometry transfer tests.",
+      "required_evidence": [
+        "public_pack_complete_zero_error",
+        "embedding_bakeoff_passed",
+        "embedding_downstream_pair_passed"
+      ]
+    },
+    {
+      "id": "frontier_mechanism_maturity",
+      "why_it_matters": "Top-conference ideas are useful only after they are converted into implemented, audited local mechanisms.",
+      "required_evidence": [
+        "literature_mechanism_registry_valid",
+        "no_unimplemented_frontier_mechanism_blockers"
+      ]
+    }
+  ],
+  "candidate_strategy_rank": [
+    {
+      "rank": 1,
+      "id": "auditable_forecaster_protocol_champion",
+      "status": "active_spine",
+      "action": "Use the auditable conformal protocol to wrap the strongest point forecasters and separate point-skill proof from reliability proof."
+    },
+    {
+      "rank": 2,
+      "id": "distributional_tail_objective",
+      "status": "next_implementation_candidate",
+      "action": "Add training-time distributional/quantile tail objectives for funding h14/h30 hard cells; evaluate tail MAE, quantile loss, coverage, and width."
+    },
+    {
+      "rank": 3,
+      "id": "selective_hard_region_learning",
+      "status": "next_implementation_candidate",
+      "action": "Train or calibrate hard regions explicitly while enforcing no easy-cell collapse."
+    },
+    {
+      "rank": 4,
+      "id": "sparse_retrieval_event_memory",
+      "status": "guarded_candidate",
+      "action": "Redesign source/text as sparse event memory with read confidence, recency, novelty, and no-read fallback; do not promote until read-gate passes."
+    },
+    {
+      "rank": 5,
+      "id": "offline_specialist_distillation",
+      "status": "medium_term_candidate",
+      "action": "Distill specialist champions into one deployable student without runtime ensembling or selector leakage."
+    }
+  ]
+}

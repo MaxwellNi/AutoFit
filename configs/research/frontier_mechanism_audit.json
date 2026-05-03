@@ -1,13 +1,39 @@
 {
   "registry_name": "frontier_mechanism_audit",
   "registry_version": "2026-05-03",
-  "purpose": "Convert 2025-2026 frontier literature signals into auditable Block 3 mechanism hypotheses and gates.",
+  "purpose": "Convert 2025-2026 frontier literature signals into auditable Block 3 mechanism hypotheses, gates, and the current champion-method spine.",
   "claim_boundary": [
     "Rows marked official_verified are supported by existing repo official-source notes; rows marked repo_tracked require a fresh official-page pass before paper claims.",
     "This registry defines mechanism hypotheses and validation gates; it does not claim any mechanism has passed until a linked artifact says so.",
-    "Source is treated as event-state/regime/context evidence, not as a direct residual multiplier."
+    "Source is treated as event-state/regime/context evidence, not as a direct residual multiplier.",
+    "The current oral-grade spine is the auditable event-state forecaster contract, not any single metric patch."
   ],
   "mechanisms": [
+    {
+      "id": "auditable_forecaster_protocol",
+      "status": "active_spine",
+      "frontier_signals": ["conformal_prediction", "auditable_ml", "foundation_forecaster_wrapping", "strict_row_key_evaluation"],
+      "source_verification": "repo_verified",
+      "implementation_surface": [
+        "src/narrative/block3/auditable_forecaster.py",
+        "scripts/run_auditable_forecaster_protocol.py",
+        "configs/research/champion_method_contract.json",
+        "scripts/r14_champion_method_contract_audit.py"
+      ],
+      "hypothesis": "The safest champion route is to separate point-skill from reliability: wrap the strongest leakage-free forecaster with a row-keyed auditable conformal protocol and prove each claim separately.",
+      "required_gates": [
+        "strict calibration/test row-key uniqueness",
+        "paired point-value audit against best non-mainline forecasters",
+        "coverage weak-cell audit",
+        "width/sharpness guard",
+        "public-pack and target-geometry transfer audits"
+      ],
+      "current_evidence": [
+        "auditable forecaster protocol layer and CLI are implemented and tested",
+        "latest mainline point-value audit is not passed: 2 wins / 8 losses on 10 current paired cells",
+        "champion method contract now blocks oral-grade claims until point accuracy, reliability, width, external transfer, and mechanism maturity pass together"
+      ]
+    },
     {
       "id": "source_regime_conformal",
       "status": "active_candidate",
@@ -29,6 +55,7 @@
       "current_evidence": [
         "source-scaling multiplier failed paired-benefit and physical-scale gates",
         "drift_guard diagnostic pilot improved coverage but formal h30/core_text rerun stayed below 0.88",
+        "hard-cell tail guard fixed one formal h30/core_text/funding blocker at 0.92139 but with wide intervals, so it is reliability evidence only",
         "row-key h30/main/funding diagnostic: marginal coverage 0.9055 beat simple source-regime Mondrian/weighted variants"
       ]
     },
@@ -56,6 +83,7 @@
         "ablation-aware source feature table now enforces no-read fallback and counterfactual permissions",
         "runtime wrapper now applies ablation-aware source read/no-read policy before funding scale and lane source-state construction",
         "read-gate counterfactual audit did not pass: source won more rows but lost on mean absolute error due large-error rows",
+        "latest read-gate mean source-minus-core absolute-error delta is +11016 despite 0.584 row win rate, proving row-count wins are not enough",
         "existing source multiplier evidence says source must be guarded rather than always active"
       ]
     },
@@ -75,24 +103,33 @@
       "current_evidence": [
         "funding targets are heavy-tailed and coverage weak cells concentrate in funding h14/h30",
         "read-gate counterfactual audit shows source can create large-error funding regressions despite row-count wins",
+        "single formal hard-cell calibration repair required upper quantile level 0.995 and width about 3.56x marginal, motivating train-time distributional/tail objectives",
         "DistDF/QDF are mechanism signals, not landed local modules"
       ]
     },
     {
       "id": "selective_hard_region_learning",
-      "status": "candidate_not_implemented",
+      "status": "active_candidate",
       "frontier_signals": ["Selective Learning", "hard-cell weighting", "curriculum"],
       "source_verification": "repo_tracked",
-      "implementation_surface": ["future training sampler/objective weighting"],
+      "implementation_surface": [
+        "BLOCK3_NCCOPO_HARD_CELL_TAIL_GUARD env branch",
+        "scripts/r14_coverage_weakness_audit.py",
+        "scripts/r14_champion_method_contract_audit.py",
+        "future training sampler/objective weighting"
+      ],
       "hypothesis": "The hardest temporal/source regimes should receive calibration-only or train-only weighting rather than a uniform global loss.",
       "required_gates": [
         "hard-cell weakpoint audit before/after",
+        "hard-cell matrix, not one isolated cell",
+        "width/sharpness guard",
         "no easy-cell collapse",
         "paired target/horizon gains in investors h1 and funding tail cells"
       ],
       "current_evidence": [
         "coverage weakness audit shows many cells below 0.88 despite acceptable canonical mean",
-        "latest CQR-lite weakness audit still has 383 records below 0.88"
+        "latest CQR-lite weakness audit still has 384 records below 0.88 and 550 below 0.90",
+        "hard-cell tail guard has one formal pass but does not yet satisfy matrix or sharpness standards"
       ]
     },
     {
@@ -117,6 +154,7 @@
       "current_evidence": [
         "text embedding bakeoff passed strict counterfactual gate",
         "7B-vs-1.5B downstream pair passed but source_scale_positive_rows_7b remains 0",
+        "source read-gate remains not passed, so sparse event memory is still a redesign candidate rather than a promoted source claim",
         "champion analysis found text embeddings often hurt unless gated"
       ]
     },
@@ -137,7 +175,8 @@
       ],
       "current_evidence": [
         "SAMformer public-pack family smoke passed 40/40",
-        "full public-pack SAMformer array completed 7/7 families with 40/40 results and 0 errors"
+        "full public-pack SAMformer array completed 7/7 families with 40/40 results and 0 errors",
+        "public-pack pass proves runner/readiness and source-free survival, not Block 3 target-geometry transfer"
       ]
     },
     {
