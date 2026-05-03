@@ -99,3 +99,32 @@ There is no honest way to guarantee a mathematical global optimum in this resear
 5. Promote only the candidate whose audit ledger beats strong alternatives under the same frozen protocol.
 
 This is the practical route to a champion that can survive review: not a claim that the search is mathematically exhaustive, but a proof that the promoted method is the best audited candidate under a frozen, leakage-free, multi-surface contract.
+
+## 2026-05-04 00:08 CEST Implementation Map
+
+Read-only code exploration after the matrix audit identified the next three implementation surfaces:
+
+1. **Distributional multistep / funding tail objective**
+	- primary files: `src/narrative/block3/models/single_model_mainline/tail_utils.py`, `src/narrative/block3/models/single_model_mainline/lanes/funding_lane.py`, `src/narrative/block3/models/single_model_mainline/wrapper.py`
+	- MVP: a funding h30/h14 tail objective that reports point MAE, tail MAE/quantile loss, interval width, and coverage separately
+	- first gate: prove h30 width can drop below the 3.0 width-ratio guard without breaking coverage >= 0.88
+	- main risk: claiming distributional progress from calibration-only width changes without point/tail-loss evidence
+
+2. **Selective hard-region learning**
+	- primary files: `scripts/run_block3_benchmark_shard.py`, `src/narrative/block3/models/single_model_mainline/objectives.py`, `src/narrative/block3/models/calibration/nccopo.py`
+	- MVP: replace hard-coded funding h14/h30 assumptions with predeclared hard-region detection based only on train/calibration residual structure and no test labels
+	- first gate: hard-region detection fidelity plus hard/non-hard coverage and width audit
+	- main risk: circular hard-mask selection from test labels or per-horizon overfitting
+
+3. **Offline specialist distillation**
+	- primary files: `src/narrative/block3/models/single_model_mainline/wrapper.py`, future `src/narrative/block3/models/single_model_mainline/distillation.py`, `src/narrative/block3/auditable_forecaster.py`
+	- MVP: snapshot a strong teacher, train one deployable student, and audit student-vs-teacher point error, coverage retention, fairness, latency, and memory
+	- first gate: student remains within a predeclared gap to teacher without runtime ensembling or selector leakage
+	- main risk: training on test teacher predictions, silently deploying multiple per-target students while claiming one model, or hiding coverage/fairness loss
+
+Execution priority remains:
+
+1. finish h30 level search and width guard selection;
+2. implement distributional tail objective MVP;
+3. implement selective hard-region detection only after the calibration-only width tradeoff is fully measured;
+4. delay offline distillation until point champion candidates are clearer.
